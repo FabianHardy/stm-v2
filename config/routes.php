@@ -179,18 +179,22 @@ $router->post('/admin/campaigns/{id}/toggle', function($id) {
     $controller->toggleActive((int)$id);
 });
 /**
- * ROUTES CATÉGORIES
+ * ROUTES CATÉGORIES (CORRIGÉ)
  * À ajouter dans /config/routes.php (après les routes campaigns)
  * 
- * @created 11/11/2025 10:20
+ * IMPORTANT : Routes sous /admin/products/categories pour correspondre à la sidebar
+ * 
+ * @created 11/11/2025 10:45
+ * @modified 11/11/2025 10:45 - Routes sous /products/ au lieu de direct
  */
 
 // ============================================
 // ROUTES CATÉGORIES (protégées par AuthMiddleware)
+// Sous-menu de Produits : /admin/products/categories
 // ============================================
 
 // Liste des catégories
-$router->get('/admin/categories', function() {
+$router->get('/admin/products/categories', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -199,7 +203,7 @@ $router->get('/admin/categories', function() {
 });
 
 // Formulaire de création
-$router->get('/admin/categories/create', function() {
+$router->get('/admin/products/categories/create', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -208,7 +212,7 @@ $router->get('/admin/categories/create', function() {
 });
 
 // Enregistrer une nouvelle catégorie
-$router->post('/admin/categories', function() {
+$router->post('/admin/products/categories', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -217,7 +221,7 @@ $router->post('/admin/categories', function() {
 });
 
 // Voir une catégorie spécifique
-$router->get('/admin/categories/{id}', function($id) {
+$router->get('/admin/products/categories/{id}', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -226,7 +230,7 @@ $router->get('/admin/categories/{id}', function($id) {
 });
 
 // Formulaire de modification
-$router->get('/admin/categories/{id}/edit', function($id) {
+$router->get('/admin/products/categories/{id}/edit', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -235,7 +239,7 @@ $router->get('/admin/categories/{id}/edit', function($id) {
 });
 
 // Mettre à jour une catégorie
-$router->post('/admin/categories/{id}', function($id) {
+$router->post('/admin/products/categories/{id}', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -244,7 +248,7 @@ $router->post('/admin/categories/{id}', function($id) {
 });
 
 // Supprimer une catégorie (formulaire POST)
-$router->post('/admin/categories/{id}/delete', function($id) {
+$router->post('/admin/products/categories/{id}/delete', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
@@ -253,7 +257,7 @@ $router->post('/admin/categories/{id}/delete', function($id) {
 });
 
 // Activer/Désactiver une catégorie
-$router->post('/admin/categories/{id}/toggle', function($id) {
+$router->post('/admin/products/categories/{id}/toggle', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
     
