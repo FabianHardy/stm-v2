@@ -265,3 +265,78 @@ $router->post('/admin/products/categories/{id}/toggle', function($id) {
     $controller = new \App\Controllers\CategoryController();
     $controller->toggleActive((int)$id);
 });
+
+/**
+ * Routes : Products
+ * 
+ * À ajouter dans /stm/config/routes.php
+ * 
+ * @created 11/11/2025 21:50
+ */
+
+// ============================================
+// ROUTES PRODUITS (CRUD COMPLET)
+// ============================================
+
+// Liste des produits
+$router->get('/admin/products', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->index();
+});
+
+// Formulaire de création
+$router->get('/admin/products/create', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->create();
+});
+
+// Enregistrer un nouveau produit
+$router->post('/admin/products', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->store();
+});
+
+// Détails d'un produit
+$router->get('/admin/products/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->show((int)$id);
+});
+
+// Formulaire d'édition
+$router->get('/admin/products/{id}/edit', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour un produit
+$router->post('/admin/products/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->update((int)$id);
+});
+
+// Supprimer un produit
+$router->post('/admin/products/{id}/delete', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new ProductController();
+    $controller->destroy((int)$id);
+});
