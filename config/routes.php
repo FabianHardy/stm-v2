@@ -277,7 +277,7 @@ $router->post('/admin/products/categories/{id}/toggle', function($id) {
 // ============================================
 // ROUTES PRODUITS (CRUD COMPLET)
 // ============================================
-
+use App\Controllers\ProductController;
 // Liste des produits
 $router->get('/admin/products', function() {
     $middleware = new AuthMiddleware();
