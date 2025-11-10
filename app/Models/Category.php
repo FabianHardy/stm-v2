@@ -1,139 +1,116 @@
 <?php
 /**
- * Model Category
+ * Model : Category
+ * 
  * Gestion des catégories de produits
  * 
- * @package STM/Models
- * @version 1.0.0
- * @created 11/11/2025 09:30
- * @modified 11/11/2025 09:30 - Création initiale
+ * @created 11/11/2025
+ * @modified 11/11/2025 21:00 - Ajout méthode isUsedByProducts()
  */
 
 namespace App\Models;
 
 use Core\Database;
-use PDO;
 
 class Category
 {
-    private $db;
+    private Database $db;
 
     public function __construct()
     {
-        $this->db = Database::getInstance()->getConnection();
+        $this->db = Database::getInstance();
     }
 
     /**
-     * Récupérer toutes les catégories triées par ordre d'affichage
+     * Récupérer toutes les catégories avec filtres
      * 
-     * @param array $filters Filtres optionnels (is_active)
-     * @return array Liste des catégories
-     * 
-     * @created 11/11/2025 09:30
+     * @param array $filters Filtres de recherche
+     * @return array
      */
     public function getAll(array $filters = []): array
     {
-        $sql = "SELECT * FROM categories WHERE 1=1";
+        $query = "SELECT * FROM categories WHERE 1=1";
         $params = [];
 
-        // Filtre par statut actif/inactif
-        if (isset($filters['is_active'])) {
-            $sql .= " AND is_active = :is_active";
-            $params['is_active'] = $filters['is_active'];
+        // Filtre par recherche
+        if (!empty($filters['search'])) {
+            $query .= " AND (name_fr LIKE :search OR name_nl LIKE :search OR code LIKE :search)";
+            $params[':search'] = '%' . $filters['search'] . '%';
         }
 
-        // Tri par ordre d'affichage
-        $sql .= " ORDER BY display_order ASC, name_fr ASC";
-
-        $stmt = $this->db->prepare($sql);
-        
-        foreach ($params as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
+        // Filtre par statut
+        if (isset($filters['status'])) {
+            if ($filters['status'] === 'active') {
+                $query .= " AND is_active = 1";
+            } elseif ($filters['status'] === 'inactive') {
+                $query .= " AND is_active = 0";
+            }
         }
-        
-        $stmt->execute();
-        
-        return $stmt->fetchAll();
+
+        $query .= " ORDER BY display_order ASC, name_fr ASC";
+
+        return $this->db->query($query, $params);
     }
 
     /**
-     * Récupérer une catégorie par son ID
+     * Récupérer une catégorie par ID
      * 
-     * @param int $id ID de la catégorie
-     * @return array|false Données de la catégorie ou false
-     * 
-     * @created 11/11/2025 09:30
+     * @param int $id
+     * @return array|null
      */
-    public function findById(int $id)
+    public function findById(int $id): ?array
     {
-        $sql = "SELECT * FROM categories WHERE id = :id";
+        $query = "SELECT * FROM categories WHERE id = :id";
+        $result = $this->db->query($query, [':id' => $id]);
         
-        $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        
-        return $stmt->fetch();
+        return $result[0] ?? null;
     }
 
     /**
-     * Récupérer une catégorie par son code
+     * Récupérer une catégorie par code
      * 
-     * @param string $code Code de la catégorie
-     * @return array|false Données de la catégorie ou false
-     * 
-     * @created 11/11/2025 09:30
+     * @param string $code
+     * @return array|null
      */
-    public function findByCode(string $code)
+    public function findByCode(string $code): ?array
     {
-        $sql = "SELECT * FROM categories WHERE code = :code";
+        $query = "SELECT * FROM categories WHERE code = :code";
+        $result = $this->db->query($query, [':code' => $code]);
         
-        $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':code', $code);
-        $stmt->execute();
-        
-        return $stmt->fetch();
+        return $result[0] ?? null;
     }
 
     /**
      * Créer une nouvelle catégorie
      * 
-     * @param array $data Données de la catégorie
+     * @param array $data
      * @return int|false ID de la catégorie créée ou false
-     * 
-     * @created 11/11/2025 09:30
      */
     public function create(array $data)
     {
-        // Validation des données
-        $errors = $this->validate($data);
-        if (!empty($errors)) {
-            return false;
-        }
+        $query = "INSERT INTO categories (
+                    code, name_fr, name_nl, color, 
+                    icon_path, display_order, is_active
+                  ) VALUES (
+                    :code, :name_fr, :name_nl, :color,
+                    :icon_path, :display_order, :is_active
+                  )";
 
-        $sql = "INSERT INTO categories (
-                    code, name_fr, name_nl, color, icon_path, 
-                    display_order, is_active
-                ) VALUES (
-                    :code, :name_fr, :name_nl, :color, :icon_path, 
-                    :display_order, :is_active
-                )";
+        $params = [
+            ':code' => $data['code'],
+            ':name_fr' => $data['name_fr'],
+            ':name_nl' => $data['name_nl'] ?? $data['name_fr'],
+            ':color' => $data['color'],
+            ':icon_path' => $data['icon_path'] ?? null,
+            ':display_order' => $data['display_order'] ?? 0,
+            ':is_active' => $data['is_active'] ?? 1
+        ];
 
         try {
-            $stmt = $this->db->prepare($sql);
-            
-            $stmt->bindValue(':code', $data['code']);
-            $stmt->bindValue(':name_fr', $data['name_fr']);
-            $stmt->bindValue(':name_nl', $data['name_nl'] ?? '');
-            $stmt->bindValue(':color', $data['color']);
-            $stmt->bindValue(':icon_path', $data['icon_path'] ?? null);
-            $stmt->bindValue(':display_order', $data['display_order'] ?? 0, PDO::PARAM_INT);
-            $stmt->bindValue(':is_active', $data['is_active'] ?? 1, PDO::PARAM_INT);
-            
-            $stmt->execute();
-            
-            return (int) $this->db->lastInsertId();
+            $this->db->execute($query, $params);
+            return $this->db->lastInsertId();
         } catch (\PDOException $e) {
-            error_log("Erreur création catégorie : " . $e->getMessage());
+            error_log("Erreur création catégorie: " . $e->getMessage());
             return false;
         }
     }
@@ -141,21 +118,13 @@ class Category
     /**
      * Mettre à jour une catégorie
      * 
-     * @param int $id ID de la catégorie
-     * @param array $data Nouvelles données
-     * @return bool Succès de la mise à jour
-     * 
-     * @created 11/11/2025 09:30
+     * @param int $id
+     * @param array $data
+     * @return bool
      */
     public function update(int $id, array $data): bool
     {
-        // Validation des données
-        $errors = $this->validate($data, $id);
-        if (!empty($errors)) {
-            return false;
-        }
-
-        $sql = "UPDATE categories SET
+        $query = "UPDATE categories SET
                     code = :code,
                     name_fr = :name_fr,
                     name_nl = :name_nl,
@@ -163,23 +132,23 @@ class Category
                     icon_path = :icon_path,
                     display_order = :display_order,
                     is_active = :is_active
-                WHERE id = :id";
+                  WHERE id = :id";
+
+        $params = [
+            ':id' => $id,
+            ':code' => $data['code'],
+            ':name_fr' => $data['name_fr'],
+            ':name_nl' => $data['name_nl'] ?? $data['name_fr'],
+            ':color' => $data['color'],
+            ':icon_path' => $data['icon_path'] ?? null,
+            ':display_order' => $data['display_order'] ?? 0,
+            ':is_active' => $data['is_active'] ?? 1
+        ];
 
         try {
-            $stmt = $this->db->prepare($sql);
-            
-            $stmt->bindValue(':code', $data['code']);
-            $stmt->bindValue(':name_fr', $data['name_fr']);
-            $stmt->bindValue(':name_nl', $data['name_nl'] ?? '');
-            $stmt->bindValue(':color', $data['color']);
-            $stmt->bindValue(':icon_path', $data['icon_path'] ?? null);
-            $stmt->bindValue(':display_order', $data['display_order'] ?? 0, PDO::PARAM_INT);
-            $stmt->bindValue(':is_active', $data['is_active'] ?? 1, PDO::PARAM_INT);
-            $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-            
-            return $stmt->execute();
+            return $this->db->execute($query, $params);
         } catch (\PDOException $e) {
-            error_log("Erreur mise à jour catégorie : " . $e->getMessage());
+            error_log("Erreur mise à jour catégorie: " . $e->getMessage());
             return false;
         }
     }
@@ -187,47 +156,42 @@ class Category
     /**
      * Supprimer une catégorie
      * 
-     * @param int $id ID de la catégorie
-     * @return bool Succès de la suppression
-     * 
-     * @created 11/11/2025 09:30
+     * @param int $id
+     * @return bool
      */
     public function delete(int $id): bool
     {
-        // Vérifier si des produits utilisent cette catégorie
-        $sql = "SELECT COUNT(*) as count FROM products WHERE category_id = :id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        $result = $stmt->fetch();
-
-        if ($result['count'] > 0) {
-            error_log("Impossible de supprimer la catégorie $id : {$result['count']} produit(s) associé(s)");
-            return false;
-        }
-
-        // Supprimer la catégorie
-        $sql = "DELETE FROM categories WHERE id = :id";
+        $query = "DELETE FROM categories WHERE id = :id";
         
         try {
-            $stmt = $this->db->prepare($sql);
-            $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-            
-            return $stmt->execute();
+            return $this->db->execute($query, [':id' => $id]);
         } catch (\PDOException $e) {
-            error_log("Erreur suppression catégorie : " . $e->getMessage());
+            error_log("Erreur suppression catégorie: " . $e->getMessage());
             return false;
         }
     }
 
     /**
+     * Vérifier si la catégorie est utilisée par des produits
+     * 
+     * @param int $id ID de la catégorie
+     * @return bool True si utilisée, false sinon
+     * @created 11/11/2025 21:00
+     */
+    public function isUsedByProducts(int $id): bool
+    {
+        $query = "SELECT COUNT(*) as count FROM products WHERE category_id = :category_id";
+        $result = $this->db->query($query, [':category_id' => $id]);
+        
+        return ($result[0]['count'] ?? 0) > 0;
+    }
+
+    /**
      * Valider les données d'une catégorie
      * 
-     * @param array $data Données à valider
-     * @param int|null $id ID de la catégorie (pour update)
-     * @return array Tableau des erreurs
-     * 
-     * @created 11/11/2025 09:30
+     * @param array $data
+     * @param int|null $id ID pour update (null pour create)
+     * @return array Tableau d'erreurs (vide si valide)
      */
     public function validate(array $data, ?int $id = null): array
     {
@@ -236,126 +200,97 @@ class Category
         // Code obligatoire
         if (empty($data['code'])) {
             $errors['code'] = 'Le code est obligatoire';
-        } elseif (strlen($data['code']) > 50) {
-            $errors['code'] = 'Le code ne doit pas dépasser 50 caractères';
         } else {
-            // Vérifier l'unicité du code
+            // Vérifier unicité du code
             $existing = $this->findByCode($data['code']);
             if ($existing && (!$id || $existing['id'] != $id)) {
-                $errors['code'] = 'Ce code est déjà utilisé';
+                $errors['code'] = 'Ce code existe déjà';
             }
         }
 
-        // Nom français obligatoire
+        // Nom FR obligatoire
         if (empty($data['name_fr'])) {
             $errors['name_fr'] = 'Le nom français est obligatoire';
-        } elseif (strlen($data['name_fr']) > 255) {
-            $errors['name_fr'] = 'Le nom français ne doit pas dépasser 255 caractères';
         }
 
-        // Nom néerlandais optionnel mais avec limite
-        if (isset($data['name_nl']) && strlen($data['name_nl']) > 255) {
-            $errors['name_nl'] = 'Le nom néerlandais ne doit pas dépasser 255 caractères';
-        }
-
-        // Couleur obligatoire et format HEX
-        if (empty($data['color'])) {
+        // Couleur au format HEX
+        if (!empty($data['color'])) {
+            if (!preg_match('/^#[A-Fa-f0-9]{6}$/', $data['color'])) {
+                $errors['color'] = 'La couleur doit être au format HEX (#RRGGBB)';
+            }
+        } else {
             $errors['color'] = 'La couleur est obligatoire';
-        } elseif (!preg_match('/^#[0-9A-Fa-f]{6}$/', $data['color'])) {
-            $errors['color'] = 'La couleur doit être au format hexadécimal (#RRGGBB)';
         }
 
-        // Ordre d'affichage doit être un nombre positif
-        if (isset($data['display_order']) && (!is_numeric($data['display_order']) || $data['display_order'] < 0)) {
-            $errors['display_order'] = "L'ordre d'affichage doit être un nombre positif";
+        // Ordre d'affichage positif
+        if (isset($data['display_order']) && $data['display_order'] < 0) {
+            $errors['display_order'] = "L'ordre d'affichage doit être positif";
         }
 
         return $errors;
     }
 
     /**
-     * Compter le nombre total de catégories
+     * Compter les catégories
      * 
-     * @param array $filters Filtres optionnels
-     * @return int Nombre de catégories
-     * 
-     * @created 11/11/2025 09:30
+     * @return int
      */
-    public function count(array $filters = []): int
+    public function count(): int
     {
-        $sql = "SELECT COUNT(*) as total FROM categories WHERE 1=1";
-        $params = [];
-
-        if (isset($filters['is_active'])) {
-            $sql .= " AND is_active = :is_active";
-            $params['is_active'] = $filters['is_active'];
-        }
-
-        $stmt = $this->db->prepare($sql);
+        $query = "SELECT COUNT(*) as count FROM categories";
+        $result = $this->db->query($query);
         
-        foreach ($params as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
-        }
-        
-        $stmt->execute();
-        $result = $stmt->fetch();
-        
-        return (int) ($result['total'] ?? 0);
+        return (int)($result[0]['count'] ?? 0);
     }
 
     /**
-     * Mettre à jour l'ordre d'affichage de plusieurs catégories
+     * Obtenir les statistiques
      * 
-     * @param array $orders Tableau [id => display_order]
-     * @return bool Succès de la mise à jour
-     * 
-     * @created 11/11/2025 09:30
-     */
-    public function updateDisplayOrder(array $orders): bool
-    {
-        try {
-            $this->db->beginTransaction();
-
-            $sql = "UPDATE categories SET display_order = :display_order WHERE id = :id";
-            $stmt = $this->db->prepare($sql);
-
-            foreach ($orders as $id => $displayOrder) {
-                $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-                $stmt->bindValue(':display_order', $displayOrder, PDO::PARAM_INT);
-                $stmt->execute();
-            }
-
-            $this->db->commit();
-            return true;
-        } catch (\PDOException $e) {
-            $this->db->rollBack();
-            error_log("Erreur mise à jour ordre catégories : " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Récupérer les statistiques des catégories
-     * 
-     * @return array Statistiques
-     * 
-     * @created 11/11/2025 09:30
+     * @return array
      */
     public function getStats(): array
     {
-        $sql = "SELECT 
-                    COUNT(*) as total,
-                    SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active,
-                    SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as inactive
-                FROM categories";
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute();
-        
-        return $stmt->fetch() ?: [
-            'total' => 0,
+        $stats = [
+            'total' => $this->count(),
             'active' => 0,
             'inactive' => 0
         ];
+
+        $query = "SELECT 
+                    COUNT(*) as total,
+                    SUM(is_active) as active
+                  FROM categories";
+        
+        $result = $this->db->query($query);
+        
+        if (!empty($result)) {
+            $stats['total'] = (int)$result[0]['total'];
+            $stats['active'] = (int)$result[0]['active'];
+            $stats['inactive'] = $stats['total'] - $stats['active'];
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Mettre à jour l'ordre d'affichage
+     * 
+     * @param int $id
+     * @param int $order
+     * @return bool
+     */
+    public function updateDisplayOrder(int $id, int $order): bool
+    {
+        $query = "UPDATE categories SET display_order = :order WHERE id = :id";
+        
+        try {
+            return $this->db->execute($query, [
+                ':id' => $id,
+                ':order' => $order
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur mise à jour ordre: " . $e->getMessage());
+            return false;
+        }
     }
 }
