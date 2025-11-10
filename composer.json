@@ -1,0 +1,25 @@
+{
+    "name": "trendyfoods/stm-v2",
+    "description": "Système de gestion de promotions B2B pour Trendy Foods",
+    "type": "project",
+    "require": {
+        "php": "^8.3",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Core\\": "core/",
+            "App\\": "app/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

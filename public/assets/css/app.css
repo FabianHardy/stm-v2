@@ -1,0 +1,240 @@
+/**
+ * STM v2 - Styles principaux
+ * Base Tailwind CSS avec personnalisations
+ */
+
+/* Directives Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===================================
+   STYLES DE BASE
+   =================================== */
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-gray-50 text-gray-900;
+  }
+  
+  h1 {
+    @apply text-4xl font-bold mb-4;
+  }
+  
+  h2 {
+    @apply text-3xl font-semibold mb-3;
+  }
+  
+  h3 {
+    @apply text-2xl font-semibold mb-2;
+  }
+  
+  h4 {
+    @apply text-xl font-medium mb-2;
+  }
+  
+  a {
+    @apply text-trendy-600 hover:text-trendy-700 transition-colors;
+  }
+}
+
+/* ===================================
+   COMPOSANTS PERSONNALISÉS
+   =================================== */
+
+@layer components {
+  
+  /* Boutons */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 inline-flex items-center justify-center;
+  }
+  
+  .btn-primary {
+    @apply bg-trendy-600 text-white hover:bg-trendy-700 focus:ring-2 focus:ring-trendy-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2;
+  }
+  
+  .btn-outline {
+    @apply border-2 border-trendy-600 text-trendy-600 hover:bg-trendy-50;
+  }
+  
+  /* Cartes */
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+  
+  .card-header {
+    @apply border-b border-gray-200 pb-4 mb-4;
+  }
+  
+  /* Formulaires */
+  .form-group {
+    @apply mb-4;
+  }
+  
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+  
+  .form-input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-trendy-500 focus:border-transparent transition;
+  }
+  
+  .form-select {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-trendy-500 focus:border-transparent transition;
+  }
+  
+  .form-textarea {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-trendy-500 focus:border-transparent transition resize-none;
+  }
+  
+  .form-error {
+    @apply text-red-600 text-sm mt-1;
+  }
+  
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-danger {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .badge-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  /* Alertes */
+  .alert {
+    @apply p-4 rounded-lg border;
+  }
+  
+  .alert-success {
+    @apply bg-green-50 border-green-200 text-green-800;
+  }
+  
+  .alert-warning {
+    @apply bg-yellow-50 border-yellow-200 text-yellow-800;
+  }
+  
+  .alert-danger {
+    @apply bg-red-50 border-red-200 text-red-800;
+  }
+  
+  .alert-info {
+    @apply bg-blue-50 border-blue-200 text-blue-800;
+  }
+  
+  /* Tables */
+  .table {
+    @apply w-full border-collapse;
+  }
+  
+  .table thead {
+    @apply bg-gray-50 border-b-2 border-gray-200;
+  }
+  
+  .table th {
+    @apply px-4 py-3 text-left text-sm font-semibold text-gray-700;
+  }
+  
+  .table td {
+    @apply px-4 py-3 text-sm text-gray-900 border-b border-gray-200;
+  }
+  
+  .table tbody tr:hover {
+    @apply bg-gray-50;
+  }
+}
+
+/* ===================================
+   UTILITAIRES PERSONNALISÉS
+   =================================== */
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .transition-all-300 {
+    transition: all 300ms ease-in-out;
+  }
+}
+
+/* ===================================
+   STYLES SPÉCIFIQUES STM
+   =================================== */
+
+/* Carte produit */
+.product-card {
+  @apply card hover:shadow-md transition-shadow cursor-pointer;
+}
+
+.product-image {
+  @apply w-full h-48 object-cover rounded-lg mb-4;
+}
+
+/* Étapes de formulaire */
+.step-indicator {
+  @apply flex items-center justify-center w-10 h-10 rounded-full font-semibold;
+}
+
+.step-indicator.active {
+  @apply bg-trendy-600 text-white;
+}
+
+.step-indicator.completed {
+  @apply bg-green-600 text-white;
+}
+
+.step-indicator.inactive {
+  @apply bg-gray-200 text-gray-600;
+}
+
+/* Panier */
+.cart-item {
+  @apply flex items-center gap-4 p-4 border-b border-gray-200 last:border-b-0;
+}
+
+/* Statistiques */
+.stat-card {
+  @apply card text-center;
+}
+
+.stat-value {
+  @apply text-3xl font-bold text-trendy-600;
+}
+
+.stat-label {
+  @apply text-sm text-gray-600 mt-1;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-4 border-gray-200 border-t-trendy-600;
+}

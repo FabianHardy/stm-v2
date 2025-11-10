@@ -1,0 +1,156 @@
+# ================================================
+# .gitignore pour STM v2
+# ================================================
+# À placer à la racine : D:\STM\stm-v2\.gitignore
+# ================================================
+
+# ================================================
+# FICHIERS SENSIBLES (NE JAMAIS COMMIT)
+# ================================================
+.env
+.env.local
+.env.production
+clear-cache.php
+/config/credentials.php
+
+# ================================================
+# DEPENDENCIES & PACKAGES
+# ================================================
+/vendor/
+node_modules/
+composer.phar
+package-lock.json
+yarn.lock
+
+# ================================================
+# LOGS & TEMP FILES
+# ================================================
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+*.swp
+*.swo
+*~
+
+# Logs Laravel/PHP
+storage/*.log
+storage/logs/*
+!storage/logs/.gitkeep
+
+# ================================================
+# OS FILES
+# ================================================
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ================================================
+# IDE & EDITORS
+# ================================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PhpStorm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# NetBeans
+nbproject/
+
+# ================================================
+# BUILD & COMPILED
+# ================================================
+/dist/
+/build/
+*.compiled
+*.min.js
+*.min.css
+
+# ================================================
+# UPLOADS & USER DATA
+# ================================================
+/public/uploads/*
+!/public/uploads/.gitkeep
+/storage/app/public/*
+!/storage/app/public/.gitkeep
+
+# ================================================
+# DATABASE
+# ================================================
+*.sql
+*.sqlite
+*.db
+/database/*.sqlite
+!/database/.gitkeep
+
+# Backups
+*.backup
+*.dump
+*backup*.sql
+
+# ================================================
+# CACHE
+# ================================================
+/cache/*
+!/cache/.gitkeep
+/tmp/*
+!/tmp/.gitkeep
+
+# ================================================
+# DOCUMENTATION BUILDS
+# ================================================
+/docs/_build/
+/docs/.doctrees/
+
+# ================================================
+# TEST FILES
+# ================================================
+/tests/_output/*
+/tests/_support/_generated
+phpunit.xml
+.phpunit.result.cache
+
+# ================================================
+# SECURITY
+# ================================================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+known_hosts
+
+# ================================================
+# NOTES
+# ================================================
+# Fichiers .env : JAMAIS commit !
+# Créer .env.example avec valeurs fictives
+# clear-cache.php : Utilitaire de debug, ne pas exposer

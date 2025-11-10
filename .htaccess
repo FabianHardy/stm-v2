@@ -1,0 +1,21 @@
+# STM v2 - Configuration racine pour rediriger vers public/
+# Fichier : /home/trendyblog/actions.trendyfoods.com/stm/.htaccess
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Rediriger toutes les requêtes vers le dossier public/
+    RewriteCond %{REQUEST_URI} !^/stm/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Protéger les fichiers sensibles du dossier racine
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(env|json|lock|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

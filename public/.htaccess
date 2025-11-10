@@ -1,0 +1,38 @@
+# STM v2 - Configuration pour /stm/public/
+# Fichier : /home/trendyblog/actions.trendyfoods.com/stm/public/.htaccess
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Base du sous-dossier
+    RewriteBase /stm/
+    
+    # Si le fichier ou dossier existe, le servir directement
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Tout rediriger vers index.php
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Désactiver l'affichage des répertoires
+Options -Indexes
+
+# Protéger les fichiers sensibles
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(env|json|lock|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Headers de sécurité
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
