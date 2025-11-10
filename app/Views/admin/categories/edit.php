@@ -67,7 +67,7 @@ ob_start();
 
 <!-- Formulaire -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>" id="categoryForm">
+    <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>" id="categoryForm" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
         <div class="space-y-6">
@@ -160,27 +160,82 @@ ob_start();
 
             <!-- Icône -->
             <div>
-                <label for="icon_path" class="block text-sm font-medium text-gray-700 mb-2">
-                    Chemin de l'icône (optionnel)
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Icône de la catégorie (optionnel)
                 </label>
-                <input type="text" 
-                       id="icon_path" 
-                       name="icon_path" 
-                       value="<?= htmlspecialchars($old['icon_path']) ?>"
-                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                       placeholder="/assets/images/categories/alcohol.svg">
-                <p class="mt-1 text-sm text-gray-500">
-                    URL ou chemin vers l'icône SVG de la catégorie
-                </p>
+                
+                <!-- Icône actuelle -->
                 <?php if (!empty($old['icon_path'])): ?>
-                    <div class="mt-2 flex items-center gap-2">
-                        <span class="text-sm text-gray-600">Aperçu :</span>
+                <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <p class="text-sm text-gray-600 mb-2">Icône actuelle :</p>
+                    <div class="flex items-center gap-4">
                         <img src="<?= htmlspecialchars($old['icon_path']) ?>" 
                              alt="Icône actuelle" 
-                             class="h-8 w-8"
-                             onerror="this.style.display='none'">
+                             class="h-16 w-16 object-contain border border-gray-300 rounded p-2 bg-white">
+                        <div class="text-sm text-gray-500">
+                            <code class="bg-white px-2 py-1 rounded"><?= htmlspecialchars($old['icon_path']) ?></code>
+                        </div>
                     </div>
+                </div>
                 <?php endif; ?>
+                
+                <!-- Choix entre upload et URL -->
+                <div class="space-y-4">
+                    <!-- Upload de fichier (nouvelle icône) -->
+                    <div>
+                        <label for="icon" class="block text-sm text-gray-600 mb-2">
+                            <i class="fas fa-upload mr-2"></i>Uploader une nouvelle icône (SVG, PNG, JPG - max 2MB)
+                        </label>
+                        <input type="file" 
+                               id="icon" 
+                               name="icon" 
+                               accept=".svg,.png,.jpg,.jpeg,.webp"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                               onchange="previewIcon(this)">
+                        <p class="mt-1 text-sm text-gray-500">
+                            <?php if (!empty($old['icon_path'])): ?>
+                                L'ancienne icône sera remplacée si vous en uploadez une nouvelle
+                            <?php else: ?>
+                                Aucune icône actuellement. Uploadez-en une ou saisissez une URL ci-dessous
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    
+                    <!-- OU URL -->
+                    <div class="flex items-center">
+                        <div class="flex-grow border-t border-gray-300"></div>
+                        <span class="px-4 text-sm text-gray-500">OU</span>
+                        <div class="flex-grow border-t border-gray-300"></div>
+                    </div>
+                    
+                    <div>
+                        <label for="icon_path" class="block text-sm text-gray-600 mb-2">
+                            <i class="fas fa-link mr-2"></i>URL de l'icône
+                        </label>
+                        <input type="text" 
+                               id="icon_path" 
+                               name="icon_path" 
+                               value="<?= htmlspecialchars($old['icon_path']) ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                               placeholder="/assets/images/categories/alcohol.svg">
+                    </div>
+                    
+                    <!-- Aperçu de la nouvelle icône -->
+                    <div id="icon_preview_container" class="hidden">
+                        <p class="text-sm text-gray-600 mb-2">Aperçu de la nouvelle icône :</p>
+                        <div class="flex items-center gap-4">
+                            <img id="icon_preview" 
+                                 src="" 
+                                 alt="Aperçu" 
+                                 class="h-16 w-16 object-contain border border-gray-300 rounded p-2 bg-gray-50">
+                            <button type="button" 
+                                    onclick="clearIconPreview()" 
+                                    class="text-sm text-red-600 hover:text-red-800">
+                                <i class="fas fa-times mr-1"></i>Annuler
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Ordre d'affichage -->
@@ -247,7 +302,7 @@ ob_start();
 $content = ob_get_clean();
 $title = 'Modifier ' . htmlspecialchars($category['name_fr']) . ' - STM';
 
-// 3. Scripts JS pour le sélecteur de couleur
+// 3. Scripts JS pour le sélecteur de couleur et l'aperçu d'icône
 $pageScripts = "
 <script>
     // Synchroniser le color picker avec l'input texte
@@ -268,6 +323,34 @@ $pageScripts = "
             colorPreview.style.backgroundColor = color;
         }
     });
+    
+    // Aperçu de l'icône uploadée
+    function previewIcon(input) {
+        const preview = document.getElementById('icon_preview');
+        const container = document.getElementById('icon_preview_container');
+        
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+                container.classList.remove('hidden');
+            };
+            
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    
+    // Supprimer l'aperçu
+    function clearIconPreview() {
+        const input = document.getElementById('icon');
+        const preview = document.getElementById('icon_preview');
+        const container = document.getElementById('icon_preview_container');
+        
+        input.value = '';
+        preview.src = '';
+        container.classList.add('hidden');
+    }
 </script>
 ";
 
