@@ -108,7 +108,7 @@ ob_start();
                 <div class="ml-5 w-0 flex-1">
                     <dl>
                         <dt class="text-sm font-medium text-gray-500 truncate">Catégories</dt>
-                        <dd class="text-2xl font-bold text-indigo-600"><?php echo $stats['categories']; ?></dd>
+                        <dd class="text-2xl font-bold text-indigo-600"><?php echo isset($stats['categories']) ? $stats['categories'] : count($categories); ?></dd>
                     </dl>
                 </div>
             </div>
