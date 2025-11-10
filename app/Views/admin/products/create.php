@@ -2,10 +2,10 @@
 /**
  * Vue : Création d'un produit
  * 
- * Formulaire de création d'un nouveau produit
+ * Formulaire de création d'un nouveau produit lié à une campagne
  * 
  * @created 11/11/2025 21:45
- * @modified 11/11/2025 22:30 - Amélioration mise en page
+ * @modified 11/11/2025 23:45 - Adaptation besoins Trendy Foods
  */
 
 use Core\Session;
@@ -68,7 +68,7 @@ $errors = $errors ?? [];
                 📋 Informations de base
             </h3>
             <p class="mt-1 text-sm text-gray-500">
-                Codes d'identification et catégorisation du produit
+                Code d'identification et campagne associée
             </p>
         </div>
         
@@ -78,7 +78,7 @@ $errors = $errors ?? [];
                 <!-- Code produit -->
                 <div>
                     <label for="product_code" class="block text-sm font-medium text-gray-700">
-                        Code produit <span class="text-red-500">*</span>
+                        Code article <span class="text-red-500">*</span>
                     </label>
                     <input type="text" 
                            name="product_code" 
@@ -87,44 +87,34 @@ $errors = $errors ?? [];
                            placeholder="Ex: COCA001"
                            required
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['product_code']) ? 'border-red-300' : ''; ?>">
+                    <p class="mt-1 text-xs text-gray-500">Code unique de l'article (sert aussi de numéro de colis)</p>
                     <?php if (isset($errors['product_code'])): ?>
                         <p class="mt-1 text-sm text-red-600"><?php echo $errors['product_code']; ?></p>
                     <?php endif; ?>
                 </div>
 
-                <!-- Numéro de colis -->
+                <!-- Campagne -->
                 <div>
-                    <label for="package_number" class="block text-sm font-medium text-gray-700">
-                        Numéro de colis <span class="text-red-500">*</span>
+                    <label for="campaign_id" class="block text-sm font-medium text-gray-700">
+                        Campagne <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" 
-                           name="package_number" 
-                           id="package_number"
-                           value="<?php echo htmlspecialchars($old['package_number'] ?? ''); ?>"
-                           placeholder="Ex: 12345678"
-                           required
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    <?php if (isset($errors['package_number'])): ?>
-                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['package_number']; ?></p>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Code EAN -->
-                <div>
-                    <label for="ean" class="block text-sm font-medium text-gray-700">
-                        Code EAN (13 chiffres)
-                    </label>
-                    <input type="text" 
-                           name="ean" 
-                           id="ean"
-                           value="<?php echo htmlspecialchars($old['ean'] ?? ''); ?>"
-                           placeholder="Ex: 5449000000996"
-                           pattern="\d{13}"
-                           maxlength="13"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    <p class="mt-1 text-xs text-gray-500">Code-barres 13 chiffres (optionnel)</p>
-                    <?php if (isset($errors['ean'])): ?>
-                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['ean']; ?></p>
+                    <select name="campaign_id" 
+                            id="campaign_id"
+                            required
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['campaign_id']) ? 'border-red-300' : ''; ?>">
+                        <option value="">-- Sélectionner une campagne --</option>
+                        <?php foreach ($campaigns as $campaign): ?>
+                            <option value="<?php echo $campaign['id']; ?>" 
+                                    <?php echo (isset($old['campaign_id']) && $old['campaign_id'] == $campaign['id']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($campaign['title']); ?>
+                                (<?php echo strtoupper($campaign['country']); ?> - 
+                                <?php echo date('d/m/Y', strtotime($campaign['start_date'])); ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Campagne à laquelle appartient ce produit</p>
+                    <?php if (isset($errors['campaign_id'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['campaign_id']; ?></p>
                     <?php endif; ?>
                 </div>
 
@@ -176,7 +166,7 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['name_fr'] ?? ''); ?>"
                            placeholder="Ex: Coca-Cola Original 24x33cl"
                            required
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['name_fr']) ? 'border-red-300' : ''; ?>">
                     <?php if (isset($errors['name_fr'])): ?>
                         <p class="mt-1 text-sm text-red-600"><?php echo $errors['name_fr']; ?></p>
                     <?php endif; ?>
@@ -198,13 +188,14 @@ $errors = $errors ?? [];
                 <!-- Image FR -->
                 <div>
                     <label for="image_fr" class="block text-sm font-medium text-gray-700">
-                        Image du produit
+                        Image du produit <span class="text-red-500">*</span>
                     </label>
                     <div class="mt-1 flex items-center">
                         <input type="file" 
                                name="image_fr" 
                                id="image_fr"
                                accept="image/jpeg,image/jpg,image/png,image/webp"
+                               required
                                class="block w-full text-sm text-gray-500
                                       file:mr-4 file:py-2 file:px-4
                                       file:rounded-md file:border-0
@@ -212,7 +203,10 @@ $errors = $errors ?? [];
                                       file:bg-indigo-50 file:text-indigo-700
                                       hover:file:bg-indigo-100">
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB</p>
+                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB - Sera utilisée aussi pour NL si non uploadée</p>
+                    <?php if (isset($errors['image_fr'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['image_fr']; ?></p>
+                    <?php endif; ?>
                 </div>
 
             </div>
@@ -226,7 +220,7 @@ $errors = $errors ?? [];
                 🇳🇱 Contenu en néerlandais
             </h3>
             <p class="mt-1 text-sm text-gray-500">
-                Informations visibles par les clients néerlandophones
+                Informations visibles par les clients néerlandophones (optionnel)
             </p>
         </div>
         
@@ -262,7 +256,7 @@ $errors = $errors ?? [];
                 <!-- Image NL -->
                 <div>
                     <label for="image_nl" class="block text-sm font-medium text-gray-700">
-                        Productafbeelding
+                        Productafbeelding (optionnel)
                     </label>
                     <div class="mt-1">
                         <input type="file" 
@@ -276,7 +270,7 @@ $errors = $errors ?? [];
                                       file:bg-indigo-50 file:text-indigo-700
                                       hover:file:bg-indigo-100">
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB</p>
+                    <p class="mt-1 text-xs text-gray-500">Si non uploadée, l'image française sera utilisée automatiquement</p>
                 </div>
 
             </div>
