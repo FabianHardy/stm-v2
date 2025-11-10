@@ -1,155 +1,399 @@
 <?php
 /**
  * Vue : Modification d'un produit
- * @created 11/11/2025 21:45
+ * 
+ * Formulaire d'édition d'un produit existant avec upload d'images
+ * 
+ * @created 11/11/2025 22:45
+ * @modified 11/11/2025 23:00 - Amélioration mise en page (style campaigns)
  */
+
 use Core\Session;
+
+// Démarrer la capture du contenu pour le layout
 ob_start();
+
+// Récupérer les anciennes valeurs et erreurs
 $old = $old ?? [];
 $errors = $errors ?? [];
 ?>
 
+<!-- En-tête de la page -->
 <div class="mb-6">
-    <h1 class="text-3xl font-bold text-gray-900">Modifier le produit</h1>
-    <p class="mt-2 text-sm text-gray-600"><?php echo htmlspecialchars($product['name_fr']); ?></p>
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Modifier le produit</h1>
+            <p class="mt-2 text-sm text-gray-600">
+                <?php echo htmlspecialchars($product['name_fr']); ?> 
+                <span class="text-gray-400">(<?php echo htmlspecialchars($product['product_code']); ?>)</span>
+            </p>
+        </div>
+        <a href="/stm/admin/products/<?php echo $product['id']; ?>" 
+           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            ← Retour aux détails
+        </a>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav class="mt-4 flex" aria-label="Breadcrumb">
+        <ol class="inline-flex items-center space-x-1 md:space-x-3">
+            <li class="inline-flex items-center">
+                <a href="/stm/admin/dashboard" class="text-gray-700 hover:text-gray-900">
+                    🏠 Dashboard
+                </a>
+            </li>
+            <li>
+                <div class="flex items-center">
+                    <span class="mx-2 text-gray-400">/</span>
+                    <a href="/stm/admin/products" class="text-gray-700 hover:text-gray-900">
+                        Produits
+                    </a>
+                </div>
+            </li>
+            <li>
+                <div class="flex items-center">
+                    <span class="mx-2 text-gray-400">/</span>
+                    <a href="/stm/admin/products/<?php echo $product['id']; ?>" class="text-gray-700 hover:text-gray-900">
+                        <?php echo htmlspecialchars($product['product_code']); ?>
+                    </a>
+                </div>
+            </li>
+            <li aria-current="page">
+                <div class="flex items-center">
+                    <span class="mx-2 text-gray-400">/</span>
+                    <span class="text-gray-500">Modifier</span>
+                </div>
+            </li>
+        </ol>
+    </nav>
 </div>
 
-<form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>" enctype="multipart/form-data" class="space-y-6">
+<!-- Formulaire -->
+<form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>" enctype="multipart/form-data">
     <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
+    <input type="hidden" name="_method" value="PUT">
 
-    <!-- Informations de base -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-medium mb-4">📋 Informations de base</h2>
+    <!-- Section : Informations de base -->
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                📋 Informations de base
+            </h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Codes d'identification et catégorisation du produit
+            </p>
+        </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Code produit *</label>
-                <input type="text" name="product_code" value="<?php echo htmlspecialchars($old['product_code'] ?? $product['product_code']); ?>" required
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-                <?php if (isset($errors['product_code'])): ?>
-                    <p class="mt-1 text-sm text-red-600"><?php echo $errors['product_code']; ?></p>
-                <?php endif; ?>
-            </div>
+        <div class="px-4 py-5 sm:p-6">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                
+                <!-- Code produit -->
+                <div>
+                    <label for="product_code" class="block text-sm font-medium text-gray-700">
+                        Code produit <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           name="product_code" 
+                           id="product_code"
+                           value="<?php echo htmlspecialchars($old['product_code'] ?? $product['product_code']); ?>"
+                           placeholder="Ex: COCA001"
+                           required
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['product_code']) ? 'border-red-300' : ''; ?>">
+                    <?php if (isset($errors['product_code'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['product_code']; ?></p>
+                    <?php endif; ?>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">N° de colis *</label>
-                <input type="text" name="package_number" value="<?php echo htmlspecialchars($old['package_number'] ?? $product['package_number']); ?>" required
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-            </div>
+                <!-- Numéro de colis -->
+                <div>
+                    <label for="package_number" class="block text-sm font-medium text-gray-700">
+                        Numéro de colis <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           name="package_number" 
+                           id="package_number"
+                           value="<?php echo htmlspecialchars($old['package_number'] ?? $product['package_number']); ?>"
+                           placeholder="Ex: 12345678"
+                           required
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <?php if (isset($errors['package_number'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['package_number']; ?></p>
+                    <?php endif; ?>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Code EAN</label>
-                <input type="text" name="ean" pattern="\d{13}" value="<?php echo htmlspecialchars($old['ean'] ?? $product['ean']); ?>"
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-            </div>
+                <!-- Code EAN -->
+                <div>
+                    <label for="ean" class="block text-sm font-medium text-gray-700">
+                        Code EAN (13 chiffres)
+                    </label>
+                    <input type="text" 
+                           name="ean" 
+                           id="ean"
+                           value="<?php echo htmlspecialchars($old['ean'] ?? $product['ean'] ?? ''); ?>"
+                           placeholder="Ex: 5449000000996"
+                           pattern="\d{13}"
+                           maxlength="13"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <p class="mt-1 text-xs text-gray-500">Code-barres 13 chiffres (optionnel)</p>
+                    <?php if (isset($errors['ean'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['ean']; ?></p>
+                    <?php endif; ?>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Catégorie</label>
-                <select name="category_id" class="mt-1 block w-full border-gray-300 rounded-md">
-                    <option value="">-- Aucune catégorie --</option>
-                    <?php foreach ($categories as $cat): ?>
-                        <option value="<?php echo $cat['id']; ?>" <?php echo ($product['category_id'] == $cat['id']) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($cat['name_fr']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <!-- Catégorie -->
+                <div>
+                    <label for="category_id" class="block text-sm font-medium text-gray-700">
+                        Catégorie
+                    </label>
+                    <select name="category_id" 
+                            id="category_id"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">-- Sélectionner une catégorie --</option>
+                        <?php foreach ($categories as $cat): ?>
+                            <option value="<?php echo $cat['id']; ?>" 
+                                    <?php echo ((isset($old['category_id']) && $old['category_id'] == $cat['id']) || 
+                                               (!isset($old['category_id']) && $product['category_id'] == $cat['id'])) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($cat['name_fr']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Optionnel - pour organiser le catalogue</p>
+                </div>
+
             </div>
         </div>
     </div>
 
-    <!-- Descriptions FR -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-medium mb-4">🇫🇷 Contenu français</h2>
+    <!-- Section : Contenu français -->
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                🇫🇷 Contenu en français
+            </h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Informations visibles par les clients francophones
+            </p>
+        </div>
         
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Nom *</label>
-                <input type="text" name="name_fr" value="<?php echo htmlspecialchars($old['name_fr'] ?? $product['name_fr']); ?>" required
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-            </div>
+        <div class="px-4 py-5 sm:p-6">
+            <div class="space-y-6">
+                
+                <!-- Nom FR -->
+                <div>
+                    <label for="name_fr" class="block text-sm font-medium text-gray-700">
+                        Nom du produit <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           name="name_fr" 
+                           id="name_fr"
+                           value="<?php echo htmlspecialchars($old['name_fr'] ?? $product['name_fr']); ?>"
+                           placeholder="Ex: Coca-Cola Original 24x33cl"
+                           required
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['name_fr']) ? 'border-red-300' : ''; ?>">
+                    <?php if (isset($errors['name_fr'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['name_fr']; ?></p>
+                    <?php endif; ?>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Description</label>
-                <textarea name="description_fr" rows="3" class="mt-1 block w-full border-gray-300 rounded-md"><?php echo htmlspecialchars($old['description_fr'] ?? $product['description_fr']); ?></textarea>
-            </div>
+                <!-- Description FR -->
+                <div>
+                    <label for="description_fr" class="block text-sm font-medium text-gray-700">
+                        Description
+                    </label>
+                    <textarea name="description_fr" 
+                              id="description_fr" 
+                              rows="4"
+                              placeholder="Description détaillée du produit..."
+                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><?php echo htmlspecialchars($old['description_fr'] ?? $product['description_fr'] ?? ''); ?></textarea>
+                    <p class="mt-1 text-xs text-gray-500">Optionnel - visible sur la fiche produit</p>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Image FR</label>
-                <?php if (!empty($product['image_fr'])): ?>
-                    <img src="<?php echo htmlspecialchars($product['image_fr']); ?>" alt="Image actuelle" class="mt-2 h-24 w-24 object-cover rounded">
-                    <p class="mt-1 text-xs text-gray-500">Image actuelle - Upload pour remplacer</p>
-                <?php endif; ?>
-                <input type="file" name="image_fr" accept="image/jpeg,image/jpg,image/png,image/webp"
-                       class="mt-1 block w-full">
+                <!-- Image FR -->
+                <div>
+                    <label for="image_fr" class="block text-sm font-medium text-gray-700">
+                        Image du produit
+                    </label>
+                    
+                    <!-- Image actuelle -->
+                    <?php if (!empty($product['image_fr'])): ?>
+                        <div class="mt-2 mb-3">
+                            <img src="<?php echo htmlspecialchars($product['image_fr']); ?>" 
+                                 alt="Image actuelle" 
+                                 class="h-32 w-32 object-cover rounded-lg border-2 border-gray-200 shadow-sm">
+                            <p class="mt-1 text-xs text-gray-500">Image actuelle - uploader pour remplacer</p>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="mt-1">
+                        <input type="file" 
+                               name="image_fr" 
+                               id="image_fr"
+                               accept="image/jpeg,image/jpg,image/png,image/webp"
+                               class="block w-full text-sm text-gray-500
+                                      file:mr-4 file:py-2 file:px-4
+                                      file:rounded-md file:border-0
+                                      file:text-sm file:font-medium
+                                      file:bg-indigo-50 file:text-indigo-700
+                                      hover:file:bg-indigo-100">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB</p>
+                </div>
+
             </div>
         </div>
     </div>
 
-    <!-- Descriptions NL -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-medium mb-4">🇳🇱 Contenu néerlandais</h2>
+    <!-- Section : Contenu néerlandais -->
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                🇳🇱 Contenu en néerlandais
+            </h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Informations visibles par les clients néerlandophones
+            </p>
+        </div>
         
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Naam</label>
-                <input type="text" name="name_nl" value="<?php echo htmlspecialchars($old['name_nl'] ?? $product['name_nl']); ?>"
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-            </div>
+        <div class="px-4 py-5 sm:p-6">
+            <div class="space-y-6">
+                
+                <!-- Nom NL -->
+                <div>
+                    <label for="name_nl" class="block text-sm font-medium text-gray-700">
+                        Productnaam
+                    </label>
+                    <input type="text" 
+                           name="name_nl" 
+                           id="name_nl"
+                           value="<?php echo htmlspecialchars($old['name_nl'] ?? $product['name_nl'] ?? ''); ?>"
+                           placeholder="Bv: Coca-Cola Original 24x33cl"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <p class="mt-1 text-xs text-gray-500">Optionnel - si vide, le nom français sera utilisé</p>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Beschrijving</label>
-                <textarea name="description_nl" rows="3" class="mt-1 block w-full border-gray-300 rounded-md"><?php echo htmlspecialchars($old['description_nl'] ?? $product['description_nl']); ?></textarea>
-            </div>
+                <!-- Description NL -->
+                <div>
+                    <label for="description_nl" class="block text-sm font-medium text-gray-700">
+                        Beschrijving
+                    </label>
+                    <textarea name="description_nl" 
+                              id="description_nl" 
+                              rows="4"
+                              placeholder="Gedetailleerde productbeschrijving..."
+                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><?php echo htmlspecialchars($old['description_nl'] ?? $product['description_nl'] ?? ''); ?></textarea>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Afbeelding NL</label>
-                <?php if (!empty($product['image_nl'])): ?>
-                    <img src="<?php echo htmlspecialchars($product['image_nl']); ?>" alt="Image actuelle" class="mt-2 h-24 w-24 object-cover rounded">
-                <?php endif; ?>
-                <input type="file" name="image_nl" accept="image/jpeg,image/jpg,image/png,image/webp"
-                       class="mt-1 block w-full">
+                <!-- Image NL -->
+                <div>
+                    <label for="image_nl" class="block text-sm font-medium text-gray-700">
+                        Productafbeelding
+                    </label>
+                    
+                    <!-- Image actuelle -->
+                    <?php if (!empty($product['image_nl'])): ?>
+                        <div class="mt-2 mb-3">
+                            <img src="<?php echo htmlspecialchars($product['image_nl']); ?>" 
+                                 alt="Image actuelle NL" 
+                                 class="h-32 w-32 object-cover rounded-lg border-2 border-gray-200 shadow-sm">
+                            <p class="mt-1 text-xs text-gray-500">Huidige afbeelding - uploaden om te vervangen</p>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="mt-1">
+                        <input type="file" 
+                               name="image_nl" 
+                               id="image_nl"
+                               accept="image/jpeg,image/jpg,image/png,image/webp"
+                               class="block w-full text-sm text-gray-500
+                                      file:mr-4 file:py-2 file:px-4
+                                      file:rounded-md file:border-0
+                                      file:text-sm file:font-medium
+                                      file:bg-indigo-50 file:text-indigo-700
+                                      hover:file:bg-indigo-100">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB</p>
+                </div>
+
             </div>
         </div>
     </div>
 
-    <!-- Options -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-medium mb-4">⚙️ Options</h2>
+    <!-- Section : Paramètres -->
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                ⚙️ Paramètres
+            </h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Options d'affichage et de statut du produit
+            </p>
+        </div>
         
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Ordre d'affichage</label>
-                <input type="number" name="display_order" value="<?php echo htmlspecialchars($product['display_order']); ?>" min="0"
-                       class="mt-1 block w-full border-gray-300 rounded-md">
-            </div>
+        <div class="px-4 py-5 sm:p-6">
+            <div class="space-y-6">
+                
+                <!-- Ordre d'affichage -->
+                <div class="sm:w-1/3">
+                    <label for="display_order" class="block text-sm font-medium text-gray-700">
+                        Ordre d'affichage
+                    </label>
+                    <input type="number" 
+                           name="display_order" 
+                           id="display_order"
+                           value="<?php echo htmlspecialchars($old['display_order'] ?? $product['display_order'] ?? '0'); ?>"
+                           min="0"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus le produit apparaît en premier</p>
+                </div>
 
-            <div class="flex items-center">
-                <input type="checkbox" name="is_active" id="is_active" value="1" <?php echo $product['is_active'] ? 'checked' : ''; ?>
-                       class="h-4 w-4 text-indigo-600">
-                <label for="is_active" class="ml-2 text-sm text-gray-700">Produit actif</label>
+                <!-- Statut actif -->
+                <div class="flex items-start">
+                    <div class="flex items-center h-5">
+                        <input type="checkbox" 
+                               name="is_active" 
+                               id="is_active"
+                               value="1"
+                               <?php echo (isset($old['is_active']) ? ($old['is_active'] ? 'checked' : '') : ($product['is_active'] ? 'checked' : '')); ?>
+                               class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="is_active" class="font-medium text-gray-700">Produit actif</label>
+                        <p class="text-gray-500">Ce produit sera visible dans le catalogue</p>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
 
-    <!-- Actions -->
-    <div class="flex justify-between items-center">
-        <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
-              onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce produit ?');">
-            <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
-            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                🗑️ Supprimer
-            </button>
-        </form>
+    <!-- Boutons d'action -->
+    <div class="flex items-center justify-between mb-6">
+        <!-- Bouton supprimer à gauche -->
+        <button type="button"
+                onclick="if(confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) { document.getElementById('delete-form').submit(); }"
+                class="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+            🗑️ Supprimer le produit
+        </button>
 
-        <div class="flex gap-4">
-            <a href="/stm/admin/products/<?php echo $product['id']; ?>" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+        <!-- Boutons annuler/enregistrer à droite -->
+        <div class="flex items-center gap-x-4">
+            <a href="/stm/admin/products/<?php echo $product['id']; ?>" 
+               class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 Annuler
             </a>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-                ✅ Enregistrer
+            <button type="submit" 
+                    class="inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                💾 Enregistrer les modifications
             </button>
         </div>
     </div>
+
+</form>
+
+<!-- Formulaire de suppression caché -->
+<form id="delete-form" method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" style="display: none;">
+    <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
+    <input type="hidden" name="_method" value="DELETE">
 </form>
 
 <?php
