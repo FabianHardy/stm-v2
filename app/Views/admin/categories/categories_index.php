@@ -34,7 +34,7 @@ ob_start();
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Catégories de produits</h1>
         <p class="text-gray-600">Gestion des catégories pour organiser les produits</p>
     </div>
-    <a href="/stm/admin/categories/create" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+    <a href="/stm/admin/products/categories/create" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
         <i class="fas fa-plus mr-2"></i>
         Nouvelle catégorie
     </a>
@@ -81,7 +81,7 @@ ob_start();
 
 <!-- Filtres -->
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
-    <form method="GET" action="/stm/admin/categories" class="flex flex-wrap gap-4 items-end">
+    <form method="GET" action="/stm/admin/products/categories" class="flex flex-wrap gap-4 items-end">
         <div class="flex-1 min-w-[200px]">
             <label for="status" class="block text-sm font-medium text-gray-700 mb-2">
                 Statut
@@ -101,7 +101,7 @@ ob_start();
             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                 <i class="fas fa-filter mr-2"></i>Filtrer
             </button>
-            <a href="/stm/admin/categories" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+            <a href="/stm/admin/products/categories" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                 <i class="fas fa-times mr-2"></i>Réinitialiser
             </a>
         </div>
@@ -133,7 +133,7 @@ ob_start();
         <div class="text-center py-12">
             <i class="fas fa-tags text-gray-300 text-5xl mb-4"></i>
             <p class="text-gray-500 text-lg">Aucune catégorie trouvée</p>
-            <a href="/stm/admin/categories/create" class="inline-block mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+            <a href="/stm/admin/products/categories/create" class="inline-block mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                 Créer la première catégorie
             </a>
         </div>
@@ -219,19 +219,19 @@ ob_start();
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                         <div class="flex items-center gap-2">
-                            <a href="/stm/admin/categories/<?= $category['id'] ?>" 
+                            <a href="/stm/admin/products/categories/<?= $category['id'] ?>" 
                                class="text-indigo-600 hover:text-indigo-900" 
                                title="Voir les détails">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            <a href="/stm/admin/categories/<?= $category['id'] ?>/edit" 
+                            <a href="/stm/admin/products/categories/<?= $category['id'] ?>/edit" 
                                class="text-blue-600 hover:text-blue-900" 
                                title="Modifier">
                                 <i class="fas fa-edit"></i>
                             </a>
                             
                             <!-- Toggle Active -->
-                            <form method="POST" action="/stm/admin/categories/<?= $category['id'] ?>/toggle" class="inline">
+                            <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>/toggle" class="inline">
                                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                                 <button type="submit" 
                                         class="<?= $category['is_active'] ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900' ?>" 
@@ -241,7 +241,7 @@ ob_start();
                             </form>
                             
                             <!-- Supprimer -->
-                            <form method="POST" action="/stm/admin/categories/<?= $category['id'] ?>/delete" 
+                            <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>/delete" 
                                   onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')" 
                                   class="inline">
                                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">

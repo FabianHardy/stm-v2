@@ -22,7 +22,7 @@ ob_start();
         <li>
             <div class="flex items-center">
                 <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <a href="/stm/admin/categories" class="text-gray-700 hover:text-indigo-600">Catégories</a>
+                <a href="/stm/admin/products/categories" class="text-gray-700 hover:text-indigo-600">Catégories</a>
             </div>
         </li>
         <li>
@@ -59,7 +59,7 @@ ob_start();
 
 <!-- Formulaire -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <form method="POST" action="/stm/admin/categories" id="categoryForm">
+    <form method="POST" action="/stm/admin/products/categories" id="categoryForm">
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
         <div class="space-y-6">
@@ -199,7 +199,7 @@ ob_start();
 
         <!-- Boutons d'action -->
         <div class="mt-8 flex justify-end gap-4 pt-6 border-t border-gray-200">
-            <a href="/stm/admin/categories" 
+            <a href="/stm/admin/products/categories" 
                class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                 <i class="fas fa-times mr-2"></i>Annuler
             </a>

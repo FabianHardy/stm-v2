@@ -22,13 +22,13 @@ ob_start();
         <li>
             <div class="flex items-center">
                 <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <a href="/stm/admin/categories" class="text-gray-700 hover:text-indigo-600">Catégories</a>
+                <a href="/stm/admin/products/categories" class="text-gray-700 hover:text-indigo-600">Catégories</a>
             </div>
         </li>
         <li>
             <div class="flex items-center">
                 <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <a href="/stm/admin/categories/<?= $category['id'] ?>" class="text-gray-700 hover:text-indigo-600">
+                <a href="/stm/admin/products/categories/<?= $category['id'] ?>" class="text-gray-700 hover:text-indigo-600">
                     <?= htmlspecialchars($category['name_fr']) ?>
                 </a>
             </div>
@@ -67,7 +67,7 @@ ob_start();
 
 <!-- Formulaire -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <form method="POST" action="/stm/admin/categories/<?= $category['id'] ?>" id="categoryForm">
+    <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>" id="categoryForm">
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
         <div class="space-y-6">
@@ -217,7 +217,7 @@ ob_start();
         <!-- Boutons d'action -->
         <div class="mt-8 flex justify-between items-center pt-6 border-t border-gray-200">
             <div>
-                <form method="POST" action="/stm/admin/categories/<?= $category['id'] ?>/delete" 
+                <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>/delete" 
                       onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')" 
                       class="inline">
                     <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
@@ -229,7 +229,7 @@ ob_start();
             </div>
             
             <div class="flex gap-4">
-                <a href="/stm/admin/categories/<?= $category['id'] ?>" 
+                <a href="/stm/admin/products/categories/<?= $category['id'] ?>" 
                    class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                     <i class="fas fa-times mr-2"></i>Annuler
                 </a>
