@@ -1,10 +1,10 @@
 <?php
 /**
- * Vue : Modification d'une catégorie
+ * Vue : Création d'une catégorie
  * 
- * Formulaire de modification d'une catégorie existante.
+ * Formulaire de création d'une nouvelle catégorie.
  * 
- * @modified 11/11/2025 10:15 - Création initiale
+ * @modified 11/11/2025 10:05 - Création initiale
  */
 
 // 1. Capturer le contenu
@@ -28,15 +28,7 @@ ob_start();
         <li>
             <div class="flex items-center">
                 <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <a href="/stm/admin/products/categories/<?= $category['id'] ?>" class="text-gray-700 hover:text-indigo-600">
-                    <?= htmlspecialchars($category['name_fr']) ?>
-                </a>
-            </div>
-        </li>
-        <li>
-            <div class="flex items-center">
-                <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <span class="text-gray-500">Modifier</span>
+                <span class="text-gray-500">Nouvelle catégorie</span>
             </div>
         </li>
     </ol>
@@ -44,8 +36,8 @@ ob_start();
 
 <!-- En-tête -->
 <div class="mb-6">
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Modifier la catégorie</h1>
-    <p class="text-gray-600"><?= htmlspecialchars($category['name_fr']) ?></p>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Nouvelle catégorie</h1>
+    <p class="text-gray-600">Créer une nouvelle catégorie de produits</p>
 </div>
 
 <!-- Messages d'erreur globaux -->
@@ -67,7 +59,7 @@ ob_start();
 
 <!-- Formulaire -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>" id="categoryForm">
+    <form method="POST" action="/stm/admin/products/categories" id="categoryForm">
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
         <div class="space-y-6">
@@ -79,7 +71,7 @@ ob_start();
                 <input type="text" 
                        id="code" 
                        name="code" 
-                       value="<?= htmlspecialchars($old['code']) ?>"
+                       value="<?= htmlspecialchars($old['code'] ?? '') ?>"
                        class="w-full px-4 py-2 border <?= isset($errors['code']) ? 'border-red-500' : 'border-gray-300' ?> rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                        placeholder="Ex: FBOAALC"
                        maxlength="50"
@@ -101,7 +93,7 @@ ob_start();
                     <input type="text" 
                            id="name_fr" 
                            name="name_fr" 
-                           value="<?= htmlspecialchars($old['name_fr']) ?>"
+                           value="<?= htmlspecialchars($old['name_fr'] ?? '') ?>"
                            class="w-full px-4 py-2 border <?= isset($errors['name_fr']) ? 'border-red-500' : 'border-gray-300' ?> rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="Ex: Boissons alcoolisées"
                            maxlength="255"
@@ -118,7 +110,7 @@ ob_start();
                     <input type="text" 
                            id="name_nl" 
                            name="name_nl" 
-                           value="<?= htmlspecialchars($old['name_nl']) ?>"
+                           value="<?= htmlspecialchars($old['name_nl'] ?? '') ?>"
                            class="w-full px-4 py-2 border <?= isset($errors['name_nl']) ? 'border-red-500' : 'border-gray-300' ?> rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="Ex: Alcoholische dranken"
                            maxlength="255">
@@ -137,18 +129,18 @@ ob_start();
                     <input type="color" 
                            id="color" 
                            name="color" 
-                           value="<?= htmlspecialchars($old['color']) ?>"
+                           value="<?= htmlspecialchars($old['color'] ?? '#6366F1') ?>"
                            class="h-12 w-20 border border-gray-300 rounded cursor-pointer"
                            required>
                     <input type="text" 
                            id="color_hex" 
-                           value="<?= htmlspecialchars($old['color']) ?>"
+                           value="<?= htmlspecialchars($old['color'] ?? '#6366F1') ?>"
                            class="flex-1 px-4 py-2 border <?= isset($errors['color']) ? 'border-red-500' : 'border-gray-300' ?> rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
                            placeholder="#6366F1"
                            pattern="^#[0-9A-Fa-f]{6}$"
                            maxlength="7"
                            readonly>
-                    <div id="color_preview" class="h-12 w-12 rounded border border-gray-300" style="background-color: <?= htmlspecialchars($old['color']) ?>"></div>
+                    <div id="color_preview" class="h-12 w-12 rounded border border-gray-300" style="background-color: <?= htmlspecialchars($old['color'] ?? '#6366F1') ?>"></div>
                 </div>
                 <p class="mt-1 text-sm text-gray-500">
                     Couleur d'identification de la catégorie (format hexadécimal)
@@ -166,21 +158,12 @@ ob_start();
                 <input type="text" 
                        id="icon_path" 
                        name="icon_path" 
-                       value="<?= htmlspecialchars($old['icon_path']) ?>"
+                       value="<?= htmlspecialchars($old['icon_path'] ?? '') ?>"
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                        placeholder="/assets/images/categories/alcohol.svg">
                 <p class="mt-1 text-sm text-gray-500">
                     URL ou chemin vers l'icône SVG de la catégorie
                 </p>
-                <?php if (!empty($old['icon_path'])): ?>
-                    <div class="mt-2 flex items-center gap-2">
-                        <span class="text-sm text-gray-600">Aperçu :</span>
-                        <img src="<?= htmlspecialchars($old['icon_path']) ?>" 
-                             alt="Icône actuelle" 
-                             class="h-8 w-8"
-                             onerror="this.style.display='none'">
-                    </div>
-                <?php endif; ?>
             </div>
 
             <!-- Ordre d'affichage -->
@@ -191,7 +174,7 @@ ob_start();
                 <input type="number" 
                        id="display_order" 
                        name="display_order" 
-                       value="<?= htmlspecialchars($old['display_order']) ?>"
+                       value="<?= htmlspecialchars($old['display_order'] ?? '0') ?>"
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                        min="0"
                        step="1">
@@ -206,7 +189,7 @@ ob_start();
                        id="is_active" 
                        name="is_active" 
                        value="1"
-                       <?= $old['is_active'] ? 'checked' : '' ?>
+                       <?= (isset($old['is_active']) && $old['is_active']) || !isset($old['is_active']) ? 'checked' : '' ?>
                        class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                 <label for="is_active" class="ml-2 block text-sm text-gray-900">
                     Catégorie active (visible dans l'application)
@@ -215,29 +198,15 @@ ob_start();
         </div>
 
         <!-- Boutons d'action -->
-        <div class="mt-8 flex justify-between items-center pt-6 border-t border-gray-200">
-            <div>
-                <form method="POST" action="/stm/admin/products/categories/<?= $category['id'] ?>/delete" 
-                      onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')" 
-                      class="inline">
-                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                    <button type="submit" 
-                            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
-                        <i class="fas fa-trash mr-2"></i>Supprimer
-                    </button>
-                </form>
-            </div>
-            
-            <div class="flex gap-4">
-                <a href="/stm/admin/products/categories/<?= $category['id'] ?>" 
-                   class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
-                    <i class="fas fa-times mr-2"></i>Annuler
-                </a>
-                <button type="submit" 
-                        class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-                    <i class="fas fa-save mr-2"></i>Enregistrer les modifications
-                </button>
-            </div>
+        <div class="mt-8 flex justify-end gap-4 pt-6 border-t border-gray-200">
+            <a href="/stm/admin/products/categories" 
+               class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                <i class="fas fa-times mr-2"></i>Annuler
+            </a>
+            <button type="submit" 
+                    class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                <i class="fas fa-save mr-2"></i>Créer la catégorie
+            </button>
         </div>
     </form>
 </div>
@@ -245,7 +214,7 @@ ob_start();
 <?php
 // 2. Variables pour le layout
 $content = ob_get_clean();
-$title = 'Modifier ' . htmlspecialchars($category['name_fr']) . ' - STM';
+$title = 'Nouvelle catégorie - STM';
 
 // 3. Scripts JS pour le sélecteur de couleur
 $pageScripts = "
