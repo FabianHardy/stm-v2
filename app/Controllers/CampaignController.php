@@ -7,7 +7,7 @@
  * @package STM
  * @version 2.0
  * @created 07/11/2025
- * @modified 10/11/2025 - Ajout méthode index() manquante
+ * @modified 11/11/2025 - Correction bugs destroy() + variables pagination
  */
 
 namespace App\Controllers;
@@ -31,7 +31,7 @@ class CampaignController
      * 
      * @return void
      * @created 07/11/2025
-     * @modified 10/11/2025 - Ajout de la méthode manquante
+     * @modified 11/11/2025 - Ajout variables pagination ($total, $currentPage, etc.)
      */
     public function index(): void
     {
@@ -39,16 +39,26 @@ class CampaignController
         $filters = [
             'search' => $_GET['search'] ?? '',
             'country' => $_GET['country'] ?? '',
-            'status' => $_GET['status'] ?? ''
+            'is_active' => isset($_GET['is_active']) && $_GET['is_active'] !== '' ? (int)$_GET['is_active'] : null
         ];
         
-        // Récupérer les campagnes filtrées
-        $campaigns = $this->campaignModel->getAll($filters);
+        // Pagination
+        $perPage = 10;
+        $currentPage = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        
+        // Récupérer le nombre total de campagnes (avec filtres)
+        $total = $this->campaignModel->count($filters);
+        
+        // Calculer le nombre de pages
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
+        
+        // Récupérer les campagnes filtrées avec pagination
+        $campaigns = $this->campaignModel->getAll($filters, $currentPage, $perPage);
         
         // Récupérer les statistiques
         $stats = $this->campaignModel->getStats();
         
-        // Charger la vue
+        // Charger la vue avec TOUTES les variables nécessaires
         require_once __DIR__ . '/../Views/admin/campaigns/index.php';
     }
 
@@ -230,6 +240,10 @@ class CampaignController
 
     /**
      * Supprimer une campagne
+     * 
+     * @param int $id ID de la campagne
+     * @return void
+     * @created 11/11/2025
      */
     public function delete(int $id): void
     {
@@ -258,6 +272,19 @@ class CampaignController
         
         header('Location: /stm/admin/campaigns');
         exit;
+    }
+
+    /**
+     * Alias pour delete() - Pour compatibilité avec routes.php
+     * 
+     * @param int $id ID de la campagne
+     * @return void
+     * @created 11/11/2025 - Correction bug "destroy() not found"
+     */
+    public function destroy(int $id): void
+    {
+        // Simplement appeler delete()
+        $this->delete($id);
     }
 
     /**
