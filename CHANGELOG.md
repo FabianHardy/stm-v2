@@ -4,19 +4,45 @@ Historique centralisé de toutes les modifications du projet.
 
 ---
 
-## [11/11/2025 14:30] - Correction chemins catégories
+## [11/11/2025 20:20] - 🔧 CORRECTION FINALE : Chemins mixtes
 
 ### 🐛 Corrigé
-- **Tous les chemins vers les vues catégories** : Retrait du dossier `/products/` inexistant
-  - CategoryController.php : 21 occurrences corrigées
-    - Avant : `/admin/products/categories/`
-    - Après : `/admin/categories/`
-  - categories_create.php : 3 occurrences corrigées
-  - categories_edit.php : 4 occurrences corrigées
-  - categories_index.php : 7 occurrences corrigées
-  
-**Cause** : Structure réelle = `/app/Views/admin/categories/` (pas de dossier `products/`)
-**Symptôme** : Erreur "Failed to open stream: No such file or directory"
+- **Confusion entre chemins de fichiers et URLs** :
+  - **Fichiers vues** : dans `/app/Views/admin/categories/` (SANS /products/)
+  - **URLs/Routes** : `/admin/products/categories` (AVEC /products/)
+
+### 📝 Explication
+Les routes dans `routes.php` utilisent `/admin/products/categories` (pour la sidebar et navigation).
+Mais les fichiers vues sont physiquement dans `/app/Views/admin/categories/`.
+
+**Solution** : Chemins mixtes dans CategoryController
+- `require_once` → vers `/admin/categories/` (fichiers)
+- `header('Location: ...)` → vers `/admin/products/categories` (URLs)
+
+**Fichiers mis à jour** :
+- CategoryController.php v1.6
+- categories_index.php
+- categories_create.php
+- categories_edit.php
+
+**Symptôme résolu** : Erreur "Route non trouvée"
+
+---
+
+## [11/11/2025 14:35] - Routes catégories manquantes
+
+### ❌ ANNULÉ
+Ce problème n'existait pas. Les routes étaient déjà présentes dans routes.php.
+
+---
+
+## [11/11/2025 14:30] - Correction chemins catégories
+
+### ❌ ERREUR DE MA PART
+J'ai "corrigé" en retirant `/products/` alors que c'était nécessaire dans les URLs.
+Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
+
+---
 
 ---
 
