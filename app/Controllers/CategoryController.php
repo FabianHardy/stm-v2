@@ -45,7 +45,7 @@ class CategoryController
         $stats = $this->categoryModel->getStats();
         
         // Charger la vue
-        require_once __DIR__ . '/../Views/admin/products/categories/index.php';
+        require_once __DIR__ . '/../Views/admin/categories/index.php';
     }
 
     /**
@@ -58,7 +58,7 @@ class CategoryController
         $errors = Session::getFlash('errors', []);
         $old = Session::getFlash('old', []);
         
-        require_once __DIR__ . '/../Views/admin/products/categories/create.php';
+        require_once __DIR__ . '/../Views/admin/categories/create.php';
     }
 
     /**
@@ -71,7 +71,7 @@ class CategoryController
         // Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products/categories/create');
+            header('Location: /stm/admin/categories/create');
             exit;
         }
 
@@ -95,7 +95,7 @@ class CategoryController
         if (!empty($errors)) {
             Session::setFlash('errors', $errors);
             Session::setFlash('old', $data);
-            header('Location: /stm/admin/products/categories/create');
+            header('Location: /stm/admin/categories/create');
             exit;
         }
 
@@ -105,17 +105,17 @@ class CategoryController
             
             if ($categoryId) {
                 Session::setFlash('success', 'Catégorie créée avec succès');
-                header('Location: /stm/admin/products/categories/' . $categoryId);
+                header('Location: /stm/admin/categories/' . $categoryId);
             } else {
                 Session::setFlash('error', 'Erreur lors de la création');
                 Session::setFlash('old', $data);
-                header('Location: /stm/admin/products/categories/create');
+                header('Location: /stm/admin/categories/create');
             }
         } catch (\Exception $e) {
             error_log("Erreur création catégorie: " . $e->getMessage());
             Session::setFlash('error', 'Erreur lors de la création: ' . $e->getMessage());
             Session::setFlash('old', $data);
-            header('Location: /stm/admin/products/categories/create');
+            header('Location: /stm/admin/categories/create');
         }
         
         exit;
@@ -133,11 +133,11 @@ class CategoryController
         
         if (!$category) {
             Session::setFlash('error', 'Catégorie introuvable');
-            header('Location: /stm/admin/products/categories');
+            header('Location: /stm/admin/categories');
             exit;
         }
         
-        require_once __DIR__ . '/../Views/admin/products/categories/show.php';
+        require_once __DIR__ . '/../Views/admin/categories/show.php';
     }
 
     /**
@@ -152,14 +152,14 @@ class CategoryController
         
         if (!$category) {
             Session::setFlash('error', 'Catégorie introuvable');
-            header('Location: /stm/admin/products/categories');
+            header('Location: /stm/admin/categories');
             exit;
         }
         
         $errors = Session::getFlash('errors', []);
         $old = Session::getFlash('old', []);
         
-        require_once __DIR__ . '/../Views/admin/products/categories/edit.php';
+        require_once __DIR__ . '/../Views/admin/categories/edit.php';
     }
 
     /**
@@ -175,14 +175,14 @@ class CategoryController
         
         if (!$category) {
             Session::setFlash('error', 'Catégorie introuvable');
-            header('Location: /stm/admin/products/categories');
+            header('Location: /stm/admin/categories');
             exit;
         }
 
         // Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products/categories/' . $id . '/edit');
+            header('Location: /stm/admin/categories/' . $id . '/edit');
             exit;
         }
 
@@ -211,7 +211,7 @@ class CategoryController
         if (!empty($errors)) {
             Session::setFlash('errors', $errors);
             Session::setFlash('old', $data);
-            header('Location: /stm/admin/products/categories/' . $id . '/edit');
+            header('Location: /stm/admin/categories/' . $id . '/edit');
             exit;
         }
 
@@ -221,17 +221,17 @@ class CategoryController
             
             if ($success) {
                 Session::setFlash('success', 'Catégorie mise à jour avec succès');
-                header('Location: /stm/admin/products/categories/' . $id);
+                header('Location: /stm/admin/categories/' . $id);
             } else {
                 Session::setFlash('error', 'Erreur lors de la mise à jour');
                 Session::setFlash('old', $data);
-                header('Location: /stm/admin/products/categories/' . $id . '/edit');
+                header('Location: /stm/admin/categories/' . $id . '/edit');
             }
         } catch (\Exception $e) {
             error_log("Erreur mise à jour catégorie: " . $e->getMessage());
             Session::setFlash('error', 'Erreur lors de la mise à jour: ' . $e->getMessage());
             Session::setFlash('old', $data);
-            header('Location: /stm/admin/products/categories/' . $id . '/edit');
+            header('Location: /stm/admin/categories/' . $id . '/edit');
         }
         
         exit;
@@ -250,14 +250,14 @@ class CategoryController
         
         if (!$category) {
             Session::setFlash('error', 'Catégorie introuvable');
-            header('Location: /stm/admin/products/categories');
+            header('Location: /stm/admin/categories');
             exit;
         }
 
         // Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products/categories');
+            header('Location: /stm/admin/categories');
             exit;
         }
 
@@ -267,7 +267,7 @@ class CategoryController
             
             if ($isUsed) {
                 Session::setFlash('error', 'Impossible de supprimer : cette catégorie est utilisée par des produits');
-                header('Location: /stm/admin/products/categories/' . $id);
+                header('Location: /stm/admin/categories/' . $id);
                 exit;
             }
         } catch (\Exception $e) {
@@ -293,7 +293,7 @@ class CategoryController
             Session::setFlash('error', 'Erreur lors de la suppression: ' . $e->getMessage());
         }
         
-        header('Location: /stm/admin/products/categories');
+        header('Location: /stm/admin/categories');
         exit;
     }
 
