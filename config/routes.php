@@ -178,6 +178,7 @@ $router->post('/admin/campaigns/{id}/toggle', function($id) {
     $controller = new CampaignController();
     $controller->toggleActive((int)$id);
 });
+
 /**
  * ROUTES CATÉGORIES (CORRIGÉ)
  * À ajouter dans /config/routes.php (après les routes campaigns)
