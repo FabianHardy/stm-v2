@@ -178,3 +178,85 @@ $router->post('/admin/campaigns/{id}/toggle', function($id) {
     $controller = new CampaignController();
     $controller->toggleActive((int)$id);
 });
+/**
+ * ROUTES CATÉGORIES
+ * À ajouter dans /config/routes.php (après les routes campaigns)
+ * 
+ * @created 11/11/2025 10:20
+ */
+
+// ============================================
+// ROUTES CATÉGORIES (protégées par AuthMiddleware)
+// ============================================
+
+// Liste des catégories
+$router->get('/admin/categories', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->index();
+});
+
+// Formulaire de création
+$router->get('/admin/categories/create', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->create();
+});
+
+// Enregistrer une nouvelle catégorie
+$router->post('/admin/categories', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->store();
+});
+
+// Voir une catégorie spécifique
+$router->get('/admin/categories/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->show((int)$id);
+});
+
+// Formulaire de modification
+$router->get('/admin/categories/{id}/edit', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour une catégorie
+$router->post('/admin/categories/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->update((int)$id);
+});
+
+// Supprimer une catégorie (formulaire POST)
+$router->post('/admin/categories/{id}/delete', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->destroy((int)$id);
+});
+
+// Activer/Désactiver une catégorie
+$router->post('/admin/categories/{id}/toggle', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new \App\Controllers\CategoryController();
+    $controller->toggleActive((int)$id);
+});
