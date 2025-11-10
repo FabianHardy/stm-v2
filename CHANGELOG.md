@@ -4,6 +4,22 @@ Historique centralisé de toutes les modifications du projet.
 
 ---
 
+## [11/11/2025 14:30] - Correction chemins catégories
+
+### 🐛 Corrigé
+- **Tous les chemins vers les vues catégories** : Retrait du dossier `/products/` inexistant
+  - CategoryController.php : 21 occurrences corrigées
+    - Avant : `/admin/products/categories/`
+    - Après : `/admin/categories/`
+  - categories_create.php : 3 occurrences corrigées
+  - categories_edit.php : 4 occurrences corrigées
+  - categories_index.php : 7 occurrences corrigées
+  
+**Cause** : Structure réelle = `/app/Views/admin/categories/` (pas de dossier `products/`)
+**Symptôme** : Erreur "Failed to open stream: No such file or directory"
+
+---
+
 ## [11/11/2025] - Sprint 3 : Module Catégories
 
 ### ✅ Ajouté
