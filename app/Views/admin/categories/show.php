@@ -250,5 +250,5 @@ $error = Session::getFlash('error');
 
 <?php
 $content = ob_get_clean();
-require_once __DIR__ . '/../../../layouts/admin.php';
+require_once __DIR__ . '/../../layouts/admin.php';
 ?>
