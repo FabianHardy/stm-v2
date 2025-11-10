@@ -17,6 +17,7 @@ Historique centralisé de toutes les modifications du projet.
   - Token CSRF via `Session::get('csrf_token')` au lieu de `$_SESSION['csrf_token']`
   - Échappement avec `htmlspecialchars()` pour sécurité
   - Confirmation JavaScript ajoutée : `onsubmit="return confirm(...)"`
+  - Chemin layout corrigé : `../../layouts/admin.php` (2 niveaux, pas 3)
 
 ### 🧪 Bugs résolus
 1. **Fatal error depuis index.php** : 
@@ -195,18 +196,65 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
 
 ---
 
+## [11/11/2025 21:50] - Sprint 4 : Module Produits (100%)
+
+### ✅ Ajouté
+- **Product.php (Model)** : CRUD complet des produits
+  - 11 méthodes incluant getAll(), getByCategory(), isUsedByCampaigns()
+  - Validation complète (code unique, EAN 13 chiffres)
+  - Liaison avec table categories
+
+- **ProductController.php** : Gestion produits
+  - 8 méthodes : index, create, store, show, edit, update, destroy
+  - Upload d'images FR et NL (max 5MB, JPG/PNG/WEBP)
+  - Suppression automatique anciennes images lors remplacement
+  - Protection suppression si produit utilisé dans campagnes
+
+- **4 vues produits** :
+  - `index.php` : Liste avec filtres (recherche, catégorie, statut)
+  - `create.php` : Formulaire création multilingue + upload 2 images
+  - `edit.php` : Formulaire édition avec aperçu images actuelles
+  - `show.php` : Détails complets + affichage 2 images
+
+- **Sécurité uploads** :
+  - `.htaccess` : blocage PHP, autorisation images uniquement
+  - `index.html` : blocage listing répertoire
+
+### 📁 Structure ajoutée
+```
+/stm/public/uploads/products/
+  ├── .htaccess
+  └── index.html
+```
+
+### 🔐 Sécurité
+- Validation stricte : JPG, PNG, WEBP uniquement
+- Taille max : 5MB par image
+- Nom fichier unique : `product_[fr|nl]_[uniqid]_[timestamp].[ext]`
+- Blocage exécution PHP dans /uploads/
+- Protection suppression si produit dans campagnes
+- Token CSRF partout
+
+### 📊 Statistiques
+- Total produits
+- Produits actifs/inactifs
+- Produits avec/sans catégorie
+- Filtres par catégorie et statut
+
+---
+
 ## 🎯 PROGRESSION GLOBALE
 
 ```
 ✅ Sprint 0 : Architecture & Setup (100%)
 ✅ Sprint 1 : Authentification (100%)
 ✅ Sprint 2 : CRUD Campagnes (100%)
-✅ Sprint 3 : Module Catégories (100%) ← TERMINÉ !
-⬜ Sprint 4 : Module Produits (0%)
+✅ Sprint 3 : Module Catégories (100%)
+✅ Sprint 4 : Module Produits (100%) ← TERMINÉ !
 ⬜ Sprint 5 : Module Clients (0%)
 ⬜ Sprint 6 : Module Commandes (0%)
 
-PROGRESSION : ~50%
+PROGRESSION : ~60%
 ```
 
 ---
