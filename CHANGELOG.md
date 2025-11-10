@@ -4,6 +4,37 @@ Historique centralisé de toutes les modifications du projet.
 
 ---
 
+## [11/11/2025 21:05] - 🐛 Correction bugs suppression catégories
+
+### 🐛 Corrigé
+- **Category.php (Model)** : Ajout méthode `isUsedByProducts()`
+  - Vérifie si une catégorie est utilisée par des produits
+  - Empêche la suppression de catégories liées à des produits
+  - Requête : `SELECT COUNT(*) FROM products WHERE category_id = ?`
+  
+- **categories/show.php** : Correction formulaire de suppression
+  - Import `Core\Session` ajouté en haut du fichier
+  - Token CSRF via `Session::get('csrf_token')` au lieu de `$_SESSION['csrf_token']`
+  - Échappement avec `htmlspecialchars()` pour sécurité
+  - Confirmation JavaScript ajoutée : `onsubmit="return confirm(...)"`
+
+### 🧪 Bugs résolus
+1. **Fatal error depuis index.php** : 
+   - Erreur : `Call to undefined method Category::isUsedByProducts()`
+   - Ligne : CategoryController.php:273
+   - Solution : Méthode ajoutée au Model
+   
+2. **Token CSRF invalide depuis show.php** :
+   - Erreur : "Token de sécurité invalide"
+   - Cause : Mauvaise récupération du token CSRF
+   - Solution : Utilisation de la classe Session
+
+### 📝 Fichiers modifiés
+- `/app/Models/Category.php` - v1.6 (ajout méthode isUsedByProducts)
+- `/app/Views/admin/categories/show.php` - v1.2 (correction token CSRF)
+
+---
+
 ## [11/11/2025 20:20] - 🔧 CORRECTION FINALE : Chemins mixtes
 
 ### 🐛 Corrigé
@@ -11,7 +42,7 @@ Historique centralisé de toutes les modifications du projet.
   - **Fichiers vues** : dans `/app/Views/admin/categories/` (SANS /products/)
   - **URLs/Routes** : `/admin/products/categories` (AVEC /products/)
 
-### 📝 Explication
+### 📖 Explication
 Les routes dans `routes.php` utilisent `/admin/products/categories` (pour la sidebar et navigation).
 Mais les fichiers vues sont physiquement dans `/app/Views/admin/categories/`.
 
@@ -44,8 +75,6 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
 
 ---
 
----
-
 ## [11/11/2025] - Sprint 3 : Module Catégories
 
 ### ✅ Ajouté
@@ -70,15 +99,24 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
   - Remplacement par upload ou URL
   - Avertissement suppression automatique
 
+- **categories_show.php** : Page détails d'une catégorie
+  - Affichage complet des informations
+  - Aperçu visuel (couleur + icône)
+  - Actions (modifier, supprimer)
+  - Formulaire suppression sécurisé
+
 - **Sécurité uploads** :
   - `.htaccess` : blocage exécution PHP, restriction types de fichiers
   - `index.html` : blocage du listing du répertoire
 
-### 🔧 Modifié
-- Aucune modification de fichiers existants (nouveaux fichiers uniquement)
+### 📧 Modifié
+- **Category.php (Model)** : v1.6 - Ajout `isUsedByProducts()`
+- **CategoryController.php** : v1.6 - Chemins mixtes corrigés
 
 ### 🐛 Corrigé
 - Fichier `categories/index.php` manquant (erreur 404)
+- Fatal error méthode `isUsedByProducts()` manquante
+- Token CSRF invalide dans formulaire suppression
 
 ### 📁 Structure ajoutée
 ```
@@ -87,11 +125,13 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
   └── index.html
 ```
 
-### 🔒 Sécurité
+### 🔐 Sécurité
 - Validation stricte : SVG, PNG, JPG, WEBP uniquement
 - Taille max : 2MB
 - Nom de fichier unique : `category_[uniqid]_[timestamp].[ext]`
 - Blocage exécution PHP dans /uploads/
+- Protection suppression si catégorie utilisée par des produits
+- Token CSRF sur tous les formulaires de suppression
 
 ---
 
@@ -113,7 +153,7 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
   - `show.php` : Détails d'une campagne
   - `edit.php` : Formulaire modification
 
-### 🔧 Modifié
+### 📧 Modifié
 - **admin.php (layout)** : Ajout récupération stats pour sidebar
 - **sidebar.php** : Badge dynamique pour campagnes actives
 - **routes.php** : 8 routes campagnes ajoutées
@@ -135,7 +175,7 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
 - **Layout admin.php** : Sidebar + navigation
 - Table `users` avec 1 admin par défaut
 
-### 🔒 Sécurité
+### 🔐 Sécurité
 - Bcrypt pour les mots de passe
 - Protection brute-force : 5 tentatives, 15 min lockout
 - CSRF token sur tous les formulaires
@@ -161,12 +201,12 @@ Cette "correction" a créé plus de problèmes qu'elle n'en a résolu.
 ✅ Sprint 0 : Architecture & Setup (100%)
 ✅ Sprint 1 : Authentification (100%)
 ✅ Sprint 2 : CRUD Campagnes (100%)
-✅ Sprint 3 : Module Catégories (100%)
+✅ Sprint 3 : Module Catégories (100%) ← TERMINÉ !
 ⬜ Sprint 4 : Module Produits (0%)
 ⬜ Sprint 5 : Module Clients (0%)
 ⬜ Sprint 6 : Module Commandes (0%)
 
-PROGRESSION : ~45%
+PROGRESSION : ~50%
 ```
 
 ---
@@ -176,12 +216,12 @@ PROGRESSION : ~45%
 Chaque modification doit suivre ce format :
 
 ```markdown
-## [DATE] - Titre de la session
+## [DATE HH:MM] - Titre de la session
 
 ### ✅ Ajouté
 - Liste des nouveaux fichiers/fonctionnalités
 
-### 🔧 Modifié
+### 📧 Modifié
 - Liste des fichiers modifiés
 
 ### 🐛 Corrigé
@@ -193,6 +233,6 @@ Chaque modification doit suivre ce format :
 
 ---
 
-**Dernière mise à jour** : 11/11/2025 14:25  
+**Dernière mise à jour** : 11/11/2025 21:05  
 **Version projet** : 2.0  
 **Statut** : En développement actif
