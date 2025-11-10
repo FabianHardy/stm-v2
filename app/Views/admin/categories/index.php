@@ -28,7 +28,7 @@ ob_start();
             </p>
         </div>
         <div class="mt-4 sm:mt-0">
-            <a href="/stm/admin/products/categories/create" 
+            <a href="/stm/admin/categories/create" 
                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -124,7 +124,7 @@ ob_start();
 
 <!-- Filtres -->
 <div class="bg-white shadow rounded-lg p-4 mb-6">
-    <form method="GET" action="/stm/admin/products/categories" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <form method="GET" action="/stm/admin/categories" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         
         <!-- Recherche -->
         <div>
@@ -155,7 +155,7 @@ ob_start();
                     class="flex-1 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
                 Filtrer
             </button>
-            <a href="/stm/admin/products/categories" 
+            <a href="/stm/admin/categories" 
                class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 Réinitialiser
             </a>
@@ -200,7 +200,7 @@ ob_start();
                         <h3 class="mt-2 text-sm font-medium text-gray-900">Aucune catégorie</h3>
                         <p class="mt-1 text-sm text-gray-500">Commencez par créer votre première catégorie.</p>
                         <div class="mt-6">
-                            <a href="/stm/admin/products/categories/create" 
+                            <a href="/stm/admin/categories/create" 
                                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700">
                                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -276,7 +276,7 @@ ob_start();
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div class="flex justify-end gap-x-2">
                             <!-- Voir -->
-                            <a href="/stm/admin/products/categories/<?= $category['id'] ?>" 
+                            <a href="/stm/admin/categories/<?= $category['id'] ?>" 
                                class="text-purple-600 hover:text-purple-900"
                                title="Voir les détails">
                                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -285,7 +285,7 @@ ob_start();
                                 </svg>
                             </a>
                             <!-- Modifier -->
-                            <a href="/stm/admin/products/categories/<?= $category['id'] ?>/edit" 
+                            <a href="/stm/admin/categories/<?= $category['id'] ?>/edit" 
                                class="text-blue-600 hover:text-blue-900"
                                title="Modifier">
                                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -294,7 +294,7 @@ ob_start();
                             </a>
                             <!-- Supprimer -->
                             <form method="POST" 
-                                  action="/stm/admin/products/categories/<?= $category['id'] ?>/delete" 
+                                  action="/stm/admin/categories/<?= $category['id'] ?>/delete" 
                                   onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')"
                                   class="inline">
                                 <input type="hidden" name="_token" value="<?= Session::get('csrf_token') ?>">
