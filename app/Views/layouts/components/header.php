@@ -27,7 +27,7 @@
                 <?php if (isset($_SESSION['customer_logged_in'])): ?>
                     <a href="/campaign/<?= $_SESSION['campaign_slug'] ?? '' ?>/products" 
                        class="text-gray-700 hover:text-primary-600 font-medium transition">
-                        <?= $lang === 'nl' ? 'Producten' : 'Produits' ?>
+                        <?= $lang === 'nl' ? 'Producten' : 'Promotions' ?>
                     </a>
                     <a href="/cart" class="text-gray-700 hover:text-primary-600 font-medium transition relative">
                         <?= $lang === 'nl' ? 'Winkelwagen' : 'Panier' ?>
