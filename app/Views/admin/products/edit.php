@@ -1,8 +1,8 @@
 <?php
 /**
- * Vue : Modification d'un Promotion
+ * Vue : Modification d'une Promotion
  * 
- * Formulaire d'édition d'un Promotion existant avec upload d'images
+ * Formulaire d'édition d'une Promotion existant avec upload d'images
  * 
  * @created 11/11/2025 22:45
  * @modified 11/11/2025 23:50 - Adaptation besoins Trendy Foods
@@ -22,7 +22,7 @@ $errors = $errors ?? [];
 <div class="mb-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">Modifier le Promotion</h1>
+            <h1 class="text-3xl font-bold text-gray-900">Modifier la Promotion</h1>
             <p class="mt-2 text-sm text-gray-600">
                 <?php echo htmlspecialchars($product['name_fr']); ?> 
                 <span class="text-gray-400">(<?php echo htmlspecialchars($product['product_code']); ?>)</span>
@@ -129,7 +129,7 @@ $errors = $errors ?? [];
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="mt-1 text-xs text-gray-500">Campagne à laquelle appartient ce Promotion</p>
+                    <p class="mt-1 text-xs text-gray-500">Campagne à laquelle appartient cette Promotion</p>
                     <?php if (isset($errors['campaign_id'])): ?>
                         <p class="mt-1 text-sm text-red-600"><?php echo $errors['campaign_id']; ?></p>
                     <?php endif; ?>
@@ -176,7 +176,7 @@ $errors = $errors ?? [];
                 <!-- Nom FR -->
                 <div>
                     <label for="name_fr" class="block text-sm font-medium text-gray-700">
-                        Nom du Promotion <span class="text-red-500">*</span>
+                        Nom de la Promotion <span class="text-red-500">*</span>
                     </label>
                     <input type="text" 
                            name="name_fr" 
@@ -198,7 +198,7 @@ $errors = $errors ?? [];
                     <textarea name="description_fr" 
                               id="description_fr" 
                               rows="4"
-                              placeholder="Description détaillée du Promotion..."
+                              placeholder="Description détaillée de la Promotion..."
                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><?php echo htmlspecialchars($old['description_fr'] ?? $product['description_fr'] ?? ''); ?></textarea>
                     <p class="mt-1 text-xs text-gray-500">Optionnel - visible sur la fiche Promotion</p>
                 </div>
@@ -206,7 +206,7 @@ $errors = $errors ?? [];
                 <!-- Image FR -->
                 <div>
                     <label for="image_fr" class="block text-sm font-medium text-gray-700">
-                        Image du Promotion
+                        Image de la Promotion
                     </label>
                     
                     <!-- Image actuelle -->
@@ -326,7 +326,7 @@ $errors = $errors ?? [];
                 ⚙️ Paramètres
             </h3>
             <p class="mt-1 text-sm text-gray-500">
-                Options d'affichage et de statut du Promotion
+                Options d'affichage et de statut de la Promotion
             </p>
         </div>
         
@@ -344,7 +344,7 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['display_order'] ?? $product['display_order'] ?? '0'); ?>"
                            min="0"
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus le Promotion apparaît en premier</p>
+                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus la Promotion apparaît en premier</p>
                 </div>
 
                 <!-- Statut actif -->
@@ -358,8 +358,8 @@ $errors = $errors ?? [];
                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
                     </div>
                     <div class="ml-3 text-sm">
-                        <label for="is_active" class="font-medium text-gray-700">Promotion actif</label>
-                        <p class="text-gray-500">Ce Promotion sera visible dans le catalogue</p>
+                        <label for="is_active" class="font-medium text-gray-700">Promotion active</label>
+                        <p class="text-gray-500">Cette Promotion sera visible dans le catalogue</p>
                     </div>
                 </div>
 
@@ -371,9 +371,9 @@ $errors = $errors ?? [];
     <div class="flex items-center justify-between mb-6">
         <!-- Bouton supprimer à gauche -->
         <button type="button"
-                onclick="if(confirm('Êtes-vous sûr de vouloir supprimer ce Promotion ?')) { document.getElementById('delete-form').submit(); }"
+                onclick="if(confirm('Êtes-vous sûr de vouloir supprimer cette Promotion ?')) { document.getElementById('delete-form').submit(); }"
                 class="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-            🗑️ Supprimer le Promotion
+            🗑️ Supprimer la Promotion
         </button>
 
         <!-- Boutons annuler/enregistrer à droite -->

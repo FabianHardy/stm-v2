@@ -1,8 +1,8 @@
 <?php
 /**
- * Vue : Détails d'un Promotion
+ * Vue : Détails d'une Promotion
  * 
- * Affichage complet des informations d'un Promotion
+ * Affichage complet des informations d'une Promotion
  * 
  * @created 11/11/2025 22:50
  * @modified 11/11/2025 23:05 - Amélioration mise en page (sections claires)
@@ -139,7 +139,7 @@ ob_start();
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">
-                    🖼️ Images du Promotion
+                    🖼️ Images de la Promotion
                 </h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
@@ -190,7 +190,7 @@ ob_start();
             <div class="px-4 py-5 sm:p-6">
                 <dl class="space-y-4">
                     <div>
-                        <dt class="text-sm font-medium text-gray-500">Nom du Promotion</dt>
+                        <dt class="text-sm font-medium text-gray-500">Nom de la Promotion</dt>
                         <dd class="mt-1 text-base text-gray-900 font-medium">
                             <?php echo htmlspecialchars($product['name_fr']); ?>
                         </dd>
@@ -306,11 +306,11 @@ ob_start();
     <div class="flex flex-wrap gap-3">
         <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit" 
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-            ✏️ Modifier le Promotion
+            ✏️ Modifier la Promotion
         </a>
         
         <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
-              onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce Promotion ?');"
+              onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette Promotion ?');"
               class="inline">
             <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
             <input type="hidden" name="_method" value="DELETE">

@@ -22,8 +22,8 @@ $errors = $errors ?? [];
 <div class="mb-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">Nouveau Promotion</h1>
-            <p class="mt-2 text-sm text-gray-600">Créer un nouveau Promotion dans le catalogue</p>
+            <h1 class="text-3xl font-bold text-gray-900">Nouvelle Promotion</h1>
+            <p class="mt-2 text-sm text-gray-600">Créer une nouvelle Promotion dans le catalogue</p>
         </div>
         <a href="/stm/admin/products" 
            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
@@ -50,7 +50,7 @@ $errors = $errors ?? [];
             <li aria-current="page">
                 <div class="flex items-center">
                     <span class="mx-2 text-gray-400">/</span>
-                    <span class="text-gray-500">Nouveau Promotion</span>
+                    <span class="text-gray-500">Nouvelle Promotion</span>
                 </div>
             </li>
         </ol>
@@ -162,7 +162,7 @@ $errors = $errors ?? [];
                 <!-- Nom FR -->
                 <div>
                     <label for="name_fr" class="block text-sm font-medium text-gray-700">
-                        Nom du Promotion <span class="text-red-500">*</span>
+                        Nom de la Promotion <span class="text-red-500">*</span>
                     </label>
                     <input type="text" 
                            name="name_fr" 
@@ -184,7 +184,7 @@ $errors = $errors ?? [];
                     <textarea name="description_fr" 
                               id="description_fr" 
                               rows="4"
-                              placeholder="Description détaillée du Promotion..."
+                              placeholder="Description détaillée de la Promotion..."
                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><?php echo htmlspecialchars($old['description_fr'] ?? ''); ?></textarea>
                     <p class="mt-1 text-xs text-gray-500">Optionnel - visible sur la fiche Promotion</p>
                 </div>
@@ -288,7 +288,7 @@ $errors = $errors ?? [];
                 ⚙️ Paramètres
             </h3>
             <p class="mt-1 text-sm text-gray-500">
-                Options d'affichage et de statut du Promotion
+                Options d'affichage et de statut de la Promotion
             </p>
         </div>
         
@@ -306,7 +306,7 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['display_order'] ?? '0'); ?>"
                            min="0"
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus le Promotion apparaît en premier</p>
+                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus la Promotion apparaît en premier</p>
                 </div>
 
                 <!-- Statut actif -->
@@ -320,8 +320,8 @@ $errors = $errors ?? [];
                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
                     </div>
                     <div class="ml-3 text-sm">
-                        <label for="is_active" class="font-medium text-gray-700">Promotion actif</label>
-                        <p class="text-gray-500">Ce Promotion sera visible dans le catalogue</p>
+                        <label for="is_active" class="font-medium text-gray-700">Promotion active</label>
+                        <p class="text-gray-500">Cette Promotion sera visible dans le catalogue</p>
                     </div>
                 </div>
 
@@ -337,7 +337,7 @@ $errors = $errors ?? [];
         </a>
         <button type="submit" 
                 class="inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            ✅ Créer le Promotion
+            ✅ Créer la Promotion
         </button>
     </div>
 
