@@ -1,8 +1,8 @@
 <?php
 /**
- * Vue : Création d'un produit
+ * Vue : Création d'un Promotion
  * 
- * Formulaire de création d'un nouveau produit lié à une campagne
+ * Formulaire de création d'un nouveau Promotion lié à une campagne
  * 
  * @created 11/11/2025 21:45
  * @modified 11/11/2025 23:45 - Adaptation besoins Trendy Foods
@@ -22,8 +22,8 @@ $errors = $errors ?? [];
 <div class="mb-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">Nouveau produit</h1>
-            <p class="mt-2 text-sm text-gray-600">Créer un nouveau produit dans le catalogue</p>
+            <h1 class="text-3xl font-bold text-gray-900">Nouveau Promotion</h1>
+            <p class="mt-2 text-sm text-gray-600">Créer un nouveau Promotion dans le catalogue</p>
         </div>
         <a href="/stm/admin/products" 
            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
@@ -43,14 +43,14 @@ $errors = $errors ?? [];
                 <div class="flex items-center">
                     <span class="mx-2 text-gray-400">/</span>
                     <a href="/stm/admin/products" class="text-gray-700 hover:text-gray-900">
-                        Produits
+                        Promotions
                     </a>
                 </div>
             </li>
             <li aria-current="page">
                 <div class="flex items-center">
                     <span class="mx-2 text-gray-400">/</span>
-                    <span class="text-gray-500">Nouveau produit</span>
+                    <span class="text-gray-500">Nouveau Promotion</span>
                 </div>
             </li>
         </ol>
@@ -75,7 +75,7 @@ $errors = $errors ?? [];
         <div class="px-4 py-5 sm:p-6">
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 
-                <!-- Code produit -->
+                <!-- Code Promotion -->
                 <div>
                     <label for="product_code" class="block text-sm font-medium text-gray-700">
                         Code article <span class="text-red-500">*</span>
@@ -116,7 +116,7 @@ $errors = $errors ?? [];
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="mt-1 text-xs text-gray-500">Campagne à laquelle appartient ce produit</p>
+                    <p class="mt-1 text-xs text-gray-500">Campagne à laquelle appartient ce Promotion</p>
                     <?php if (isset($errors['campaign_id'])): ?>
                         <p class="mt-1 text-sm text-red-600"><?php echo $errors['campaign_id']; ?></p>
                     <?php endif; ?>
@@ -162,7 +162,7 @@ $errors = $errors ?? [];
                 <!-- Nom FR -->
                 <div>
                     <label for="name_fr" class="block text-sm font-medium text-gray-700">
-                        Nom du produit <span class="text-red-500">*</span>
+                        Nom du Promotion <span class="text-red-500">*</span>
                     </label>
                     <input type="text" 
                            name="name_fr" 
@@ -184,15 +184,15 @@ $errors = $errors ?? [];
                     <textarea name="description_fr" 
                               id="description_fr" 
                               rows="4"
-                              placeholder="Description détaillée du produit..."
+                              placeholder="Description détaillée du Promotion..."
                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><?php echo htmlspecialchars($old['description_fr'] ?? ''); ?></textarea>
-                    <p class="mt-1 text-xs text-gray-500">Optionnel - visible sur la fiche produit</p>
+                    <p class="mt-1 text-xs text-gray-500">Optionnel - visible sur la fiche Promotion</p>
                 </div>
 
                 <!-- Image FR -->
                 <div>
                     <label for="image_fr" class="block text-sm font-medium text-gray-700">
-                        Image du produit <span class="text-red-500">*</span>
+                        Image du Promotion <span class="text-red-500">*</span>
                     </label>
                     <div class="mt-1 flex items-center">
                         <input type="file" 
@@ -288,7 +288,7 @@ $errors = $errors ?? [];
                 ⚙️ Paramètres
             </h3>
             <p class="mt-1 text-sm text-gray-500">
-                Options d'affichage et de statut du produit
+                Options d'affichage et de statut du Promotion
             </p>
         </div>
         
@@ -306,7 +306,7 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['display_order'] ?? '0'); ?>"
                            min="0"
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus le produit apparaît en premier</p>
+                    <p class="mt-1 text-xs text-gray-500">Plus le nombre est petit, plus le Promotion apparaît en premier</p>
                 </div>
 
                 <!-- Statut actif -->
@@ -320,8 +320,8 @@ $errors = $errors ?? [];
                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
                     </div>
                     <div class="ml-3 text-sm">
-                        <label for="is_active" class="font-medium text-gray-700">Produit actif</label>
-                        <p class="text-gray-500">Ce produit sera visible dans le catalogue</p>
+                        <label for="is_active" class="font-medium text-gray-700">Promotion actif</label>
+                        <p class="text-gray-500">Ce Promotion sera visible dans le catalogue</p>
                     </div>
                 </div>
 
@@ -337,7 +337,7 @@ $errors = $errors ?? [];
         </a>
         <button type="submit" 
                 class="inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            ✅ Créer le produit
+            ✅ Créer le Promotion
         </button>
     </div>
 

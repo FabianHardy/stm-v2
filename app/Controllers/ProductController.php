@@ -1,6 +1,6 @@
 <?php
 /**
- * ProductController - Gestion des produits
+ * ProductController - Gestion des Promotions
  * 
  * @created 11/11/2025
  * @modified 12/11/2025 00:15 - Version 3 avec campagnes obligatoires
@@ -23,7 +23,7 @@ class ProductController
     }
 
     /**
-     * Afficher la liste des produits avec filtres
+     * Afficher la liste des Promotions avec filtres
      */
     public function index(): void
     {
@@ -34,7 +34,7 @@ class ProductController
             'status' => $_GET['status'] ?? ''
         ];
 
-        // Récupérer les produits filtrés
+        // Récupérer les Promotions filtrés
         $products = $this->productModel->getAll($filters);
 
         // Récupérer les statistiques
@@ -76,7 +76,7 @@ class ProductController
     }
 
     /**
-     * Enregistrer un nouveau produit
+     * Enregistrer un nouveau Promotion
      */
     public function store(): void
     {
@@ -140,14 +140,14 @@ class ProductController
             $data['image_nl'] = $data['image_fr'];
         }
 
-        // Créer le produit
+        // Créer le Promotion
         $productId = $this->productModel->create($data);
 
         if ($productId) {
-            Session::set('success', 'Produit créé avec succès');
+            Session::set('success', 'Promotion créé avec succès');
             header('Location: /stm/admin/products/' . $productId);
         } else {
-            Session::set('error', 'Erreur lors de la création du produit');
+            Session::set('error', 'Erreur lors de la création du Promotion');
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
@@ -155,14 +155,14 @@ class ProductController
     }
 
     /**
-     * Afficher les détails d'un produit
+     * Afficher les détails d'un Promotion
      */
     public function show(int $id): void
     {
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Produit non trouvé');
+            Session::set('error', 'Promotion non trouvé');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -179,7 +179,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Produit non trouvé');
+            Session::set('error', 'Promotion non trouvé');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -207,7 +207,7 @@ class ProductController
     }
 
     /**
-     * Mettre à jour un produit
+     * Mettre à jour un Promotion
      */
     public function update(int $id): void
     {
@@ -218,11 +218,11 @@ class ProductController
             exit;
         }
 
-        // Récupérer le produit existant
+        // Récupérer le Promotion existant
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Produit non trouvé');
+            Session::set('error', 'Promotion non trouvé');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -286,7 +286,7 @@ class ProductController
 
         // Mettre à jour
         if ($this->productModel->update($id, $data)) {
-            Session::set('success', 'Produit modifié avec succès');
+            Session::set('success', 'Promotion modifié avec succès');
             header('Location: /stm/admin/products/' . $id);
         } else {
             Session::set('error', 'Erreur lors de la modification');
@@ -296,7 +296,7 @@ class ProductController
     }
 
     /**
-     * Supprimer un produit
+     * Supprimer un Promotion
      */
     public function destroy(int $id): void
     {
@@ -310,7 +310,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Produit non trouvé');
+            Session::set('error', 'Promotion non trouvé');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -321,9 +321,9 @@ class ProductController
             $this->deleteImage($product['image_nl']);
         }
 
-        // Supprimer le produit
+        // Supprimer le Promotion
         if ($this->productModel->delete($id)) {
-            Session::set('success', 'Produit supprimé avec succès');
+            Session::set('success', 'Promotion supprimé avec succès');
         } else {
             Session::set('error', 'Erreur lors de la suppression');
         }

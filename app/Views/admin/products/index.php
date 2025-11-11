@@ -1,8 +1,8 @@
 <?php
 /**
- * Vue : Liste des produits
+ * Vue : Liste des Promotions
  * 
- * Affichage de tous les produits avec filtres, recherche et statistiques
+ * Affichage de tous les Promotions avec filtres, recherche et statistiques
  * 
  * @created 11/11/2025 22:30
  * @modified 11/11/2025 23:10 - Vérification cohérence style
@@ -18,12 +18,12 @@ ob_start();
 <div class="mb-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">Produits</h1>
-            <p class="mt-2 text-sm text-gray-600">Gestion du catalogue de produits</p>
+            <h1 class="text-3xl font-bold text-gray-900">Promotions</h1>
+            <p class="mt-2 text-sm text-gray-600">Gestion du catalogue de Promotions</p>
         </div>
         <a href="/stm/admin/products/create" 
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-            ➕ Nouveau produit
+            ➕ Nouveau Promotion
         </a>
     </div>
 
@@ -38,7 +38,7 @@ ob_start();
             <li aria-current="page">
                 <div class="flex items-center">
                     <span class="mx-2 text-gray-400">/</span>
-                    <span class="text-gray-500">Produits</span>
+                    <span class="text-gray-500">Promotions</span>
                 </div>
             </li>
         </ol>
@@ -56,7 +56,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Total produits</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Total Promotions</dt>
                         <dd class="text-2xl font-bold text-gray-900"><?php echo $stats['total']; ?></dd>
                     </dl>
                 </div>
@@ -73,7 +73,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Produits actifs</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions actifs</dt>
                         <dd class="text-2xl font-bold text-green-600"><?php echo $stats['active']; ?></dd>
                     </dl>
                 </div>
@@ -90,7 +90,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Produits inactifs</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions inactifs</dt>
                         <dd class="text-2xl font-bold text-red-600"><?php echo $stats['inactive']; ?></dd>
                     </dl>
                 </div>
@@ -184,11 +184,11 @@ ob_start();
     </div>
 </div>
 
-<!-- Liste des produits -->
+<!-- Liste des Promotions -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
         <h3 class="text-lg leading-6 font-medium text-gray-900">
-            📋 Liste des produits
+            📋 Liste des Promotions
             <span class="text-sm text-gray-500 font-normal ml-2">(<?php echo count($products); ?> résultat<?php echo count($products) > 1 ? 's' : ''; ?>)</span>
         </h3>
     </div>
@@ -201,7 +201,7 @@ ob_start();
                         Image
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Produit
+                        Promotion
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Codes
@@ -223,10 +223,10 @@ ob_start();
                         <td colspan="6" class="px-6 py-12 text-center">
                             <div class="text-gray-400">
                                 <span class="text-4xl mb-2 block">📦</span>
-                                <p class="text-sm">Aucun produit trouvé</p>
+                                <p class="text-sm">Aucun Promotion trouvé</p>
                                 <a href="/stm/admin/products/create" 
                                    class="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
-                                    ➕ Créer le premier produit
+                                    ➕ Créer le premier Promotion
                                 </a>
                             </div>
                         </td>
@@ -247,7 +247,7 @@ ob_start();
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Produit -->
+                            <!-- Promotion -->
                             <td class="px-6 py-4">
                                 <div class="text-sm font-medium text-gray-900">
                                     <?php echo htmlspecialchars($product['name_fr']); ?>
@@ -307,7 +307,7 @@ ob_start();
                                     </a>
                                     <form method="POST" 
                                           action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
-                                          onsubmit="return confirm('Supprimer ce produit ?');"
+                                          onsubmit="return confirm('Supprimer ce Promotion ?');"
                                           class="inline">
                                         <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
                                         <input type="hidden" name="_method" value="DELETE">

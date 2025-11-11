@@ -191,7 +191,7 @@ $router->post('/admin/campaigns/{id}/toggle', function($id) {
 
 // ============================================
 // ROUTES CATÉGORIES (protégées par AuthMiddleware)
-// Sous-menu de Produits : /admin/products/categories
+// Sous-menu de Promotions : /admin/products/categories
 // ============================================
 
 // Liste des catégories
@@ -275,10 +275,10 @@ $router->post('/admin/products/categories/{id}/toggle', function($id) {
  */
 
 // ============================================
-// ROUTES PRODUITS (CRUD COMPLET)
+// ROUTES Promotions (CRUD COMPLET)
 // ============================================
 use App\Controllers\ProductController;
-// Liste des produits
+// Liste des Promotions
 $router->get('/admin/products', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -296,7 +296,7 @@ $router->get('/admin/products/create', function() {
     $controller->create();
 });
 
-// Enregistrer un nouveau produit
+// Enregistrer un nouveau Promotion
 $router->post('/admin/products', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -305,7 +305,7 @@ $router->post('/admin/products', function() {
     $controller->store();
 });
 
-// Détails d'un produit
+// Détails d'un Promotion
 $router->get('/admin/products/{id}', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -323,7 +323,7 @@ $router->get('/admin/products/{id}/edit', function($id) {
     $controller->edit((int)$id);
 });
 
-// Mettre à jour un produit
+// Mettre à jour un Promotion
 $router->post('/admin/products/{id}', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -332,7 +332,7 @@ $router->post('/admin/products/{id}', function($id) {
     $controller->update((int)$id);
 });
 
-// Supprimer un produit
+// Supprimer un Promotion
 $router->post('/admin/products/{id}/delete', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();

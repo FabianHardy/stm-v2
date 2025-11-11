@@ -1,8 +1,8 @@
 <?php
 /**
- * Vue : Détails d'un produit
+ * Vue : Détails d'un Promotion
  * 
- * Affichage complet des informations d'un produit
+ * Affichage complet des informations d'un Promotion
  * 
  * @created 11/11/2025 22:50
  * @modified 11/11/2025 23:05 - Amélioration mise en page (sections claires)
@@ -52,7 +52,7 @@ ob_start();
                 <div class="flex items-center">
                     <span class="mx-2 text-gray-400">/</span>
                     <a href="/stm/admin/products" class="text-gray-700 hover:text-gray-900">
-                        Produits
+                        Promotions
                     </a>
                 </div>
             </li>
@@ -103,7 +103,7 @@ ob_start();
             <div class="px-4 py-5 sm:p-6">
                 <dl class="space-y-4">
                     <div>
-                        <dt class="text-sm font-medium text-gray-500">Code produit</dt>
+                        <dt class="text-sm font-medium text-gray-500">Code Promotion</dt>
                         <dd class="mt-1 text-sm text-gray-900 font-medium">
                             <?php echo htmlspecialchars($product['product_code']); ?>
                         </dd>
@@ -139,7 +139,7 @@ ob_start();
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">
-                    🖼️ Images du produit
+                    🖼️ Images du Promotion
                 </h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
@@ -190,7 +190,7 @@ ob_start();
             <div class="px-4 py-5 sm:p-6">
                 <dl class="space-y-4">
                     <div>
-                        <dt class="text-sm font-medium text-gray-500">Nom du produit</dt>
+                        <dt class="text-sm font-medium text-gray-500">Nom du Promotion</dt>
                         <dd class="mt-1 text-base text-gray-900 font-medium">
                             <?php echo htmlspecialchars($product['name_fr']); ?>
                         </dd>
@@ -306,11 +306,11 @@ ob_start();
     <div class="flex flex-wrap gap-3">
         <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit" 
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-            ✏️ Modifier le produit
+            ✏️ Modifier le Promotion
         </a>
         
         <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
-              onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce produit ?');"
+              onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce Promotion ?');"
               class="inline">
             <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
             <input type="hidden" name="_method" value="DELETE">
