@@ -77,11 +77,11 @@
                     </span>
                 </a>
 
-                <!-- Produits -->
+                <!-- Promotions -->
                 <a href="/stm/admin/products" 
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-box w-5"></i>
-                    <span class="ml-3">Produits</span>
+                    <span class="ml-3">Promotions</span>
                 </a>
 
                 <!-- Clients -->
