@@ -288,7 +288,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Promotions actifs</dt>
+                        <dt class="truncate text-sm font-medium text-gray-500">Promotions actives</dt>
                         <dd class="flex items-baseline">
                             <div class="text-2xl font-semibold text-gray-900">
                                 <?= number_format($stats['total_products'], 0, ',', ' ') ?>
