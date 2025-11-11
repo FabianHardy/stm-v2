@@ -64,7 +64,7 @@ try {
     error_log("Erreur récupération stats commandes: " . $e->getMessage());
 }
 
-// KPI 4: Produits totaux
+// KPI 4: Promotions totaux
 try {
     $results = $db->query("
         SELECT COUNT(*) as total 
@@ -75,7 +75,7 @@ try {
         $stats['total_products'] = $results[0]['total'] ?? 0;
     }
 } catch (\PDOException $e) {
-    error_log("Erreur récupération stats produits: " . $e->getMessage());
+    error_log("Erreur récupération stats Promotions: " . $e->getMessage());
 }
 
 // Dernières commandes
@@ -122,7 +122,7 @@ try {
     $campaign_stats = [];
 }
 
-// Répartition par catégorie de produits
+// Répartition par catégorie de Promotions
 try {
     $product_categories = $db->query("
         SELECT 
@@ -275,7 +275,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
         </div>
     </div>
 
-    <!-- Produits -->
+    <!-- Promotions -->
     <div class="overflow-hidden rounded-lg bg-white shadow">
         <div class="p-5">
             <div class="flex items-center">
@@ -288,7 +288,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Produits actifs</dt>
+                        <dt class="truncate text-sm font-medium text-gray-500">Promotions actifs</dt>
                         <dd class="flex items-baseline">
                             <div class="text-2xl font-semibold text-gray-900">
                                 <?= number_format($stats['total_products'], 0, ',', ' ') ?>
@@ -311,7 +311,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
 
     <!-- Répartition par catégorie -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Produits par catégorie</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Promotions par catégorie</h3>
         <canvas id="categoryChart" height="200"></canvas>
     </div>
 </div>
@@ -396,7 +396,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
-        <span class="mt-2 block text-sm font-medium text-gray-900">Gérer les produits</span>
+        <span class="mt-2 block text-sm font-medium text-gray-900">Gérer les Promotions</span>
     </a>
 
     <a href="/admin/customers" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors">
