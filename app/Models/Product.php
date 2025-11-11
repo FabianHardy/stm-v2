@@ -1,10 +1,11 @@
 <?php
 /**
- * Model : Product
+ * Model Product (renommé en Promotion dans l'interface)
+ * Gestion des promotions par campagne
  * 
- * Gestion des produits
- * 
- * @created 11/11/2025 21:30
+ * @package STM/Models
+ * @version 2.0.0
+ * @created 11/11/2025
  */
 
 namespace App\Models;
@@ -13,7 +14,7 @@ use Core\Database;
 
 class Product
 {
-    private Database $db;
+    private $db;
 
     public function __construct()
     {
@@ -21,293 +22,277 @@ class Product
     }
 
     /**
-     * Récupérer tous les produits avec filtres
+     * Récupérer toutes les promotions avec filtres
      * 
-     * @param array $filters Filtres de recherche
+     * @param array $filters Filtres optionnels
      * @return array
      */
     public function getAll(array $filters = []): array
     {
-        $query = "SELECT p.*, c.name_fr as category_name, c.color as category_color 
-                  FROM products p
-                  LEFT JOIN categories c ON p.category_id = c.id
-                  WHERE 1=1";
+        $sql = "SELECT p.*, c.name as campaign_name, c.country as campaign_country
+                FROM products p
+                LEFT JOIN campaigns c ON p.campaign_id = c.id
+                WHERE 1=1";
+        
         $params = [];
+
+        // Filtre par campagne
+        if (!empty($filters['campaign_id'])) {
+            $sql .= " AND p.campaign_id = :campaign_id";
+            $params[':campaign_id'] = $filters['campaign_id'];
+        }
 
         // Filtre par recherche
         if (!empty($filters['search'])) {
-            $query .= " AND (p.name_fr LIKE :search OR p.name_nl LIKE :search 
-                        OR p.product_code LIKE :search OR p.package_number LIKE :search)";
+            $sql .= " AND (p.code_article LIKE :search OR p.title_fr LIKE :search OR p.title_nl LIKE :search)";
             $params[':search'] = '%' . $filters['search'] . '%';
         }
 
-        // Filtre par catégorie
-        if (!empty($filters['category_id'])) {
-            $query .= " AND p.category_id = :category_id";
-            $params[':category_id'] = $filters['category_id'];
-        }
-
         // Filtre par statut
-        if (isset($filters['status'])) {
-            if ($filters['status'] === 'active') {
-                $query .= " AND p.is_active = 1";
-            } elseif ($filters['status'] === 'inactive') {
-                $query .= " AND p.is_active = 0";
-            }
+        if (isset($filters['is_active'])) {
+            $sql .= " AND p.is_active = :is_active";
+            $params[':is_active'] = $filters['is_active'];
         }
 
-        $query .= " ORDER BY p.display_order ASC, p.name_fr ASC";
+        $sql .= " ORDER BY p.created_at DESC";
 
-        return $this->db->query($query, $params);
+        return $this->db->query($sql, $params);
     }
 
     /**
-     * Récupérer un produit par ID
+     * Récupérer une promotion par son ID
      * 
-     * @param int $id
-     * @return array|null
+     * @param int $id ID de la promotion
+     * @return array|false
      */
-    public function findById(int $id): ?array
+    public function findById(int $id): array|false
     {
-        $query = "SELECT p.*, c.name_fr as category_name, c.color as category_color 
-                  FROM products p
-                  LEFT JOIN categories c ON p.category_id = c.id
-                  WHERE p.id = :id";
-        $result = $this->db->query($query, [':id' => $id]);
+        $sql = "SELECT p.*, c.name as campaign_name, c.country as campaign_country
+                FROM products p
+                LEFT JOIN campaigns c ON p.campaign_id = c.id
+                WHERE p.id = :id";
         
-        return $result[0] ?? null;
-    }
-
-    /**
-     * Récupérer un produit par code
-     * 
-     * @param string $code
-     * @return array|null
-     */
-    public function findByCode(string $code): ?array
-    {
-        $query = "SELECT * FROM products WHERE product_code = :code";
-        $result = $this->db->query($query, [':code' => $code]);
+        $result = $this->db->queryOne($sql, [':id' => $id]);
         
-        return $result[0] ?? null;
+        return $result ?: false;
     }
 
     /**
-     * Récupérer les produits d'une catégorie
+     * Récupérer une promotion par son code article
      * 
-     * @param int $categoryId
-     * @return array
+     * @param string $code Code article
+     * @return array|false
      */
-    public function getByCategory(int $categoryId): array
+    public function findByCode(string $code): array|false
     {
-        $query = "SELECT * FROM products 
-                  WHERE category_id = :category_id 
-                  AND is_active = 1
-                  ORDER BY display_order ASC, name_fr ASC";
+        $sql = "SELECT * FROM products WHERE code_article = :code";
+        $result = $this->db->queryOne($sql, [':code' => $code]);
         
-        return $this->db->query($query, [':category_id' => $categoryId]);
+        return $result ?: false;
     }
 
     /**
-     * Créer un nouveau produit
+     * Créer une nouvelle promotion
      * 
-     * @param array $data
-     * @return int|false ID du produit créé ou false
+     * @param array $data Données de la promotion
+     * @return int|false ID de la promotion créée ou false
      */
-    public function create(array $data)
+    public function create(array $data): int|false
     {
-        $query = "INSERT INTO products (
-                    product_code, package_number, ean, category_id,
-                    name_fr, name_nl, description_fr, description_nl,
-                    image_fr, image_nl, display_order, is_active
-                  ) VALUES (
-                    :product_code, :package_number, :ean, :category_id,
-                    :name_fr, :name_nl, :description_fr, :description_nl,
-                    :image_fr, :image_nl, :display_order, :is_active
-                  )";
+        $sql = "INSERT INTO products (
+                    code_article, 
+                    campaign_id,
+                    title_fr, 
+                    title_nl,
+                    name_fr,
+                    name_nl,
+                    description_fr,
+                    description_nl,
+                    image_fr,
+                    image_nl,
+                    is_active
+                ) VALUES (
+                    :code_article,
+                    :campaign_id,
+                    :title_fr,
+                    :title_nl,
+                    :name_fr,
+                    :name_nl,
+                    :description_fr,
+                    :description_nl,
+                    :image_fr,
+                    :image_nl,
+                    :is_active
+                )";
 
         $params = [
-            ':product_code' => $data['product_code'],
-            ':package_number' => $data['package_number'],
-            ':ean' => $data['ean'] ?? null,
-            ':category_id' => $data['category_id'] ?? null,
-            ':name_fr' => $data['name_fr'],
-            ':name_nl' => $data['name_nl'] ?? $data['name_fr'],
+            ':code_article' => $data['code_article'],
+            ':campaign_id' => $data['campaign_id'],
+            ':title_fr' => $data['title_fr'] ?? $data['name_fr'] ?? null,
+            ':title_nl' => $data['title_nl'] ?? $data['name_nl'] ?? null,
+            ':name_fr' => $data['name_fr'] ?? $data['title_fr'] ?? null,
+            ':name_nl' => $data['name_nl'] ?? $data['title_nl'] ?? null,
             ':description_fr' => $data['description_fr'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
             ':image_fr' => $data['image_fr'] ?? null,
             ':image_nl' => $data['image_nl'] ?? null,
-            ':display_order' => $data['display_order'] ?? 0,
-            ':is_active' => $data['is_active'] ?? 1
+            ':is_active' => $data['is_active'] ?? 1,
         ];
 
-        try {
-            $this->db->execute($query, $params);
-            return $this->db->lastInsertId();
-        } catch (\PDOException $e) {
-            error_log("Erreur création produit: " . $e->getMessage());
-            return false;
+        if ($this->db->execute($sql, $params)) {
+            return (int) $this->db->lastInsertId();
         }
+        
+        return false;
     }
 
     /**
-     * Mettre à jour un produit
+     * Mettre à jour une promotion
      * 
-     * @param int $id
-     * @param array $data
+     * @param int $id ID de la promotion
+     * @param array $data Nouvelles données
      * @return bool
      */
     public function update(int $id, array $data): bool
     {
-        $query = "UPDATE products SET
-                    product_code = :product_code,
-                    package_number = :package_number,
-                    ean = :ean,
-                    category_id = :category_id,
+        $sql = "UPDATE products SET
+                    code_article = :code_article,
+                    campaign_id = :campaign_id,
+                    title_fr = :title_fr,
+                    title_nl = :title_nl,
                     name_fr = :name_fr,
                     name_nl = :name_nl,
                     description_fr = :description_fr,
                     description_nl = :description_nl,
                     image_fr = :image_fr,
                     image_nl = :image_nl,
-                    display_order = :display_order,
-                    is_active = :is_active,
-                    updated_at = NOW()
-                  WHERE id = :id";
+                    is_active = :is_active
+                WHERE id = :id";
 
         $params = [
             ':id' => $id,
-            ':product_code' => $data['product_code'],
-            ':package_number' => $data['package_number'],
-            ':ean' => $data['ean'] ?? null,
-            ':category_id' => $data['category_id'] ?? null,
-            ':name_fr' => $data['name_fr'],
-            ':name_nl' => $data['name_nl'] ?? $data['name_fr'],
+            ':code_article' => $data['code_article'],
+            ':campaign_id' => $data['campaign_id'],
+            ':title_fr' => $data['title_fr'] ?? $data['name_fr'] ?? null,
+            ':title_nl' => $data['title_nl'] ?? $data['name_nl'] ?? null,
+            ':name_fr' => $data['name_fr'] ?? $data['title_fr'] ?? null,
+            ':name_nl' => $data['name_nl'] ?? $data['title_nl'] ?? null,
             ':description_fr' => $data['description_fr'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
             ':image_fr' => $data['image_fr'] ?? null,
             ':image_nl' => $data['image_nl'] ?? null,
-            ':display_order' => $data['display_order'] ?? 0,
-            ':is_active' => $data['is_active'] ?? 1
+            ':is_active' => $data['is_active'] ?? 1,
         ];
 
-        try {
-            return $this->db->execute($query, $params);
-        } catch (\PDOException $e) {
-            error_log("Erreur mise à jour produit: " . $e->getMessage());
-            return false;
-        }
+        return $this->db->execute($sql, $params);
     }
 
     /**
-     * Supprimer un produit
+     * Supprimer une promotion
      * 
-     * @param int $id
+     * @param int $id ID de la promotion
      * @return bool
      */
     public function delete(int $id): bool
     {
-        $query = "DELETE FROM products WHERE id = :id";
+        $sql = "DELETE FROM products WHERE id = :id";
         
-        try {
-            return $this->db->execute($query, [':id' => $id]);
-        } catch (\PDOException $e) {
-            error_log("Erreur suppression produit: " . $e->getMessage());
-            return false;
-        }
+        return $this->db->execute($sql, [':id' => $id]);
     }
 
     /**
-     * Vérifier si le produit est utilisé dans des campagnes
+     * Récupérer les promotions actives
      * 
-     * @param int $id ID du produit
-     * @return bool True si utilisé, false sinon
-     * @created 11/11/2025 21:30
+     * @return array
      */
-    public function isUsedByCampaigns(int $id): bool
+    public function getActive(): array
     {
-        $query = "SELECT COUNT(*) as count FROM campaign_products WHERE product_id = :product_id";
-        $result = $this->db->query($query, [':product_id' => $id]);
+        $sql = "SELECT p.*, c.name as campaign_name
+                FROM products p
+                LEFT JOIN campaigns c ON p.campaign_id = c.id
+                WHERE p.is_active = 1
+                ORDER BY p.created_at DESC";
         
-        return ($result[0]['count'] ?? 0) > 0;
+        return $this->db->query($sql);
     }
 
     /**
-     * Valider les données d'un produit
+     * Récupérer les promotions d'une campagne
      * 
-     * @param array $data
-     * @param int|null $id ID pour update (null pour create)
-     * @return array Tableau d'erreurs (vide si valide)
+     * @param int $campaignId ID de la campagne
+     * @return array
      */
-    public function validate(array $data, ?int $id = null): array
+    public function getByCampaign(int $campaignId): array
     {
-        $errors = [];
-
-        // Code produit obligatoire
-        if (empty($data['product_code'])) {
-            $errors['product_code'] = 'Le code produit est obligatoire';
-        } else {
-            // Vérifier unicité du code
-            $existing = $this->findByCode($data['product_code']);
-            if ($existing && (!$id || $existing['id'] != $id)) {
-                $errors['product_code'] = 'Ce code produit existe déjà';
-            }
-        }
-
-        // Numéro de colis obligatoire
-        if (empty($data['package_number'])) {
-            $errors['package_number'] = 'Le numéro de colis est obligatoire';
-        }
-
-        // Nom FR obligatoire
-        if (empty($data['name_fr'])) {
-            $errors['name_fr'] = 'Le nom français est obligatoire';
-        }
-
-        // EAN : 13 chiffres si renseigné
-        if (!empty($data['ean']) && !preg_match('/^\d{13}$/', $data['ean'])) {
-            $errors['ean'] = 'Le code EAN doit contenir exactement 13 chiffres';
-        }
-
-        // Ordre d'affichage positif
-        if (isset($data['display_order']) && $data['display_order'] < 0) {
-            $errors['display_order'] = "L'ordre d'affichage doit être positif";
-        }
-
-        return $errors;
+        $sql = "SELECT * FROM products 
+                WHERE campaign_id = :campaign_id 
+                ORDER BY created_at DESC";
+        
+        return $this->db->query($sql, [':campaign_id' => $campaignId]);
     }
 
     /**
-     * Compter les produits
+     * Compter les promotions
      * 
      * @param array $filters Filtres optionnels
      * @return int
      */
     public function count(array $filters = []): int
     {
-        $query = "SELECT COUNT(*) as count FROM products WHERE 1=1";
+        $sql = "SELECT COUNT(*) as total FROM products WHERE 1=1";
         $params = [];
 
-        if (!empty($filters['category_id'])) {
-            $query .= " AND category_id = :category_id";
-            $params[':category_id'] = $filters['category_id'];
+        if (!empty($filters['campaign_id'])) {
+            $sql .= " AND campaign_id = :campaign_id";
+            $params[':campaign_id'] = $filters['campaign_id'];
         }
 
-        if (isset($filters['status'])) {
-            if ($filters['status'] === 'active') {
-                $query .= " AND is_active = 1";
-            } elseif ($filters['status'] === 'inactive') {
-                $query .= " AND is_active = 0";
-            }
+        if (isset($filters['is_active'])) {
+            $sql .= " AND is_active = :is_active";
+            $params[':is_active'] = $filters['is_active'];
         }
 
-        $result = $this->db->query($query, $params);
+        $result = $this->db->query($sql, $params);
         
-        return (int)($result[0]['count'] ?? 0);
+        return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
     }
 
     /**
-     * Obtenir les statistiques
+     * Valider les données d'une promotion
+     * 
+     * @param array $data Données à valider
+     * @return array Tableau des erreurs (vide si OK)
+     */
+    public function validate(array $data): array
+    {
+        $errors = [];
+
+        // Code article obligatoire
+        if (empty($data['code_article'])) {
+            $errors['code_article'] = 'Le code article est obligatoire';
+        } else {
+            // Vérifier l'unicité (sauf si update avec même code)
+            $existing = $this->findByCode($data['code_article']);
+            if ($existing && (!isset($data['id']) || $existing['id'] != $data['id'])) {
+                $errors['code_article'] = 'Ce code article existe déjà';
+            }
+        }
+
+        // Campagne obligatoire
+        if (empty($data['campaign_id'])) {
+            $errors['campaign_id'] = 'La campagne est obligatoire';
+        }
+
+        // Titre FR OU name_fr obligatoire
+        if (empty($data['title_fr']) && empty($data['name_fr'])) {
+            $errors['title_fr'] = 'Le titre en français est obligatoire';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Récupérer les statistiques des promotions
      * 
      * @return array
      */
@@ -317,48 +302,23 @@ class Product
             'total' => 0,
             'active' => 0,
             'inactive' => 0,
-            'with_category' => 0,
-            'without_category' => 0
         ];
 
-        $query = "SELECT 
-                    COUNT(*) as total,
-                    SUM(is_active) as active,
-                    SUM(CASE WHEN category_id IS NOT NULL THEN 1 ELSE 0 END) as with_category
-                  FROM products";
-        
-        $result = $this->db->query($query);
-        
-        if (!empty($result)) {
-            $stats['total'] = (int)$result[0]['total'];
-            $stats['active'] = (int)$result[0]['active'];
-            $stats['inactive'] = $stats['total'] - $stats['active'];
-            $stats['with_category'] = (int)$result[0]['with_category'];
-            $stats['without_category'] = $stats['total'] - $stats['with_category'];
-        }
+        // Total
+        $sql = "SELECT COUNT(*) as count FROM products";
+        $result = $this->db->query($sql);
+        $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
+
+        // Actives
+        $sql = "SELECT COUNT(*) as count FROM products WHERE is_active = 1";
+        $result = $this->db->query($sql);
+        $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
+
+        // Inactives
+        $sql = "SELECT COUNT(*) as count FROM products WHERE is_active = 0";
+        $result = $this->db->query($sql);
+        $stats['inactive'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         return $stats;
-    }
-
-    /**
-     * Mettre à jour l'ordre d'affichage
-     * 
-     * @param int $id
-     * @param int $order
-     * @return bool
-     */
-    public function updateDisplayOrder(int $id, int $order): bool
-    {
-        $query = "UPDATE products SET display_order = :order WHERE id = :id";
-        
-        try {
-            return $this->db->execute($query, [
-                ':id' => $id,
-                ':order' => $order
-            ]);
-        } catch (\PDOException $e) {
-            error_log("Erreur mise à jour ordre: " . $e->getMessage());
-            return false;
-        }
     }
 }
