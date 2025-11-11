@@ -144,10 +144,10 @@ class ProductController
         $productId = $this->productModel->create($data);
 
         if ($productId) {
-            Session::set('success', 'Promotion créé avec succès');
+            Session::set('success', 'Promotion créée avec succès');
             header('Location: /stm/admin/products/' . $productId);
         } else {
-            Session::set('error', 'Erreur lors de la création du Promotion');
+            Session::set('error', 'Erreur lors de la création de la Promotion');
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
@@ -162,7 +162,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvé');
+            Session::set('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -179,7 +179,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvé');
+            Session::set('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -222,7 +222,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvé');
+            Session::set('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -286,7 +286,7 @@ class ProductController
 
         // Mettre à jour
         if ($this->productModel->update($id, $data)) {
-            Session::set('success', 'Promotion modifié avec succès');
+            Session::set('success', 'Promotion modifiée avec succès');
             header('Location: /stm/admin/products/' . $id);
         } else {
             Session::set('error', 'Erreur lors de la modification');
@@ -310,7 +310,7 @@ class ProductController
         $product = $this->productModel->find($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvé');
+            Session::set('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -323,7 +323,7 @@ class ProductController
 
         // Supprimer le Promotion
         if ($this->productModel->delete($id)) {
-            Session::set('success', 'Promotion supprimé avec succès');
+            Session::set('success', 'Promotion supprimée avec succès');
         } else {
             Session::set('error', 'Erreur lors de la suppression');
         }
