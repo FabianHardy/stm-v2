@@ -57,14 +57,14 @@ class ProductController
         $categoryModel = new Category();
         $categories = $categoryModel->getAll();
 
-        // Récupérer les campagnes ACTIVES
+        // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
         
-        // Essayer d'abord getActive(), sinon getAll()
-        if (method_exists($campaignModel, 'getActive')) {
+        if (method_exists($campaignModel, 'getActiveOrFuture')) {
+            $campaigns = $campaignModel->getActiveOrFuture();
+        } elseif (method_exists($campaignModel, 'getActive')) {
             $campaigns = $campaignModel->getActive();
         } else {
-            // Si pas de méthode getActive, récupérer toutes les campagnes
             $campaigns = $campaignModel->getAll();
         }
 
@@ -188,11 +188,12 @@ class ProductController
         $categoryModel = new Category();
         $categories = $categoryModel->getAll();
 
-        // Récupérer les campagnes
+        // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
         
-        // Essayer d'abord getActive(), sinon getAll()
-        if (method_exists($campaignModel, 'getActive')) {
+        if (method_exists($campaignModel, 'getActiveOrFuture')) {
+            $campaigns = $campaignModel->getActiveOrFuture();
+        } elseif (method_exists($campaignModel, 'getActive')) {
             $campaigns = $campaignModel->getActive();
         } else {
             $campaigns = $campaignModel->getAll();
