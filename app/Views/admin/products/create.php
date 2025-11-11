@@ -104,9 +104,13 @@ $errors = $errors ?? [];
                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['campaign_id']) ? 'border-red-300' : ''; ?>">
                         <option value="">-- Sélectionner une campagne --</option>
                         <?php foreach ($campaigns as $campaign): ?>
+                            <?php 
+                            // Gérer différents noms de champs pour le titre
+                            $campaignTitle = $campaign['title'] ?? $campaign['name'] ?? $campaign['campaign_name'] ?? 'Campagne #' . $campaign['id'];
+                            ?>
                             <option value="<?php echo $campaign['id']; ?>" 
                                     <?php echo (isset($old['campaign_id']) && $old['campaign_id'] == $campaign['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($campaign['title']); ?>
+                                <?php echo htmlspecialchars($campaignTitle); ?>
                                 (<?php echo strtoupper($campaign['country']); ?> - 
                                 <?php echo date('d/m/Y', strtotime($campaign['start_date'])); ?>)
                             </option>
