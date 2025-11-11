@@ -4,8 +4,8 @@
  * Gestion des campagnes promotionnelles
  * 
  * @package STM/Models
- * @version 2.2.0
- * @modified 11/11/2025 - Ajout méthode getActiveOrFuture() pour dropdown produits
+ * @version 2.2.1
+ * @modified 11/11/2025 - CORRECTIF : Utiliser query() au lieu de prepare()
  */
 
 namespace App\Models;
@@ -40,19 +40,19 @@ class Campaign
         // Filtre par pays
         if (!empty($filters['country'])) {
             $sql .= " AND country = :country";
-            $params['country'] = $filters['country'];
+            $params[':country'] = $filters['country'];
         }
 
         // Filtre par statut
         if (isset($filters['is_active'])) {
             $sql .= " AND is_active = :is_active";
-            $params['is_active'] = $filters['is_active'];
+            $params[':is_active'] = $filters['is_active'];
         }
 
         // Filtre par recherche (nom ou titres)
         if (!empty($filters['search'])) {
             $sql .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $params[':search'] = '%' . $filters['search'] . '%';
         }
 
         // Filtre par statut temporel
@@ -75,10 +75,11 @@ class Campaign
 
         $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
 
-        $stmt = $this->db->prepare($sql);
+        // ✅ CORRECTIF : Utiliser getConnection()->prepare() au lieu de $this->db->prepare()
+        $stmt = $this->db->getConnection()->prepare($sql);
         
         foreach ($params as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
+            $stmt->bindValue($key, $value);
         }
         
         $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
@@ -97,22 +98,22 @@ class Campaign
      */
     public function count(array $filters = []): int
     {
-        $sql = "SELECT COUNT(*) FROM campaigns WHERE 1=1";
+        $sql = "SELECT COUNT(*) as total FROM campaigns WHERE 1=1";
         $params = [];
 
         if (!empty($filters['country'])) {
             $sql .= " AND country = :country";
-            $params['country'] = $filters['country'];
+            $params[':country'] = $filters['country'];
         }
 
         if (isset($filters['is_active'])) {
             $sql .= " AND is_active = :is_active";
-            $params['is_active'] = $filters['is_active'];
+            $params[':is_active'] = $filters['is_active'];
         }
 
         if (!empty($filters['search'])) {
             $sql .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $params[':search'] = '%' . $filters['search'] . '%';
         }
 
         if (!empty($filters['status'])) {
@@ -132,15 +133,10 @@ class Campaign
             }
         }
 
-        $stmt = $this->db->prepare($sql);
+        // ✅ CORRECTIF : Utiliser query() directement (retourne un array)
+        $result = $this->db->query($sql, $params);
         
-        foreach ($params as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
-        }
-        
-        $stmt->execute();
-        
-        return (int) $stmt->fetchColumn();
+        return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
     }
 
     /**
@@ -152,10 +148,9 @@ class Campaign
     public function findById(int $id): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE id = :id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['id' => $id]);
+        $result = $this->db->queryOne($sql, [':id' => $id]);
         
-        return $stmt->fetch();
+        return $result ?: false;
     }
 
     /**
@@ -167,10 +162,9 @@ class Campaign
     public function findByUuid(string $uuid): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE uuid = :uuid";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['uuid' => $uuid]);
+        $result = $this->db->queryOne($sql, [':uuid' => $uuid]);
         
-        return $stmt->fetch();
+        return $result ?: false;
     }
 
     /**
@@ -182,10 +176,9 @@ class Campaign
     public function findBySlug(string $slug): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE slug = :slug";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['slug' => $slug]);
+        $result = $this->db->queryOne($sql, [':slug' => $slug]);
         
-        return $stmt->fetch();
+        return $result ?: false;
     }
 
     /**
@@ -212,23 +205,21 @@ class Campaign
                     :title_nl, :description_nl
                 )";
 
-        $stmt = $this->db->prepare($sql);
-        
         $params = [
-            'uuid' => $uuid,
-            'slug' => $slug,
-            'name' => $data['name'],
-            'country' => $data['country'],
-            'is_active' => $data['is_active'] ?? 1,
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-            'title_fr' => $data['title_fr'] ?? null,
-            'description_fr' => $data['description_fr'] ?? null,
-            'title_nl' => $data['title_nl'] ?? null,
-            'description_nl' => $data['description_nl'] ?? null,
+            ':uuid' => $uuid,
+            ':slug' => $slug,
+            ':name' => $data['name'],
+            ':country' => $data['country'],
+            ':is_active' => $data['is_active'] ?? 1,
+            ':start_date' => $data['start_date'],
+            ':end_date' => $data['end_date'],
+            ':title_fr' => $data['title_fr'] ?? null,
+            ':description_fr' => $data['description_fr'] ?? null,
+            ':title_nl' => $data['title_nl'] ?? null,
+            ':description_nl' => $data['description_nl'] ?? null,
         ];
 
-        if ($stmt->execute($params)) {
+        if ($this->db->execute($sql, $params)) {
             return (int) $this->db->lastInsertId();
         }
         
@@ -267,26 +258,24 @@ class Campaign
         
         $sql .= " WHERE id = :id";
 
-        $stmt = $this->db->prepare($sql);
-        
         $params = [
-            'id' => $id,
-            'name' => $data['name'],
-            'country' => $data['country'],
-            'is_active' => $data['is_active'] ?? 1,
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-            'title_fr' => $data['title_fr'] ?? null,
-            'description_fr' => $data['description_fr'] ?? null,
-            'title_nl' => $data['title_nl'] ?? null,
-            'description_nl' => $data['description_nl'] ?? null,
+            ':id' => $id,
+            ':name' => $data['name'],
+            ':country' => $data['country'],
+            ':is_active' => $data['is_active'] ?? 1,
+            ':start_date' => $data['start_date'],
+            ':end_date' => $data['end_date'],
+            ':title_fr' => $data['title_fr'] ?? null,
+            ':description_fr' => $data['description_fr'] ?? null,
+            ':title_nl' => $data['title_nl'] ?? null,
+            ':description_nl' => $data['description_nl'] ?? null,
         ];
         
         if (isset($data['slug'])) {
-            $params['slug'] = $data['slug'];
+            $params[':slug'] = $data['slug'];
         }
 
-        return $stmt->execute($params);
+        return $this->db->execute($sql, $params);
     }
 
     /**
@@ -298,9 +287,8 @@ class Campaign
     public function delete(int $id): bool
     {
         $sql = "DELETE FROM campaigns WHERE id = :id";
-        $stmt = $this->db->prepare($sql);
         
-        return $stmt->execute(['id' => $id]);
+        return $this->db->execute($sql, [':id' => $id]);
     }
 
     /**
@@ -321,7 +309,7 @@ class Campaign
 
     /**
      * Récupérer les campagnes actives OU futures (pas les passées)
-     * Utilisé pour les dropdowns produits : on ne veut pas les campagnes passées
+     * Utilisé pour les dropdowns promotions : on ne veut pas les campagnes passées
      * 
      * @return array
      * @created 11/11/2025
@@ -368,7 +356,7 @@ class Campaign
         // Total
         $sql = "SELECT COUNT(*) as count FROM campaigns";
         $result = $this->db->query($sql);
-        $stats['total'] = (int) $result[0]['count'];
+        $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         // Actives (en cours de validité)
         $sql = "SELECT COUNT(*) as count FROM campaigns 
@@ -376,22 +364,22 @@ class Campaign
                 AND start_date <= CURDATE() 
                 AND end_date >= CURDATE()";
         $result = $this->db->query($sql);
-        $stats['active'] = (int) $result[0]['count'];
+        $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         // Archivées (inactives ou terminées)
         $sql = "SELECT COUNT(*) as count FROM campaigns 
                 WHERE is_active = 0 OR end_date < CURDATE()";
         $result = $this->db->query($sql);
-        $stats['archived'] = (int) $result[0]['count'];
+        $stats['archived'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         // Par pays
         $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'BE'";
         $result = $this->db->query($sql);
-        $stats['be'] = (int) $result[0]['count'];
+        $stats['be'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'LU'";
         $result = $this->db->query($sql);
-        $stats['lu'] = (int) $result[0]['count'];
+        $stats['lu'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         return $stats;
     }
@@ -500,8 +488,7 @@ class Campaign
     public function toggleActive(int $id): bool
     {
         $sql = "UPDATE campaigns SET is_active = NOT is_active WHERE id = :id";
-        $stmt = $this->db->prepare($sql);
         
-        return $stmt->execute(['id' => $id]);
+        return $this->db->execute($sql, [':id' => $id]);
     }
 }
