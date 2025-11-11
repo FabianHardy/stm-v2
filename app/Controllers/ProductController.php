@@ -3,7 +3,7 @@
  * ProductController - Gestion des Promotions
  * 
  * @created 11/11/2025
- * @modified 12/11/2025 00:15 - Version 3 avec campagnes obligatoires
+ * @modified 12/11/2025 01:00 - CORRECTIF : find() → findById()
  */
 
 namespace App\Controllers;
@@ -159,7 +159,8 @@ class ProductController
      */
     public function show(int $id): void
     {
-        $product = $this->productModel->find($id);
+        // ✅ CORRECTIF : Utiliser findById() au lieu de find()
+        $product = $this->productModel->findById($id);
 
         if (!$product) {
             Session::set('error', 'Promotion non trouvée');
@@ -176,7 +177,8 @@ class ProductController
      */
     public function edit(int $id): void
     {
-        $product = $this->productModel->find($id);
+        // ✅ CORRECTIF : Utiliser findById() au lieu de find()
+        $product = $this->productModel->findById($id);
 
         if (!$product) {
             Session::set('error', 'Promotion non trouvée');
@@ -218,8 +220,9 @@ class ProductController
             exit;
         }
 
+        // ✅ CORRECTIF : Utiliser findById() au lieu de find()
         // Récupérer le Promotion existant
-        $product = $this->productModel->find($id);
+        $product = $this->productModel->findById($id);
 
         if (!$product) {
             Session::set('error', 'Promotion non trouvée');
@@ -307,7 +310,8 @@ class ProductController
             exit;
         }
 
-        $product = $this->productModel->find($id);
+        // ✅ CORRECTIF : Utiliser findById() au lieu de find()
+        $product = $this->productModel->findById($id);
 
         if (!$product) {
             Session::set('error', 'Promotion non trouvée');
