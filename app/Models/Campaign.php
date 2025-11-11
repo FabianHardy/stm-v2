@@ -260,6 +260,26 @@ class Campaign
     }
 
     /**
+     * Récupérer les campagnes actives OU futures (pas les passées)
+     * 
+     * Utilisé pour les formulaires de sélection de campagne
+     * Retourne les campagnes en cours + celles qui vont commencer
+     * Exclut les campagnes terminées
+     * 
+     * @return array
+     * @added 12/11/2025
+     */
+    public function getActiveOrFuture(): array
+    {
+        $sql = "SELECT * FROM campaigns 
+                WHERE is_active = 1 
+                AND end_date >= CURDATE()
+                ORDER BY start_date ASC";
+        
+        return $this->db->query($sql);
+    }
+
+    /**
      * Récupérer les campagnes archivées
      */
     public function getArchived(): array
