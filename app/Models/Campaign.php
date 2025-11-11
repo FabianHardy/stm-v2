@@ -4,8 +4,8 @@
  * Gestion des campagnes promotionnelles
  * 
  * @package STM/Models
- * @version 2.1.0
- * @modified 11/11/2025 - Génération auto UUID + slug, suppression contrainte UNIQUE sur name
+ * @version 2.2.0
+ * @modified 11/11/2025 - Ajout méthode getActiveOrFuture() pour dropdown produits
  */
 
 namespace App\Models;
@@ -24,6 +24,11 @@ class Campaign
 
     /**
      * Récupérer toutes les campagnes avec pagination et filtres
+     * 
+     * @param array $filters Filtres optionnels (country, is_active, search)
+     * @param int $page Numéro de page
+     * @param int $perPage Nombre de résultats par page
+     * @return array
      */
     public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
     {
@@ -44,10 +49,28 @@ class Campaign
             $params['is_active'] = $filters['is_active'];
         }
 
-        // Filtre par recherche (nom)
+        // Filtre par recherche (nom ou titres)
         if (!empty($filters['search'])) {
             $sql .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
             $params['search'] = '%' . $filters['search'] . '%';
+        }
+
+        // Filtre par statut temporel
+        if (!empty($filters['status'])) {
+            switch ($filters['status']) {
+                case 'active':
+                    $sql .= " AND is_active = 1 AND start_date <= CURDATE() AND end_date >= CURDATE()";
+                    break;
+                case 'upcoming':
+                    $sql .= " AND start_date > CURDATE()";
+                    break;
+                case 'ended':
+                    $sql .= " AND end_date < CURDATE()";
+                    break;
+                case 'inactive':
+                    $sql .= " AND is_active = 0";
+                    break;
+            }
         }
 
         $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
@@ -68,6 +91,9 @@ class Campaign
 
     /**
      * Compter les campagnes avec filtres
+     * 
+     * @param array $filters Filtres optionnels
+     * @return int
      */
     public function count(array $filters = []): int
     {
@@ -89,6 +115,23 @@ class Campaign
             $params['search'] = '%' . $filters['search'] . '%';
         }
 
+        if (!empty($filters['status'])) {
+            switch ($filters['status']) {
+                case 'active':
+                    $sql .= " AND is_active = 1 AND start_date <= CURDATE() AND end_date >= CURDATE()";
+                    break;
+                case 'upcoming':
+                    $sql .= " AND start_date > CURDATE()";
+                    break;
+                case 'ended':
+                    $sql .= " AND end_date < CURDATE()";
+                    break;
+                case 'inactive':
+                    $sql .= " AND is_active = 0";
+                    break;
+            }
+        }
+
         $stmt = $this->db->prepare($sql);
         
         foreach ($params as $key => $value) {
@@ -101,60 +144,66 @@ class Campaign
     }
 
     /**
-     * Récupérer une campagne par ID
+     * Récupérer une campagne par son ID
+     * 
+     * @param int $id ID de la campagne
+     * @return array|false
      */
-    public function findById(int $id): ?array
+    public function findById(int $id): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['id' => $id]);
         
-        $result = $stmt->fetch();
-        return $result ?: null;
+        return $stmt->fetch();
     }
 
     /**
-     * Récupérer une campagne par UUID
+     * Récupérer une campagne par son UUID
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return array|false
      */
-    public function findByUuid(string $uuid): ?array
+    public function findByUuid(string $uuid): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE uuid = :uuid";
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['uuid' => $uuid]);
         
-        $result = $stmt->fetch();
-        return $result ?: null;
+        return $stmt->fetch();
     }
 
     /**
-     * Récupérer une campagne par slug
+     * Récupérer une campagne par son slug
+     * 
+     * @param string $slug Slug de la campagne
+     * @return array|false
      */
-    public function findBySlug(string $slug): ?array
+    public function findBySlug(string $slug): array|false
     {
         $sql = "SELECT * FROM campaigns WHERE slug = :slug";
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['slug' => $slug]);
         
-        $result = $stmt->fetch();
-        return $result ?: null;
+        return $stmt->fetch();
     }
 
     /**
      * Créer une nouvelle campagne
-     * Génère automatiquement l'UUID et le slug
+     * 
+     * @param array $data Données de la campagne
+     * @return int|false ID de la campagne créée ou false
      */
-    public function create(array $data): int
+    public function create(array $data): int|false
     {
-        // Générer UUID unique
-        $uuid = $this->generateUniqueUuid();
-        
-        // Générer slug depuis le nom
+        // Générer UUID et slug automatiquement
+        $uuid = $this->generateUuid();
         $slug = $this->generateSlug($data['name']);
         
         $sql = "INSERT INTO campaigns (
-                    uuid, slug, name, country, is_active,
-                    start_date, end_date,
-                    title_fr, description_fr,
+                    uuid, slug, name, country, is_active, 
+                    start_date, end_date, 
+                    title_fr, description_fr, 
                     title_nl, description_nl
                 ) VALUES (
                     :uuid, :slug, :name, :country, :is_active,
@@ -179,13 +228,19 @@ class Campaign
             'description_nl' => $data['description_nl'] ?? null,
         ];
 
-        $stmt->execute($params);
+        if ($stmt->execute($params)) {
+            return (int) $this->db->lastInsertId();
+        }
         
-        return (int) $this->db->lastInsertId();
+        return false;
     }
 
     /**
      * Mettre à jour une campagne
+     * 
+     * @param int $id ID de la campagne
+     * @param array $data Nouvelles données
+     * @return bool
      */
     public function update(int $id, array $data): bool
     {
@@ -236,6 +291,9 @@ class Campaign
 
     /**
      * Supprimer une campagne
+     * 
+     * @param int $id ID de la campagne
+     * @return bool
      */
     public function delete(int $id): bool
     {
@@ -246,7 +304,9 @@ class Campaign
     }
 
     /**
-     * Récupérer les campagnes actives
+     * Récupérer les campagnes actives (en cours de validité)
+     * 
+     * @return array
      */
     public function getActive(): array
     {
@@ -261,13 +321,10 @@ class Campaign
 
     /**
      * Récupérer les campagnes actives OU futures (pas les passées)
-     * 
-     * Utilisé pour les formulaires de sélection de campagne
-     * Retourne les campagnes en cours + celles qui vont commencer
-     * Exclut les campagnes terminées
+     * Utilisé pour les dropdowns produits : on ne veut pas les campagnes passées
      * 
      * @return array
-     * @added 12/11/2025
+     * @created 11/11/2025
      */
     public function getActiveOrFuture(): array
     {
@@ -280,7 +337,9 @@ class Campaign
     }
 
     /**
-     * Récupérer les campagnes archivées
+     * Récupérer les campagnes archivées (inactives ou terminées)
+     * 
+     * @return array
      */
     public function getArchived(): array
     {
@@ -292,7 +351,9 @@ class Campaign
     }
 
     /**
-     * Récupérer les statistiques
+     * Récupérer les statistiques des campagnes
+     * 
+     * @return array
      */
     public function getStats(): array
     {
@@ -305,123 +366,125 @@ class Campaign
         ];
 
         // Total
-        $sql = "SELECT COUNT(*) FROM campaigns";
-        $stats['total'] = (int) $this->db->query($sql)[0]['COUNT(*)'];
+        $sql = "SELECT COUNT(*) as count FROM campaigns";
+        $result = $this->db->query($sql);
+        $stats['total'] = (int) $result[0]['count'];
 
         // Actives (en cours de validité)
-        $sql = "SELECT COUNT(*) FROM campaigns 
+        $sql = "SELECT COUNT(*) as count FROM campaigns 
                 WHERE is_active = 1 
                 AND start_date <= CURDATE() 
                 AND end_date >= CURDATE()";
-        $stats['active'] = (int) $this->db->query($sql)[0]['COUNT(*)'];
+        $result = $this->db->query($sql);
+        $stats['active'] = (int) $result[0]['count'];
 
-        // Archives
-        $sql = "SELECT COUNT(*) FROM campaigns 
+        // Archivées (inactives ou terminées)
+        $sql = "SELECT COUNT(*) as count FROM campaigns 
                 WHERE is_active = 0 OR end_date < CURDATE()";
-        $stats['archived'] = (int) $this->db->query($sql)[0]['COUNT(*)'];
+        $result = $this->db->query($sql);
+        $stats['archived'] = (int) $result[0]['count'];
 
         // Par pays
-        $sql = "SELECT country, COUNT(*) as count FROM campaigns GROUP BY country";
-        $results = $this->db->query($sql);
-        
-        foreach ($results as $row) {
-            $country = strtolower($row['country']);
-            $stats[$country] = (int) $row['count'];
-        }
+        $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'BE'";
+        $result = $this->db->query($sql);
+        $stats['be'] = (int) $result[0]['count'];
+
+        $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'LU'";
+        $result = $this->db->query($sql);
+        $stats['lu'] = (int) $result[0]['count'];
 
         return $stats;
     }
 
     /**
-     * Valider les données de campagne
+     * Valider les données d'une campagne
+     * 
+     * @param array $data Données à valider
+     * @return array Tableau des erreurs (vide si OK)
      */
-    public function validate(array $data, bool $isUpdate = false): array
+    public function validate(array $data): array
     {
         $errors = [];
 
-        // Nom requis
+        // Nom obligatoire
         if (empty($data['name'])) {
-            $errors['name'] = "Le nom de la campagne est requis";
+            $errors['name'] = 'Le nom de la campagne est obligatoire';
         }
 
-        // Pays requis
-        if (empty($data['country']) || !in_array($data['country'], ['BE', 'LU'])) {
-            $errors['country'] = "Le pays doit être BE ou LU";
+        // Pays obligatoire et valide
+        if (empty($data['country'])) {
+            $errors['country'] = 'Le pays est obligatoire';
+        } elseif (!in_array($data['country'], ['BE', 'LU'])) {
+            $errors['country'] = 'Le pays doit être BE ou LU';
         }
 
-        // Date de début requise
+        // Dates obligatoires
         if (empty($data['start_date'])) {
-            $errors['start_date'] = "La date de début est requise";
+            $errors['start_date'] = 'La date de début est obligatoire';
         }
 
-        // Date de fin requise
         if (empty($data['end_date'])) {
-            $errors['end_date'] = "La date de fin est requise";
+            $errors['end_date'] = 'La date de fin est obligatoire';
         }
 
         // Vérifier que end_date > start_date
         if (!empty($data['start_date']) && !empty($data['end_date'])) {
             if (strtotime($data['end_date']) < strtotime($data['start_date'])) {
-                $errors['end_date'] = "La date de fin doit être après la date de début";
+                $errors['end_date'] = 'La date de fin doit être postérieure à la date de début';
             }
+        }
+
+        // Titre FR obligatoire
+        if (empty($data['title_fr'])) {
+            $errors['title_fr'] = 'Le titre en français est obligatoire';
         }
 
         return $errors;
     }
 
     /**
-     * Générer un UUID v4 unique
-     */
-    private function generateUniqueUuid(): string
-    {
-        do {
-            $uuid = $this->generateUuid();
-            $existing = $this->findByUuid($uuid);
-        } while ($existing !== null);
-
-        return $uuid;
-    }
-
-    /**
-     * Générer un UUID v4
+     * Générer un UUID unique
+     * 
+     * @return string
      */
     private function generateUuid(): string
     {
-        $data = random_bytes(16);
-        
-        // Set version (4) et variant
-        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
-        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
-        
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
     }
 
     /**
-     * Générer un slug depuis une chaîne
+     * Générer un slug à partir d'un texte
+     * 
+     * @param string $text Texte à transformer
+     * @return string
      */
     private function generateSlug(string $text): string
     {
-        // Convertir en minuscules
-        $slug = strtolower($text);
-        
         // Remplacer les caractères accentués
-        $slug = iconv('UTF-8', 'ASCII//TRANSLIT', $slug);
+        $text = iconv('UTF-8', 'ASCII//TRANSLIT', $text);
         
-        // Supprimer tout sauf lettres, chiffres, tirets
-        $slug = preg_replace('/[^a-z0-9-]+/', '-', $slug);
+        // Mettre en minuscule
+        $text = strtolower($text);
         
-        // Supprimer les tirets multiples
-        $slug = preg_replace('/-+/', '-', $slug);
+        // Remplacer tout ce qui n'est pas alphanumérique par des tirets
+        $text = preg_replace('/[^a-z0-9]+/', '-', $text);
         
-        // Supprimer les tirets en début/fin
-        $slug = trim($slug, '-');
+        // Enlever les tirets en début et fin
+        $text = trim($text, '-');
         
-        // Si le slug existe déjà, ajouter un suffixe numérique
-        $originalSlug = $slug;
+        // S'assurer que le slug est unique
+        $slug = $text;
         $counter = 1;
         
-        while ($this->findBySlug($slug) !== null) {
-            $slug = $originalSlug . '-' . $counter;
+        while ($this->findBySlug($slug)) {
+            $slug = $text . '-' . $counter;
             $counter++;
         }
         
@@ -429,11 +492,16 @@ class Campaign
     }
 
     /**
-     * Obtenir l'URL publique d'une campagne
+     * Basculer le statut actif/inactif d'une campagne
+     * 
+     * @param int $id ID de la campagne
+     * @return bool
      */
-    public function getPublicUrl(array $campaign): string
+    public function toggleActive(int $id): bool
     {
-        $baseUrl = rtrim($_ENV['APP_URL'] ?? 'https://actions.trendyfoods.com/stm', '/');
-        return $baseUrl . '/c/' . $campaign['uuid'];
+        $sql = "UPDATE campaigns SET is_active = NOT is_active WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        
+        return $stmt->execute(['id' => $id]);
     }
 }
