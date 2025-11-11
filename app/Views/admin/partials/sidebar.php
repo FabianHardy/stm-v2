@@ -58,13 +58,13 @@ $menuItems = [
         ]
     ],
     [
-        'label' => 'Produits',
+        'label' => 'Promotions',
         'icon' => 'fa-box',
         'route' => '/stm/admin/products',
         'badge' => null,
         'submenu' => [
-            ['label' => 'Tous les produits', 'route' => '/stm/admin/products'],
-            ['label' => 'Ajouter un produit', 'route' => '/stm/admin/products/create'],
+            ['label' => 'Toutes les Promotions', 'route' => '/stm/admin/products'],
+            ['label' => 'Ajouter une promotion', 'route' => '/stm/admin/products/create'],
             ['label' => 'Catégories', 'route' => '/stm/admin/products/categories'],
             ['label' => 'Stock', 'route' => '/stm/admin/products/stock'],
         ]
