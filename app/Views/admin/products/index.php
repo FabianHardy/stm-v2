@@ -5,7 +5,7 @@
  * Affichage de tous les Promotions avec filtres, recherche et statistiques
  * 
  * @created 11/11/2025 22:30
- * @modified 11/11/2025 23:10 - Vérification cohérence style
+ * @modified 12/11/2025 02:00 - Suppression EAN et package_number
  */
 
 use Core\Session;
@@ -131,7 +131,7 @@ ob_start();
                            name="search" 
                            id="search"
                            value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
-                           placeholder="Code, nom, EAN..."
+                           placeholder="Code, nom..."
                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
 
@@ -170,10 +170,10 @@ ob_start();
             </div>
 
             <!-- Boutons -->
-            <div class="flex items-center gap-2">
+            <div class="flex gap-2">
                 <button type="submit" 
                         class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                    🔎 Filtrer
+                    🔍 Filtrer
                 </button>
                 <a href="/stm/admin/products" 
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
@@ -184,15 +184,18 @@ ob_start();
     </div>
 </div>
 
-<!-- Liste des Promotions -->
+<!-- Tableau des Promotions -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
         <h3 class="text-lg leading-6 font-medium text-gray-900">
             📋 Liste des Promotions
-            <span class="text-sm text-gray-500 font-normal ml-2">(<?php echo count($products); ?> résultat<?php echo count($products) > 1 ? 's' : ''; ?>)</span>
+            <?php if (!empty($products)): ?>
+                <span class="ml-2 text-sm font-normal text-gray-500">
+                    (<?php echo count($products); ?> résultat<?php echo count($products) > 1 ? 's' : ''; ?>)
+                </span>
+            <?php endif; ?>
         </h3>
     </div>
-    
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
@@ -204,7 +207,7 @@ ob_start();
                         Promotion
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Codes
+                        Code
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Catégorie
@@ -259,19 +262,11 @@ ob_start();
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Codes -->
+                            <!-- Code -->
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-900 font-medium">
+                                <div class="text-sm text-gray-900 font-mono font-medium">
                                     <?php echo htmlspecialchars($product['product_code']); ?>
                                 </div>
-                                <div class="text-xs text-gray-500">
-                                    Colis: <?php echo htmlspecialchars($product['package_number']); ?>
-                                </div>
-                                <?php if ($product['ean']): ?>
-                                    <div class="text-xs text-gray-500 font-mono">
-                                        EAN: <?php echo htmlspecialchars($product['ean']); ?>
-                                    </div>
-                                <?php endif; ?>
                             </td>
 
                             <!-- Catégorie -->
