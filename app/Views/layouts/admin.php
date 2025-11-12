@@ -13,6 +13,7 @@
  * @package STM
  * @version 2.0
  * @modified 10/11/2025 - Ajout récupération stats campagnes actives pour sidebar
+ * @modified 12/11/2025 - Ajout compteur clients pour badge sidebar
  */
 
 use Core\Session;
@@ -29,6 +30,16 @@ try {
 } catch (\Exception $e) {
     error_log("Erreur récupération stats campagnes: " . $e->getMessage());
     $activeCampaignsCount = 0;
+}
+
+// Compteur clients pour badge sidebar
+try {
+    $db = \Core\Database::getInstance();
+    $result = $db->query("SELECT COUNT(*) as total FROM customers");
+    $customerCount = $result[0]['total'] ?? 0;
+} catch (\PDOException $e) {
+    error_log("Erreur récupération compteur clients: " . $e->getMessage());
+    $customerCount = 0;
 }
 ?>
 <!DOCTYPE html>
