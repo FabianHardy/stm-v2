@@ -7,7 +7,7 @@
  * Permet l'import automatique depuis la base externe trendyblog_sig
  * 
  * @created  2025/11/12 20:00
- * @modified 2025/11/12 20:00 - Création initiale
+ * @modified 2025/11/12 22:05 - Correction méthodes Database (getPDO → getConnection/query/queryOne/execute)
  */
 
 namespace App\Models;
@@ -85,18 +85,20 @@ class Customer
             // Tri par nom d'entreprise
             $sql .= " ORDER BY company_name ASC";
 
-            // Limite et offset
+            // Limite et offset (nécessite bindValue avec PDO::PARAM_INT)
             if ($limit > 0) {
                 $sql .= " LIMIT :limit OFFSET :offset";
             }
 
-            $stmt = $this->db->getPDO()->prepare($sql);
+            // Pour LIMIT/OFFSET, on doit utiliser getConnection() avec bindValue
+            $stmt = $this->db->getConnection()->prepare($sql);
 
-            // Bind des paramètres
+            // Bind des paramètres normaux
             foreach ($params as $key => $value) {
                 $stmt->bindValue($key, $value);
             }
 
+            // Bind LIMIT et OFFSET avec type INT
             if ($limit > 0) {
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -120,11 +122,7 @@ class Customer
     {
         try {
             $sql = "SELECT * FROM {$this->table} WHERE id = :id LIMIT 1";
-            $stmt = $this->db->getPDO()->prepare($sql);
-            $stmt->execute([':id' => $id]);
-
-            $result = $stmt->fetch();
-            return $result ?: null;
+            return $this->db->queryOne($sql, [':id' => $id]);
         } catch (PDOException $e) {
             error_log("Customer::findById() - Erreur : " . $e->getMessage());
             return null;
@@ -143,14 +141,10 @@ class Customer
     {
         try {
             $sql = "SELECT * FROM {$this->table} WHERE customer_number = :customer_number AND country = :country LIMIT 1";
-            $stmt = $this->db->getPDO()->prepare($sql);
-            $stmt->execute([
+            return $this->db->queryOne($sql, [
                 ':customer_number' => $customerNumber,
                 ':country' => $country
             ]);
-
-            $result = $stmt->fetch();
-            return $result ?: null;
         } catch (PDOException $e) {
             error_log("Customer::findByCustomerNumberAndCountry() - Erreur : " . $e->getMessage());
             return null;
@@ -195,8 +189,7 @@ class Customer
                 :is_blocked
             )";
 
-            $stmt = $this->db->getPDO()->prepare($sql);
-            $result = $stmt->execute([
+            $params = [
                 ':customer_number' => $data['customer_number'],
                 ':email' => $data['email'] ?? null,
                 ':company_name' => $data['company_name'],
@@ -206,10 +199,10 @@ class Customer
                 ':rep_id' => $data['rep_id'] ?? null,
                 ':is_active' => isset($data['is_active']) ? (int) $data['is_active'] : 1,
                 ':is_blocked' => isset($data['is_blocked']) ? (int) $data['is_blocked'] : 0
-            ]);
+            ];
 
-            if ($result) {
-                return (int) $this->db->getPDO()->lastInsertId();
+            if ($this->db->execute($sql, $params)) {
+                return (int) $this->db->lastInsertId();
             }
 
             return false;
@@ -229,17 +222,14 @@ class Customer
     public function update(int $id, array $data): bool
     {
         try {
-            // Ajouter l'ID pour la validation (éviter les doublons)
-            $data['id'] = $id;
-
             // Valider les données
-            $errors = $this->validate($data);
+            $errors = $this->validate($data, $id);
             if (!empty($errors)) {
                 error_log("Customer::update() - Erreurs de validation : " . json_encode($errors));
                 return false;
             }
 
-            $sql = "UPDATE {$this->table} SET 
+            $sql = "UPDATE {$this->table} SET
                 customer_number = :customer_number,
                 email = :email,
                 company_name = :company_name,
@@ -248,12 +238,10 @@ class Customer
                 rep_name = :rep_name,
                 rep_id = :rep_id,
                 is_active = :is_active,
-                is_blocked = :is_blocked,
-                updated_at = CURRENT_TIMESTAMP
+                is_blocked = :is_blocked
             WHERE id = :id";
 
-            $stmt = $this->db->getPDO()->prepare($sql);
-            return $stmt->execute([
+            $params = [
                 ':id' => $id,
                 ':customer_number' => $data['customer_number'],
                 ':email' => $data['email'] ?? null,
@@ -264,7 +252,9 @@ class Customer
                 ':rep_id' => $data['rep_id'] ?? null,
                 ':is_active' => isset($data['is_active']) ? (int) $data['is_active'] : 1,
                 ':is_blocked' => isset($data['is_blocked']) ? (int) $data['is_blocked'] : 0
-            ]);
+            ];
+
+            return $this->db->execute($sql, $params);
         } catch (PDOException $e) {
             error_log("Customer::update() - Erreur SQL : " . $e->getMessage());
             return false;
@@ -281,10 +271,9 @@ class Customer
     {
         try {
             $sql = "DELETE FROM {$this->table} WHERE id = :id";
-            $stmt = $this->db->getPDO()->prepare($sql);
-            return $stmt->execute([':id' => $id]);
+            return $this->db->execute($sql, [':id' => $id]);
         } catch (PDOException $e) {
-            error_log("Customer::delete() - Erreur : " . $e->getMessage());
+            error_log("Customer::delete() - Erreur SQL : " . $e->getMessage());
             return false;
         }
     }
@@ -293,21 +282,27 @@ class Customer
      * Valider les données d'un client
      * 
      * @param array $data Données à valider
-     * @return array Tableau des erreurs (vide si pas d'erreur)
+     * @param int|null $id ID du client (pour update, vérifier doublon sauf soi-même)
+     * @return array Tableau des erreurs (vide si tout est OK)
      */
-    public function validate(array $data): array
+    public function validate(array $data, ?int $id = null): array
     {
         $errors = [];
 
-        // customer_number : requis, format flexible
+        // customer_number : requis, format valide, unique (customer_number + country)
         if (empty($data['customer_number'])) {
             $errors['customer_number'] = 'Le numéro client est requis';
         } elseif (!$this->isValidCustomerNumber($data['customer_number'])) {
-            $errors['customer_number'] = 'Format de numéro client invalide (exemples valides : 123456, 123456-12, E12345-CB, *12345)';
+            $errors['customer_number'] = 'Format de numéro client invalide';
         } else {
             // Vérifier l'unicité (customer_number + country)
-            $existing = $this->findByCustomerNumberAndCountry($data['customer_number'], $data['country']);
-            if ($existing && (!isset($data['id']) || $existing['id'] != $data['id'])) {
+            $existing = $this->findByCustomerNumberAndCountry(
+                $data['customer_number'], 
+                $data['country'] ?? ''
+            );
+            
+            // Si on trouve un client avec ce numéro/pays ET ce n'est pas le client en cours de modification
+            if ($existing && (!$id || $existing['id'] != $id)) {
                 $errors['customer_number'] = 'Ce numéro client existe déjà pour ce pays';
             }
         }
@@ -432,22 +427,22 @@ class Customer
 
             // Total
             $sql = "SELECT COUNT(*) as total FROM {$this->table}";
-            $result = $this->db->getPDO()->query($sql)->fetch();
-            $stats['total'] = (int) $result['total'];
+            $result = $this->db->queryOne($sql);
+            $stats['total'] = (int) ($result['total'] ?? 0);
 
             // Actifs
             $sql = "SELECT COUNT(*) as total FROM {$this->table} WHERE is_active = 1";
-            $result = $this->db->getPDO()->query($sql)->fetch();
-            $stats['active'] = (int) $result['total'];
+            $result = $this->db->queryOne($sql);
+            $stats['active'] = (int) ($result['total'] ?? 0);
 
             // Bloqués
             $sql = "SELECT COUNT(*) as total FROM {$this->table} WHERE is_blocked = 1";
-            $result = $this->db->getPDO()->query($sql)->fetch();
-            $stats['blocked'] = (int) $result['total'];
+            $result = $this->db->queryOne($sql);
+            $stats['blocked'] = (int) ($result['total'] ?? 0);
 
             // Par pays
             $sql = "SELECT country, COUNT(*) as total FROM {$this->table} GROUP BY country";
-            $results = $this->db->getPDO()->query($sql)->fetchAll();
+            $results = $this->db->query($sql);
             foreach ($results as $row) {
                 $stats['by_country'][$row['country']] = (int) $row['total'];
             }
@@ -474,20 +469,16 @@ class Customer
     {
         try {
             $sql = "SELECT DISTINCT rep_name, rep_id FROM {$this->table} WHERE rep_name IS NOT NULL";
+            $params = [];
 
             if ($country) {
                 $sql .= " AND country = :country";
+                $params[':country'] = $country;
             }
 
             $sql .= " ORDER BY rep_name ASC";
 
-            if ($country) {
-                $stmt = $this->db->getPDO()->prepare($sql);
-                $stmt->execute([':country' => $country]);
-                return $stmt->fetchAll();
-            } else {
-                return $this->db->getPDO()->query($sql)->fetchAll();
-            }
+            return $this->db->query($sql, $params);
         } catch (PDOException $e) {
             error_log("Customer::getRepresentatives() - Erreur : " . $e->getMessage());
             return [];
@@ -533,14 +524,146 @@ class Customer
                 $params[':search'] = "%{$search}%";
             }
 
-            $stmt = $this->db->getPDO()->prepare($sql);
-            $stmt->execute($params);
-            $result = $stmt->fetch();
-
-            return (int) $result['total'];
+            $result = $this->db->queryOne($sql, $params);
+            return (int) ($result['total'] ?? 0);
         } catch (PDOException $e) {
             error_log("Customer::count() - Erreur : " . $e->getMessage());
             return 0;
+        }
+    }
+
+    /**
+     * Récupérer les campagnes attribuées à un client
+     * 
+     * @param int $customerId ID du client
+     * @return array Liste des campagnes
+     */
+    public function getCampaigns(int $customerId): array
+    {
+        try {
+            $sql = "SELECT c.* 
+                    FROM campaigns c
+                    INNER JOIN campaign_customers cc ON c.id = cc.campaign_id
+                    WHERE cc.customer_id = :customer_id
+                    ORDER BY c.start_date DESC";
+            
+            return $this->db->query($sql, [':customer_id' => $customerId]);
+        } catch (PDOException $e) {
+            error_log("Customer::getCampaigns() - Erreur : " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupérer les commandes d'un client
+     * 
+     * @param int $customerId ID du client
+     * @return array Liste des commandes
+     */
+    public function getOrders(int $customerId): array
+    {
+        try {
+            $sql = "SELECT o.*, c.name as campaign_name
+                    FROM orders o
+                    LEFT JOIN campaigns c ON o.campaign_id = c.id
+                    WHERE o.customer_id = :customer_id
+                    ORDER BY o.created_at DESC";
+            
+            return $this->db->query($sql, [':customer_id' => $customerId]);
+        } catch (PDOException $e) {
+            error_log("Customer::getOrders() - Erreur : " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Mettre à jour les attributions de campagnes d'un client
+     * 
+     * @param int $customerId ID du client
+     * @param array $campaignIds IDs des campagnes à attribuer
+     * @return bool True si succès, false sinon
+     */
+    public function updateCampaignAssignments(int $customerId, array $campaignIds): bool
+    {
+        try {
+            $this->db->beginTransaction();
+
+            // Supprimer toutes les attributions existantes
+            $sql = "DELETE FROM campaign_customers WHERE customer_id = :customer_id";
+            $this->db->execute($sql, [':customer_id' => $customerId]);
+
+            // Ajouter les nouvelles attributions
+            if (!empty($campaignIds)) {
+                $sql = "INSERT INTO campaign_customers (campaign_id, customer_id) VALUES (:campaign_id, :customer_id)";
+                
+                foreach ($campaignIds as $campaignId) {
+                    $this->db->execute($sql, [
+                        ':campaign_id' => (int) $campaignId,
+                        ':customer_id' => $customerId
+                    ]);
+                }
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            error_log("Customer::updateCampaignAssignments() - Erreur : " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Récupérer les numéros clients existants pour un pays
+     * 
+     * @param string $country Pays (BE ou LU)
+     * @return array Liste des numéros clients
+     */
+    public function getExistingCustomerNumbers(string $country): array
+    {
+        try {
+            $sql = "SELECT customer_number FROM {$this->table} WHERE country = :country";
+            $results = $this->db->query($sql, [':country' => $country]);
+            
+            return array_column($results, 'customer_number');
+        } catch (PDOException $e) {
+            error_log("Customer::getExistingCustomerNumbers() - Erreur : " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupérer les clients de la base externe
+     * 
+     * @param string $country Pays (BE ou LU)
+     * @param string $search Recherche optionnelle
+     * @return array Liste des clients externes
+     */
+    public function getExternalCustomers(string $country, string $search = ''): array
+    {
+        try {
+            $externalDb = ExternalDatabase::getInstance();
+            
+            $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            $sql = "SELECT CLL_NCLIXX as customer_number, 
+                           CLL_NOM as company_name,
+                           IDE_REP as rep_id
+                    FROM {$table}
+                    WHERE 1=1";
+            
+            $params = [];
+            
+            if (!empty($search)) {
+                $sql .= " AND (CLL_NCLIXX LIKE :search OR CLL_NOM LIKE :search)";
+                $params[':search'] = "%{$search}%";
+            }
+            
+            $sql .= " ORDER BY CLL_NOM ASC LIMIT 100";
+            
+            return $externalDb->query($sql, $params);
+        } catch (\Exception $e) {
+            error_log("Customer::getExternalCustomers() - Erreur : " . $e->getMessage());
+            return [];
         }
     }
 }
