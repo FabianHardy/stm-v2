@@ -47,7 +47,7 @@ class CustomerController
         ];
         
         // Récupérer les clients filtrés
-        $customers = $this->customerModel->getAll($filters);
+        $customers = $this->customerModel->findAll($filters);
         
         // Récupérer les statistiques
         $stats = $this->customerModel->getStats();
