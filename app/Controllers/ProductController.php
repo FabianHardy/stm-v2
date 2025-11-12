@@ -50,12 +50,14 @@ class ProductController
 
     /**
      * Afficher le formulaire de création
+     * 
+     * @modified 12/11/2025 15:45 - FIX : Utilisation product_categories
      */
     public function create(): void
     {
-        // Récupérer les catégories
-        $categoryModel = new Category();
-        $categories = $categoryModel->getAll();
+        // Récupérer les catégories depuis product_categories
+        $db = \Core\Database::getInstance();
+        $categories = $db->query("SELECT * FROM product_categories ORDER BY display_order ASC");
 
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
