@@ -340,3 +340,102 @@ $router->post('/admin/products/{id}/delete', function($id) {
     $controller = new ProductController();
     $controller->destroy((int)$id);
 });
+
+/**
+ * ============================================
+ * ROUTES CLIENTS (À AJOUTER DANS routes.php)
+ * ============================================
+ * 
+ * Instructions : Copier ce bloc APRÈS les routes des campagnes
+ * et AVANT les routes des catégories (si elles existent)
+ * 
+ * Position dans le fichier : Ligne ~180 environ
+ * (après la dernière route de campagnes)
+ */
+
+// ============================================
+// ROUTES CLIENTS (CRUD COMPLET)
+// ============================================
+
+use App\Controllers\CustomerController;
+
+// Liste des clients
+$router->get('/admin/customers', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->index();
+});
+
+// Formulaire de création
+$router->get('/admin/customers/create', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->create();
+});
+
+// Page d'import depuis DB externe
+$router->get('/admin/customers/import', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->importPreview();
+});
+
+// Exécuter l'import
+$router->post('/admin/customers/import/execute', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->importExecute();
+});
+
+// Enregistrer un nouveau client
+$router->post('/admin/customers', function() {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->store();
+});
+
+// Détails d'un client
+$router->get('/admin/customers/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->show((int)$id);
+});
+
+// Formulaire d'édition
+$router->get('/admin/customers/{id}/edit', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour un client
+$router->post('/admin/customers/{id}', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->update((int)$id);
+});
+
+// Supprimer un client
+$router->post('/admin/customers/{id}/delete', function($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+    
+    $controller = new CustomerController();
+    $controller->delete((int)$id);
+});
