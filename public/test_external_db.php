@@ -17,7 +17,7 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
 // Importer la classe ExternalDatabase
-use App\Core\ExternalDatabase;
+use Core\ExternalDatabase;
 
 // Activer l'affichage des erreurs pour le test
 ini_set('display_errors', 1);
