@@ -5,7 +5,7 @@
  * Affichage complet des informations d'une Promotion
  * 
  * @created 11/11/2025 22:50
- * @modified 11/11/2025 23:05 - Amélioration mise en page (sections claires)
+ * @modified 12/11/2025 02:00 - Suppression EAN et package_number
  */
 
 use Core\Session;
@@ -23,9 +23,6 @@ ob_start();
             </h1>
             <p class="mt-2 text-sm text-gray-600">
                 Code: <span class="font-medium"><?php echo htmlspecialchars($product['product_code']); ?></span>
-                <?php if ($product['ean']): ?>
-                    • EAN: <span class="font-medium"><?php echo htmlspecialchars($product['ean']); ?></span>
-                <?php endif; ?>
             </p>
         </div>
         <div class="flex gap-2">
@@ -108,22 +105,6 @@ ob_start();
                             <?php echo htmlspecialchars($product['product_code']); ?>
                         </dd>
                     </div>
-                    
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500">Numéro de colis</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                            <?php echo htmlspecialchars($product['package_number']); ?>
-                        </dd>
-                    </div>
-                    
-                    <?php if ($product['ean']): ?>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Code EAN</dt>
-                            <dd class="mt-1 text-sm text-gray-900 font-mono">
-                                <?php echo htmlspecialchars($product['ean']); ?>
-                            </dd>
-                        </div>
-                    <?php endif; ?>
                     
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Catégorie</dt>
