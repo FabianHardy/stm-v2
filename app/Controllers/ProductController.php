@@ -3,7 +3,7 @@
  * ProductController - Gestion des Promotions
  * 
  * @created 11/11/2025
- * @modified 12/11/2025 01:00 - CORRECTIF : find() → findById()
+ * @modified 12/11/2025 17:30 - Ajout quotas (max_total, max_per_customer)
  */
 
 namespace App\Controllers;
@@ -79,6 +79,8 @@ class ProductController
 
     /**
      * Enregistrer un nouveau Promotion
+     * 
+     * @modified 12/11/2025 17:30 - Ajout quotas
      */
     public function store(): void
     {
@@ -99,6 +101,8 @@ class ProductController
             'description_fr' => trim($_POST['description_fr'] ?? ''),
             'description_nl' => trim($_POST['description_nl'] ?? ''),
             'display_order' => (int)($_POST['display_order'] ?? 0),
+            'max_total' => !empty($_POST['max_total']) ? (int)$_POST['max_total'] : null,
+            'max_per_customer' => !empty($_POST['max_per_customer']) ? (int)$_POST['max_per_customer'] : null,
             'is_active' => isset($_POST['is_active']) ? 1 : 0
         ];
 
@@ -212,6 +216,8 @@ class ProductController
 
     /**
      * Mettre à jour un Promotion
+     * 
+     * @modified 12/11/2025 17:30 - Ajout quotas
      */
     public function update(int $id): void
     {
@@ -242,6 +248,8 @@ class ProductController
             'description_fr' => trim($_POST['description_fr'] ?? ''),
             'description_nl' => trim($_POST['description_nl'] ?? ''),
             'display_order' => (int)($_POST['display_order'] ?? 0),
+            'max_total' => !empty($_POST['max_total']) ? (int)$_POST['max_total'] : null,
+            'max_per_customer' => !empty($_POST['max_per_customer']) ? (int)$_POST['max_per_customer'] : null,
             'is_active' => isset($_POST['is_active']) ? 1 : 0,
             'image_fr' => $product['image_fr'], // Garder ancienne par défaut
             'image_nl' => $product['image_nl']
