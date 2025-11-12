@@ -263,6 +263,13 @@ class ProductController
             'image_nl' => $product['image_nl']
         ];
 
+        // DEBUG : Logger les quotas reçus
+        error_log("ProductController::update() - ID: $id");
+        error_log("ProductController::update() - POST max_total: " . var_export($_POST['max_total'] ?? 'NOT_SET', true));
+        error_log("ProductController::update() - POST max_per_customer: " . var_export($_POST['max_per_customer'] ?? 'NOT_SET', true));
+        error_log("ProductController::update() - DATA max_total: " . var_export($data['max_total'], true));
+        error_log("ProductController::update() - DATA max_per_customer: " . var_export($data['max_per_customer'], true));
+
         // Validation
         $errors = $this->productModel->validate($data);
 
