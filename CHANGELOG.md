@@ -4,6 +4,75 @@ Historique centralisÃ© de toutes les modifications du projet.
 
 ---
 
+## [12/11/2025 20:00] - Sprint 5 (ÉTAPE 4) : Vues customers ✅
+
+### ✅ Ajouté
+- **5 vues customers** complètes et fonctionnelles :
+  - **customers/index.php** : Liste clients avec filtres (pays, représentant, recherche) + stats
+  - **customers/create.php** : Formulaire création + lien vers import DB externe
+  - **customers/show.php** : Détails client + campagnes attribuées + historique commandes
+  - **customers/edit.php** : Formulaire modification
+  - **customers/import_preview.php** : Import DB externe avec sélection multiple
+
+### 🎨 Design & Fonctionnalités
+**index.php** :
+- Statistiques rapides : Total, BE, LU, Actifs
+- Filtres HTMX : recherche, pays, représentant
+- Tableau avec badges colorés (pays, statut)
+- Actions : Voir, Modifier, Supprimer (formulaire POST sécurisé)
+- 2 boutons en-tête : "Nouveau client" + "Importer depuis DB"
+
+**create.php** :
+- Formulaire complet (12 champs)
+- Select représentant dynamique selon pays (Alpine.js)
+- Card bleue avec lien vers import DB externe
+- Validation HTML5 + affichage erreurs
+- Token CSRF
+
+**show.php** :
+- Layout 2 colonnes (principale + sidebar)
+- Section informations générales + coordonnées
+- Section "Campagnes attribuées" (lecture seule)
+- Section "Historique des commandes" (tableau)
+- Sidebar : Catégorisation + Métadonnées système
+- Boutons : Modifier, Supprimer
+
+**edit.php** :
+- Identique à create.php mais pré-rempli
+- Action POST vers /stm/admin/customers/{id}
+- Sans option import
+
+**import_preview.php** :
+- Filtres : Pays (BE/LU) + Recherche (Alpine.js)
+- Tableau avec checkboxes de sélection
+- Badge "Déjà importé" pour doublons (checkbox disabled)
+- Compteur temps réel : "X clients sélectionnés"
+- Boutons : "Tout sélectionner", "Tout désélectionner", "Importer"
+- Action POST vers /stm/admin/customers/import/execute
+
+### 🎯 Standards respectés
+- ✅ Layout centralisé : `require __DIR__ . '/../../layouts/admin.php'`
+- ✅ Structure : ob_start() → HTML → ob_get_clean() → $content → $title → layout
+- ✅ Design cohérent avec campaigns (même style badges, tableaux, formulaires)
+- ✅ Tailwind CSS + HTMX + Alpine.js
+- ✅ Responsive mobile-first
+- ✅ Token CSRF dans tous les formulaires POST
+- ✅ Commentaires français + DocBlocks complets
+- ✅ Messages flash gérés par layout
+
+### 📊 Progression Sprint 5
+- ✅ ÉTAPE 1 : Base de données + Connexion externe (100%)
+- ✅ ÉTAPE 2 : Model Customer.php (100%)
+- ✅ ÉTAPE 3 : CustomerController.php (100%)
+- ✅ ÉTAPE 4 : Vues customers (100%)
+- ⬜ ÉTAPE 5 : Routes et intégration (0%)
+- ⬜ ÉTAPE 6 : Attribution campagnes finale (0%)
+
+**Sprint 5 progression** : 67% (4/6 étapes terminées)
+
+---
+
+
 ## [12/11/2025 19:15] - Sprint 5 (ÉTAPE 3) : CustomerController.php ✅
 
 ### ✅ Ajouté
