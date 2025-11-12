@@ -1,56 +1,109 @@
-# 📝 CHANGELOG - STM v2
+# ðŸ“ CHANGELOG - STM v2
 
-Historique centralisé de toutes les modifications du projet.
+Historique centralisÃ© de toutes les modifications du projet.
 
 ---
 
-## [12/11/2025 18:50] - Sprint 4 : Système de quotas TERMINÉ ✅
+## [12/11/2025 19:15] - Sprint 5 (ÉTAPE 3) : CustomerController.php ✅
 
-### 🎉 SUCCÈS
-Le système de quotas est maintenant **100% fonctionnel** en production !
+### ✅ Ajouté
+- **CustomerController.php** : Contrôleur complet du module Clients
+  - **CRUD standard** : 7 méthodes (index, create, store, show, edit, update, delete)
+  - **Import DB externe** : 2 méthodes (importPreview, importExecute)
+  - **Attribution campagnes** : 2 méthodes (assignCampaigns, updateCampaignAssignments)
+  - **Helpers** : getRepresentatives(), validateCSRF()
 
-**Tests réussis** :
-- ✅ Création de promotion avec quotas
-- ✅ Modification de promotion avec quotas
-- ✅ Affichage des quotas avec badges colorés
-- ✅ Validation correcte (nombres >= 1)
-- ✅ Sauvegarde en base de données
+### 🎯 Fonctionnalités implémentées
+**CRUD complet** :
+- Liste clients avec filtres (pays, représentant, recherche)
+- Création/modification avec validation
+- Suppression sécurisée (POST + CSRF + vérification commandes)
+- Détails client avec campagnes et commandes
 
-### 📊 Système de quotas complet
+**Import base externe** :
+- Prévisualisation clients disponibles (BE_CLL / LU_CLL)
+- Import par sélection multiple
+- Détection doublons (contrainte customer_number + country)
+- Statistiques d'import (importés, ignorés, erreurs)
+
+**Attribution campagnes** :
+- Interface d'attribution par client
+- Mise à jour des relations client-campagne
+- Support Mode 1 (liste manuelle) prêt pour Mode 2 (tous dynamique)
+
+### 🔒 Sécurité
+- Validation CSRF sur toutes les actions POST
+- Try/catch sur opérations DB
+- Vérification existence avant modification/suppression
+- Protection contre suppression si commandes existantes
+
+### 📝 Code quality
+- Commentaires en français
+- DocBlocks complets (@created, @modified)
+- Respect PSR-12
+- Gestion erreurs avec messages flash
+- Structure inspirée de CampaignController
+
+### 📊 Progression Sprint 5
+- ✅ ÉTAPE 1 : Base de données + Connexion externe (100%)
+- ✅ ÉTAPE 2 : Model Customer.php (100%)
+- ✅ ÉTAPE 3 : CustomerController.php (100%)
+- ⬜ ÉTAPE 4 : Vues customers (0%)
+- ⬜ ÉTAPE 5 : Routes et intégration (0%)
+- ⬜ ÉTAPE 6 : Attribution campagnes finale (0%)
+
+**Sprint 5 progression** : 50% (3/6 étapes terminées)
+
+---
+
+
+## [12/11/2025 18:50] - Sprint 4 : SystÃ¨me de quotas TERMINÃ‰ âœ…
+
+### ðŸŽ‰ SUCCÃˆS
+Le systÃ¨me de quotas est maintenant **100% fonctionnel** en production !
+
+**Tests rÃ©ussis** :
+- âœ… CrÃ©ation de promotion avec quotas
+- âœ… Modification de promotion avec quotas
+- âœ… Affichage des quotas avec badges colorÃ©s
+- âœ… Validation correcte (nombres >= 1)
+- âœ… Sauvegarde en base de donnÃ©es
+
+### ðŸ“Š SystÃ¨me de quotas complet
 **Interface** :
 - Section "Quotas de commande" dans les formulaires
 - 2 champs optionnels : max_total (global) et max_per_customer (par client)
-- Exemples d'utilisation intégrés
-- Affichage badges colorés : 🌍 (violet), 👤 (bleu), ∞ (gris)
+- Exemples d'utilisation intÃ©grÃ©s
+- Affichage badges colorÃ©s : ðŸŒ (violet), ðŸ‘¤ (bleu), âˆž (gris)
 
 **Backend** :
 - Colonnes max_total et max_per_customer dans table products
-- Validation : nombres entiers positifs >= 1 ou NULL (illimité)
+- Validation : nombres entiers positifs >= 1 ou NULL (illimitÃ©)
 - Gestion dans Product.php (create/update/validate)
 - Traitement dans ProductController.php (store/update)
 
-### 🔧 Session de débogage
-**Méthode utilisée** :
-1. Vérification base de données → Colonnes OK
-2. Ajout affichage erreurs de validation → OK
-3. Mode debug visuel → Identification du bug
-4. Correction appliquée → Résolu
+### ðŸ”§ Session de dÃ©bogage
+**MÃ©thode utilisÃ©e** :
+1. VÃ©rification base de donnÃ©es â†’ Colonnes OK
+2. Ajout affichage erreurs de validation â†’ OK
+3. Mode debug visuel â†’ Identification du bug
+4. Correction appliquÃ©e â†’ RÃ©solu
 
-**Durée totale** : ~2h de debug et corrections
-**Résultat** : Système entièrement opérationnel
+**DurÃ©e totale** : ~2h de debug et corrections
+**RÃ©sultat** : SystÃ¨me entiÃ¨rement opÃ©rationnel
 
-### 📈 Progression projet
-- Sprint 4 (Module Promotions) : 100% ✅
-- Progression globale : 60% → Prêt pour Sprint 5 (Clients)
+### ðŸ“ˆ Progression projet
+- Sprint 4 (Module Promotions) : 100% âœ…
+- Progression globale : 60% â†’ PrÃªt pour Sprint 5 (Clients)
 
 ---
 
-## [12/11/2025 18:45] - Sprint 4 : FIX FINAL Modification quotas ✅
+## [12/11/2025 18:45] - Sprint 4 : FIX FINAL Modification quotas âœ…
 
-### 🐛 Corrigé
+### ðŸ› CorrigÃ©
 - **ProductController.php** : Ajout de l'ID dans $data lors de la modification
-  - Bug identifié : L'ID n'était pas passé à la validation
-  - Conséquence : La validation échouait avec "Ce code produit existe déjà"
+  - Bug identifiÃ© : L'ID n'Ã©tait pas passÃ© Ã  la validation
+  - ConsÃ©quence : La validation Ã©chouait avec "Ce code produit existe dÃ©jÃ "
   - Solution : Ajout de `'id' => $id` dans le tableau $data
   - Retrait du mode debug temporaire
 
@@ -59,350 +112,350 @@ Le système de quotas est maintenant **100% fonctionnel** en production !
   - Conservation des try/catch essentiels
   - Simplification de la gestion d'erreur
 
-### ✅ Résultat
-- ✅ **Création** : Fonctionne avec quotas
-- ✅ **Modification** : Fonctionne maintenant avec quotas
+### âœ… RÃ©sultat
+- âœ… **CrÃ©ation** : Fonctionne avec quotas
+- âœ… **Modification** : Fonctionne maintenant avec quotas
 
-### 🔍 Diagnostic effectué
-1. Mode debug visuel → Identifié que le formulaire fonctionne
-2. Analyse du code → Trouvé que l'ID manquait dans $data
-3. Validation échouait → Code produit considéré comme doublon
-4. Correction appliquée → L'ID est maintenant passé à la validation
+### ðŸ” Diagnostic effectuÃ©
+1. Mode debug visuel â†’ IdentifiÃ© que le formulaire fonctionne
+2. Analyse du code â†’ TrouvÃ© que l'ID manquait dans $data
+3. Validation Ã©chouait â†’ Code produit considÃ©rÃ© comme doublon
+4. Correction appliquÃ©e â†’ L'ID est maintenant passÃ© Ã  la validation
 
-### 📊 Bug technique
-**Ligne problématique dans Product::validate()** :
+### ðŸ“Š Bug technique
+**Ligne problÃ©matique dans Product::validate()** :
 ```php
 $existing = $this->findByCode($data['product_code']);
 if ($existing && (!isset($data['id']) || $existing['id'] != $data['id'])) {
-    // Erreur "code existe déjà" MÊME pour le produit lui-même
+    // Erreur "code existe dÃ©jÃ " MÃŠME pour le produit lui-mÃªme
 }
 ```
 
-**Sans l'ID** : `!isset($data['id'])` = true → Erreur systématique  
-**Avec l'ID** : La condition vérifie si c'est un autre produit → OK
+**Sans l'ID** : `!isset($data['id'])` = true â†’ Erreur systÃ©matique  
+**Avec l'ID** : La condition vÃ©rifie si c'est un autre produit â†’ OK
 
 ---
 
 ## [12/11/2025 18:30] - Sprint 4 : Mode debug visuel (temporaire)
 
-### 🔧 Ajouté
+### ðŸ”§ AjoutÃ©
 - **ProductController_DEBUG.php** : Version debug temporaire
-  - Affichage à l'écran des valeurs POST et DATA
+  - Affichage Ã  l'Ã©cran des valeurs POST et DATA
   - Test de la fonction empty() sur les quotas
-  - Arrêt du traitement pour diagnostic
-  - **⚠️ À utiliser temporairement pour identifier le problème**
+  - ArrÃªt du traitement pour diagnostic
+  - **âš ï¸ Ã€ utiliser temporairement pour identifier le problÃ¨me**
 
-### 📋 Fichiers
+### ðŸ“‹ Fichiers
 - **MODE_DEBUG_INSTRUCTIONS.md** : Guide d'utilisation
   - Instructions d'upload et de test
-  - Interprétation des 3 cas possibles
-  - Rappel de retirer le mode debug après diagnostic
+  - InterprÃ©tation des 3 cas possibles
+  - Rappel de retirer le mode debug aprÃ¨s diagnostic
 
-### 🎯 Objectif
+### ðŸŽ¯ Objectif
 Identifier pourquoi les quotas ne se sauvent pas lors de la modification.
-Le mode debug affiche les valeurs directement à l'écran sans nécessiter d'accès aux logs PHP.
+Le mode debug affiche les valeurs directement Ã  l'Ã©cran sans nÃ©cessiter d'accÃ¨s aux logs PHP.
 
 ---
 
 ## [12/11/2025 18:15] - Sprint 4 : Diagnostic modification quotas
 
-### 🔧 Modifié
-- **Product.php** : Ajout logging détaillé dans update()
-  - Log des paramètres SQL avant exécution
-  - Traçage des valeurs max_total et max_per_customer
-  - Permet d'identifier exactement où ça bloque
+### ðŸ”§ ModifiÃ©
+- **Product.php** : Ajout logging dÃ©taillÃ© dans update()
+  - Log des paramÃ¨tres SQL avant exÃ©cution
+  - TraÃ§age des valeurs max_total et max_per_customer
+  - Permet d'identifier exactement oÃ¹ Ã§a bloque
 
-- **ProductController.php** : Ajout logging détaillé dans update()
-  - Log des valeurs POST reçues du formulaire
-  - Log des valeurs DATA après traitement
-  - Comparaison POST vs DATA pour débugger
+- **ProductController.php** : Ajout logging dÃ©taillÃ© dans update()
+  - Log des valeurs POST reÃ§ues du formulaire
+  - Log des valeurs DATA aprÃ¨s traitement
+  - Comparaison POST vs DATA pour dÃ©bugger
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **DIAGNOSTIC_MODIFICATION.md** : Guide complet de diagnostic
-  - Instructions de test étape par étape
-  - Guide d'accès aux logs PHP sur O2switch
+  - Instructions de test Ã©tape par Ã©tape
+  - Guide d'accÃ¨s aux logs PHP sur O2switch
   - Questions de diagnostic
   - Ce qu'il faut chercher dans les logs
 
-### 📊 État actuel
-- ✅ **Création** : Fonctionne avec quotas
-- ❌ **Modification** : Ne fonctionne pas avec quotas
-- 🔍 **Diagnostic** : Logging activé pour identifier le problème
+### ðŸ“Š Ã‰tat actuel
+- âœ… **CrÃ©ation** : Fonctionne avec quotas
+- âŒ **Modification** : Ne fonctionne pas avec quotas
+- ðŸ” **Diagnostic** : Logging activÃ© pour identifier le problÃ¨me
 
 ---
 
 ## [12/11/2025 18:00] - Sprint 4 : FIX Validation quotas + Affichage erreurs
 
-### 🐛 Corrigé
+### ðŸ› CorrigÃ©
 - **create.php** : Ajout affichage erreurs validation quotas
   - Messages d'erreur rouges sous les champs max_total et max_per_customer
   - Bordure rouge sur les champs en erreur
 
 - **edit.php** : Ajout affichage erreurs validation quotas
-  - Même système que create.php
-  - Pré-remplissage des valeurs existantes maintenu
+  - MÃªme systÃ¨me que create.php
+  - PrÃ©-remplissage des valeurs existantes maintenu
 
 - **Product.php** : Simplification validation quotas
   - Logique de validation plus claire et robuste
   - Conversion explicite en int avant validation
-  - Vérification : nombre entier positif >= 1
-  - Ajout logging détaillé pour debug
+  - VÃ©rification : nombre entier positif >= 1
+  - Ajout logging dÃ©taillÃ© pour debug
 
-### 📊 Diagnostic
-- **Symptôme** : Promotion ne se sauve pas avec quotas remplis
-- **Cause** : Erreurs de validation non affichées dans les formulaires
+### ðŸ“Š Diagnostic
+- **SymptÃ´me** : Promotion ne se sauve pas avec quotas remplis
+- **Cause** : Erreurs de validation non affichÃ©es dans les formulaires
 - **Solution** : Ajout affichage erreurs + simplification validation
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **INSTRUCTIONS_DEBOGAGE.md** : Guide complet de test
-  - Procédure de test étape par étape
-  - Tableau des valeurs à tester
-  - Instructions pour vérifier les logs
-  - 5 fichiers à uploader listés
+  - ProcÃ©dure de test Ã©tape par Ã©tape
+  - Tableau des valeurs Ã  tester
+  - Instructions pour vÃ©rifier les logs
+  - 5 fichiers Ã  uploader listÃ©s
 
 ---
 
 ## [12/11/2025 17:45] - Sprint 4 : FIX Bug sauvegarde Promotions
 
-### 🐛 Corrigé
+### ðŸ› CorrigÃ©
 - **Product.php** : Ajout gestion d'erreur avec try/catch
   - Logging des erreurs SQL dans error_log
-  - Affichage erreur détaillée en cas d'échec
-  - Méthode `create()` : try/catch avec error_log
-  - Méthode `update()` : try/catch avec error_log
+  - Affichage erreur dÃ©taillÃ©e en cas d'Ã©chec
+  - MÃ©thode `create()` : try/catch avec error_log
+  - MÃ©thode `update()` : try/catch avec error_log
 
-- **ProductController.php** : Amélioration messages d'erreur
-  - Méthode `store()` : Capture exception et affichage erreur technique
-  - Méthode `update()` : Capture exception et affichage erreur technique
+- **ProductController.php** : AmÃ©lioration messages d'erreur
+  - MÃ©thode `store()` : Capture exception et affichage erreur technique
+  - MÃ©thode `update()` : Capture exception et affichage erreur technique
   - Messages plus explicites pour l'utilisateur
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **DIAGNOSTIC_TABLE_PRODUCTS.sql** : Script SQL de diagnostic
-  - Vérification structure table products
+  - VÃ©rification structure table products
   - Ajout colonnes max_total et max_per_customer si manquantes
-  - Tests de vérification
+  - Tests de vÃ©rification
 
-### 📊 Problème identifié
+### ðŸ“Š ProblÃ¨me identifiÃ©
 - Redirections silencieuses sans message d'erreur visible
-- Erreurs SQL non capturées ni loggées
-- Impossible de débuguer sans accès aux logs
+- Erreurs SQL non capturÃ©es ni loggÃ©es
+- Impossible de dÃ©buguer sans accÃ¨s aux logs
 
-### 🔧 Solution appliquée
+### ðŸ”§ Solution appliquÃ©e
 - Try/catch dans le Model pour capturer erreurs SQL
-- Error_log pour tracer les problèmes
-- Messages d'erreur explicites à l'utilisateur
-- Script de diagnostic pour vérifier colonnes DB
+- Error_log pour tracer les problÃ¨mes
+- Messages d'erreur explicites Ã  l'utilisateur
+- Script de diagnostic pour vÃ©rifier colonnes DB
 
 ---
 
-## [12/11/2025 16:50] - Sprint 4 : Implémentation interface quotas
+## [12/11/2025 16:50] - Sprint 4 : ImplÃ©mentation interface quotas
 
-### 🔧 Modifié
-- **create.php** : Ajout section "📊 Quotas de commande (Optionnel)"
+### ðŸ”§ ModifiÃ©
+- **create.php** : Ajout section "ðŸ“Š Quotas de commande (Optionnel)"
   - Champs `max_total` (quota global) et `max_per_customer` (quota par client)
-  - Inputs de type number avec placeholder "Illimité"
-  - Encadré bleu avec exemples d'utilisation
-  - Positionné après section Paramètres, avant boutons action
+  - Inputs de type number avec placeholder "IllimitÃ©"
+  - EncadrÃ© bleu avec exemples d'utilisation
+  - PositionnÃ© aprÃ¨s section ParamÃ¨tres, avant boutons action
 
-- **edit.php** : Ajout section "📊 Quotas de commande (Optionnel)"
-  - Mêmes champs que create.php
+- **edit.php** : Ajout section "ðŸ“Š Quotas de commande (Optionnel)"
+  - MÃªmes champs que create.php
   - Values avec fallback : `$old ?? $product ?? ''`
-  - Pré-remplissage automatique des quotas existants
+  - PrÃ©-remplissage automatique des quotas existants
 
-- **show.php** : Ajout affichage quotas dans section Paramètres
-  - Badges colorés : violet 🌍 (global), bleu 👤 (par client)
-  - Affichage conditionnel (si quotas définis vs illimité)
+- **show.php** : Ajout affichage quotas dans section ParamÃ¨tres
+  - Badges colorÃ©s : violet ðŸŒ (global), bleu ðŸ‘¤ (par client)
+  - Affichage conditionnel (si quotas dÃ©finis vs illimitÃ©)
   - Formatage nombre avec `number_format()` pour max_total
   - Explications sous chaque badge
 
-### ✅ Fonctionnalités
-- Interface complète pour définir les quotas lors de la création
+### âœ… FonctionnalitÃ©s
+- Interface complÃ¨te pour dÃ©finir les quotas lors de la crÃ©ation
 - Modification des quotas existants
-- Visualisation claire des quotas avec badges colorés
-- Système optionnel : champs non-required, placeholders "Illimité"
+- Visualisation claire des quotas avec badges colorÃ©s
+- SystÃ¨me optionnel : champs non-required, placeholders "IllimitÃ©"
 
-### 📊 Système de quotas
+### ðŸ“Š SystÃ¨me de quotas
 - **max_total** : Limite globale tous clients confondus
 - **max_per_customer** : Limite individuelle par client
-- NULL = Illimité (pas de contrainte)
-- Validation côté serveur déjà implémentée (nombres positifs uniquement)
+- NULL = IllimitÃ© (pas de contrainte)
+- Validation cÃ´tÃ© serveur dÃ©jÃ  implÃ©mentÃ©e (nombres positifs uniquement)
 
 ---
 
 ## [12/11/2025] - Optimisation configuration projet Claude
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **INSTRUCTIONS_PROJET_OPTIMISEES.md** : Nouvelles instructions projet v2.0
-  - Autorisation permanente d'accès au GitHub
-  - Règle de vérification systématique des fichiers (aucune supposition)
-  - Gestion incrémentale du CHANGELOG
+  - Autorisation permanente d'accÃ¨s au GitHub
+  - RÃ¨gle de vÃ©rification systÃ©matique des fichiers (aucune supposition)
+  - Gestion incrÃ©mentale du CHANGELOG
   - Clarification environnement O2switch (full production)
-  - Workflow de développement optimisé
+  - Workflow de dÃ©veloppement optimisÃ©
   
 - **FICHIERS_PROJET_CLAUDE.md** : Guide d'organisation du projet
-  - Liste des 7 fichiers essentiels à uploader
-  - Fichiers à ne pas uploader (code accessible via GitHub)
-  - Instructions de mise à jour
+  - Liste des 7 fichiers essentiels Ã  uploader
+  - Fichiers Ã  ne pas uploader (code accessible via GitHub)
+  - Instructions de mise Ã  jour
   - Checklist setup initial
 
-### 🔧 Modifié
-- **CHANGELOG.md** : Ajout de cette entrée (mise à jour incrémentale)
+### ðŸ”§ ModifiÃ©
+- **CHANGELOG.md** : Ajout de cette entrÃ©e (mise Ã  jour incrÃ©mentale)
 
-### 📋 Configuration projet
-- Environnement clarifié : full O2switch (pas de local)
-- Accès GitHub autorisé de manière permanente
-- Process de vérification des fichiers établi
-- Mise à jour CHANGELOG systématique à chaque session
+### ðŸ“‹ Configuration projet
+- Environnement clarifiÃ© : full O2switch (pas de local)
+- AccÃ¨s GitHub autorisÃ© de maniÃ¨re permanente
+- Process de vÃ©rification des fichiers Ã©tabli
+- Mise Ã  jour CHANGELOG systÃ©matique Ã  chaque session
 
 ---
 
-## [11/11/2025] - Sprint 3 : Module Catégories
+## [11/11/2025] - Sprint 3 : Module CatÃ©gories
 
-### ✅ Ajouté
-- **CategoryController.php v1.5** : Upload d'icônes
-  - Méthode `handleIconUpload()` : validation, upload, génération nom unique
-  - Méthode `deleteIcon()` : suppression physique des fichiers
-  - Modification `store()` et `update()` pour gérer l'upload
+### âœ… AjoutÃ©
+- **CategoryController.php v1.5** : Upload d'icÃ´nes
+  - MÃ©thode `handleIconUpload()` : validation, upload, gÃ©nÃ©ration nom unique
+  - MÃ©thode `deleteIcon()` : suppression physique des fichiers
+  - Modification `store()` et `update()` pour gÃ©rer l'upload
   
-- **categories_index.php** : Liste des catégories
+- **categories_index.php** : Liste des catÃ©gories
   - Statistiques (total, actives, inactives)
   - Filtres (recherche, statut)
-  - Table avec icônes colorées
+  - Table avec icÃ´nes colorÃ©es
   - Actions (voir, modifier, supprimer)
 
-- **categories_create.php** : Formulaire création avec upload
+- **categories_create.php** : Formulaire crÃ©ation avec upload
   - Onglets : Upload de fichier OU saisie d'URL
-  - Aperçu JavaScript de l'icône
-  - Validation HTML5 (types de fichiers acceptés)
+  - AperÃ§u JavaScript de l'icÃ´ne
+  - Validation HTML5 (types de fichiers acceptÃ©s)
 
-- **categories_edit.php** : Formulaire édition avec upload
-  - Affichage de l'icône actuelle
+- **categories_edit.php** : Formulaire Ã©dition avec upload
+  - Affichage de l'icÃ´ne actuelle
   - Remplacement par upload ou URL
   - Avertissement suppression automatique
 
-- **Sécurité uploads** :
-  - `.htaccess` : blocage exécution PHP, restriction types de fichiers
-  - `index.html` : blocage du listing du répertoire
+- **SÃ©curitÃ© uploads** :
+  - `.htaccess` : blocage exÃ©cution PHP, restriction types de fichiers
+  - `index.html` : blocage du listing du rÃ©pertoire
 
-### 🔧 Modifié
+### ðŸ”§ ModifiÃ©
 - Aucune modification de fichiers existants (nouveaux fichiers uniquement)
 
-### 🐛 Corrigé
+### ðŸ› CorrigÃ©
 - Fichier `categories/index.php` manquant (erreur 404)
 
-### 📁 Structure ajoutée
+### ðŸ“ Structure ajoutÃ©e
 ```
 /stm/public/uploads/categories/
-  ├── .htaccess
-  └── index.html
+  â”œâ”€â”€ .htaccess
+  â””â”€â”€ index.html
 ```
 
-### 🔒 Sécurité
+### ðŸ”’ SÃ©curitÃ©
 - Validation stricte : SVG, PNG, JPG, WEBP uniquement
 - Taille max : 2MB
 - Nom de fichier unique : `category_[uniqid]_[timestamp].[ext]`
-- Blocage exécution PHP dans /uploads/
+- Blocage exÃ©cution PHP dans /uploads/
 
 ---
 
 ## [08/11/2025] - Sprint 2 : Module Campagnes (100%)
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **CampaignController.php** : CRUD complet des campagnes
-  - 10 méthodes : index, create, store, show, edit, update, destroy, active, archives, toggleActive
+  - 10 mÃ©thodes : index, create, store, show, edit, update, destroy, active, archives, toggleActive
   - Validation CSRF sur toutes les actions POST
   - Gestion des erreurs et messages flash
 
 - **Campaign.php (Model)** : Gestion BDD
-  - 11 méthodes incluant getStats(), getActive(), getArchived()
-  - Validation des données (dates, pays, champs requis)
+  - 11 mÃ©thodes incluant getStats(), getActive(), getArchived()
+  - Validation des donnÃ©es (dates, pays, champs requis)
 
 - **4 vues campagnes** :
   - `index.php` : Liste avec filtres et statistiques
-  - `create.php` : Formulaire création multilingue
-  - `show.php` : Détails d'une campagne
+  - `create.php` : Formulaire crÃ©ation multilingue
+  - `show.php` : DÃ©tails d'une campagne
   - `edit.php` : Formulaire modification
 
-### 🔧 Modifié
-- **admin.php (layout)** : Ajout récupération stats pour sidebar
+### ðŸ”§ ModifiÃ©
+- **admin.php (layout)** : Ajout rÃ©cupÃ©ration stats pour sidebar
 - **sidebar.php** : Badge dynamique pour campagnes actives
-- **routes.php** : 8 routes campagnes ajoutées
+- **routes.php** : 8 routes campagnes ajoutÃ©es
 
-### 🐛 Corrigé
+### ðŸ› CorrigÃ©
 - Chemin layout dans vues campagnes (2 niveaux au lieu de 1)
 - Actions formulaires : POST vers `/admin/campaigns` au lieu de `/store`
-- Suppression sécurisée : formulaire POST au lieu de onclick GET
-- Badge sidebar : affichage nombre réel de campagnes actives
+- Suppression sÃ©curisÃ©e : formulaire POST au lieu de onclick GET
+- Badge sidebar : affichage nombre rÃ©el de campagnes actives
 
 ---
 
 ## [07/11/2025] - Sprint 1 : Authentification (100%)
 
-### ✅ Ajouté
+### âœ… AjoutÃ©
 - **AuthController.php** : Login/Logout
 - **AuthMiddleware.php** : Protection routes admin
 - **Dashboard complet** : KPIs + graphiques Chart.js
 - **Layout admin.php** : Sidebar + navigation
-- Table `users` avec 1 admin par défaut
+- Table `users` avec 1 admin par dÃ©faut
 
-### 🔒 Sécurité
+### ðŸ”’ SÃ©curitÃ©
 - Bcrypt pour les mots de passe
 - Protection brute-force : 5 tentatives, 15 min lockout
 - CSRF token sur tous les formulaires
-- Session sécurisée avec régénération
+- Session sÃ©curisÃ©e avec rÃ©gÃ©nÃ©ration
 
 ---
 
 ## [06/11/2025] - Sprint 0 : Architecture (100%)
 
-### ✅ Ajouté
-- **Structure MVC complète**
+### âœ… AjoutÃ©
+- **Structure MVC complÃ¨te**
 - **Core classes** : Database, Router, View, Request, Response, Auth, Session, Validator
-- **Base de données** : 12 tables créées
-- **Configuration** : .env avec variables O2switch spécifiques
+- **Base de donnÃ©es** : 12 tables crÃ©Ã©es
+- **Configuration** : .env avec variables O2switch spÃ©cifiques
 - **50+ helpers** : Fonctions utilitaires
 - **Autoloader PSR-4**
 
 ---
 
-## 🎯 PROGRESSION GLOBALE
+## ðŸŽ¯ PROGRESSION GLOBALE
 
 ```
-✅ Sprint 0 : Architecture & Setup (100%)
-✅ Sprint 1 : Authentification (100%)
-✅ Sprint 2 : CRUD Campagnes (100%)
-✅ Sprint 3 : Module Catégories (100%)
-⬜ Sprint 4 : Module Produits (0%)
-⬜ Sprint 5 : Module Clients (0%)
-⬜ Sprint 6 : Module Commandes (0%)
+âœ… Sprint 0 : Architecture & Setup (100%)
+âœ… Sprint 1 : Authentification (100%)
+âœ… Sprint 2 : CRUD Campagnes (100%)
+âœ… Sprint 3 : Module CatÃ©gories (100%)
+â¬œ Sprint 4 : Module Produits (0%)
+â¬œ Sprint 5 : Module Clients (0%)
+â¬œ Sprint 6 : Module Commandes (0%)
 
 PROGRESSION : ~45%
 ```
 
 ---
 
-## 📋 FORMAT DES ENTRÉES
+## ðŸ“‹ FORMAT DES ENTRÃ‰ES
 
 Chaque modification doit suivre ce format :
 
 ```markdown
 ## [DATE] - Titre de la session
 
-### ✅ Ajouté
-- Liste des nouveaux fichiers/fonctionnalités
+### âœ… AjoutÃ©
+- Liste des nouveaux fichiers/fonctionnalitÃ©s
 
-### 🔧 Modifié
-- Liste des fichiers modifiés
+### ðŸ”§ ModifiÃ©
+- Liste des fichiers modifiÃ©s
 
-### 🐛 Corrigé
-- Liste des bugs corrigés
+### ðŸ› CorrigÃ©
+- Liste des bugs corrigÃ©s
 
-### 🗑️ Supprimé (si applicable)
-- Liste des fichiers/fonctionnalités supprimés
+### ðŸ—‘ï¸ SupprimÃ© (si applicable)
+- Liste des fichiers/fonctionnalitÃ©s supprimÃ©s
 ```
 
 ---
 
-**Dernière mise à jour** : 12/11/2025 16:30  
+**DerniÃ¨re mise Ã  jour** : 12/11/2025 16:30  
 **Version projet** : 2.0  
-**Statut** : En développement actif
+**Statut** : En dÃ©veloppement actif
