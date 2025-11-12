@@ -3,8 +3,91 @@
 Historique centralisé de toutes les modifications du projet.
 
 ---
+## [12/11/2025 18:00] - Sprint 4 : FIX Validation quotas + Affichage erreurs
+🐛 Corrigé
 
-[12/11/2025 16:50] - Sprint 4 : Implémentation interface quotas
+create.php : Ajout affichage erreurs validation quotas
+
+Messages d'erreur rouges sous les champs max_total et max_per_customer
+Bordure rouge sur les champs en erreur
+
+
+edit.php : Ajout affichage erreurs validation quotas
+
+Même système que create.php
+Pré-remplissage des valeurs existantes maintenu
+
+
+Product.php : Simplification validation quotas
+
+Logique de validation plus claire et robuste
+Conversion explicite en int avant validation
+Vérification : nombre entier positif >= 1
+Ajout logging détaillé pour debug
+
+
+
+📊 Diagnostic
+
+Symptôme : Promotion ne se sauve pas avec quotas remplis
+Cause : Erreurs de validation non affichées dans les formulaires
+Solution : Ajout affichage erreurs + simplification validation
+
+✅ Ajouté
+
+INSTRUCTIONS_DEBOGAGE.md : Guide complet de test
+
+Procédure de test étape par étape
+Tableau des valeurs à tester
+Instructions pour vérifier les logs
+5 fichiers à uploader listés
+
+
+
+
+## [12/11/2025 17:45] - Sprint 4 : FIX Bug sauvegarde Promotions
+🐛 Corrigé
+
+Product.php : Ajout gestion d'erreur avec try/catch
+
+Logging des erreurs SQL dans error_log
+Affichage erreur détaillée en cas d'échec
+Méthode create() : try/catch avec error_log
+Méthode update() : try/catch avec error_log
+
+
+ProductController.php : Amélioration messages d'erreur
+
+Méthode store() : Capture exception et affichage erreur technique
+Méthode update() : Capture exception et affichage erreur technique
+Messages plus explicites pour l'utilisateur
+
+
+
+✅ Ajouté
+
+DIAGNOSTIC_TABLE_PRODUCTS.sql : Script SQL de diagnostic
+
+Vérification structure table products
+Ajout colonnes max_total et max_per_customer si manquantes
+Tests de vérification
+
+
+
+📊 Problème identifié
+
+Redirections silencieuses sans message d'erreur visible
+Erreurs SQL non capturées ni loggées
+Impossible de débuguer sans accès aux logs
+
+🔧 Solution appliquée
+
+Try/catch dans le Model pour capturer erreurs SQL
+Error_log pour tracer les problèmes
+Messages d'erreur explicites à l'utilisateur
+Script de diagnostic pour vérifier colonnes DB
+
+## [12/11/2025 16:50] - Sprint 4 : Implémentation interface quotas
 🔧 Modifié
 
 create.php : Ajout section "📊 Quotas de commande (Optionnel)"
