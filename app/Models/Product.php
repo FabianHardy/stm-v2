@@ -241,6 +241,11 @@ class Product
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
+        // DEBUG : Logger les valeurs avant SQL
+        error_log("Product::update() - ID: $id");
+        error_log("Product::update() - Params max_total: " . var_export($params[':max_total'], true));
+        error_log("Product::update() - Params max_per_customer: " . var_export($params[':max_per_customer'], true));
+
         try {
             $result = $this->db->execute($sql, $params);
             
