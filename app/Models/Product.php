@@ -185,15 +185,9 @@ class Product
             if ($this->db->execute($sql, $params)) {
                 return (int) $this->db->lastInsertId();
             }
-            
-            // Log si échec sans exception
-            error_log("Product::create() - Execute returned false");
             return false;
         } catch (\PDOException $e) {
-            // Log l'erreur SQL complète
             error_log("Product::create() - SQL Error: " . $e->getMessage());
-            error_log("Product::create() - SQL: " . $sql);
-            error_log("Product::create() - Params: " . print_r($params, true));
             return false;
         }
     }
@@ -241,24 +235,10 @@ class Product
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
-        // DEBUG : Logger les valeurs avant SQL
-        error_log("Product::update() - ID: $id");
-        error_log("Product::update() - Params max_total: " . var_export($params[':max_total'], true));
-        error_log("Product::update() - Params max_per_customer: " . var_export($params[':max_per_customer'], true));
-
         try {
-            $result = $this->db->execute($sql, $params);
-            
-            if (!$result) {
-                error_log("Product::update() - Execute returned false");
-            }
-            
-            return $result;
+            return $this->db->execute($sql, $params);
         } catch (\PDOException $e) {
-            // Log l'erreur SQL complète
             error_log("Product::update() - SQL Error: " . $e->getMessage());
-            error_log("Product::update() - SQL: " . $sql);
-            error_log("Product::update() - Params: " . print_r($params, true));
             return false;
         }
     }
@@ -343,11 +323,6 @@ class Product
     public function validate(array $data): array
     {
         $errors = [];
-
-        // Log pour debug
-        error_log("Product::validate() - Validating data:");
-        error_log("Product::validate() - max_total: " . var_export($data['max_total'] ?? 'NOT_SET', true));
-        error_log("Product::validate() - max_per_customer: " . var_export($data['max_per_customer'] ?? 'NOT_SET', true));
 
         // Code produit obligatoire
         if (empty($data['product_code'])) {

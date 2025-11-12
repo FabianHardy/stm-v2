@@ -147,21 +147,13 @@ class ProductController
         }
 
         // Créer le Promotion
-        try {
-            $productId = $this->productModel->create($data);
+        $productId = $this->productModel->create($data);
 
-            if ($productId) {
-                Session::set('success', 'Promotion créée avec succès');
-                header('Location: /stm/admin/products/' . $productId);
-            } else {
-                // Récupérer la dernière erreur pour debug
-                Session::set('error', 'Erreur lors de la création de la Promotion. Vérifiez les logs serveur.');
-                Session::set('old', $data);
-                header('Location: /stm/admin/products/create');
-            }
-        } catch (\Exception $e) {
-            error_log("ProductController::store() - Exception: " . $e->getMessage());
-            Session::set('error', 'Erreur technique : ' . $e->getMessage());
+        if ($productId) {
+            Session::set('success', 'Promotion créée avec succès');
+            header('Location: /stm/admin/products/' . $productId);
+        } else {
+            Session::set('error', 'Erreur lors de la création de la Promotion');
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
@@ -248,6 +240,7 @@ class ProductController
 
         // Récupérer les données
         $data = [
+            'id' => $id, // ✅ AJOUT : Nécessaire pour la validation (vérification unicité code produit)
             'campaign_id' => $_POST['campaign_id'] ?? null,
             'category_id' => $_POST['category_id'] ?? null,
             'product_code' => trim($_POST['product_code'] ?? ''),
@@ -262,13 +255,6 @@ class ProductController
             'image_fr' => $product['image_fr'], // Garder ancienne par défaut
             'image_nl' => $product['image_nl']
         ];
-
-        // DEBUG : Logger les quotas reçus
-        error_log("ProductController::update() - ID: $id");
-        error_log("ProductController::update() - POST max_total: " . var_export($_POST['max_total'] ?? 'NOT_SET', true));
-        error_log("ProductController::update() - POST max_per_customer: " . var_export($_POST['max_per_customer'] ?? 'NOT_SET', true));
-        error_log("ProductController::update() - DATA max_total: " . var_export($data['max_total'], true));
-        error_log("ProductController::update() - DATA max_per_customer: " . var_export($data['max_per_customer'], true));
 
         // Validation
         $errors = $this->productModel->validate($data);
@@ -313,17 +299,11 @@ class ProductController
         }
 
         // Mettre à jour
-        try {
-            if ($this->productModel->update($id, $data)) {
-                Session::set('success', 'Promotion modifiée avec succès');
-                header('Location: /stm/admin/products/' . $id);
-            } else {
-                Session::set('error', 'Erreur lors de la modification. Vérifiez les logs serveur.');
-                header('Location: /stm/admin/products/' . $id . '/edit');
-            }
-        } catch (\Exception $e) {
-            error_log("ProductController::update() - Exception: " . $e->getMessage());
-            Session::set('error', 'Erreur technique : ' . $e->getMessage());
+        if ($this->productModel->update($id, $data)) {
+            Session::set('success', 'Promotion modifiée avec succès');
+            header('Location: /stm/admin/products/' . $id);
+        } else {
+            Session::set('error', 'Erreur lors de la modification');
             header('Location: /stm/admin/products/' . $id . '/edit');
         }
         exit;
