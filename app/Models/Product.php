@@ -339,6 +339,11 @@ class Product
     {
         $errors = [];
 
+        // Log pour debug
+        error_log("Product::validate() - Validating data:");
+        error_log("Product::validate() - max_total: " . var_export($data['max_total'] ?? 'NOT_SET', true));
+        error_log("Product::validate() - max_per_customer: " . var_export($data['max_per_customer'] ?? 'NOT_SET', true));
+
         // Code produit obligatoire
         if (empty($data['product_code'])) {
             $errors['product_code'] = 'Le code produit est obligatoire';
@@ -368,17 +373,18 @@ class Product
             $errors['name_fr'] = 'Le nom en français est obligatoire';
         }
 
-        // ✅ NOUVEAU : Validation max_total
-        if (isset($data['max_total']) && $data['max_total'] !== '' && $data['max_total'] !== null) {
-            if (!is_numeric($data['max_total']) || $data['max_total'] <= 0) {
-                $errors['max_total'] = 'Le quota global doit être un nombre positif';
+        // Validation des quotas (optionnels)
+        if (isset($data['max_total']) && $data['max_total'] !== null && $data['max_total'] !== '') {
+            $maxTotal = is_numeric($data['max_total']) ? (int)$data['max_total'] : $data['max_total'];
+            if (!is_int($maxTotal) || $maxTotal < 1) {
+                $errors['max_total'] = 'Le quota global doit être un nombre entier positif (minimum 1)';
             }
         }
 
-        // ✅ NOUVEAU : Validation max_per_customer
-        if (isset($data['max_per_customer']) && $data['max_per_customer'] !== '' && $data['max_per_customer'] !== null) {
-            if (!is_numeric($data['max_per_customer']) || $data['max_per_customer'] <= 0) {
-                $errors['max_per_customer'] = 'Le quota par client doit être un nombre positif';
+        if (isset($data['max_per_customer']) && $data['max_per_customer'] !== null && $data['max_per_customer'] !== '') {
+            $maxPerCustomer = is_numeric($data['max_per_customer']) ? (int)$data['max_per_customer'] : $data['max_per_customer'];
+            if (!is_int($maxPerCustomer) || $maxPerCustomer < 1) {
+                $errors['max_per_customer'] = 'Le quota par client doit être un nombre entier positif (minimum 1)';
             }
         }
 

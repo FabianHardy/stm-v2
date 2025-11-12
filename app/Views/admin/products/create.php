@@ -354,10 +354,13 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['max_total'] ?? ''); ?>"
                            min="1"
                            placeholder="Illimité"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['max_total']) ? 'border-red-300' : ''; ?>">
                     <p class="mt-1 text-xs text-gray-500">
                         Maximum d'unités vendables au total (tous clients confondus)
                     </p>
+                    <?php if (isset($errors['max_total'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['max_total']; ?></p>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Quota par client -->
@@ -371,10 +374,13 @@ $errors = $errors ?? [];
                            value="<?php echo htmlspecialchars($old['max_per_customer'] ?? ''); ?>"
                            min="1"
                            placeholder="Illimité"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm <?php echo isset($errors['max_per_customer']) ? 'border-red-300' : ''; ?>">
                     <p class="mt-1 text-xs text-gray-500">
                         Maximum qu'un client peut commander individuellement
                     </p>
+                    <?php if (isset($errors['max_per_customer'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['max_per_customer']; ?></p>
+                    <?php endif; ?>
                 </div>
 
             </div>
