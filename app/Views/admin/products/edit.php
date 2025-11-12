@@ -5,7 +5,7 @@
  * Formulaire d'édition d'une Promotion existant avec upload d'images
  * 
  * @created 11/11/2025 22:45
- * @modified 11/11/2025 23:50 - Adaptation besoins Trendy Foods
+ * @modified 12/11/2025 15:00 - FIX : Suppression method spoofing (_method=PUT/DELETE)
  */
 
 use Core\Session;
@@ -71,7 +71,6 @@ $errors = $errors ?? [];
 <!-- Formulaire -->
 <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>" enctype="multipart/form-data">
     <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
-    <input type="hidden" name="_method" value="PUT">
 
     <!-- Section : Informations de base -->
     <div class="bg-white shadow rounded-lg mb-6">
@@ -394,7 +393,6 @@ $errors = $errors ?? [];
 <!-- Formulaire de suppression caché -->
 <form id="delete-form" method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" style="display: none;">
     <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
-    <input type="hidden" name="_method" value="DELETE">
 </form>
 
 <?php
