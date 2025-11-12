@@ -4,6 +4,47 @@ Historique centralisé de toutes les modifications du projet.
 
 ---
 
+[12/11/2025 16:50] - Sprint 4 : Implémentation interface quotas
+🔧 Modifié
+
+create.php : Ajout section "📊 Quotas de commande (Optionnel)"
+
+Champs max_total (quota global) et max_per_customer (quota par client)
+Inputs de type number avec placeholder "Illimité"
+Encadré bleu avec exemples d'utilisation
+Positionné après section Paramètres, avant boutons action
+
+
+edit.php : Ajout section "📊 Quotas de commande (Optionnel)"
+
+Mêmes champs que create.php
+Values avec fallback : $old ?? $product ?? ''
+Pré-remplissage automatique des quotas existants
+
+
+show.php : Ajout affichage quotas dans section Paramètres
+
+Badges colorés : violet 🌍 (global), bleu 👤 (par client)
+Affichage conditionnel (si quotas définis vs illimité)
+Formatage nombre avec number_format() pour max_total
+Explications sous chaque badge
+
+
+
+✅ Fonctionnalités
+
+Interface complète pour définir les quotas lors de la création
+Modification des quotas existants
+Visualisation claire des quotas avec badges colorés
+Système optionnel : champs non-required, placeholders "Illimité"
+
+📊 Système de quotas
+
+max_total : Limite globale tous clients confondus
+max_per_customer : Limite individuelle par client
+NULL = Illimité (pas de contrainte)
+Validation côté serveur déjà implémentée (nombres positifs uniquement)
+
 ## [12/11/2025] - Optimisation configuration projet Claude
 
 ### ✅ Ajouté
