@@ -4,9 +4,9 @@
  * Gestion des promotions par campagne
  * 
  * @package STM/Models
- * @version 2.1.0
+ * @version 2.2.0
  * @created 11/11/2025
- * @modified 12/11/2025 01:00 - Adaptation structure BDD (product_code)
+ * @modified 12/11/2025 17:30 - Ajout quotas (max_total, max_per_customer)
  */
 
 namespace App\Models;
@@ -131,6 +131,7 @@ class Product
      * 
      * @param array $data Données de la promotion
      * @return int|false ID de la promotion créée ou false
+     * @modified 12/11/2025 17:30 - Ajout max_total et max_per_customer
      */
     public function create(array $data): int|false
     {
@@ -145,6 +146,8 @@ class Product
                     image_fr,
                     image_nl,
                     display_order,
+                    max_total,
+                    max_per_customer,
                     is_active
                 ) VALUES (
                     :campaign_id,
@@ -157,6 +160,8 @@ class Product
                     :image_fr,
                     :image_nl,
                     :display_order,
+                    :max_total,
+                    :max_per_customer,
                     :is_active
                 )";
 
@@ -171,6 +176,8 @@ class Product
             ':image_fr' => $data['image_fr'] ?? null,
             ':image_nl' => $data['image_nl'] ?? null,
             ':display_order' => $data['display_order'] ?? 0,
+            ':max_total' => !empty($data['max_total']) ? (int)$data['max_total'] : null,
+            ':max_per_customer' => !empty($data['max_per_customer']) ? (int)$data['max_per_customer'] : null,
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
@@ -187,6 +194,7 @@ class Product
      * @param int $id ID de la promotion
      * @param array $data Nouvelles données
      * @return bool
+     * @modified 12/11/2025 17:30 - Ajout max_total et max_per_customer
      */
     public function update(int $id, array $data): bool
     {
@@ -201,6 +209,8 @@ class Product
                     image_fr = :image_fr,
                     image_nl = :image_nl,
                     display_order = :display_order,
+                    max_total = :max_total,
+                    max_per_customer = :max_per_customer,
                     is_active = :is_active
                 WHERE id = :id";
 
@@ -216,6 +226,8 @@ class Product
             ':image_fr' => $data['image_fr'] ?? null,
             ':image_nl' => $data['image_nl'] ?? null,
             ':display_order' => $data['display_order'] ?? 0,
+            ':max_total' => !empty($data['max_total']) ? (int)$data['max_total'] : null,
+            ':max_per_customer' => !empty($data['max_per_customer']) ? (int)$data['max_per_customer'] : null,
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
@@ -297,6 +309,7 @@ class Product
      * 
      * @param array $data Données à valider
      * @return array Tableau des erreurs (vide si OK)
+     * @modified 12/11/2025 17:30 - Ajout validation quotas
      */
     public function validate(array $data): array
     {
@@ -329,6 +342,20 @@ class Product
         // Nom FR obligatoire
         if (empty($data['name_fr'])) {
             $errors['name_fr'] = 'Le nom en français est obligatoire';
+        }
+
+        // ✅ NOUVEAU : Validation max_total
+        if (isset($data['max_total']) && $data['max_total'] !== '' && $data['max_total'] !== null) {
+            if (!is_numeric($data['max_total']) || $data['max_total'] <= 0) {
+                $errors['max_total'] = 'Le quota global doit être un nombre positif';
+            }
+        }
+
+        // ✅ NOUVEAU : Validation max_per_customer
+        if (isset($data['max_per_customer']) && $data['max_per_customer'] !== '' && $data['max_per_customer'] !== null) {
+            if (!is_numeric($data['max_per_customer']) || $data['max_per_customer'] <= 0) {
+                $errors['max_per_customer'] = 'Le quota par client doit être un nombre positif';
+            }
         }
 
         return $errors;
