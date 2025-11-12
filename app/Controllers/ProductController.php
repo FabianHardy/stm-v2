@@ -385,7 +385,7 @@ class ProductController
         }
 
         // Retourner chemin relatif
-        return '/uploads/products/' . $randomName;
+        return '/stm/uploads/products/' . $randomName;
     }
 
     /**
