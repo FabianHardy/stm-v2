@@ -5,7 +5,7 @@
  * Affichage complet des informations d'une Promotion
  * 
  * @created 11/11/2025 22:50
- * @modified 12/11/2025 02:00 - Suppression EAN et package_number
+ * @modified 12/11/2025 16:50 - Ajout affichage des quotas
  */
 
 use Core\Session;
@@ -252,6 +252,47 @@ ob_start();
                             <span class="text-gray-500 text-xs ml-2">(Plus petit = apparaît en premier)</span>
                         </dd>
                     </div>
+
+                    <!-- Quotas -->
+                    <?php if (!empty($product['max_total']) || !empty($product['max_per_customer'])): ?>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">
+                                📊 Quotas
+                            </dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                <div class="space-y-2">
+                                    <?php if (!empty($product['max_total'])): ?>
+                                        <div>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                🌍 Global : <?php echo number_format($product['max_total'], 0, ',', ' '); ?> unités max
+                                            </span>
+                                            <p class="text-xs text-gray-500 mt-1">Stock total limité (tous clients confondus)</p>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($product['max_per_customer'])): ?>
+                                        <div>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                👤 Par client : <?php echo $product['max_per_customer']; ?> unités max
+                                            </span>
+                                            <p class="text-xs text-gray-500 mt-1">Limite individuelle par client</p>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </dd>
+                        </div>
+                    <?php else: ?>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">
+                                📊 Quotas
+                            </dt>
+                            <dd class="mt-1 text-sm text-gray-500">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    ∞ Illimité
+                                </span>
+                            </dd>
+                        </div>
+                    <?php endif; ?>
                     
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Date de création</dt>

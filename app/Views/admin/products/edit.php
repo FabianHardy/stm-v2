@@ -5,7 +5,7 @@
  * Formulaire d'édition d'une Promotion existant avec upload d'images
  * 
  * @created 11/11/2025 22:45
- * @modified 12/11/2025 15:00 - FIX : Suppression method spoofing (_method=PUT/DELETE)
+ * @modified 12/11/2025 16:50 - Ajout section Quotas de commande
  */
 
 use Core\Session;
@@ -192,7 +192,7 @@ $errors = $errors ?? [];
                 <!-- Description FR -->
                 <div>
                     <label for="description_fr" class="block text-sm font-medium text-gray-700">
-                        Description
+                        Description (optionnel)
                     </label>
                     <textarea name="description_fr" 
                               id="description_fr" 
@@ -205,20 +205,20 @@ $errors = $errors ?? [];
                 <!-- Image FR -->
                 <div>
                     <label for="image_fr" class="block text-sm font-medium text-gray-700">
-                        Image de la Promotion
+                        Image du Promotion
                     </label>
                     
                     <!-- Image actuelle -->
                     <?php if (!empty($product['image_fr'])): ?>
                         <div class="mt-2 mb-3">
                             <img src="<?php echo htmlspecialchars($product['image_fr']); ?>" 
-                                 alt="Image actuelle" 
+                                 alt="Image actuelle FR" 
                                  class="h-32 w-32 object-cover rounded-lg border-2 border-gray-200 shadow-sm">
                             <p class="mt-1 text-xs text-gray-500">Image actuelle - uploader pour remplacer</p>
                         </div>
                     <?php endif; ?>
                     
-                    <div class="mt-1">
+                    <div class="mt-1 flex items-center">
                         <input type="file" 
                                name="image_fr" 
                                id="image_fr"
@@ -230,7 +230,10 @@ $errors = $errors ?? [];
                                       file:bg-indigo-50 file:text-indigo-700
                                       hover:file:bg-indigo-100">
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB</p>
+                    <p class="mt-1 text-xs text-gray-500">JPG, PNG, WEBP - Maximum 5MB - Laissez vide pour garder l'image actuelle</p>
+                    <?php if (isset($errors['image_fr'])): ?>
+                        <p class="mt-1 text-sm text-red-600"><?php echo $errors['image_fr']; ?></p>
+                    <?php endif; ?>
                 </div>
 
             </div>
@@ -362,6 +365,69 @@ $errors = $errors ?? [];
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Section : Quotas de commande (Optionnel) -->
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                📊 Quotas de commande (Optionnel)
+            </h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Limiter la quantité maximum commandable (global et/ou par client)
+            </p>
+        </div>
+        
+        <div class="px-4 py-5 sm:p-6">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                
+                <!-- Quota global -->
+                <div>
+                    <label for="max_total" class="block text-sm font-medium text-gray-700">
+                        Quota global maximum
+                    </label>
+                    <input type="number" 
+                           name="max_total" 
+                           id="max_total"
+                           value="<?php echo htmlspecialchars($old['max_total'] ?? $product['max_total'] ?? ''); ?>"
+                           min="1"
+                           placeholder="Illimité"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <p class="mt-1 text-xs text-gray-500">
+                        Maximum d'unités vendables au total (tous clients confondus)
+                    </p>
+                </div>
+
+                <!-- Quota par client -->
+                <div>
+                    <label for="max_per_customer" class="block text-sm font-medium text-gray-700">
+                        Quota par client
+                    </label>
+                    <input type="number" 
+                           name="max_per_customer" 
+                           id="max_per_customer"
+                           value="<?php echo htmlspecialchars($old['max_per_customer'] ?? $product['max_per_customer'] ?? ''); ?>"
+                           min="1"
+                           placeholder="Illimité"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <p class="mt-1 text-xs text-gray-500">
+                        Maximum qu'un client peut commander individuellement
+                    </p>
+                </div>
+
+            </div>
+
+            <!-- Exemples -->
+            <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p class="text-xs text-blue-800 font-medium mb-2">💡 Exemples d'utilisation :</p>
+                <ul class="text-xs text-blue-700 space-y-1">
+                    <li>• <strong>Global: 500, Par client: 10</strong> → Stock limité + répartition équitable</li>
+                    <li>• <strong>Global: illimité, Par client: 20</strong> → Limite individuelle sans limite globale</li>
+                    <li>• <strong>Global: 200, Par client: illimité</strong> → Premier arrivé premier servi jusqu'à 200</li>
+                    <li>• <strong>Global: illimité, Par client: illimité</strong> → Aucune limite</li>
+                </ul>
             </div>
         </div>
     </div>
