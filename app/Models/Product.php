@@ -181,11 +181,21 @@ class Product
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
-        if ($this->db->execute($sql, $params)) {
-            return (int) $this->db->lastInsertId();
+        try {
+            if ($this->db->execute($sql, $params)) {
+                return (int) $this->db->lastInsertId();
+            }
+            
+            // Log si échec sans exception
+            error_log("Product::create() - Execute returned false");
+            return false;
+        } catch (\PDOException $e) {
+            // Log l'erreur SQL complète
+            error_log("Product::create() - SQL Error: " . $e->getMessage());
+            error_log("Product::create() - SQL: " . $sql);
+            error_log("Product::create() - Params: " . print_r($params, true));
+            return false;
         }
-        
-        return false;
     }
 
     /**
@@ -231,7 +241,21 @@ class Product
             ':is_active' => $data['is_active'] ?? 1,
         ];
 
-        return $this->db->execute($sql, $params);
+        try {
+            $result = $this->db->execute($sql, $params);
+            
+            if (!$result) {
+                error_log("Product::update() - Execute returned false");
+            }
+            
+            return $result;
+        } catch (\PDOException $e) {
+            // Log l'erreur SQL complète
+            error_log("Product::update() - SQL Error: " . $e->getMessage());
+            error_log("Product::update() - SQL: " . $sql);
+            error_log("Product::update() - Params: " . print_r($params, true));
+            return false;
+        }
     }
 
     /**

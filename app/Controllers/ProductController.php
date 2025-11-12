@@ -147,13 +147,21 @@ class ProductController
         }
 
         // Créer le Promotion
-        $productId = $this->productModel->create($data);
+        try {
+            $productId = $this->productModel->create($data);
 
-        if ($productId) {
-            Session::set('success', 'Promotion créée avec succès');
-            header('Location: /stm/admin/products/' . $productId);
-        } else {
-            Session::set('error', 'Erreur lors de la création de la Promotion');
+            if ($productId) {
+                Session::set('success', 'Promotion créée avec succès');
+                header('Location: /stm/admin/products/' . $productId);
+            } else {
+                // Récupérer la dernière erreur pour debug
+                Session::set('error', 'Erreur lors de la création de la Promotion. Vérifiez les logs serveur.');
+                Session::set('old', $data);
+                header('Location: /stm/admin/products/create');
+            }
+        } catch (\Exception $e) {
+            error_log("ProductController::store() - Exception: " . $e->getMessage());
+            Session::set('error', 'Erreur technique : ' . $e->getMessage());
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
@@ -298,11 +306,17 @@ class ProductController
         }
 
         // Mettre à jour
-        if ($this->productModel->update($id, $data)) {
-            Session::set('success', 'Promotion modifiée avec succès');
-            header('Location: /stm/admin/products/' . $id);
-        } else {
-            Session::set('error', 'Erreur lors de la modification');
+        try {
+            if ($this->productModel->update($id, $data)) {
+                Session::set('success', 'Promotion modifiée avec succès');
+                header('Location: /stm/admin/products/' . $id);
+            } else {
+                Session::set('error', 'Erreur lors de la modification. Vérifiez les logs serveur.');
+                header('Location: /stm/admin/products/' . $id . '/edit');
+            }
+        } catch (\Exception $e) {
+            error_log("ProductController::update() - Exception: " . $e->getMessage());
+            Session::set('error', 'Erreur technique : ' . $e->getMessage());
             header('Location: /stm/admin/products/' . $id . '/edit');
         }
         exit;
