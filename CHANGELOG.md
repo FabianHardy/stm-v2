@@ -3,6 +3,89 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+# 📝 ENTRÉE CHANGELOG - Session 14/11/2025
+
+## [14/11/2025 00:30] - Sprint 5 : Architecture clients & campagnes DÉFINIE
+
+### 🏗️ Architecture complète documentée
+
+**Analyse approfondie** de la gestion des clients et attribution aux campagnes :
+- ⚠️ **Problème identifié** : Numéros clients NON UNIQUES entre BE et LU
+- ✅ **Solution** : UNIQUE KEY (customer_number, country) dans table customers
+- ✅ **Stratégie** : Pas de sync massive, création clients à la volée lors des commandes
+
+**3 modes d'attribution définis** :
+1. **automatic** : Tous les clients du pays (lecture directe BE_CLL/LU_CLL)
+2. **manual** : Liste restreinte (stockée dans campaign_customers)
+3. **protected** : Tous avec mot de passe (lecture directe + vérif password)
+
+**Tables analysées** :
+- `customers` : UNIQUE(customer_number, country) ✅ OK
+- `campaign_customers` : Besoin modification (customer_id → customer_number + country)
+- `campaigns` : Ajouter 'protected' + order_password
+- `orders` : Structure OK avec customer_id FK
+
+### 📄 Documents créés
+
+**ARCHITECTURE_CLIENTS_CAMPAGNES.md** (60 KB) :
+- Vue d'ensemble complète avec schémas
+- Explication du problème numéros non uniques
+- Les 3 modes d'attribution avec code PHP complet
+- Workflow de création commande
+- Tests à effectuer
+
+**MODIFICATIONS_SQL_SPRINT5.sql** :
+- Requêtes SQL à exécuter (2 modifications seulement)
+- Modification campaign_customers (customer_number + country)
+- Ajout mode 'protected' et order_password
+
+**Exports SQL reçus** :
+- `trendyblog_stm_v2.sql` : Structure complète DB locale
+- `trendyblog_sig.sql` : Structure DB externe (BE_CLL, LU_CLL, etc.)
+
+### 🔧 Modifications SQL nécessaires
+
+**1. Table campaign_customers** :
+```sql
+-- Remplacer customer_id par customer_number + country
+DROP FOREIGN KEY campaign_customers_ibfk_2;
+DROP COLUMN customer_id;
+ADD COLUMN customer_number VARCHAR(20) NOT NULL;
+ADD COLUMN country ENUM('BE', 'LU') NOT NULL;
+ADD INDEX idx_campaign_customer (campaign_id, customer_number, country);
+```
+
+**2. Table campaigns** :
+```sql
+-- Ajouter mode protected + mot de passe
+MODIFY customer_assignment_mode ENUM('automatic', 'manual', 'protected');
+ADD COLUMN order_password VARCHAR(255) NULL;
+```
+
+### 📊 Mapping colonnes (Vues → DB réelle)
+
+| Vues | DB réelle | Action |
+|------|-----------|--------|
+| type | order_type | Adapter vues |
+| global_quota | max_orders_global | Adapter vues |
+| quota_per_customer | max_quantity_per_customer | Adapter vues |
+| customer_access_type | customer_assignment_mode | Adapter vues |
+| order_password | order_password | À ajouter SQL |
+
+### ⏭️ Prochaines étapes
+
+1. ✅ Valider les requêtes SQL avec Fabian
+2. ⬜ Exécuter les modifications SQL
+3. ⬜ Adapter Campaign.php (utiliser customer_number au lieu de customer_id)
+4. ⬜ Adapter CampaignController.php (gérer order_password)
+5. ⬜ Adapter les vues (mapping colonnes)
+
+### 🎯 Progression
+
+Sprint 5 : 85% (Architecture définie, reste implémentation backend)
+Projet global : 62%
+
+---
 
 # 📝 ENTRÉE CHANGELOG - Session 14/11/2025
 
