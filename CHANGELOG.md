@@ -3,6 +3,102 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+## [14/11/2025 02:15] - Sprint 5 : Vues edit.php et show.php TERMINÉES - 100% ✅
+
+### ✅ Ajouté
+
+**campaigns_edit.php** (23 KB) - Formulaire modification campagne :
+- Section 1 : Informations de base (name, country, dates)
+  - Pré-remplissage des valeurs existantes
+  - Validation côté client
+  
+- Section 2 : Attribution clients (3 modes avec toggle Alpine.js)
+  - Mode automatic : Tous les clients du pays
+  - Mode manual : Liste restreinte (textarea pré-remplie)
+  - Mode protected : Mot de passe (champ pré-rempli)
+  
+- Section 3 : Paramètres commande
+  - Type : W (Normal) ou V (Prospection)
+  - Livraison : Immédiate ou différée (avec date picker)
+  - Checkbox + champ conditionnel
+  
+- Section 4 : Contenu multilingue (FR/NL)
+  - Textarea pré-remplies
+  
+- Method PUT via hidden input
+- Token CSRF
+- **SANS section quotas** (quotas au niveau promotions)
+
+**campaigns_show.php** (22 KB) - Page détails campagne complète :
+- Section 1 : 4 cartes statistiques
+  - Clients (compteur ou ∞ si automatic)
+  - Promotions (compteur réel)
+  - Commandes (placeholder 0)
+  - Montant total (placeholder 0 €)
+  
+- Section 2 : Informations de base
+  - name, country, dates
+  - Badge statut dynamique (À venir/Active/Terminée)
+  
+- Section 3 : Type & Livraison
+  - Badge type commande (Normal/Prospection)
+  - Badge livraison (Immédiate/Différée avec date)
+  
+- Section 4 : Attribution clients
+  - Badge mode (Automatique/Manuel/Protégé)
+  - Si manual : Liste complète des numéros clients
+  - Si protected : Mot de passe avec toggle show/hide (Alpine.js)
+  
+- Section 5 : Contenu multilingue
+  - description_fr avec nl2br
+  - description_nl avec nl2br
+  - Message "Aucune description" si vide
+  
+- Section 6 : Actions rapides (sidebar)
+  - Bouton Modifier
+  - Bouton Gérer promotions
+  - Bouton Supprimer (avec confirmation)
+  - URL publique avec bouton copier (clipboard API)
+  - Carte informations techniques (ID, UUID, dates)
+  
+- Layout responsive (2/3 + 1/3 colonnes)
+- **SANS section quotas**
+
+### 🎯 Statut Sprint 5
+
+**Vues** : 100% terminées ✅
+- create.php ✅
+- edit.php ✅ (NEW)
+- show.php ✅ (NEW)
+- index.php ✅
+- active.php ✅
+- archives.php ✅
+
+**Backend** : 100% terminé ✅
+- Campaign.php v3 ✅
+- CampaignController.php v3 ✅
+
+**Routes** : 100% terminées ✅
+- 8 routes admin ✅
+- 8 routes publiques ✅
+
+**Documentation** : 100% terminée ✅
+
+### 📊 Progression globale
+
+- **Sprint 5 (Module Clients & Attribution)** : **100%** ✅
+- **Progression projet** : **68%** (5/8 sprints terminés)
+
+### 📝 Notes importantes
+
+- Les quotas sont au niveau des PROMOTIONS, pas des campagnes
+- Mode automatic/protected : Table `campaign_customers` vide (normal)
+- Mode manual : Table `campaign_customers` contient `customer_number` + `country`
+- Structure DB : 5 colonnes Sprint 5 (pas de quotas)
+- Toutes les vues utilisent le layout centralisé `admin.php`
+- Alpine.js pour les interactions JavaScript (toggle champs)
+
+---
 
 ## [14/11/2025 02:00] - Sprint 5 : Backend TERMINÉ (v3 FINALE) - 100% ✅
 
