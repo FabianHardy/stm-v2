@@ -3,8 +3,8 @@
  * Vue : Création de campagne
  * 
  * @package STM/Views/Admin/Campaigns
- * @version 2.2.0
- * @modified 13/11/2025 - Ajout section Attribution Clients (3 champs)
+ * @version 3.0.0
+ * @modified 13/11/2025 - Ajout TOUS les champs (type, delivery_date, quotas quantité, attribution)
  */
 
 ob_start();
@@ -13,7 +13,7 @@ ob_start();
 <!-- En-tête -->
 <div class="mb-6">
     <h2 class="text-2xl font-bold text-gray-900">Créer une nouvelle campagne</h2>
-    <p class="mt-1 text-sm text-gray-500">Définissez les informations de base et l'attribution des clients</p>
+    <p class="mt-1 text-sm text-gray-500">Définissez les informations de base, les quotas et l'attribution des clients</p>
 </div>
 
 <!-- Messages d'erreur -->
@@ -71,6 +71,31 @@ ob_start();
                 </select>
             </div>
 
+            <!-- Type de commande -->
+            <div>
+                <label for="type" class="block text-sm font-medium text-gray-700">
+                    Type de commande <span class="text-red-500">*</span>
+                </label>
+                <select name="type" id="type" required
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
+                    <option value="W" <?= ($old['type'] ?? 'W') === 'W' ? 'selected' : '' ?>>📦 Commande normale</option>
+                    <option value="V" <?= ($old['type'] ?? '') === 'V' ? 'selected' : '' ?>>🎯 Prospection à livrer</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-500">W = Normal, V = Prospection</p>
+            </div>
+
+            <!-- Statut -->
+            <div>
+                <label for="is_active" class="block text-sm font-medium text-gray-700">
+                    Statut
+                </label>
+                <select name="is_active" id="is_active"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
+                    <option value="1" <?= ($old['is_active'] ?? '1') === '1' ? 'selected' : '' ?>>✅ Active</option>
+                    <option value="0" <?= ($old['is_active'] ?? '1') === '0' ? 'selected' : '' ?>>⏸️ Inactive</option>
+                </select>
+            </div>
+
             <!-- Date début -->
             <div>
                 <label for="start_date" class="block text-sm font-medium text-gray-700">
@@ -91,21 +116,158 @@ ob_start();
                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
             </div>
 
-            <!-- Statut -->
-            <div>
-                <label for="is_active" class="block text-sm font-medium text-gray-700">
-                    Statut
+            <!-- Date de livraison (optionnel) -->
+            <div class="sm:col-span-2">
+                <label for="delivery_date" class="block text-sm font-medium text-gray-700">
+                    Date de livraison différée (optionnel)
                 </label>
-                <select name="is_active" id="is_active"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                    <option value="1" <?= ($old['is_active'] ?? '1') === '1' ? 'selected' : '' ?>>✅ Active</option>
-                    <option value="0" <?= ($old['is_active'] ?? '1') === '0' ? 'selected' : '' ?>>⏸️ Inactive</option>
-                </select>
+                <input type="date" name="delivery_date" id="delivery_date"
+                       value="<?= htmlspecialchars($old['delivery_date'] ?? '') ?>"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
+                <p class="mt-1 text-xs text-gray-500">Si vide, livraison immédiate. Si rempli, livraison différée à cette date.</p>
             </div>
         </div>
     </div>
 
-    <!-- Section 2 : Contenu multilingue -->
+    <!-- Section 2 : Quotas de commande (QUANTITÉS) -->
+    <div class="bg-white shadow-sm rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">📦 Quotas de commande (en quantité)</h3>
+        <p class="text-sm text-gray-500 mb-4">Limitez les quantités commandables (en nombre d'unités, pas en €)</p>
+        
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <!-- Quota global -->
+            <div>
+                <label for="global_quota" class="block text-sm font-medium text-gray-700">
+                    Quota global (tous clients)
+                </label>
+                <input type="number" name="global_quota" id="global_quota" min="1"
+                       value="<?= htmlspecialchars($old['global_quota'] ?? '') ?>"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                       placeholder="Ex: 1000">
+                <p class="mt-1 text-xs text-gray-500">
+                    🌍 Quantité maximale totale commandable (tous clients confondus)<br>
+                    Laissez vide pour illimité
+                </p>
+            </div>
+
+            <!-- Quota par client -->
+            <div>
+                <label for="quota_per_customer" class="block text-sm font-medium text-gray-700">
+                    Quota par client
+                </label>
+                <input type="number" name="quota_per_customer" id="quota_per_customer" min="1"
+                       value="<?= htmlspecialchars($old['quota_per_customer'] ?? '') ?>"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                       placeholder="Ex: 50">
+                <p class="mt-1 text-xs text-gray-500">
+                    👤 Quantité maximale par client<br>
+                    Laissez vide pour illimité
+                </p>
+            </div>
+        </div>
+
+        <!-- Info badge -->
+        <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-start">
+                <svg class="h-5 w-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                </svg>
+                <div class="ml-3 text-sm text-blue-700">
+                    <p class="font-medium">💡 Exemple d'utilisation :</p>
+                    <ul class="mt-2 list-disc list-inside space-y-1">
+                        <li><strong>Quota global = 1000</strong> : Maximum 1000 unités commandables au total</li>
+                        <li><strong>Quota par client = 50</strong> : Chaque client peut commander max 50 unités</li>
+                        <li><strong>Les deux vides</strong> : Quantités illimitées</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3 : Attribution des clients -->
+    <div class="bg-white shadow-sm rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">👥 Attribution des clients</h3>
+        <p class="text-sm text-gray-500 mb-4">Définissez comment les clients peuvent accéder à cette campagne</p>
+        
+        <div class="space-y-6">
+            <!-- Mode d'attribution -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3">
+                    Mode d'attribution <span class="text-red-500">*</span>
+                </label>
+                
+                <div class="space-y-3">
+                    <!-- Manuel -->
+                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="customer_access_type" value="manual" 
+                               <?= ($old['customer_access_type'] ?? 'manual') === 'manual' ? 'checked' : '' ?>
+                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
+                        <div class="ml-3 flex-1">
+                            <div class="text-sm font-medium text-gray-900">📝 Manuel (Liste spécifique)</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                Liste fixe de numéros clients (un par ligne)
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Dynamique -->
+                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="customer_access_type" value="dynamic"
+                               <?= ($old['customer_access_type'] ?? '') === 'dynamic' ? 'checked' : '' ?>
+                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
+                        <div class="ml-3 flex-1">
+                            <div class="text-sm font-medium text-gray-900">🔄 Dynamique (Tous les clients)</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                Lecture en temps réel depuis la base externe (tous les clients actifs du pays)
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Protégé -->
+                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="customer_access_type" value="protected"
+                               <?= ($old['customer_access_type'] ?? '') === 'protected' ? 'checked' : '' ?>
+                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
+                        <div class="ml-3 flex-1">
+                            <div class="text-sm font-medium text-gray-900">🔒 Protégé par mot de passe</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                Accès libre avec un mot de passe unique pour tous
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Liste clients (affichée si Manuel) -->
+            <div id="customer_list_section" style="display: none;">
+                <label for="customer_list" class="block text-sm font-medium text-gray-700">
+                    Liste des numéros clients
+                </label>
+                <textarea name="customer_list" id="customer_list" rows="6"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm font-mono text-xs"
+                          placeholder="123456&#10;654321&#10;789012&#10;..."><?= htmlspecialchars($old['customer_list'] ?? '') ?></textarea>
+                <p class="mt-1 text-xs text-gray-500">
+                    Un numéro client par ligne. Accepte: 123456, 123456-12, E12345-CB, *12345
+                </p>
+            </div>
+
+            <!-- Mot de passe (affiché si Protégé) -->
+            <div id="order_password_section" style="display: none;">
+                <label for="order_password" class="block text-sm font-medium text-gray-700">
+                    Mot de passe de la campagne
+                </label>
+                <input type="text" name="order_password" id="order_password"
+                       value="<?= htmlspecialchars($old['order_password'] ?? '') ?>"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                       placeholder="Ex: PROMO2025">
+                <p class="mt-1 text-xs text-gray-500">
+                    Ce mot de passe sera demandé aux clients pour accéder à la campagne
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4 : Contenu multilingue -->
     <div class="bg-white shadow-sm rounded-lg p-6">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Contenu multilingue</h3>
         
@@ -160,89 +322,6 @@ ob_start();
                                   placeholder="Publieke beschrijving..."><?= htmlspecialchars($old['description_nl'] ?? '') ?></textarea>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Section 3 : Attribution des clients -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">👥 Attribution des clients</h3>
-        <p class="text-sm text-gray-500 mb-4">Définissez comment les clients peuvent accéder à cette campagne</p>
-        
-        <div class="space-y-6">
-            <!-- Mode d'attribution -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-3">
-                    Mode d'attribution <span class="text-red-500">*</span>
-                </label>
-                
-                <div class="space-y-3">
-                    <!-- Manuel -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="manual" 
-                               <?= ($old['customer_access_type'] ?? 'manual') === 'manual' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">📝 Manuel</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Liste fixe de numéros clients (un par ligne)
-                            </div>
-                        </div>
-                    </label>
-
-                    <!-- Dynamique -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="dynamic"
-                               <?= ($old['customer_access_type'] ?? '') === 'dynamic' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">🔄 Dynamique</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Lecture en temps réel depuis la base externe (tous les clients du pays)
-                            </div>
-                        </div>
-                    </label>
-
-                    <!-- Protégé -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="protected"
-                               <?= ($old['customer_access_type'] ?? '') === 'protected' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">🔒 Protégé par mot de passe</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Accès libre avec un mot de passe unique pour tous
-                            </div>
-                        </div>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Liste clients (affichée si Manuel) -->
-            <div id="customer_list_section" style="display: none;">
-                <label for="customer_list" class="block text-sm font-medium text-gray-700">
-                    Liste des numéros clients
-                </label>
-                <textarea name="customer_list" id="customer_list" rows="6"
-                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm font-mono text-xs"
-                          placeholder="123456&#10;654321&#10;789012&#10;..."><?= htmlspecialchars($old['customer_list'] ?? '') ?></textarea>
-                <p class="mt-1 text-xs text-gray-500">
-                    Un numéro client par ligne. Accepte: 123456, 123456-12, E12345-CB, *12345
-                </p>
-            </div>
-
-            <!-- Mot de passe (affiché si Protégé) -->
-            <div id="order_password_section" style="display: none;">
-                <label for="order_password" class="block text-sm font-medium text-gray-700">
-                    Mot de passe de la campagne
-                </label>
-                <input type="text" name="order_password" id="order_password"
-                       value="<?= htmlspecialchars($old['order_password'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                       placeholder="Ex: PROMO2025">
-                <p class="mt-1 text-xs text-gray-500">
-                    Ce mot de passe sera demandé aux clients pour accéder à la campagne
-                </p>
             </div>
         </div>
     </div>
