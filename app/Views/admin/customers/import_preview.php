@@ -182,13 +182,13 @@ ob_start();
                                         <?= htmlspecialchars($customer['customer_number']) ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= htmlspecialchars($customer['name']) ?>
+                                        <?= htmlspecialchars($customer['company_name']) ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <?= htmlspecialchars($customer['representative'] ?? '-') ?>
+                                        -
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <?= htmlspecialchars($customer['email'] ?? '-') ?>
+                                        -
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <?php if ($customer['already_imported']): ?>
