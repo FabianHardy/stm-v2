@@ -414,20 +414,26 @@ class Campaign
     /**
      * Supprimer une campagne
      * 
+     * Supprime d'abord les clients liés, puis la campagne
+     * 
      * @param int $id ID de la campagne
      * @return bool
      */
     public function delete(int $id): bool
     {
-        $query = "DELETE FROM campaigns WHERE id = :id";
-        
         try {
+            // 1. Supprimer d'abord les clients liés (si mode manual)
+            $this->removeAllCustomers($id);
+            
+            // 2. Supprimer la campagne
+            $query = "DELETE FROM campaigns WHERE id = :id";
             return $this->db->execute($query, [':id' => $id]);
         } catch (\PDOException $e) {
             error_log("Erreur delete: " . $e->getMessage());
             return false;
         }
     }
+
 
     /**
      * Valider les données d'une campagne
