@@ -301,6 +301,7 @@ class Campaign
                     title_nl, description_nl,
                     customer_assignment_mode,
                     order_password, order_type, deferred_delivery, delivery_date,
+                    unique_url,
                     created_at
                 ) VALUES (
                     :uuid, :slug, :name, :country, :is_active,
@@ -309,6 +310,7 @@ class Campaign
                     :title_nl, :description_nl,
                     :customer_assignment_mode,
                     :order_password, :order_type, :deferred_delivery, :delivery_date,
+                    :unique_url,
                     NOW()
                 )";
 
@@ -327,13 +329,14 @@ class Campaign
             ':customer_assignment_mode' => $data['customer_assignment_mode'] ?? 'automatic',
             ':order_password' => $data['order_password'] ?? null,
             ':order_type' => $data['order_type'] ?? 'W',
+            ':unique_url' => $uuid, // Utiliser le même UUID pour unique_url
             ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
             ':delivery_date' => $data['delivery_date'] ?? null,
         ];
 
         try {
             $this->db->execute($query, $params);
-            return $this->db->lastInsertId();
+            return (int)$this->db->lastInsertId();
         } catch (\PDOException $e) {
             error_log("Erreur create: " . $e->getMessage());
             return false;

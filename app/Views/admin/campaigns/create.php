@@ -3,13 +3,13 @@
  * Vue : Formulaire de création d'une campagne
  * 
  * Permet de créer une nouvelle campagne avec :
- * - Informations de base (nom, pays, dates)
+ * - Informations de base (nom, pays, dates, statut)
  * - Attribution clients (automatic/manual/protected)
  * - Paramètres de commande (type, livraison)
  * - Contenu multilingue (FR/NL)
  * 
  * @created  2025/11/14 02:00
- * @modified 2025/11/14 04:00 - Ajout title_fr et title_nl manquants
+ * @modified 2025/11/14 06:00 - Version finale avec design complet
  */
 
 ob_start();
@@ -54,6 +54,18 @@ ob_start();
         <?php unset($_SESSION['error']); ?>
     <?php endif; ?>
 
+    <?php if (isset($_SESSION['errors'])): ?>
+        <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+            <h3 class="text-sm font-bold text-red-700 mb-2">Erreurs de validation :</h3>
+            <ul class="list-disc list-inside text-sm text-red-700">
+                <?php foreach ($_SESSION['errors'] as $error): ?>
+                    <li><?= htmlspecialchars($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php unset($_SESSION['errors']); ?>
+    <?php endif; ?>
+
     <!-- Formulaire -->
     <form method="POST" 
           action="/stm/admin/campaigns" 
@@ -86,7 +98,9 @@ ob_start();
                     <input type="text" 
                            id="name" 
                            name="name" 
+                           required
                            maxlength="255"
+                           value="<?= htmlspecialchars($old['name'] ?? '') ?>"
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                            placeholder="Ex: Promotions Printemps 2025">
                     <p class="mt-1 text-sm text-gray-500">
@@ -101,10 +115,10 @@ ob_start();
                     </label>
                     <select id="country" 
                             name="country" 
+                            required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="">Sélectionnez un pays</option>
-                        <option value="BE">🇧🇪 Belgique</option>
-                        <option value="LU">🇱🇺 Luxembourg</option>
+                        <option value="BE" <?= ($old['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                        <option value="LU" <?= ($old['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
                     </select>
                     <p class="mt-1 text-sm text-gray-500">
                         Détermine les clients éligibles à la campagne
@@ -134,7 +148,12 @@ ob_start();
                         <input type="date" 
                                id="start_date" 
                                name="start_date" 
+                               required
+                               value="<?= htmlspecialchars($old['start_date'] ?? '') ?>"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-sm text-gray-500">
+                            ⏰ Début automatique à 00:01
+                        </p>
                     </div>
 
                     <!-- Date de fin -->
@@ -145,7 +164,12 @@ ob_start();
                         <input type="date" 
                                id="end_date" 
                                name="end_date" 
+                               required
+                               value="<?= htmlspecialchars($old['end_date'] ?? '') ?>"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-sm text-gray-500">
+                            ⏰ Fin automatique à 23:59
+                        </p>
                     </div>
                 </div>
             </div>
@@ -230,7 +254,8 @@ ob_start();
                 <!-- Liste manuelle (si mode manual) -->
                 <div x-show="assignmentMode === 'manual'" 
                      x-transition
-                     class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                     class="p-4 bg-blue-50 border border-blue-200 rounded-lg"
+                     style="display: none;">
                     <label for="customer_list" class="block text-sm font-medium text-gray-900 mb-2">
                         Liste des numéros clients
                     </label>
@@ -238,7 +263,7 @@ ob_start();
                               name="customer_list" 
                               rows="6"
                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                              placeholder="123456&#10;654321&#10;789012&#10;..."></textarea>
+                              placeholder="123456&#10;654321&#10;789012&#10;..."><?= htmlspecialchars($old['customer_list'] ?? '') ?></textarea>
                     <p class="mt-2 text-sm text-gray-600">
                         📝 Entrez un numéro client par ligne. Formats acceptés : 123456, 123456-12, E12345-CB, *12345
                     </p>
@@ -247,7 +272,8 @@ ob_start();
                 <!-- Mot de passe (si mode protected) -->
                 <div x-show="assignmentMode === 'protected'" 
                      x-transition
-                     class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                     class="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+                     style="display: none;">
                     <label for="order_password" class="block text-sm font-medium text-gray-900 mb-2">
                         Mot de passe d'accès
                     </label>
@@ -255,6 +281,7 @@ ob_start();
                            id="order_password" 
                            name="order_password" 
                            maxlength="255"
+                           value="<?= htmlspecialchars($old['order_password'] ?? '') ?>"
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
                            placeholder="PROMO2025">
                     <p class="mt-2 text-sm text-gray-600">
@@ -339,13 +366,15 @@ ob_start();
                     <!-- Date de livraison (si livraison différée) -->
                     <div x-show="deferredDelivery" 
                          x-transition
-                         class="mt-4">
+                         class="mt-4"
+                         style="display: none;">
                         <label for="delivery_date" class="block text-sm font-medium text-gray-700 mb-2">
                             Date de livraison souhaitée
                         </label>
                         <input type="date" 
                                id="delivery_date" 
                                name="delivery_date" 
+                               value="<?= htmlspecialchars($old['delivery_date'] ?? '') ?>"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <p class="mt-1 text-sm text-gray-600">
                             📦 Les commandes seront livrées à cette date
@@ -375,7 +404,9 @@ ob_start();
                     <input type="text" 
                            id="title_fr" 
                            name="title_fr" 
+                           required
                            maxlength="255"
+                           value="<?= htmlspecialchars($old['title_fr'] ?? '') ?>"
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                            placeholder="Ex: Promotions du Printemps 2025">
                 </div>
@@ -389,7 +420,7 @@ ob_start();
                               name="description_fr" 
                               rows="4"
                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Décrivez la campagne en français..."></textarea>
+                              placeholder="Décrivez la campagne en français..."><?= htmlspecialchars($old['description_fr'] ?? '') ?></textarea>
                 </div>
 
                 <!-- Titre NL -->
@@ -400,7 +431,9 @@ ob_start();
                     <input type="text" 
                            id="title_nl" 
                            name="title_nl" 
+                           required
                            maxlength="255"
+                           value="<?= htmlspecialchars($old['title_nl'] ?? '') ?>"
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                            placeholder="Bijv: Lentepromoties 2025">
                 </div>
@@ -414,7 +447,7 @@ ob_start();
                               name="description_nl" 
                               rows="4"
                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Beschrijf de campagne in het Nederlands..."></textarea>
+                              placeholder="Beschrijf de campagne in het Nederlands..."><?= htmlspecialchars($old['description_nl'] ?? '') ?></textarea>
                 </div>
             </div>
         </div>

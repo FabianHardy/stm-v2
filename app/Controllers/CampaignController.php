@@ -1,450 +1,477 @@
 <?php
 /**
- * CampaignController
+ * Vue : Formulaire de création d'une campagne
  * 
- * Contrôleur pour la gestion des campagnes promotionnelles
+ * Permet de créer une nouvelle campagne avec :
+ * - Informations de base (nom, pays, dates, statut)
+ * - Attribution clients (automatic/manual/protected)
+ * - Paramètres de commande (type, livraison)
+ * - Contenu multilingue (FR/NL)
  * 
- * @created  2025/11/07 10:00
- * @modified 2025/11/14 01:00 - Sprint 5 : Ajout gestion nouveaux champs (customer_assignment_mode, order_password, order_type, deferred_delivery, delivery_date, quotas) + compteurs clients/promotions
+ * @created  2025/11/14 02:00
+ * @modified 2025/11/14 06:00 - Version finale avec design complet
  */
 
-namespace App\Controllers;
+ob_start();
+?>
 
-use App\Models\Campaign;
-use Core\Session;
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- En-tête -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">
+                    Créer une nouvelle campagne
+                </h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Définissez les paramètres de votre campagne promotionnelle
+                </p>
+            </div>
+            <a href="/stm/admin/campaigns" 
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Retour à la liste
+            </a>
+        </div>
+    </div>
 
-class CampaignController
-{
-    private Campaign $campaignModel;
+    <!-- Messages flash -->
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-red-700"><?= htmlspecialchars($_SESSION['error']) ?></p>
+                </div>
+            </div>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
 
-    public function __construct()
-    {
-        $this->campaignModel = new Campaign();
-    }
+    <?php if (isset($_SESSION['errors'])): ?>
+        <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+            <h3 class="text-sm font-bold text-red-700 mb-2">Erreurs de validation :</h3>
+            <ul class="list-disc list-inside text-sm text-red-700">
+                <?php foreach ($_SESSION['errors'] as $error): ?>
+                    <li><?= htmlspecialchars($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php unset($_SESSION['errors']); ?>
+    <?php endif; ?>
 
-    /**
-     * Afficher la liste de toutes les campagnes avec filtres
-     * 
-     * @return void
-     */
-    public function index(): void
-    {
-        // Récupérer les filtres de la requête
-        $filters = [
-            'search' => $_GET['search'] ?? '',
-            'country' => $_GET['country'] ?? '',
-            'status' => $_GET['status'] ?? ''
-        ];
+    <!-- Formulaire -->
+    <form method="POST" 
+          action="/stm/admin/campaigns" 
+          class="space-y-8"
+          x-data="{
+              assignmentMode: 'automatic',
+              deferredDelivery: false
+          }">
         
-        // Récupérer les campagnes filtrées
-        $campaigns = $this->campaignModel->getAll($filters);
-        
-        // Récupérer les statistiques
-        $stats = $this->campaignModel->getStats();
-        
-        // Ajouter statistiques par pays
-        $stats['be'] = $this->campaignModel->countByCountry('BE');
-        $stats['lu'] = $this->campaignModel->countByCountry('LU');
-        
-        // Calcul pagination (variables attendues par la vue)
-        $total = $this->campaignModel->count($filters);
-        $perPage = 20;
-        $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/index.php';
-    }
+        <!-- Token CSRF -->
+        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
 
-    /**
-     * Afficher le formulaire de création
-     * 
-     * @return void
-     */
-    public function create(): void
-    {
-        // Préparer les variables pour la vue
-        $errors = Session::getFlash('errors', []);
-        $old = Session::getFlash('old', []);
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/create.php';
-    }
-
-    /**
-     * Enregistrer une nouvelle campagne (POST)
-     * 
-     * @return void
-     */
-    public function store(): void
-    {
-        // 1. Vérifier le token CSRF
-        if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/campaigns/create');
-            exit;
-        }
-
-        // 2. Récupérer les données du formulaire
-        $data = [
-            'name' => $_POST['name'] ?? '',
-            'country' => $_POST['country'] ?? '',
-            'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'start_date' => $_POST['start_date'] ?? '',
-            'end_date' => $_POST['end_date'] ?? '',
-            'title_fr' => $_POST['title_fr'] ?? '',
-            'description_fr' => $_POST['description_fr'] ?? '',
-            'title_nl' => $_POST['title_nl'] ?? '',
-            'description_nl' => $_POST['description_nl'] ?? '',
+        <!-- SECTION 1 : Informations de base -->
+        <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
+            <div class="px-6 py-5 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">
+                    📋 Informations de base
+                </h2>
+                <p class="mt-1 text-sm text-gray-600">
+                    Nom de la campagne, pays et période de validité
+                </p>
+            </div>
             
-            // Champs Sprint 5 (Attribution clients + Paramètres commande)
-            'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
-            'order_password' => $_POST['order_password'] ?? null,
-            'order_type' => $_POST['order_type'] ?? 'W',
-            'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
-            'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
-        ];
+            <div class="px-6 py-6 space-y-6">
+                <!-- Nom de la campagne -->
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
+                        Nom de la campagne <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="name" 
+                           name="name" 
+                           required
+                           maxlength="255"
+                           value="<?= htmlspecialchars($old['name'] ?? '') ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Ex: Promotions Printemps 2025">
+                    <p class="mt-1 text-sm text-gray-500">
+                        Nom commercial de la campagne (visible par les clients)
+                    </p>
+                </div>
 
-        // 3. Valider les données
-        $errors = $this->campaignModel->validate($data);
-        
-        if (!empty($errors)) {
-            Session::setFlash('errors', $errors);
-            Session::setFlash('old', $data);
-            header('Location: /stm/admin/campaigns/create');
-            exit;
-        }
+                <!-- Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-2">
+                        Pays <span class="text-red-500">*</span>
+                    </label>
+                    <select id="country" 
+                            name="country" 
+                            required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="BE" <?= ($old['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                        <option value="LU" <?= ($old['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Détermine les clients éligibles à la campagne
+                    </p>
+                </div>
 
-        // 4. Créer la campagne
-        try {
-            $campaignId = $this->campaignModel->create($data);
+                <!-- Statut actif -->
+                <div class="flex items-center">
+                    <input type="checkbox" 
+                           id="is_active" 
+                           name="is_active" 
+                           value="1"
+                           checked
+                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="is_active" class="ml-2 block text-sm text-gray-700">
+                        Campagne active dès sa création
+                    </label>
+                </div>
+
+                <!-- Dates -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Date de début -->
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            Date de début <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               id="start_date" 
+                               name="start_date" 
+                               required
+                               value="<?= htmlspecialchars($old['start_date'] ?? '') ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-sm text-gray-500">
+                            ⏰ Début automatique à 00:01
+                        </p>
+                    </div>
+
+                    <!-- Date de fin -->
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            Date de fin <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               id="end_date" 
+                               name="end_date" 
+                               required
+                               value="<?= htmlspecialchars($old['end_date'] ?? '') ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-sm text-gray-500">
+                            ⏰ Fin automatique à 23:59
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 2 : Attribution clients -->
+        <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
+            <div class="px-6 py-5 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">
+                    👥 Attribution des clients
+                </h2>
+                <p class="mt-1 text-sm text-gray-600">
+                    Définissez qui peut accéder à cette campagne
+                </p>
+            </div>
             
-            if ($campaignId) {
-                // Si mode MANUAL, gérer la liste de clients
-                if ($data['customer_assignment_mode'] === 'manual' && !empty($_POST['customer_list'])) {
-                    $customerList = $_POST['customer_list'];
-                    $customerNumbers = explode("\n", $customerList);
-                    $customerNumbers = array_map('trim', $customerNumbers);
-                    $customerNumbers = array_filter($customerNumbers); // Supprimer les lignes vides
+            <div class="px-6 py-6 space-y-6">
+                <!-- Mode d'attribution -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        Mode d'attribution <span class="text-red-500">*</span>
+                    </label>
                     
-                    if (!empty($customerNumbers)) {
-                        $added = $this->campaignModel->addCustomersToCampaign($campaignId, $customerNumbers);
-                        Session::setFlash('info', "{$added} client(s) ajouté(s) à la campagne");
-                    }
-                }
-                
-                Session::setFlash('success', 'Campagne créée avec succès');
-                header('Location: /stm/admin/campaigns/' . $campaignId);
-            } else {
-                Session::setFlash('error', 'Erreur lors de la création de la campagne');
-                Session::setFlash('old', $data);
-                header('Location: /stm/admin/campaigns/create');
-            }
-        } catch (\Exception $e) {
-            error_log("Erreur création campagne: " . $e->getMessage());
-            Session::setFlash('error', 'Erreur lors de la création de la campagne');
-            Session::setFlash('old', $data);
-            header('Location: /stm/admin/campaigns/create');
-        }
-        
-        exit;
-    }
+                    <div class="space-y-3">
+                        <!-- Mode Automatique -->
+                        <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                               :class="assignmentMode === 'automatic' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'">
+                            <input type="radio" 
+                                   name="customer_assignment_mode" 
+                                   value="automatic" 
+                                   x-model="assignmentMode"
+                                   checked
+                                   class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                            <div class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">
+                                    🌍 Tous les clients du pays (Automatique)
+                                </span>
+                                <span class="block text-sm text-gray-600 mt-1">
+                                    Tous les clients BE ou LU peuvent accéder (lecture en temps réel)
+                                </span>
+                            </div>
+                        </label>
 
-    /**
-     * Afficher les détails d'une campagne
-     * 
-     * @param int $id ID de la campagne
-     * @return void
-     */
-    public function show(int $id): void
-    {
-        $campaign = $this->campaignModel->findById($id);
-        
-        if (!$campaign) {
-            Session::setFlash('error', 'Campagne introuvable');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
-        
-        // Récupérer les compteurs pour les statistiques
-        $customerCount = $this->campaignModel->countCustomers($id);
-        $promotionCount = $this->campaignModel->countPromotions($id);
-        
-        // TODO: Ajouter compteurs commandes et montant total quand module Commandes sera prêt
-        $orderCount = 0;
-        $totalAmount = 0;
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/show.php';
-    }
+                        <!-- Mode Manuel -->
+                        <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                               :class="assignmentMode === 'manual' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'">
+                            <input type="radio" 
+                                   name="customer_assignment_mode" 
+                                   value="manual" 
+                                   x-model="assignmentMode"
+                                   class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                            <div class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">
+                                    📝 Liste manuelle de clients
+                                </span>
+                                <span class="block text-sm text-gray-600 mt-1">
+                                    Définissez une liste restreinte de numéros clients
+                                </span>
+                            </div>
+                        </label>
 
-    /**
-     * Afficher le formulaire de modification
-     * 
-     * @param int $id ID de la campagne
-     * @return void
-     */
-    public function edit(int $id): void
-    {
-        $campaign = $this->campaignModel->findById($id);
-        
-        if (!$campaign) {
-            Session::setFlash('error', 'Campagne introuvable');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
-        
-        // Préparer les variables pour la vue
-        $errors = Session::getFlash('errors', []);
-        $old = Session::getFlash('old', []);
-        
-        // Si mode manual, récupérer la liste actuelle des clients
-        if ($campaign['customer_assignment_mode'] === 'manual') {
-            $customers = $this->campaignModel->getCustomerNumbers($id);
-            $campaign['customer_list'] = implode("\n", $customers);
-        }
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/edit.php';
-    }
+                        <!-- Mode Protégé -->
+                        <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                               :class="assignmentMode === 'protected' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'">
+                            <input type="radio" 
+                                   name="customer_assignment_mode" 
+                                   value="protected" 
+                                   x-model="assignmentMode"
+                                   class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                            <div class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">
+                                    🔒 Accès protégé par mot de passe
+                                </span>
+                                <span class="block text-sm text-gray-600 mt-1">
+                                    Tous les clients mais avec mot de passe requis
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-    /**
-     * Mettre à jour une campagne (POST)
-     * 
-     * @param int $id ID de la campagne
-     * @return void
-     */
-    public function update(int $id): void
-    {
-        // 1. Vérifier que la campagne existe
-        $campaign = $this->campaignModel->findById($id);
-        
-        if (!$campaign) {
-            Session::setFlash('error', 'Campagne introuvable');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
+                <!-- Liste manuelle (si mode manual) -->
+                <div x-show="assignmentMode === 'manual'" 
+                     x-transition
+                     class="p-4 bg-blue-50 border border-blue-200 rounded-lg"
+                     style="display: none;">
+                    <label for="customer_list" class="block text-sm font-medium text-gray-900 mb-2">
+                        Liste des numéros clients
+                    </label>
+                    <textarea id="customer_list" 
+                              name="customer_list" 
+                              rows="6"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                              placeholder="123456&#10;654321&#10;789012&#10;..."><?= htmlspecialchars($old['customer_list'] ?? '') ?></textarea>
+                    <p class="mt-2 text-sm text-gray-600">
+                        📝 Entrez un numéro client par ligne. Formats acceptés : 123456, 123456-12, E12345-CB, *12345
+                    </p>
+                </div>
 
-        // 2. Vérifier le token CSRF
-        if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/campaigns/' . $id . '/edit');
-            exit;
-        }
+                <!-- Mot de passe (si mode protected) -->
+                <div x-show="assignmentMode === 'protected'" 
+                     x-transition
+                     class="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+                     style="display: none;">
+                    <label for="order_password" class="block text-sm font-medium text-gray-900 mb-2">
+                        Mot de passe d'accès
+                    </label>
+                    <input type="text" 
+                           id="order_password" 
+                           name="order_password" 
+                           maxlength="255"
+                           value="<?= htmlspecialchars($old['order_password'] ?? '') ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                           placeholder="PROMO2025">
+                    <p class="mt-2 text-sm text-gray-600">
+                        🔑 Ce mot de passe sera demandé aux clients pour accéder à la campagne
+                    </p>
+                </div>
+            </div>
+        </div>
 
-        // 3. Récupérer les données du formulaire
-        $data = [
-            'name' => $_POST['name'] ?? '',
-            'country' => $_POST['country'] ?? '',
-            'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'start_date' => $_POST['start_date'] ?? '',
-            'end_date' => $_POST['end_date'] ?? '',
-            'title_fr' => $_POST['title_fr'] ?? '',
-            'description_fr' => $_POST['description_fr'] ?? '',
-            'title_nl' => $_POST['title_nl'] ?? '',
-            'description_nl' => $_POST['description_nl'] ?? '',
+        <!-- SECTION 3 : Paramètres de commande -->
+        <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
+            <div class="px-6 py-5 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">
+                    🚚 Paramètres de commande
+                </h2>
+                <p class="mt-1 text-sm text-gray-600">
+                    Type de commande et modalités de livraison
+                </p>
+            </div>
             
-            // Champs Sprint 5 (Attribution clients + Paramètres commande)
-            'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
-            'order_password' => $_POST['order_password'] ?? null,
-            'order_type' => $_POST['order_type'] ?? 'W',
-            'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
-            'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
-        ];
-
-        // 4. Valider les données
-        $errors = $this->campaignModel->validate($data);
-        
-        if (!empty($errors)) {
-            Session::setFlash('errors', $errors);
-            Session::setFlash('old', $data);
-            header('Location: /stm/admin/campaigns/' . $id . '/edit');
-            exit;
-        }
-
-        // 5. Mettre à jour la campagne
-        try {
-            $success = $this->campaignModel->update($id, $data);
-            
-            if ($success) {
-                // Gérer le changement de mode d'attribution
-                $oldMode = $campaign['customer_assignment_mode'];
-                $newMode = $data['customer_assignment_mode'];
-                
-                // Si passage de manual à autre mode : supprimer les clients
-                if ($oldMode === 'manual' && $newMode !== 'manual') {
-                    $this->campaignModel->removeAllCustomers($id);
-                }
-                
-                // Si passage à manual : gérer la nouvelle liste
-                if ($newMode === 'manual') {
-                    // Supprimer l'ancienne liste
-                    $this->campaignModel->removeAllCustomers($id);
+            <div class="px-6 py-6 space-y-6">
+                <!-- Type de commande -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        Type de commande <span class="text-red-500">*</span>
+                    </label>
                     
-                    // Ajouter la nouvelle liste
-                    if (!empty($_POST['customer_list'])) {
-                        $customerList = $_POST['customer_list'];
-                        $customerNumbers = explode("\n", $customerList);
-                        $customerNumbers = array_map('trim', $customerNumbers);
-                        $customerNumbers = array_filter($customerNumbers);
-                        
-                        if (!empty($customerNumbers)) {
-                            $added = $this->campaignModel->addCustomersToCampaign($id, $customerNumbers);
-                            Session::setFlash('info', "{$added} client(s) ajouté(s) à la campagne");
-                        }
-                    }
-                }
-                
-                Session::setFlash('success', 'Campagne mise à jour avec succès');
-                header('Location: /stm/admin/campaigns/' . $id);
-            } else {
-                Session::setFlash('error', 'Erreur lors de la mise à jour');
-                Session::setFlash('old', $data);
-                header('Location: /stm/admin/campaigns/' . $id . '/edit');
-            }
-        } catch (\Exception $e) {
-            error_log("Erreur mise à jour campagne: " . $e->getMessage());
-            Session::setFlash('error', 'Erreur lors de la mise à jour');
-            Session::setFlash('old', $data);
-            header('Location: /stm/admin/campaigns/' . $id . '/edit');
-        }
-        
-        exit;
-    }
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <!-- Type W (Normal) -->
+                        <label class="relative flex items-start p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                            <input type="radio" 
+                                   name="order_type" 
+                                   value="W" 
+                                   checked
+                                   class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500">
+                            <div class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">
+                                    ✅ Commande normale (W)
+                                </span>
+                                <span class="block text-sm text-gray-600 mt-1">
+                                    Commande standard avec stock immédiat
+                                </span>
+                            </div>
+                        </label>
 
-    /**
-     * Supprimer une campagne (POST)
-     * 
-     * @param int $id ID de la campagne
-     * @return void
-     */
-    public function destroy(int $id): void
-    {
-        // Vérifier que la campagne existe
-        $campaign = $this->campaignModel->findById($id);
-        
-        if (!$campaign) {
-            Session::setFlash('error', 'Campagne introuvable');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
+                        <!-- Type V (Prospection) -->
+                        <label class="relative flex items-start p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                            <input type="radio" 
+                                   name="order_type" 
+                                   value="V" 
+                                   class="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500">
+                            <div class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">
+                                    🎯 Prospection (V)
+                                </span>
+                                <span class="block text-sm text-gray-600 mt-1">
+                                    Pré-commande ou test de marché
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-        // Vérifier le token CSRF
-        if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
+                <!-- Livraison différée -->
+                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label class="flex items-start cursor-pointer">
+                        <input type="checkbox" 
+                               name="deferred_delivery" 
+                               value="1"
+                               x-model="deferredDelivery"
+                               class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 rounded">
+                        <div class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">
+                                📅 Livraison différée
+                            </span>
+                            <span class="block text-sm text-gray-600 mt-1">
+                                Définir une date de livraison future pour cette campagne
+                            </span>
+                        </div>
+                    </label>
 
-        // Supprimer la campagne
-        try {
-            $success = $this->campaignModel->delete($id);
+                    <!-- Date de livraison (si livraison différée) -->
+                    <div x-show="deferredDelivery" 
+                         x-transition
+                         class="mt-4"
+                         style="display: none;">
+                        <label for="delivery_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            Date de livraison souhaitée
+                        </label>
+                        <input type="date" 
+                               id="delivery_date" 
+                               name="delivery_date" 
+                               value="<?= htmlspecialchars($old['delivery_date'] ?? '') ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-sm text-gray-600">
+                            📦 Les commandes seront livrées à cette date
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 4 : Contenu multilingue -->
+        <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
+            <div class="px-6 py-5 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">
+                    🌐 Contenu multilingue
+                </h2>
+                <p class="mt-1 text-sm text-gray-600">
+                    Titres et descriptions de la campagne en français et néerlandais
+                </p>
+            </div>
             
-            if ($success) {
-                Session::setFlash('success', 'Campagne supprimée avec succès');
-            } else {
-                Session::setFlash('error', 'Erreur lors de la suppression');
-            }
-        } catch (\Exception $e) {
-            error_log("Erreur suppression campagne: " . $e->getMessage());
-            Session::setFlash('error', 'Erreur lors de la suppression');
-        }
-        
-        header('Location: /stm/admin/campaigns');
-        exit;
-    }
+            <div class="px-6 py-6 space-y-6">
+                <!-- Titre FR -->
+                <div>
+                    <label for="title_fr" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇫🇷 Titre français <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="title_fr" 
+                           name="title_fr" 
+                           required
+                           maxlength="255"
+                           value="<?= htmlspecialchars($old['title_fr'] ?? '') ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Ex: Promotions du Printemps 2025">
+                </div>
 
-    /**
-     * Afficher les campagnes actives uniquement
-     * 
-     * @return void
-     */
-    public function active(): void
-    {
-        $campaigns = $this->campaignModel->getActive();
-        $stats = $this->campaignModel->getStats();
-        
-        // Ajouter les compteurs pour chaque campagne
-        foreach ($campaigns as &$campaign) {
-            $campaign['customer_count'] = $this->campaignModel->countCustomers($campaign['id']);
-            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
-        }
-        
-        // Préparer les filtres pour la vue
-        $filters = ['status' => 'active'];
-        
-        // Charger la vue
-        $pageTitle = 'Campagnes actives';
-        require_once __DIR__ . '/../Views/admin/campaigns/active.php';
-    }
+                <!-- Description FR -->
+                <div>
+                    <label for="description_fr" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇫🇷 Description française
+                    </label>
+                    <textarea id="description_fr" 
+                              name="description_fr" 
+                              rows="4"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="Décrivez la campagne en français..."><?= htmlspecialchars($old['description_fr'] ?? '') ?></textarea>
+                </div>
 
-    /**
-     * Afficher les campagnes archivées (terminées + inactives)
-     * 
-     * @return void
-     */
-    public function archives(): void
-    {
-        $campaigns = $this->campaignModel->getArchived();
-        $stats = $this->campaignModel->getStats();
-        
-        // Ajouter les compteurs pour chaque campagne
-        foreach ($campaigns as &$campaign) {
-            $campaign['customer_count'] = $this->campaignModel->countCustomers($campaign['id']);
-            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
-        }
-        
-        // Préparer les filtres pour la vue
-        $filters = ['status' => 'archived'];
-        
-        // Charger la vue
-        $pageTitle = 'Campagnes archivées';
-        require_once __DIR__ . '/../Views/admin/campaigns/archives.php';
-    }
+                <!-- Titre NL -->
+                <div>
+                    <label for="title_nl" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇳🇱 Titre néerlandais <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="title_nl" 
+                           name="title_nl" 
+                           required
+                           maxlength="255"
+                           value="<?= htmlspecialchars($old['title_nl'] ?? '') ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Bijv: Lentepromoties 2025">
+                </div>
 
-    /**
-     * Activer/Désactiver une campagne (AJAX)
-     * 
-     * @param int $id ID de la campagne
-     * @return void
-     */
-    public function toggleActive(int $id): void
-    {
-        $campaign = $this->campaignModel->findById($id);
-        
-        if (!$campaign) {
-            http_response_code(404);
-            echo json_encode(['success' => false, 'message' => 'Campagne introuvable']);
-            exit;
-        }
-        
-        try {
-            $newStatus = !$campaign['is_active'];
-            $success = $this->campaignModel->update($id, ['is_active' => $newStatus]);
+                <!-- Description NL -->
+                <div>
+                    <label for="description_nl" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇳🇱 Description néerlandaise
+                    </label>
+                    <textarea id="description_nl" 
+                              name="description_nl" 
+                              rows="4"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="Beschrijf de campagne in het Nederlands..."><?= htmlspecialchars($old['description_nl'] ?? '') ?></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="flex items-center justify-between pt-6 border-t border-gray-200">
+            <a href="/stm/admin/campaigns" 
+               class="inline-flex items-center px-6 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
+                Annuler
+            </a>
             
-            if ($success) {
-                echo json_encode(['success' => true, 'is_active' => $newStatus]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Erreur mise à jour']);
-            }
-        } catch (\Exception $e) {
-            error_log("Erreur toggle active: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Erreur serveur']);
-        }
-        
-        exit;
-    }
+            <button type="submit"
+                    class="inline-flex items-center px-6 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Créer la campagne
+            </button>
+        </div>
+    </form>
+</div>
 
-    /**
-     * Valider le token CSRF
-     * 
-     * @return bool
-     */
-    private function validateCSRF(): bool
-    {
-        $token = $_POST['_token'] ?? '';
-        return !empty($token) && 
-               isset($_SESSION['csrf_token']) && 
-               $token === $_SESSION['csrf_token'];
-    }
-}
+<?php
+$content = ob_get_clean();
+$title = 'Créer une campagne - STM';
+require __DIR__ . '/../../layouts/admin.php';
+?>
