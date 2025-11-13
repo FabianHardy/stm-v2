@@ -598,4 +598,62 @@ class Campaign
             return 0;
         }
     }
+
+    /**
+     * Compter le nombre de campagnes par pays
+     * 
+     * @param string $country Code pays (BE ou LU)
+     * @return int
+     */
+    public function countByCountry(string $country): int
+    {
+        $query = "SELECT COUNT(*) as count FROM campaigns WHERE country = :country";
+        
+        try {
+            $result = $this->db->queryOne($query, [':country' => $country]);
+            return (int) ($result['count'] ?? 0);
+        } catch (\PDOException $e) {
+            error_log("Erreur countByCountry: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Récupérer la liste des numéros clients d'une campagne (mode MANUAL)
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return array Liste des numéros clients
+     */
+    public function getCustomerNumbers(int $campaignId): array
+    {
+        $query = "SELECT customer_number FROM campaign_customers 
+                  WHERE campaign_id = :campaign_id 
+                  ORDER BY customer_number ASC";
+        
+        try {
+            $results = $this->db->query($query, [':campaign_id' => $campaignId]);
+            return array_column($results, 'customer_number');
+        } catch (\PDOException $e) {
+            error_log("Erreur getCustomerNumbers: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Supprimer tous les clients d'une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return bool
+     */
+    public function removeAllCustomers(int $campaignId): bool
+    {
+        $query = "DELETE FROM campaign_customers WHERE campaign_id = :campaign_id";
+        
+        try {
+            return $this->db->execute($query, [':campaign_id' => $campaignId]);
+        } catch (\PDOException $e) {
+            error_log("Erreur removeAllCustomers: " . $e->getMessage());
+            return false;
+        }
+    }
 }
