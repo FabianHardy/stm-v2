@@ -3,6 +3,121 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+
+## [14/11/2025 02:00] - Sprint 5 : Backend TERMINÉ (v3 FINALE) - 100% ✅
+
+### 🔧 Modifié
+
+**Campaign.php** (Model) - Version 3 FINALE :
+- `create()` : Ajout 5 colonnes Sprint 5 (SANS les quotas)
+  - `customer_assignment_mode` (ENUM automatic/manual/protected)
+  - `order_password` (VARCHAR 255 NULL)
+  - `order_type` (ENUM 'V'/'W' DEFAULT 'W')
+  - `deferred_delivery` (TINYINT DEFAULT 0)
+  - `delivery_date` (DATE NULL)
+  
+- `update()` : Ajout des mêmes 5 colonnes (SANS les quotas)
+  
+- `addCustomersToCampaign()` : Refonte complète
+  - Récupération du `country` depuis `findById($campaignId)`
+  - Ajout colonne `country` dans INSERT et SELECT de vérification
+  - Utilisation `customer_number` + `country` au lieu de `customer_id`
+  - Gestion erreurs avec try/catch par client
+  
+- `validate()` : Validation complète avec règles métier
+  - Mode protected → order_password requis
+  - Livraison différée → delivery_date requise
+  - Cohérence des dates vérifiée
+  
+- `getCustomerNumbers()` : Récupère liste numéros clients (mode manual)
+- `removeAllCustomers()` : Supprime tous les clients d'une campagne
+- `countByCountry()` : Compte campagnes par pays (BE/LU)
+
+**CampaignController.php** - Version 3 FINALE :
+- `index()` : Gère pagination + stats par pays (BE/LU)
+  - Variables : $total, $totalPages, $stats['be'], $stats['lu']
+  
+- `store()` : Gère les 5 nouveaux champs depuis $_POST (SANS quotas)
+  - Validation complète des données
+  - Si mode MANUAL : Ajout liste clients via `addCustomersToCampaign()`
+  - Message flash avec nombre de clients ajoutés
+  
+- `update()` : Gère les 5 nouveaux champs + changement mode attribution
+  - Détecte changement de mode (automatic ↔ manual ↔ protected)
+  - Si passage de manual → autre : Supprime clients
+  - Si passage à manual : Remplace liste clients
+  
+- `show()` : Ajout compteurs clients/promotions
+  - `$customerCount = countCustomers($id)`
+  - `$promotionCount = countPromotions($id)`
+  - Variables passées à la vue
+  
+- `edit()` : Pré-charge liste clients si mode manual
+  - Récupère `customer_list` depuis DB
+  - Formate en textarea (1 numéro par ligne)
+  
+- `active()` : Ajout compteurs pour chaque campagne dans la liste
+- `archives()` : Ajout compteurs pour chaque campagne dans la liste
+
+### ⚠️ RETIRÉ
+
+**Colonnes quotas retirées des campagnes** :
+- ❌ `max_orders_global` (quota global)
+- ❌ `max_quantity_per_customer` (quota par client)
+
+**Raison** : Les quotas sont gérés au niveau des **promotions** individuellement (Sprint 4), pas au niveau des campagnes.
+
+### ✅ Fonctionnalités complètes
+
+**3 modes d'attribution clients** :
+1. **AUTOMATIC** : Tous les clients du pays (lecture temps réel BE_CLL/LU_CLL)
+2. **MANUAL** : Liste restreinte (stockée dans campaign_customers)
+3. **PROTECTED** : Tous avec mot de passe (lecture temps réel + vérif password)
+
+**Paramètres de commande** :
+- Type : V (Prospection) ou W (Normale)
+- Livraison : Immédiate ou Différée (avec date)
+- Mot de passe : Pour mode protected
+
+**Validation métier** :
+- Mode protected → Mot de passe obligatoire
+- Livraison différée → Date obligatoire
+- Cohérence dates début/fin
+- Types et modes validés (ENUM)
+
+**Compteurs et statistiques** :
+- Statistiques par pays (BE/LU)
+- Compteurs clients/promotions par campagne
+- Pagination complète (liste campagnes)
+
+### 🎯 Prochaines étapes
+
+**Tests en production** :
+1. Test création campagne mode automatic
+2. Test création campagne mode manual (avec liste clients)
+3. Test création campagne mode protected (avec mot de passe)
+4. Test création campagne type V (prospection) avec livraison différée
+5. Test modification campagne (changement mode)
+6. Test modification manual → automatic (suppression clients)
+7. Test validations (mode protected sans password, etc.)
+8. Test affichage compteurs
+9. Test listes campagnes actives/archivées
+
+**Progression** :
+- Sprint 5 (Module Clients & Attribution) : **100%** ✅
+- Progression globale : **68%** (5/8 sprints terminés)
+
+### 📝 Notes importantes
+
+- **Les quotas sont au niveau des PROMOTIONS**, pas des campagnes
+- Mode automatic/protected : Table `campaign_customers` vide (normal)
+- Mode manual : Table `campaign_customers` contient `customer_number` + `country`
+- Cache OPcache à vider après upload des fichiers PHP
+- Structure DB : 5 colonnes Sprint 5 (pas de quotas)
+
+---
+
+
 ## [14/11/2025 01:30] - Sprint 5 : Backend TERMINÉ - 100% ✅
 
 ### 🔧 Modifié
