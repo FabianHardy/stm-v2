@@ -3,6 +3,149 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+## [14/11/2025 01:30] - Sprint 5 : Backend TERMINÉ - 100% ✅
+
+### 🔧 Modifié
+
+**Campaign.php** (Model) - 6 méthodes adaptées :
+- `create()` : Ajout 7 colonnes Sprint 5
+  - `customer_assignment_mode` (ENUM automatic/manual/protected)
+  - `order_password` (VARCHAR 255 NULL)
+  - `order_type` (ENUM 'V'/'W' DEFAULT 'W')
+  - `deferred_delivery` (TINYINT DEFAULT 0)
+  - `delivery_date` (DATE NULL)
+  - `max_orders_global` (INT NULL - quota global)
+  - `max_quantity_per_customer` (INT NULL - quota par client)
+  
+- `update()` : Ajout des mêmes 7 colonnes
+  
+- `addCustomersToCampaign()` : Refonte complète
+  - Récupération du `country` depuis `findById($campaignId)`
+  - Ajout colonne `country` dans INSERT et SELECT de vérification
+  - Utilisation `customer_number` + `country` au lieu de `customer_id`
+  - Gestion erreurs avec try/catch par client
+  
+- `validate()` : Validation complète avec règles métier
+  - Mode protected → order_password requis
+  - Livraison différée → delivery_date requise
+  - Cohérence des dates vérifiée
+  
+- `getCustomerNumbers()` : Récupère liste numéros clients (mode manual)
+- `removeAllCustomers()` : Supprime tous les clients d'une campagne
+
+**CampaignController.php** - 6 méthodes adaptées :
+- `store()` : Gère les 7 nouveaux champs depuis $_POST
+  - Validation complète des données
+  - Si mode MANUAL : Ajout liste clients via `addCustomersToCampaign()`
+  - Message flash avec nombre de clients ajoutés
+  
+- `update()` : Gère les 7 nouveaux champs + changement mode attribution
+  - Détecte changement de mode (automatic ↔ manual ↔ protected)
+  - Si passage de manual → autre : Supprime clients
+  - Si passage à manual : Remplace liste clients
+  
+- `show()` : Ajout compteurs clients/promotions
+  - `$customerCount = countCustomers($id)`
+  - `$promotionCount = countPromotions($id)`
+  - Variables passées à la vue
+  
+- `edit()` : Pré-charge liste clients si mode manual
+  - Récupère `customer_list` depuis DB
+  - Formate en textarea (1 numéro par ligne)
+  
+- `active()` : Ajout compteurs pour chaque campagne dans la liste
+- `archives()` : Ajout compteurs pour chaque campagne dans la liste
+
+### ✅ Fonctionnalités complètes
+
+**3 modes d'attribution clients** :
+1. **AUTOMATIC** : Tous les clients du pays (lecture temps réel BE_CLL/LU_CLL)
+2. **MANUAL** : Liste restreinte (stockée dans campaign_customers)
+3. **PROTECTED** : Tous avec mot de passe (lecture temps réel + vérif password)
+
+**Paramètres de commande** :
+- Type : V (Prospection) ou W (Normale)
+- Livraison : Immédiate ou Différée (avec date)
+- Mot de passe : Pour mode protected
+
+**Système de quotas** :
+- Quota global : Max quantités tous clients confondus
+- Quota par client : Max quantités par client
+
+**Validation métier** :
+- Mode protected → Mot de passe obligatoire
+- Livraison différée → Date obligatoire
+- Cohérence dates début/fin
+- Types et modes validés (ENUM)
+
+### 🎯 Prochaines étapes
+
+**Tests en production** :
+1. Test création campagne mode automatic
+2. Test création campagne mode manual (avec liste clients)
+3. Test création campagne mode protected (avec mot de passe)
+4. Test création campagne type V (prospection) avec livraison différée
+5. Test création campagne avec quotas
+6. Test modification campagne (changement mode)
+7. Test modification manual → automatic (suppression clients)
+8. Test validations (mode protected sans password, etc.)
+9. Test affichage compteurs
+10. Test listes campagnes actives/archivées
+
+**Progression** :
+- Sprint 5 (Module Clients & Attribution) : **100%** ✅
+- Progression globale : **68%** (5/8 sprints terminés)
+
+### 📝 Notes importantes
+
+- Les quotas sont en **QUANTITÉ** (unités), pas en montant (€)
+- Mode automatic/protected : Table `campaign_customers` vide (normal)
+- Mode manual : Table `campaign_customers` contient `customer_number` + `country`
+- Cache OPcache à vider après upload des fichiers PHP
+- Structure DB doit être à jour (voir MODIFICATIONS_SQL_SPRINT5.sql)
+
+---
+
+## [14/11/2025 01:00] - Sprint 5 : Adaptation backend Campaign.php (85%)
+
+### 🔧 Modifié
+**Campaign.php** (Model) - 3 méthodes adaptées :
+- Méthode `create()` : Ajout 4 colonnes Sprint 5
+  - `order_password` (VARCHAR 255 NULL)
+  - `order_type` (ENUM 'V'/'W' DEFAULT 'W')
+  - `deferred_delivery` (TINYINT DEFAULT 0)
+  - `delivery_date` (DATE NULL)
+  - Ajout aussi : `customer_assignment_mode`, `max_orders_global`, `max_quantity_per_customer`
+  
+- Méthode `update()` : Ajout des mêmes 4 colonnes + gestion des quotas
+  
+- Méthode `addCustomersToCampaign()` : Refonte complète
+  - Récupération du `country` depuis `findById($campaignId)`
+  - Ajout colonne `country` dans INSERT et SELECT de vérification
+  - Utilisation `customer_number` + `country` au lieu de `customer_id`
+  - Gestion erreurs avec try/catch par client
+  - Retour nombre de clients ajoutés avec succès
+
+### ✅ Méthodes auxiliaires incluses
+- `countCustomers()` : Compte clients d'une campagne
+- `countPromotions()` : Compte promotions d'une campagne
+- `validate()` : Validation complète avec règles métier
+  - Mode protected → order_password requis
+  - Livraison différée → delivery_date requise
+  - Cohérence des dates vérifiée
+
+### 🎯 Prochaines étapes
+1. **CampaignController.php** - Méthodes à adapter :
+   - `store()` : Gérer nouveaux champs dans $_POST
+   - `update()` : Gérer nouveaux champs dans $_POST
+2. **Vues** - Mapping colonnes (create.php, edit.php, show.php)
+3. **Tests** en production
+
+**Progression Sprint 5** : 85%
+
+---
+
+
 # 📝 ENTRÉE CHANGELOG - Session 14/11/2025
 
 ## [14/11/2025 00:30] - Sprint 5 : Architecture clients & campagnes DÉFINIE
