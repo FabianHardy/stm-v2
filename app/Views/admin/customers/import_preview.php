@@ -173,16 +173,16 @@ ob_start();
                                         <?php else: ?>
                                             <input type="checkbox" 
                                                    name="customers[]" 
-                                                   value="<?= htmlspecialchars($customer['customer_number']) ?>"
+                                                   value="<?= htmlspecialchars($customer['customer_number'] ?? '') ?>"
                                                    @change="updateCount()"
                                                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        <?= htmlspecialchars($customer['customer_number']) ?>
+                                        <?= htmlspecialchars($customer['customer_number'] ?? '-') ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= htmlspecialchars($customer['company_name']) ?>
+                                        <?= htmlspecialchars($customer['company_name'] ?? '-') ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         -
