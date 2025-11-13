@@ -1,22 +1,20 @@
 <?php
 /**
- * Model Campaign
+ * Campaign Model
+ * 
  * Gestion des campagnes promotionnelles
  * 
- * @package STM/Models
- * @version 2.3.0
- * @modified 13/11/2025 - Ajout attribution clients + paramètres commande + compteurs clients/promotions
+ * @created  2025/11/08 10:00
+ * @modified 2025/11/14 00:00 - Sprint 5 : Ajout colonnes order_password, order_type, deferred_delivery, delivery_date + modification addCustomersToCampaign() pour utiliser customer_number + country
  */
 
 namespace App\Models;
 
 use Core\Database;
-use Core\ExternalDatabase;
-use PDO;
 
 class Campaign
 {
-    private $db;
+    private Database $db;
 
     public function __construct()
     {
@@ -24,160 +22,264 @@ class Campaign
     }
 
     /**
-     * Récupérer toutes les campagnes avec pagination et filtres
+     * Générer un UUID unique
      * 
-     * @param array $filters Filtres optionnels (country, is_active, search)
-     * @param int $page Numéro de page
-     * @param int $perPage Nombre de résultats par page
+     * @return string
+     */
+    private function generateUniqueUuid(): string
+    {
+        do {
+            $uuid = sprintf(
+                '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff)
+            );
+            
+            $exists = $this->findByUuid($uuid);
+        } while ($exists);
+        
+        return $uuid;
+    }
+
+    /**
+     * Générer un slug depuis le nom
+     * 
+     * @param string $name
+     * @return string
+     */
+    private function generateSlug(string $name): string
+    {
+        $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $name), '-'));
+        
+        // Vérifier l'unicité
+        $counter = 1;
+        $originalSlug = $slug;
+        
+        while ($this->findBySlug($slug)) {
+            $slug = $originalSlug . '-' . $counter;
+            $counter++;
+        }
+        
+        return $slug;
+    }
+
+    /**
+     * Récupérer toutes les campagnes avec filtres optionnels
+     * 
+     * @param array $filters Filtres (search, country, status)
      * @return array
      */
-    public function getAll(array $filters = [], int $page = 1, int $perPage = 10): array
+    public function getAll(array $filters = []): array
     {
-        $offset = ($page - 1) * $perPage;
-        
-        $sql = "SELECT * FROM campaigns WHERE 1=1";
+        $query = "SELECT * FROM campaigns WHERE 1=1";
         $params = [];
 
-        // Filtre par pays
-        if (!empty($filters['country'])) {
-            $sql .= " AND country = :country";
-            $params[':country'] = $filters['country'];
-        }
-
-        // Filtre par statut
-        if (isset($filters['is_active'])) {
-            $sql .= " AND is_active = :is_active";
-            $params[':is_active'] = $filters['is_active'];
-        }
-
-        // Filtre par recherche (nom ou titres)
+        // Filtre recherche
         if (!empty($filters['search'])) {
-            $sql .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
+            $query .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
             $params[':search'] = '%' . $filters['search'] . '%';
         }
 
-        // Filtre par statut temporel
+        // Filtre pays
+        if (!empty($filters['country'])) {
+            $query .= " AND country = :country";
+            $params[':country'] = $filters['country'];
+        }
+
+        // Filtre statut
         if (!empty($filters['status'])) {
             switch ($filters['status']) {
                 case 'active':
-                    $sql .= " AND is_active = 1 AND start_date <= CURDATE() AND end_date >= CURDATE()";
+                    $query .= " AND is_active = 1 AND start_date <= CURDATE() AND end_date >= CURDATE()";
                     break;
                 case 'upcoming':
-                    $sql .= " AND start_date > CURDATE()";
+                    $query .= " AND start_date > CURDATE()";
                     break;
                 case 'ended':
-                    $sql .= " AND end_date < CURDATE()";
+                    $query .= " AND end_date < CURDATE()";
                     break;
                 case 'inactive':
-                    $sql .= " AND is_active = 0";
+                    $query .= " AND is_active = 0";
                     break;
             }
         }
 
-        $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+        $query .= " ORDER BY start_date DESC";
 
-        $stmt = $this->db->getConnection()->prepare($sql);
-        
-        foreach ($params as $key => $value) {
-            $stmt->bindValue($key, $value);
+        try {
+            return $this->db->query($query, $params);
+        } catch (\PDOException $e) {
+            error_log("Erreur getAll: " . $e->getMessage());
+            return [];
         }
-        
-        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-        
-        $stmt->execute();
-        
-        return $stmt->fetchAll();
     }
 
     /**
-     * Compter les campagnes avec filtres
+     * Récupérer les campagnes actives
+     * 
+     * @return array
+     */
+    public function getActive(): array
+    {
+        $query = "SELECT * FROM campaigns 
+                  WHERE is_active = 1 
+                  AND start_date <= CURDATE() 
+                  AND end_date >= CURDATE()
+                  ORDER BY start_date DESC";
+
+        try {
+            return $this->db->query($query);
+        } catch (\PDOException $e) {
+            error_log("Erreur getActive: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupérer les campagnes archivées
+     * 
+     * @return array
+     */
+    public function getArchived(): array
+    {
+        $query = "SELECT * FROM campaigns 
+                  WHERE end_date < CURDATE()
+                  ORDER BY end_date DESC";
+
+        try {
+            return $this->db->query($query);
+        } catch (\PDOException $e) {
+            error_log("Erreur getArchived: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupérer les statistiques des campagnes
+     * 
+     * @return array
+     */
+    public function getStats(): array
+    {
+        try {
+            $total = $this->db->queryOne("SELECT COUNT(*) as count FROM campaigns");
+            $active = $this->db->queryOne("SELECT COUNT(*) as count FROM campaigns 
+                                           WHERE is_active = 1 
+                                           AND start_date <= CURDATE() 
+                                           AND end_date >= CURDATE()");
+            $upcoming = $this->db->queryOne("SELECT COUNT(*) as count FROM campaigns 
+                                             WHERE start_date > CURDATE()");
+            $ended = $this->db->queryOne("SELECT COUNT(*) as count FROM campaigns 
+                                          WHERE end_date < CURDATE()");
+
+            return [
+                'total' => $total['count'] ?? 0,
+                'active' => $active['count'] ?? 0,
+                'upcoming' => $upcoming['count'] ?? 0,
+                'ended' => $ended['count'] ?? 0
+            ];
+        } catch (\PDOException $e) {
+            error_log("Erreur getStats: " . $e->getMessage());
+            return [
+                'total' => 0,
+                'active' => 0,
+                'upcoming' => 0,
+                'ended' => 0
+            ];
+        }
+    }
+
+    /**
+     * Compter le nombre total de campagnes
      * 
      * @param array $filters Filtres optionnels
      * @return int
      */
     public function count(array $filters = []): int
     {
-        $sql = "SELECT COUNT(*) as total FROM campaigns WHERE 1=1";
+        $query = "SELECT COUNT(*) as count FROM campaigns WHERE 1=1";
         $params = [];
 
-        if (!empty($filters['country'])) {
-            $sql .= " AND country = :country";
-            $params[':country'] = $filters['country'];
-        }
-
-        if (isset($filters['is_active'])) {
-            $sql .= " AND is_active = :is_active";
-            $params[':is_active'] = $filters['is_active'];
-        }
-
         if (!empty($filters['search'])) {
-            $sql .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
+            $query .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
             $params[':search'] = '%' . $filters['search'] . '%';
         }
 
-        if (!empty($filters['status'])) {
-            switch ($filters['status']) {
-                case 'active':
-                    $sql .= " AND is_active = 1 AND start_date <= CURDATE() AND end_date >= CURDATE()";
-                    break;
-                case 'upcoming':
-                    $sql .= " AND start_date > CURDATE()";
-                    break;
-                case 'ended':
-                    $sql .= " AND end_date < CURDATE()";
-                    break;
-                case 'inactive':
-                    $sql .= " AND is_active = 0";
-                    break;
-            }
+        if (!empty($filters['country'])) {
+            $query .= " AND country = :country";
+            $params[':country'] = $filters['country'];
         }
 
-        $result = $this->db->query($sql, $params);
-        
-        return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
+        try {
+            $result = $this->db->queryOne($query, $params);
+            return (int) ($result['count'] ?? 0);
+        } catch (\PDOException $e) {
+            error_log("Erreur count: " . $e->getMessage());
+            return 0;
+        }
     }
 
     /**
-     * Récupérer une campagne par son ID
+     * Récupérer une campagne par ID
      * 
-     * @param int $id ID de la campagne
+     * @param int $id
      * @return array|false
      */
     public function findById(int $id): array|false
     {
-        $sql = "SELECT * FROM campaigns WHERE id = :id";
-        $result = $this->db->queryOne($sql, [':id' => $id]);
+        $query = "SELECT * FROM campaigns WHERE id = :id";
         
-        return $result ?: false;
+        try {
+            $result = $this->db->queryOne($query, [':id' => $id]);
+            return $result ?: false;
+        } catch (\PDOException $e) {
+            error_log("Erreur findById: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
-     * Récupérer une campagne par son UUID
+     * Récupérer une campagne par UUID
      * 
-     * @param string $uuid UUID de la campagne
+     * @param string $uuid
      * @return array|false
      */
     public function findByUuid(string $uuid): array|false
     {
-        $sql = "SELECT * FROM campaigns WHERE uuid = :uuid";
-        $result = $this->db->queryOne($sql, [':uuid' => $uuid]);
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
         
-        return $result ?: false;
+        try {
+            $result = $this->db->queryOne($query, [':uuid' => $uuid]);
+            return $result ?: false;
+        } catch (\PDOException $e) {
+            error_log("Erreur findByUuid: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
-     * Récupérer une campagne par son slug
+     * Récupérer une campagne par slug
      * 
-     * @param string $slug Slug de la campagne
+     * @param string $slug
      * @return array|false
      */
     public function findBySlug(string $slug): array|false
     {
-        $sql = "SELECT * FROM campaigns WHERE slug = :slug";
-        $result = $this->db->queryOne($sql, [':slug' => $slug]);
+        $query = "SELECT * FROM campaigns WHERE slug = :slug";
         
-        return $result ?: false;
+        try {
+            $result = $this->db->queryOne($query, [':slug' => $slug]);
+            return $result ?: false;
+        } catch (\PDOException $e) {
+            error_log("Erreur findBySlug: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -188,22 +290,28 @@ class Campaign
      */
     public function create(array $data): int|false
     {
-        // Générer UUID et slug automatiquement
-        $uuid = $this->generateUuid();
+        // Générer UUID et slug
+        $uuid = $this->generateUniqueUuid();
         $slug = $this->generateSlug($data['name']);
         
-        $sql = "INSERT INTO campaigns (
-                    uuid, slug, name, country, is_active, 
-                    start_date, end_date, 
-                    title_fr, description_fr, 
+        $query = "INSERT INTO campaigns (
+                    uuid, slug, name, country, is_active,
+                    start_date, end_date,
+                    title_fr, description_fr,
                     title_nl, description_nl,
-                    customer_assignment_mode, order_type, deferred_delivery, delivery_date
+                    customer_assignment_mode,
+                    order_password, order_type, deferred_delivery, delivery_date,
+                    max_orders_global, max_quantity_per_customer,
+                    created_at
                 ) VALUES (
                     :uuid, :slug, :name, :country, :is_active,
                     :start_date, :end_date,
                     :title_fr, :description_fr,
                     :title_nl, :description_nl,
-                    :customer_assignment_mode, :order_type, :deferred_delivery, :delivery_date
+                    :customer_assignment_mode,
+                    :order_password, :order_type, :deferred_delivery, :delivery_date,
+                    :max_orders_global, :max_quantity_per_customer,
+                    NOW()
                 )";
 
         $params = [
@@ -219,16 +327,21 @@ class Campaign
             ':title_nl' => $data['title_nl'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
             ':customer_assignment_mode' => $data['customer_assignment_mode'] ?? 'automatic',
+            ':order_password' => $data['order_password'] ?? null,
             ':order_type' => $data['order_type'] ?? 'W',
             ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
             ':delivery_date' => $data['delivery_date'] ?? null,
+            ':max_orders_global' => $data['max_orders_global'] ?? null,
+            ':max_quantity_per_customer' => $data['max_quantity_per_customer'] ?? null,
         ];
 
-        if ($this->db->execute($sql, $params)) {
-            return (int) $this->db->lastInsertId();
+        try {
+            $this->db->execute($query, $params);
+            return $this->db->lastInsertId();
+        } catch (\PDOException $e) {
+            error_log("Erreur create: " . $e->getMessage());
+            return false;
         }
-        
-        return false;
     }
 
     /**
@@ -246,7 +359,7 @@ class Campaign
             $data['slug'] = $this->generateSlug($data['name']);
         }
         
-        $sql = "UPDATE campaigns SET
+        $query = "UPDATE campaigns SET
                     name = :name,
                     country = :country,
                     is_active = :is_active,
@@ -257,15 +370,19 @@ class Campaign
                     title_nl = :title_nl,
                     description_nl = :description_nl,
                     customer_assignment_mode = :customer_assignment_mode,
+                    order_password = :order_password,
                     order_type = :order_type,
                     deferred_delivery = :deferred_delivery,
-                    delivery_date = :delivery_date";
+                    delivery_date = :delivery_date,
+                    max_orders_global = :max_orders_global,
+                    max_quantity_per_customer = :max_quantity_per_customer,
+                    updated_at = NOW()";
         
         if (isset($data['slug'])) {
-            $sql .= ", slug = :slug";
+            $query .= ", slug = :slug";
         }
         
-        $sql .= " WHERE id = :id";
+        $query .= " WHERE id = :id";
 
         $params = [
             ':id' => $id,
@@ -279,16 +396,24 @@ class Campaign
             ':title_nl' => $data['title_nl'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
             ':customer_assignment_mode' => $data['customer_assignment_mode'] ?? 'automatic',
+            ':order_password' => $data['order_password'] ?? null,
             ':order_type' => $data['order_type'] ?? 'W',
             ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
             ':delivery_date' => $data['delivery_date'] ?? null,
+            ':max_orders_global' => $data['max_orders_global'] ?? null,
+            ':max_quantity_per_customer' => $data['max_quantity_per_customer'] ?? null,
         ];
         
         if (isset($data['slug'])) {
             $params[':slug'] = $data['slug'];
         }
 
-        return $this->db->execute($sql, $params);
+        try {
+            return $this->db->execute($query, $params);
+        } catch (\PDOException $e) {
+            error_log("Erreur update: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -299,427 +424,178 @@ class Campaign
      */
     public function delete(int $id): bool
     {
-        $sql = "DELETE FROM campaigns WHERE id = :id";
+        $query = "DELETE FROM campaigns WHERE id = :id";
         
-        return $this->db->execute($sql, [':id' => $id]);
-    }
-
-    /**
-     * Récupérer les campagnes actives (en cours de validité)
-     * 
-     * @return array
-     */
-    public function getActive(): array
-    {
-        $sql = "SELECT * FROM campaigns 
-                WHERE is_active = 1 
-                AND start_date <= CURDATE() 
-                AND end_date >= CURDATE()
-                ORDER BY start_date DESC";
-        
-        return $this->db->query($sql);
-    }
-
-    /**
-     * Récupérer les campagnes actives OU futures (pas les passées)
-     * Utilisé pour les dropdowns promotions : on ne veut pas les campagnes passées
-     * 
-     * @return array
-     * @created 11/11/2025
-     */
-    public function getActiveOrFuture(): array
-    {
-        $sql = "SELECT * FROM campaigns 
-                WHERE is_active = 1 
-                AND end_date >= CURDATE()
-                ORDER BY start_date ASC";
-        
-        return $this->db->query($sql);
-    }
-
-    /**
-     * Récupérer les campagnes archivées (inactives ou terminées)
-     * 
-     * @return array
-     */
-    public function getArchived(): array
-    {
-        $sql = "SELECT * FROM campaigns 
-                WHERE is_active = 0 OR end_date < CURDATE()
-                ORDER BY end_date DESC";
-        
-        return $this->db->query($sql);
-    }
-
-    /**
-     * Récupérer les statistiques des campagnes
-     * 
-     * @return array
-     */
-    public function getStats(): array
-    {
-        $stats = [
-            'total' => 0,
-            'active' => 0,
-            'archived' => 0,
-            'be' => 0,
-            'lu' => 0,
-        ];
-
-        // Total
-        $sql = "SELECT COUNT(*) as count FROM campaigns";
-        $result = $this->db->query($sql);
-        $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        // Actives (en cours de validité)
-        $sql = "SELECT COUNT(*) as count FROM campaigns 
-                WHERE is_active = 1 
-                AND start_date <= CURDATE() 
-                AND end_date >= CURDATE()";
-        $result = $this->db->query($sql);
-        $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        // Archivées (inactives ou terminées)
-        $sql = "SELECT COUNT(*) as count FROM campaigns 
-                WHERE is_active = 0 OR end_date < CURDATE()";
-        $result = $this->db->query($sql);
-        $stats['archived'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        // Par pays
-        $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'BE'";
-        $result = $this->db->query($sql);
-        $stats['be'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        $sql = "SELECT COUNT(*) as count FROM campaigns WHERE country = 'LU'";
-        $result = $this->db->query($sql);
-        $stats['lu'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        return $stats;
+        try {
+            return $this->db->execute($query, [':id' => $id]);
+        } catch (\PDOException $e) {
+            error_log("Erreur delete: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
      * Valider les données d'une campagne
      * 
      * @param array $data Données à valider
-     * @return array Tableau des erreurs (vide si OK)
+     * @return array Tableau des erreurs (vide si pas d'erreur)
      */
     public function validate(array $data): array
     {
         $errors = [];
 
-        // Nom obligatoire
+        // Nom requis
         if (empty($data['name'])) {
-            $errors['name'] = 'Le nom de la campagne est obligatoire';
+            $errors['name'] = 'Le nom de la campagne est requis';
         }
 
-        // Pays obligatoire et valide
-        if (empty($data['country'])) {
-            $errors['country'] = 'Le pays est obligatoire';
-        } elseif (!in_array($data['country'], ['BE', 'LU'])) {
+        // Pays requis
+        if (empty($data['country']) || !in_array($data['country'], ['BE', 'LU'])) {
             $errors['country'] = 'Le pays doit être BE ou LU';
         }
 
-        // Dates obligatoires
+        // Dates requises
         if (empty($data['start_date'])) {
-            $errors['start_date'] = 'La date de début est obligatoire';
+            $errors['start_date'] = 'La date de début est requise';
         }
 
         if (empty($data['end_date'])) {
-            $errors['end_date'] = 'La date de fin est obligatoire';
+            $errors['end_date'] = 'La date de fin est requise';
         }
 
-        // Vérifier que end_date > start_date
+        // Validation cohérence des dates
         if (!empty($data['start_date']) && !empty($data['end_date'])) {
             if (strtotime($data['end_date']) < strtotime($data['start_date'])) {
-                $errors['end_date'] = 'La date de fin doit être postérieure à la date de début';
+                $errors['end_date'] = 'La date de fin doit être après la date de début';
             }
         }
 
-        // Titre FR obligatoire
-        if (empty($data['title_fr'])) {
-            $errors['title_fr'] = 'Le titre en français est obligatoire';
+        // Validation order_type
+        if (!empty($data['order_type']) && !in_array($data['order_type'], ['V', 'W'])) {
+            $errors['order_type'] = 'Le type de commande doit être V ou W';
+        }
+
+        // Validation customer_assignment_mode
+        if (!empty($data['customer_assignment_mode']) && 
+            !in_array($data['customer_assignment_mode'], ['automatic', 'manual', 'protected'])) {
+            $errors['customer_assignment_mode'] = 'Le mode d\'attribution doit être automatic, manual ou protected';
+        }
+
+        // Si mode protected, le mot de passe est requis
+        if (!empty($data['customer_assignment_mode']) && 
+            $data['customer_assignment_mode'] === 'protected' && 
+            empty($data['order_password'])) {
+            $errors['order_password'] = 'Le mot de passe est requis pour le mode protégé';
+        }
+
+        // Si livraison différée, la date de livraison est requise
+        if (!empty($data['deferred_delivery']) && 
+            $data['deferred_delivery'] == 1 && 
+            empty($data['delivery_date'])) {
+            $errors['delivery_date'] = 'La date de livraison est requise pour une livraison différée';
         }
 
         return $errors;
     }
 
     /**
-     * Générer un UUID unique
-     * 
-     * @return string
-     */
-    private function generateUuid(): string
-    {
-        return sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0x0fff) | 0x4000,
-            mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-        );
-    }
-
-    /**
-     * Générer un slug à partir d'un texte
-     * 
-     * @param string $text Texte à transformer
-     * @return string
-     */
-    private function generateSlug(string $text): string
-    {
-        // Remplacer les caractères accentués
-        $text = iconv('UTF-8', 'ASCII//TRANSLIT', $text);
-        
-        // Mettre en minuscule
-        $text = strtolower($text);
-        
-        // Remplacer tout ce qui n'est pas alphanumérique par des tirets
-        $text = preg_replace('/[^a-z0-9]+/', '-', $text);
-        
-        // Enlever les tirets en début et fin
-        $text = trim($text, '-');
-        
-        // S'assurer que le slug est unique
-        $slug = $text;
-        $counter = 1;
-        
-        while ($this->findBySlug($slug)) {
-            $slug = $text . '-' . $counter;
-            $counter++;
-        }
-        
-        return $slug;
-    }
-
-    /**
-     * Basculer le statut actif/inactif d'une campagne
-     * 
-     * @param int $id ID de la campagne
-     * @return bool
-     */
-    public function toggleActive(int $id): bool
-    {
-        $sql = "UPDATE campaigns SET is_active = NOT is_active WHERE id = :id";
-        
-        return $this->db->execute($sql, [':id' => $id]);
-    }
-
-    // ============================================
-    // NOUVELLES MÉTHODES - ATTRIBUTION CLIENTS
-    // ============================================
-
-    /**
-     * Vérifier si un client peut accéder à une campagne
-     * 
-     * @param string $customerNumber Numéro client
-     * @param int $campaignId ID de la campagne
-     * @return bool True si accès autorisé, false sinon
-     * @created 13/11/2025
-     */
-    public function canAccessCampaign(string $customerNumber, int $campaignId): bool
-    {
-        try {
-            // Récupérer la campagne
-            $campaign = $this->findById($campaignId);
-            
-            if (!$campaign) {
-                return false;
-            }
-            
-            // Mode automatique : vérifier dans la DB externe
-            if ($campaign['customer_assignment_mode'] === 'automatic') {
-                $externalDb = ExternalDatabase::getInstance();
-                $country = $campaign['country'];
-                $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
-                
-                $sql = "SELECT COUNT(*) as count FROM {$table} WHERE CLL_NCLIXX = :customer_number";
-                $result = $externalDb->queryOne($sql, [':customer_number' => $customerNumber]);
-                
-                return ($result['count'] ?? 0) > 0;
-            }
-            
-            // Mode manuel : vérifier dans campaign_customers
-            if ($campaign['customer_assignment_mode'] === 'manual') {
-                $sql = "SELECT COUNT(*) as count 
-                        FROM campaign_customers 
-                        WHERE campaign_id = :campaign_id 
-                        AND customer_number = :customer_number";
-                
-                $result = $this->db->queryOne($sql, [
-                    ':campaign_id' => $campaignId,
-                    ':customer_number' => $customerNumber
-                ]);
-                
-                return ($result['count'] ?? 0) > 0;
-            }
-            
-            return false;
-        } catch (\Exception $e) {
-            error_log("Campaign::canAccessCampaign() - Erreur : " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Ajouter des clients à une campagne (mode manuel)
+     * Ajouter des clients à une campagne (mode MANUAL)
      * 
      * @param int $campaignId ID de la campagne
      * @param array $customerNumbers Liste des numéros clients
      * @return int Nombre de clients ajoutés
-     * @created 13/11/2025
      */
     public function addCustomersToCampaign(int $campaignId, array $customerNumbers): int
     {
-        try {
-            $added = 0;
+        // Récupérer le pays de la campagne
+        $campaign = $this->findById($campaignId);
+        if (!$campaign) {
+            return 0;
+        }
+        
+        $country = $campaign['country'];
+        $added = 0;
+        
+        foreach ($customerNumbers as $number) {
+            $number = trim($number);
+            if (empty($number)) {
+                continue;
+            }
             
-            foreach ($customerNumbers as $customerNumber) {
-                // Vérifier si déjà existant
-                $sql = "SELECT COUNT(*) as count 
-                        FROM campaign_customers 
-                        WHERE campaign_id = :campaign_id 
-                        AND customer_number = :customer_number";
-                
-                $result = $this->db->queryOne($sql, [
+            // Vérifier si le client n'existe pas déjà
+            $checkQuery = "SELECT COUNT(*) as count FROM campaign_customers 
+                          WHERE campaign_id = :campaign_id 
+                          AND customer_number = :customer_number 
+                          AND country = :country";
+            
+            try {
+                $result = $this->db->queryOne($checkQuery, [
                     ':campaign_id' => $campaignId,
-                    ':customer_number' => trim($customerNumber)
+                    ':customer_number' => $number,
+                    ':country' => $country
                 ]);
                 
-                if (($result['count'] ?? 0) == 0) {
-                    // Ajouter le client
-                    $insertSql = "INSERT INTO campaign_customers (campaign_id, customer_number, created_at) 
-                                 VALUES (:campaign_id, :customer_number, NOW())";
-                    
-                    if ($this->db->execute($insertSql, [
-                        ':campaign_id' => $campaignId,
-                        ':customer_number' => trim($customerNumber)
-                    ])) {
-                        $added++;
-                    }
+                if ($result['count'] > 0) {
+                    continue; // Client déjà associé
                 }
+                
+                // Ajouter le client
+                $insertQuery = "INSERT INTO campaign_customers 
+                               (campaign_id, customer_number, country, created_at) 
+                               VALUES (:campaign_id, :customer_number, :country, NOW())";
+                
+                if ($this->db->execute($insertQuery, [
+                    ':campaign_id' => $campaignId,
+                    ':customer_number' => $number,
+                    ':country' => $country
+                ])) {
+                    $added++;
+                }
+            } catch (\PDOException $e) {
+                error_log("Erreur ajout client {$number}: " . $e->getMessage());
             }
-            
-            return $added;
-        } catch (\Exception $e) {
-            error_log("Campaign::addCustomersToCampaign() - Erreur : " . $e->getMessage());
-            return 0;
         }
+        
+        return $added;
     }
 
     /**
-     * Supprimer tous les clients d'une campagne
+     * Compter le nombre de clients pour une campagne
      * 
      * @param int $campaignId ID de la campagne
-     * @return bool True si succès
-     * @created 13/11/2025
+     * @return int
      */
-    public function removeAllCustomersFromCampaign(int $campaignId): bool
+    public function countCustomers(int $campaignId): int
     {
+        $query = "SELECT COUNT(*) as count FROM campaign_customers 
+                  WHERE campaign_id = :campaign_id";
+        
         try {
-            $sql = "DELETE FROM campaign_customers WHERE campaign_id = :campaign_id";
-            return $this->db->execute($sql, [':campaign_id' => $campaignId]);
-        } catch (\Exception $e) {
-            error_log("Campaign::removeAllCustomersFromCampaign() - Erreur : " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Récupérer les clients d'une campagne (mode manuel uniquement)
-     * 
-     * @param int $campaignId ID de la campagne
-     * @return array Liste des numéros clients
-     * @created 13/11/2025
-     */
-    public function getCustomersList(int $campaignId): array
-    {
-        try {
-            $sql = "SELECT customer_number FROM campaign_customers 
-                    WHERE campaign_id = :campaign_id 
-                    ORDER BY customer_number ASC";
-            
-            $results = $this->db->query($sql, [':campaign_id' => $campaignId]);
-            
-            return array_column($results, 'customer_number');
-        } catch (\Exception $e) {
-            error_log("Campaign::getCustomersList() - Erreur : " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * Compter le nombre de clients d'une campagne
-     * 
-     * @param int $campaignId ID de la campagne
-     * @return int|string Nombre de clients ou "Tous" si mode automatique
-     * @created 13/11/2025
-     */
-    public function countCustomers(int $campaignId)
-    {
-        try {
-            $campaign = $this->findById($campaignId);
-            
-            if (!$campaign) {
-                return 0;
-            }
-            
-            // Mode automatique : retourner "Tous"
-            if ($campaign['customer_assignment_mode'] === 'automatic') {
-                return 'Tous (' . $campaign['country'] . ')';
-            }
-            
-            // Mode manuel : compter
-            $sql = "SELECT COUNT(*) as count FROM campaign_customers WHERE campaign_id = :campaign_id";
-            $result = $this->db->queryOne($sql, [':campaign_id' => $campaignId]);
-            
+            $result = $this->db->queryOne($query, [':campaign_id' => $campaignId]);
             return (int) ($result['count'] ?? 0);
-        } catch (\Exception $e) {
-            error_log("Campaign::countCustomers() - Erreur : " . $e->getMessage());
+        } catch (\PDOException $e) {
+            error_log("Erreur countCustomers: " . $e->getMessage());
             return 0;
         }
     }
 
     /**
-     * Compter le nombre de promotions d'une campagne
+     * Compter le nombre de promotions pour une campagne
      * 
      * @param int $campaignId ID de la campagne
-     * @return int Nombre de promotions
-     * @created 13/11/2025
+     * @return int
      */
     public function countPromotions(int $campaignId): int
     {
+        $query = "SELECT COUNT(*) as count FROM promotions 
+                  WHERE campaign_id = :campaign_id";
+        
         try {
-            $sql = "SELECT COUNT(*) as count FROM products WHERE campaign_id = :campaign_id";
-            $result = $this->db->queryOne($sql, [':campaign_id' => $campaignId]);
-            
+            $result = $this->db->queryOne($query, [':campaign_id' => $campaignId]);
             return (int) ($result['count'] ?? 0);
-        } catch (\Exception $e) {
-            error_log("Campaign::countPromotions() - Erreur : " . $e->getMessage());
+        } catch (\PDOException $e) {
+            error_log("Erreur countPromotions: " . $e->getMessage());
             return 0;
-        }
-    }
-
-    /**
-     * Récupérer les promotions d'une campagne
-     * 
-     * @param int $campaignId ID de la campagne
-     * @return array Liste des promotions
-     * @created 13/11/2025
-     */
-    public function getPromotions(int $campaignId): array
-    {
-        try {
-            $sql = "SELECT p.*, c.name_fr as category_name 
-                    FROM products p
-                    LEFT JOIN categories c ON p.category_id = c.id
-                    WHERE p.campaign_id = :campaign_id
-                    ORDER BY p.name ASC";
-            
-            return $this->db->query($sql, [':campaign_id' => $campaignId]);
-        } catch (\Exception $e) {
-            error_log("Campaign::getPromotions() - Erreur : " . $e->getMessage());
-            return [];
         }
     }
 }
