@@ -4,6 +4,90 @@ Historique centralisé de toutes les modifications du projet.
 
 ---
 
+
+## [12/11/2025 22:15] - Sprint 5 : FIX Warnings NULL dans import_preview.php
+
+### 🐛 Corrigé
+- **import_preview.php** : Ajout fallbacks pour valeurs NULL
+  - Ligne 176 : `$customer['customer_number']` → `$customer['customer_number'] ?? ''` (valeur input)
+  - Ligne 182 : `$customer['customer_number']` → `$customer['customer_number'] ?? '-'` (affichage)
+  - Ligne 185 : `$customer['company_name']` → `$customer['company_name'] ?? '-'` (affichage)
+  - Résout les warnings "Deprecated: htmlspecialchars(): Passing null to parameter"
+
+### ✅ Tests
+- ✅ Plus de warnings PHP
+- ✅ Affichage "-" si données manquantes
+- ✅ Import fonctionnel
+
+---
+
+
+## [12/11/2025 22:10] - Sprint 5 : FIX Vue import_preview.php
+
+### 🐛 Corrigé
+- **import_preview.php** : Correction clés de données externes (ligne 185-191)
+  - `$customer['name']` → `$customer['company_name']` (cohérence avec getExternalCustomers())
+  - `$customer['representative']` → `-` (non disponible dans DB externe)
+  - `$customer['email']` → `-` (non disponible dans DB externe)
+  - Résout les warnings "Undefined array key 'name'" et "htmlspecialchars(): Passing null"
+
+### ✅ Tests
+- ✅ Page `/admin/customers/import` fonctionne sans warnings
+- ✅ Affichage correct des clients externes
+- ✅ Import fonctionnel
+
+---
+
+
+## [12/11/2025 22:05] - Sprint 5 : FIX Méthodes Database dans Customer.php
+
+### 🐛 Corrigé
+- **Customer.php** : Correction complète des méthodes Database
+  - Remplacé 14 occurrences de `getPDO()` par les méthodes helper appropriées
+  - `getPDO()->prepare()` → `getConnection()->prepare()` (pour LIMIT/OFFSET avec bindValue)
+  - `getPDO()->prepare()` → `queryOne()` ou `execute()` (selon le contexte)
+  - `getPDO()->lastInsertId()` → `lastInsertId()`
+  - `getPDO()->query()->fetch()` → `queryOne()`
+  - `getPDO()->query()->fetchAll()` → `query()`
+  - Cohérence avec Product.php et les autres modèles
+  - Résout l'erreur "Call to undefined method Core\Database::getPDO()"
+
+### ✅ Méthodes corrigées
+- `findAll()` : Utilise `getConnection()` pour LIMIT/OFFSET avec bindValue
+- `findById()` : Utilise `queryOne()`
+- `findByCustomerNumberAndCountry()` : Utilise `queryOne()`
+- `create()` : Utilise `execute()` et `lastInsertId()`
+- `update()` : Utilise `execute()`
+- `delete()` : Utilise `execute()`
+- `getStats()` : Utilise `queryOne()` et `query()`
+- `getRepresentatives()` : Utilise `query()`
+- `count()` : Utilise `queryOne()`
+- Ajout méthodes manquantes : `getCampaigns()`, `getOrders()`, `updateCampaignAssignments()`, `getExistingCustomerNumbers()`, `getExternalCustomers()`
+
+### 📊 Tests à faire
+- ✅ Liste clients : `/admin/customers`
+- ✅ Création client
+- ✅ Modification client
+- ✅ Suppression client
+- ✅ Import depuis DB externe
+
+---
+
+
+## [12/11/2025 22:00] - Sprint 5 : FIX Erreur getAll() dans CustomerController
+
+### 🐛 Corrigé
+- **CustomerController.php** : Correction ligne 50
+  - Remplacé `getAll($filters)` par `findAll($filters)`
+  - Cohérence avec les méthodes du modèle Customer.php
+  - Résout l'erreur "Call to undefined method getAll()"
+
+### ✅ Tests
+- ✅ Page /admin/customers fonctionne correctement
+- ✅ Liste des clients s'affiche sans erreur
+
+---
+
 ## [12/11/2025 21:45] - Sprint 5 : Finalisation intégration module Clients
 
 ### ✅ Modifié
