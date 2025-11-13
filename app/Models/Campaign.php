@@ -4,13 +4,14 @@
  * Gestion des campagnes promotionnelles
  * 
  * @package STM/Models
- * @version 2.2.1
- * @modified 11/11/2025 - CORRECTIF : Utiliser query() au lieu de prepare()
+ * @version 2.3.0
+ * @modified 13/11/2025 - Ajout attribution clients + paramètres commande + compteurs clients/promotions
  */
 
 namespace App\Models;
 
 use Core\Database;
+use Core\ExternalDatabase;
 use PDO;
 
 class Campaign
@@ -75,7 +76,6 @@ class Campaign
 
         $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
 
-        // ✅ CORRECTIF : Utiliser getConnection()->prepare() au lieu de $this->db->prepare()
         $stmt = $this->db->getConnection()->prepare($sql);
         
         foreach ($params as $key => $value) {
@@ -133,7 +133,6 @@ class Campaign
             }
         }
 
-        // ✅ CORRECTIF : Utiliser query() directement (retourne un array)
         $result = $this->db->query($sql, $params);
         
         return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
@@ -197,12 +196,14 @@ class Campaign
                     uuid, slug, name, country, is_active, 
                     start_date, end_date, 
                     title_fr, description_fr, 
-                    title_nl, description_nl
+                    title_nl, description_nl,
+                    customer_assignment_mode, order_type, deferred_delivery, delivery_date
                 ) VALUES (
                     :uuid, :slug, :name, :country, :is_active,
                     :start_date, :end_date,
                     :title_fr, :description_fr,
-                    :title_nl, :description_nl
+                    :title_nl, :description_nl,
+                    :customer_assignment_mode, :order_type, :deferred_delivery, :delivery_date
                 )";
 
         $params = [
@@ -217,6 +218,10 @@ class Campaign
             ':description_fr' => $data['description_fr'] ?? null,
             ':title_nl' => $data['title_nl'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
+            ':customer_assignment_mode' => $data['customer_assignment_mode'] ?? 'automatic',
+            ':order_type' => $data['order_type'] ?? 'W',
+            ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
+            ':delivery_date' => $data['delivery_date'] ?? null,
         ];
 
         if ($this->db->execute($sql, $params)) {
@@ -250,7 +255,11 @@ class Campaign
                     title_fr = :title_fr,
                     description_fr = :description_fr,
                     title_nl = :title_nl,
-                    description_nl = :description_nl";
+                    description_nl = :description_nl,
+                    customer_assignment_mode = :customer_assignment_mode,
+                    order_type = :order_type,
+                    deferred_delivery = :deferred_delivery,
+                    delivery_date = :delivery_date";
         
         if (isset($data['slug'])) {
             $sql .= ", slug = :slug";
@@ -269,6 +278,10 @@ class Campaign
             ':description_fr' => $data['description_fr'] ?? null,
             ':title_nl' => $data['title_nl'] ?? null,
             ':description_nl' => $data['description_nl'] ?? null,
+            ':customer_assignment_mode' => $data['customer_assignment_mode'] ?? 'automatic',
+            ':order_type' => $data['order_type'] ?? 'W',
+            ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
+            ':delivery_date' => $data['delivery_date'] ?? null,
         ];
         
         if (isset($data['slug'])) {
@@ -490,5 +503,223 @@ class Campaign
         $sql = "UPDATE campaigns SET is_active = NOT is_active WHERE id = :id";
         
         return $this->db->execute($sql, [':id' => $id]);
+    }
+
+    // ============================================
+    // NOUVELLES MÉTHODES - ATTRIBUTION CLIENTS
+    // ============================================
+
+    /**
+     * Vérifier si un client peut accéder à une campagne
+     * 
+     * @param string $customerNumber Numéro client
+     * @param int $campaignId ID de la campagne
+     * @return bool True si accès autorisé, false sinon
+     * @created 13/11/2025
+     */
+    public function canAccessCampaign(string $customerNumber, int $campaignId): bool
+    {
+        try {
+            // Récupérer la campagne
+            $campaign = $this->findById($campaignId);
+            
+            if (!$campaign) {
+                return false;
+            }
+            
+            // Mode automatique : vérifier dans la DB externe
+            if ($campaign['customer_assignment_mode'] === 'automatic') {
+                $externalDb = ExternalDatabase::getInstance();
+                $country = $campaign['country'];
+                $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+                
+                $sql = "SELECT COUNT(*) as count FROM {$table} WHERE CLL_NCLIXX = :customer_number";
+                $result = $externalDb->queryOne($sql, [':customer_number' => $customerNumber]);
+                
+                return ($result['count'] ?? 0) > 0;
+            }
+            
+            // Mode manuel : vérifier dans campaign_customers
+            if ($campaign['customer_assignment_mode'] === 'manual') {
+                $sql = "SELECT COUNT(*) as count 
+                        FROM campaign_customers 
+                        WHERE campaign_id = :campaign_id 
+                        AND customer_number = :customer_number";
+                
+                $result = $this->db->queryOne($sql, [
+                    ':campaign_id' => $campaignId,
+                    ':customer_number' => $customerNumber
+                ]);
+                
+                return ($result['count'] ?? 0) > 0;
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            error_log("Campaign::canAccessCampaign() - Erreur : " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Ajouter des clients à une campagne (mode manuel)
+     * 
+     * @param int $campaignId ID de la campagne
+     * @param array $customerNumbers Liste des numéros clients
+     * @return int Nombre de clients ajoutés
+     * @created 13/11/2025
+     */
+    public function addCustomersToCampaign(int $campaignId, array $customerNumbers): int
+    {
+        try {
+            $added = 0;
+            
+            foreach ($customerNumbers as $customerNumber) {
+                // Vérifier si déjà existant
+                $sql = "SELECT COUNT(*) as count 
+                        FROM campaign_customers 
+                        WHERE campaign_id = :campaign_id 
+                        AND customer_number = :customer_number";
+                
+                $result = $this->db->queryOne($sql, [
+                    ':campaign_id' => $campaignId,
+                    ':customer_number' => trim($customerNumber)
+                ]);
+                
+                if (($result['count'] ?? 0) == 0) {
+                    // Ajouter le client
+                    $insertSql = "INSERT INTO campaign_customers (campaign_id, customer_number, created_at) 
+                                 VALUES (:campaign_id, :customer_number, NOW())";
+                    
+                    if ($this->db->execute($insertSql, [
+                        ':campaign_id' => $campaignId,
+                        ':customer_number' => trim($customerNumber)
+                    ])) {
+                        $added++;
+                    }
+                }
+            }
+            
+            return $added;
+        } catch (\Exception $e) {
+            error_log("Campaign::addCustomersToCampaign() - Erreur : " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Supprimer tous les clients d'une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return bool True si succès
+     * @created 13/11/2025
+     */
+    public function removeAllCustomersFromCampaign(int $campaignId): bool
+    {
+        try {
+            $sql = "DELETE FROM campaign_customers WHERE campaign_id = :campaign_id";
+            return $this->db->execute($sql, [':campaign_id' => $campaignId]);
+        } catch (\Exception $e) {
+            error_log("Campaign::removeAllCustomersFromCampaign() - Erreur : " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Récupérer les clients d'une campagne (mode manuel uniquement)
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return array Liste des numéros clients
+     * @created 13/11/2025
+     */
+    public function getCustomersList(int $campaignId): array
+    {
+        try {
+            $sql = "SELECT customer_number FROM campaign_customers 
+                    WHERE campaign_id = :campaign_id 
+                    ORDER BY customer_number ASC";
+            
+            $results = $this->db->query($sql, [':campaign_id' => $campaignId]);
+            
+            return array_column($results, 'customer_number');
+        } catch (\Exception $e) {
+            error_log("Campaign::getCustomersList() - Erreur : " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Compter le nombre de clients d'une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return int|string Nombre de clients ou "Tous" si mode automatique
+     * @created 13/11/2025
+     */
+    public function countCustomers(int $campaignId)
+    {
+        try {
+            $campaign = $this->findById($campaignId);
+            
+            if (!$campaign) {
+                return 0;
+            }
+            
+            // Mode automatique : retourner "Tous"
+            if ($campaign['customer_assignment_mode'] === 'automatic') {
+                return 'Tous (' . $campaign['country'] . ')';
+            }
+            
+            // Mode manuel : compter
+            $sql = "SELECT COUNT(*) as count FROM campaign_customers WHERE campaign_id = :campaign_id";
+            $result = $this->db->queryOne($sql, [':campaign_id' => $campaignId]);
+            
+            return (int) ($result['count'] ?? 0);
+        } catch (\Exception $e) {
+            error_log("Campaign::countCustomers() - Erreur : " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Compter le nombre de promotions d'une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return int Nombre de promotions
+     * @created 13/11/2025
+     */
+    public function countPromotions(int $campaignId): int
+    {
+        try {
+            $sql = "SELECT COUNT(*) as count FROM products WHERE campaign_id = :campaign_id";
+            $result = $this->db->queryOne($sql, [':campaign_id' => $campaignId]);
+            
+            return (int) ($result['count'] ?? 0);
+        } catch (\Exception $e) {
+            error_log("Campaign::countPromotions() - Erreur : " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Récupérer les promotions d'une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return array Liste des promotions
+     * @created 13/11/2025
+     */
+    public function getPromotions(int $campaignId): array
+    {
+        try {
+            $sql = "SELECT p.*, c.name_fr as category_name 
+                    FROM products p
+                    LEFT JOIN categories c ON p.category_id = c.id
+                    WHERE p.campaign_id = :campaign_id
+                    ORDER BY p.name ASC";
+            
+            return $this->db->query($sql, [':campaign_id' => $campaignId]);
+        } catch (\Exception $e) {
+            error_log("Campaign::getPromotions() - Erreur : " . $e->getMessage());
+            return [];
+        }
     }
 }
