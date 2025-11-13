@@ -301,7 +301,6 @@ class Campaign
                     title_nl, description_nl,
                     customer_assignment_mode,
                     order_password, order_type, deferred_delivery, delivery_date,
-                    max_orders_global, max_quantity_per_customer,
                     created_at
                 ) VALUES (
                     :uuid, :slug, :name, :country, :is_active,
@@ -310,7 +309,6 @@ class Campaign
                     :title_nl, :description_nl,
                     :customer_assignment_mode,
                     :order_password, :order_type, :deferred_delivery, :delivery_date,
-                    :max_orders_global, :max_quantity_per_customer,
                     NOW()
                 )";
 
@@ -331,8 +329,6 @@ class Campaign
             ':order_type' => $data['order_type'] ?? 'W',
             ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
             ':delivery_date' => $data['delivery_date'] ?? null,
-            ':max_orders_global' => $data['max_orders_global'] ?? null,
-            ':max_quantity_per_customer' => $data['max_quantity_per_customer'] ?? null,
         ];
 
         try {
@@ -374,8 +370,6 @@ class Campaign
                     order_type = :order_type,
                     deferred_delivery = :deferred_delivery,
                     delivery_date = :delivery_date,
-                    max_orders_global = :max_orders_global,
-                    max_quantity_per_customer = :max_quantity_per_customer,
                     updated_at = NOW()";
         
         if (isset($data['slug'])) {
@@ -400,8 +394,6 @@ class Campaign
             ':order_type' => $data['order_type'] ?? 'W',
             ':deferred_delivery' => $data['deferred_delivery'] ?? 0,
             ':delivery_date' => $data['delivery_date'] ?? null,
-            ':max_orders_global' => $data['max_orders_global'] ?? null,
-            ':max_quantity_per_customer' => $data['max_quantity_per_customer'] ?? null,
         ];
         
         if (isset($data['slug'])) {

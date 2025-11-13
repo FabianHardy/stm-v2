@@ -97,14 +97,12 @@ class CampaignController
             'title_nl' => $_POST['title_nl'] ?? '',
             'description_nl' => $_POST['description_nl'] ?? '',
             
-            // Nouveaux champs Sprint 5
+            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
             'order_password' => $_POST['order_password'] ?? null,
             'order_type' => $_POST['order_type'] ?? 'W',
             'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
             'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
-            'max_orders_global' => !empty($_POST['max_orders_global']) ? (int)$_POST['max_orders_global'] : null,
-            'max_quantity_per_customer' => !empty($_POST['max_quantity_per_customer']) ? (int)$_POST['max_quantity_per_customer'] : null,
         ];
 
         // 3. Valider les données
@@ -246,14 +244,12 @@ class CampaignController
             'title_nl' => $_POST['title_nl'] ?? '',
             'description_nl' => $_POST['description_nl'] ?? '',
             
-            // Nouveaux champs Sprint 5
+            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
             'order_password' => $_POST['order_password'] ?? null,
             'order_type' => $_POST['order_type'] ?? 'W',
             'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
             'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
-            'max_orders_global' => !empty($_POST['max_orders_global']) ? (int)$_POST['max_orders_global'] : null,
-            'max_quantity_per_customer' => !empty($_POST['max_quantity_per_customer']) ? (int)$_POST['max_quantity_per_customer'] : null,
         ];
 
         // 4. Valider les données
