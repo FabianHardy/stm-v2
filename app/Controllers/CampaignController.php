@@ -42,6 +42,16 @@ class CampaignController
         // Récupérer les statistiques
         $stats = $this->campaignModel->getStats();
         
+        // Ajouter statistiques par pays
+        $stats['be'] = $this->campaignModel->countByCountry('BE');
+        $stats['lu'] = $this->campaignModel->countByCountry('LU');
+        
+        // Calcul pagination (variables attendues par la vue)
+        $total = $this->campaignModel->count($filters);
+        $perPage = 20;
+        $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
+        
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/campaigns/index.php';
     }
