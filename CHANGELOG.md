@@ -3,7 +3,76 @@
 Historique centralisé de toutes les modifications du projet.
 
 ---
+# 📝 MISE À JOUR CHANGELOG - Sprint 5
 
+**Copier cette entrée au début du CHANGELOG.md (après le titre)**
+
+---
+
+## [13/11/2025 22:30] - Sprint 5 : Finalisation attribution clients (70%)
+
+### ✅ Créé
+**Vues campagnes modifiées** :
+- `create.php` : Ajout 2 sections (Attribution clients + Paramètres commande)
+  - Radio buttons : Manuel / Dynamique / Protégé
+  - Champs : customer_list, order_password, order_min_amount, order_max_total
+  - JavaScript pour toggle champs selon mode
+- `edit.php` : Mêmes sections avec pré-remplissage
+- `show.php` : Affichage complet attribution + compteurs
+  - Statistiques rapides (Clients, Promotions, Commandes, Montant)
+  - Section détails attribution clients
+  - Section paramètres de commande
+  - URL publique avec bouton copier
+
+**Routes publiques** :
+- `routes.php` : Ajout 3 routes campagnes publiques
+  - `/c/{uuid}` - Page campagne
+  - `/c/{uuid}/login` - Connexion client
+  - `/c/{uuid}/promotions` - Catalogue
+
+**Documentation** :
+- `MODIFICATIONS_CONTROLLERS.md` : Guide détaillé des 9 modifications à faire
+- `README_FICHIERS_MODIFIES.md` : Documentation complète du projet
+- `RESUME_FINAL_SPRINT5.md` : Résumé complet et plan d'action
+
+### 🔧 À modifier
+**Campaign.php (Model)** :
+- Méthode `create()` : Ajouter 5 nouveaux champs dans INSERT
+- Méthode `update()` : Ajouter 5 nouveaux champs dans UPDATE
+
+**CampaignController.php** :
+- Méthode `store()` : Gérer nouveaux champs + nettoyer ancien code
+- Méthode `update()` : Gérer nouveaux champs
+- Méthode `show()` : Ajouter compteurs clients/promotions
+- Méthode `active()` : Ajouter compteurs
+- Méthode `archives()` : Ajouter compteurs
+
+**Note** : Les méthodes `countCustomers()` et `countPromotions()` existent déjà ✅
+
+### 📊 Champs DB (migration déjà faite)
+- `customer_access_type` ENUM('manual', 'dynamic', 'protected')
+- `customer_list` TEXT
+- `order_password` VARCHAR(255)
+- `order_min_amount` DECIMAL(10,2)
+- `order_max_total` DECIMAL(10,2)
+
+### 🎯 Statut
+- **Vues** : 100% terminées (4 fichiers)
+- **Routes** : 100% terminées
+- **Documentation** : 100% terminée
+- **Modifications controllers** : 0% (guide fourni)
+- **Tests** : 0%
+
+**Progression Sprint 5** : 70%
+
+### 📝 Prochaine étape
+1. Upload des 4 fichiers vues + routes
+2. Appliquer les modifications dans Campaign.php (2 modifs)
+3. Appliquer les modifications dans CampaignController.php (7 modifs)
+4. Tests complets
+5. Sprint 5 terminé → Sprint 6 (Commandes publiques)
+
+---
 
 ## [12/11/2025 22:15] - Sprint 5 : FIX Warnings NULL dans import_preview.php
 
