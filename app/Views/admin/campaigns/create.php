@@ -9,7 +9,7 @@
  * - Contenu multilingue (FR/NL)
  * 
  * @created  2025/11/14 02:00
- * @modified 2025/11/14 03:00 - Correction gestion Alpine.js mode manuel
+ * @modified 2025/11/14 04:00 - Ajout title_fr et title_nl manquants
  */
 
 ob_start();
@@ -353,11 +353,25 @@ ob_start();
                     🌐 Contenu multilingue
                 </h2>
                 <p class="mt-1 text-sm text-gray-600">
-                    Description de la campagne en français et néerlandais
+                    Titres et descriptions de la campagne en français et néerlandais
                 </p>
             </div>
             
             <div class="px-6 py-6 space-y-6">
+                <!-- Titre FR -->
+                <div>
+                    <label for="title_fr" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇫🇷 Titre français <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="title_fr" 
+                           name="title_fr" 
+                           required
+                           maxlength="255"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Ex: Promotions du Printemps 2025">
+                </div>
+
                 <!-- Description FR -->
                 <div>
                     <label for="description_fr" class="block text-sm font-medium text-gray-700 mb-2">
@@ -368,6 +382,20 @@ ob_start();
                               rows="4"
                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Décrivez la campagne en français..."></textarea>
+                </div>
+
+                <!-- Titre NL -->
+                <div>
+                    <label for="title_nl" class="block text-sm font-medium text-gray-700 mb-2">
+                        🇳🇱 Titre néerlandais <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="title_nl" 
+                           name="title_nl" 
+                           required
+                           maxlength="255"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Bijv: Lentepromoties 2025">
                 </div>
 
                 <!-- Description NL -->
