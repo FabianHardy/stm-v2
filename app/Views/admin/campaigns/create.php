@@ -1,377 +1,288 @@
 <?php
 /**
- * Vue : Création de campagne
+ * Vue : Création d'une campagne
  * 
- * @package STM/Views/Admin/Campaigns
- * @version 3.0.0
- * @modified 13/11/2025 - Ajout TOUS les champs (type, delivery_date, quotas quantité, attribution)
+ * Formulaire de création d'une nouvelle campagne promotionnelle
+ * 
+ * @modified 08/11/2025 15:40 - Correction action formulaire
  */
 
+// Démarrer la capture du contenu pour le layout
 ob_start();
 ?>
 
-<!-- En-tête -->
+<!-- En-tête de la page -->
 <div class="mb-6">
-    <h2 class="text-2xl font-bold text-gray-900">Créer une nouvelle campagne</h2>
-    <p class="mt-1 text-sm text-gray-500">Définissez les informations de base, les quotas et l'attribution des clients</p>
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Créer une campagne</h1>
+            <p class="mt-2 text-sm text-gray-600">
+                Créez une nouvelle campagne promotionnelle pour la Belgique ou le Luxembourg
+            </p>
+        </div>
+        <a href="/stm/admin/campaigns" 
+           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Retour à la liste
+        </a>
+    </div>
 </div>
 
-<!-- Messages d'erreur -->
+<!-- Messages d'erreur (si présents) -->
 <?php if (!empty($errors)): ?>
-    <div class="mb-6 rounded-md bg-red-50 p-4">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                </svg>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-red-800">Erreurs de validation</h3>
-                <ul class="mt-2 list-disc list-inside text-sm text-red-700">
-                    <?php foreach ($errors as $error): ?>
-                        <li><?= htmlspecialchars($error) ?></li>
+<div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <div class="ml-3">
+            <h3 class="text-sm font-medium text-red-800">
+                Erreurs de validation
+            </h3>
+            <div class="mt-2 text-sm text-red-700">
+                <ul class="list-disc list-inside space-y-1">
+                    <?php foreach ($errors as $field => $error): ?>
+                        <li><?php echo htmlspecialchars($error); ?></li>
                     <?php endforeach; ?>
                 </ul>
             </div>
         </div>
     </div>
+</div>
 <?php endif; ?>
 
-<!-- Formulaire -->
-<form method="POST" action="/stm/admin/campaigns/store" class="space-y-8">
-    <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-
-    <!-- Section 1 : Informations de base -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Informations de base</h3>
+<!-- Formulaire de création -->
+<div class="bg-white shadow rounded-lg">
+    <form method="POST" action="/stm/admin/campaigns" class="divide-y divide-gray-200">
         
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <!-- Nom -->
-            <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">
-                    Nom de la campagne <span class="text-red-500">*</span>
-                </label>
-                <input type="text" name="name" id="name" required
-                       value="<?= htmlspecialchars($old['name'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                       placeholder="Ex: Promo Rentrée 2025">
-                <p class="mt-1 text-xs text-gray-500">Nom interne unique (sera dans l'URL)</p>
-            </div>
-
-            <!-- Pays -->
-            <div>
-                <label for="country" class="block text-sm font-medium text-gray-700">
-                    Pays <span class="text-red-500">*</span>
-                </label>
-                <select name="country" id="country" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                    <option value="">-- Sélectionner --</option>
-                    <option value="BE" <?= ($old['country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                    <option value="LU" <?= ($old['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
-                </select>
-            </div>
-
-            <!-- Type de commande -->
-            <div>
-                <label for="type" class="block text-sm font-medium text-gray-700">
-                    Type de commande <span class="text-red-500">*</span>
-                </label>
-                <select name="type" id="type" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                    <option value="W" <?= ($old['type'] ?? 'W') === 'W' ? 'selected' : '' ?>>📦 Commande normale</option>
-                    <option value="V" <?= ($old['type'] ?? '') === 'V' ? 'selected' : '' ?>>🎯 Prospection à livrer</option>
-                </select>
-                <p class="mt-1 text-xs text-gray-500">W = Normal, V = Prospection</p>
-            </div>
-
-            <!-- Statut -->
-            <div>
-                <label for="is_active" class="block text-sm font-medium text-gray-700">
-                    Statut
-                </label>
-                <select name="is_active" id="is_active"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                    <option value="1" <?= ($old['is_active'] ?? '1') === '1' ? 'selected' : '' ?>>✅ Active</option>
-                    <option value="0" <?= ($old['is_active'] ?? '1') === '0' ? 'selected' : '' ?>>⏸️ Inactive</option>
-                </select>
-            </div>
-
-            <!-- Date début -->
-            <div>
-                <label for="start_date" class="block text-sm font-medium text-gray-700">
-                    Date de début <span class="text-red-500">*</span>
-                </label>
-                <input type="date" name="start_date" id="start_date" required
-                       value="<?= htmlspecialchars($old['start_date'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-            </div>
-
-            <!-- Date fin -->
-            <div>
-                <label for="end_date" class="block text-sm font-medium text-gray-700">
-                    Date de fin <span class="text-red-500">*</span>
-                </label>
-                <input type="date" name="end_date" id="end_date" required
-                       value="<?= htmlspecialchars($old['end_date'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-            </div>
-
-            <!-- Date de livraison (optionnel) -->
-            <div class="sm:col-span-2">
-                <label for="delivery_date" class="block text-sm font-medium text-gray-700">
-                    Date de livraison différée (optionnel)
-                </label>
-                <input type="date" name="delivery_date" id="delivery_date"
-                       value="<?= htmlspecialchars($old['delivery_date'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                <p class="mt-1 text-xs text-gray-500">Si vide, livraison immédiate. Si rempli, livraison différée à cette date.</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Section 2 : Quotas de commande (QUANTITÉS) -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">📦 Quotas de commande (en quantité)</h3>
-        <p class="text-sm text-gray-500 mb-4">Limitez les quantités commandables (en nombre d'unités, pas en €)</p>
+        <!-- Token CSRF -->
+        <input type="hidden" name="_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
         
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <!-- Quota global -->
-            <div>
-                <label for="global_quota" class="block text-sm font-medium text-gray-700">
-                    Quota global (tous clients)
-                </label>
-                <input type="number" name="global_quota" id="global_quota" min="1"
-                       value="<?= htmlspecialchars($old['global_quota'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                       placeholder="Ex: 1000">
-                <p class="mt-1 text-xs text-gray-500">
-                    🌍 Quantité maximale totale commandable (tous clients confondus)<br>
-                    Laissez vide pour illimité
-                </p>
-            </div>
+        <!-- Section : Informations générales -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Informations générales</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Nom interne -->
+                <div class="md:col-span-2">
+                    <label for="name" class="block text-sm font-medium text-gray-700">
+                        Nom interne <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           name="name" 
+                           id="name" 
+                           required
+                           value="<?php echo htmlspecialchars($old['name'] ?? ''); ?>"
+                           placeholder="Ex: PROMO_Q1_2025_BE"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Identifiant unique de la campagne (non visible par les clients)</p>
+                </div>
 
-            <!-- Quota par client -->
-            <div>
-                <label for="quota_per_customer" class="block text-sm font-medium text-gray-700">
-                    Quota par client
-                </label>
-                <input type="number" name="quota_per_customer" id="quota_per_customer" min="1"
-                       value="<?= htmlspecialchars($old['quota_per_customer'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                       placeholder="Ex: 50">
-                <p class="mt-1 text-xs text-gray-500">
-                    👤 Quantité maximale par client<br>
-                    Laissez vide pour illimité
-                </p>
+                <!-- Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700">
+                        Pays <span class="text-red-500">*</span>
+                    </label>
+                    <select name="country" 
+                            id="country" 
+                            required
+                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">Sélectionnez un pays</option>
+                        <option value="BE" <?php echo ($old['country'] ?? '') === 'BE' ? 'selected' : ''; ?>>🇧🇪 Belgique</option>
+                        <option value="LU" <?php echo ($old['country'] ?? '') === 'LU' ? 'selected' : ''; ?>>🇱🇺 Luxembourg</option>
+                    </select>
+                </div>
+
+                <!-- Statut actif -->
+                <div class="flex items-center h-full pt-6">
+                    <div class="flex items-center h-5">
+                        <input type="checkbox" 
+                               name="is_active" 
+                               id="is_active" 
+                               value="1"
+                               <?php echo ($old['is_active'] ?? true) ? 'checked' : ''; ?>
+                               class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="is_active" class="font-medium text-gray-700">Campagne active</label>
+                        <p class="text-gray-500">La campagne sera immédiatement visible et accessible</p>
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <!-- Info badge -->
-        <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div class="flex items-start">
-                <svg class="h-5 w-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+        <!-- Section : Dates -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Période de validité</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Date de début -->
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700">
+                        Date de début <span class="text-red-500">*</span>
+                    </label>
+                    <input type="date" 
+                           name="start_date" 
+                           id="start_date" 
+                           required
+                           value="<?php echo htmlspecialchars($old['start_date'] ?? ''); ?>"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- Date de fin -->
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700">
+                        Date de fin <span class="text-red-500">*</span>
+                    </label>
+                    <input type="date" 
+                           name="end_date" 
+                           id="end_date" 
+                           required
+                           value="<?php echo htmlspecialchars($old['end_date'] ?? ''); ?>"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Section : Contenu en français -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                🇫🇷 Contenu en français
+            </h3>
+            
+            <div class="space-y-6">
+                
+                <!-- Titre FR -->
+                <div>
+                    <label for="title_fr" class="block text-sm font-medium text-gray-700">
+                        Titre de la campagne <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           name="title_fr" 
+                           id="title_fr" 
+                           required
+                           value="<?php echo htmlspecialchars($old['title_fr'] ?? ''); ?>"
+                           placeholder="Ex: Promotions du printemps 2025"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Titre visible par les clients francophones</p>
+                </div>
+
+                <!-- Description FR -->
+                <div>
+                    <label for="description_fr" class="block text-sm font-medium text-gray-700">
+                        Description
+                    </label>
+                    <textarea name="description_fr" 
+                              id="description_fr" 
+                              rows="4"
+                              placeholder="Décrivez la campagne promotionnelle..."
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_fr'] ?? ''); ?></textarea>
+                    <p class="mt-1 text-sm text-gray-500">Description visible par les clients francophones (optionnel)</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Section : Contenu en néerlandais -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                🇳🇱 Contenu en néerlandais
+            </h3>
+            
+            <div class="space-y-6">
+                
+                <!-- Titre NL -->
+                <div>
+                    <label for="title_nl" class="block text-sm font-medium text-gray-700">
+                        Titel van de campagne
+                    </label>
+                    <input type="text" 
+                           name="title_nl" 
+                           id="title_nl"
+                           value="<?php echo htmlspecialchars($old['title_nl'] ?? ''); ?>"
+                           placeholder="Bv: Lentepromoties 2025"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Titre visible par les clients néerlandophones (optionnel)</p>
+                </div>
+
+                <!-- Description NL -->
+                <div>
+                    <label for="description_nl" class="block text-sm font-medium text-gray-700">
+                        Beschrijving
+                    </label>
+                    <textarea name="description_nl" 
+                              id="description_nl" 
+                              rows="4"
+                              placeholder="Beschrijf de promotiecampagne..."
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_nl'] ?? ''); ?></textarea>
+                    <p class="mt-1 text-sm text-gray-500">Description visible par les clients néerlandophones (optionnel)</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="px-4 py-4 sm:px-6 flex items-center justify-end gap-3 bg-gray-50">
+            <a href="/stm/admin/campaigns" 
+               class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Annuler
+            </a>
+            <button type="submit" 
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                <div class="ml-3 text-sm text-blue-700">
-                    <p class="font-medium">💡 Exemple d'utilisation :</p>
-                    <ul class="mt-2 list-disc list-inside space-y-1">
-                        <li><strong>Quota global = 1000</strong> : Maximum 1000 unités commandables au total</li>
-                        <li><strong>Quota par client = 50</strong> : Chaque client peut commander max 50 unités</li>
-                        <li><strong>Les deux vides</strong> : Quantités illimitées</li>
-                    </ul>
-                </div>
-            </div>
+                Créer la campagne
+            </button>
         </div>
-    </div>
 
-    <!-- Section 3 : Attribution des clients -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">👥 Attribution des clients</h3>
-        <p class="text-sm text-gray-500 mb-4">Définissez comment les clients peuvent accéder à cette campagne</p>
-        
-        <div class="space-y-6">
-            <!-- Mode d'attribution -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-3">
-                    Mode d'attribution <span class="text-red-500">*</span>
-                </label>
-                
-                <div class="space-y-3">
-                    <!-- Manuel -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="manual" 
-                               <?= ($old['customer_access_type'] ?? 'manual') === 'manual' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">📝 Manuel (Liste spécifique)</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Liste fixe de numéros clients (un par ligne)
-                            </div>
-                        </div>
-                    </label>
+    </form>
+</div>
 
-                    <!-- Dynamique -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="dynamic"
-                               <?= ($old['customer_access_type'] ?? '') === 'dynamic' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">🔄 Dynamique (Tous les clients)</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Lecture en temps réel depuis la base externe (tous les clients actifs du pays)
-                            </div>
-                        </div>
-                    </label>
-
-                    <!-- Protégé -->
-                    <label class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <input type="radio" name="customer_access_type" value="protected"
-                               <?= ($old['customer_access_type'] ?? '') === 'protected' ? 'checked' : '' ?>
-                               class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 mt-1">
-                        <div class="ml-3 flex-1">
-                            <div class="text-sm font-medium text-gray-900">🔒 Protégé par mot de passe</div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Accès libre avec un mot de passe unique pour tous
-                            </div>
-                        </div>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Liste clients (affichée si Manuel) -->
-            <div id="customer_list_section" style="display: none;">
-                <label for="customer_list" class="block text-sm font-medium text-gray-700">
-                    Liste des numéros clients
-                </label>
-                <textarea name="customer_list" id="customer_list" rows="6"
-                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm font-mono text-xs"
-                          placeholder="123456&#10;654321&#10;789012&#10;..."><?= htmlspecialchars($old['customer_list'] ?? '') ?></textarea>
-                <p class="mt-1 text-xs text-gray-500">
-                    Un numéro client par ligne. Accepte: 123456, 123456-12, E12345-CB, *12345
-                </p>
-            </div>
-
-            <!-- Mot de passe (affiché si Protégé) -->
-            <div id="order_password_section" style="display: none;">
-                <label for="order_password" class="block text-sm font-medium text-gray-700">
-                    Mot de passe de la campagne
-                </label>
-                <input type="text" name="order_password" id="order_password"
-                       value="<?= htmlspecialchars($old['order_password'] ?? '') ?>"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                       placeholder="Ex: PROMO2025">
-                <p class="mt-1 text-xs text-gray-500">
-                    Ce mot de passe sera demandé aux clients pour accéder à la campagne
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Section 4 : Contenu multilingue -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Contenu multilingue</h3>
-        
-        <div class="space-y-6">
-            <!-- Version française -->
-            <div class="border-l-4 border-blue-500 pl-4">
-                <h4 class="text-sm font-medium text-gray-900 mb-3">🇫🇷 Version française</h4>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label for="title_fr" class="block text-sm font-medium text-gray-700">
-                            Titre
-                        </label>
-                        <input type="text" name="title_fr" id="title_fr"
-                               value="<?= htmlspecialchars($old['title_fr'] ?? '') ?>"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                               placeholder="Titre public de la campagne">
-                    </div>
-
-                    <div>
-                        <label for="description_fr" class="block text-sm font-medium text-gray-700">
-                            Description
-                        </label>
-                        <textarea name="description_fr" id="description_fr" rows="4"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                  placeholder="Description publique..."><?= htmlspecialchars($old['description_fr'] ?? '') ?></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Version néerlandaise -->
-            <div class="border-l-4 border-orange-500 pl-4">
-                <h4 class="text-sm font-medium text-gray-900 mb-3">🇳🇱 Version néerlandaise</h4>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label for="title_nl" class="block text-sm font-medium text-gray-700">
-                            Titel
-                        </label>
-                        <input type="text" name="title_nl" id="title_nl"
-                               value="<?= htmlspecialchars($old['title_nl'] ?? '') ?>"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                               placeholder="Publieke titel van de campagne">
-                    </div>
-
-                    <div>
-                        <label for="description_nl" class="block text-sm font-medium text-gray-700">
-                            Beschrijving
-                        </label>
-                        <textarea name="description_nl" id="description_nl" rows="4"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                  placeholder="Publieke beschrijving..."><?= htmlspecialchars($old['description_nl'] ?? '') ?></textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="flex items-center justify-between pt-6 border-t border-gray-200">
-        <a href="/stm/admin/campaigns" 
-           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-            ← Annuler
-        </a>
-        <button type="submit"
-                class="inline-flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
-            Créer la campagne
-        </button>
-    </div>
-</form>
-
-<!-- JavaScript pour toggle des champs selon le mode -->
+<!-- Script pour validation des dates -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const radios = document.querySelectorAll('input[name="customer_access_type"]');
-    const customerListSection = document.getElementById('customer_list_section');
-    const passwordSection = document.getElementById('order_password_section');
+    // Validation : la date de fin doit être après la date de début
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
 
-    function updateSections() {
-        const selectedValue = document.querySelector('input[name="customer_access_type"]:checked').value;
-        
-        // Masquer tous les champs
-        customerListSection.style.display = 'none';
-        passwordSection.style.display = 'none';
-        
-        // Afficher selon le mode
-        if (selectedValue === 'manual') {
-            customerListSection.style.display = 'block';
-        } else if (selectedValue === 'protected') {
-            passwordSection.style.display = 'block';
+    function validateDates() {
+        const startDate = new Date(startDateInput.value);
+        const endDate = new Date(endDateInput.value);
+
+        if (startDate && endDate && endDate < startDate) {
+            endDateInput.setCustomValidity('La date de fin doit être après la date de début');
+        } else {
+            endDateInput.setCustomValidity('');
         }
     }
 
-    radios.forEach(radio => {
-        radio.addEventListener('change', updateSections);
-    });
-
-    // Initialisation au chargement
-    updateSections();
-});
+    startDateInput.addEventListener('change', validateDates);
+    endDateInput.addEventListener('change', validateDates);
 </script>
 
 <?php
+// Capturer le contenu
 $content = ob_get_clean();
+
+// Définir le titre de la page (variable attendue par le layout)
 $title = 'Créer une campagne';
 
+// Script pour la validation des dates
+$pageScripts = "
+<script>
+    // Validation additionnelle côté client si nécessaire
+    console.log('Formulaire de création de campagne chargé');
+</script>
+";
+
+// Inclure le layout du dashboard (celui avec le beau design)
 require __DIR__ . '/../../layouts/admin.php';
+?>
