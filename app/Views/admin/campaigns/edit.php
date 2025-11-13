@@ -4,7 +4,7 @@
  * 
  * Formulaire de modification d'une campagne existante
  * 
- * @modified 08/11/2025 15:40 - Correction action formulaire
+ * @modified 13/11/2025 - Ajout sections Attribution clients + Paramètres commande
  */
 
 // Démarrer la capture du contenu pour le layout
@@ -143,7 +143,7 @@ ob_start();
                            name="start_date" 
                            id="start_date" 
                            required
-                           value="<?php echo htmlspecialchars($old['start_date'] ?? $campaign['start_date']); ?>"
+                           value="<?php echo htmlspecialchars($old['start_date'] ?? date('Y-m-d', strtotime($campaign['start_date']))); ?>"
                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
@@ -156,7 +156,7 @@ ob_start();
                            name="end_date" 
                            id="end_date" 
                            required
-                           value="<?php echo htmlspecialchars($old['end_date'] ?? $campaign['end_date']); ?>"
+                           value="<?php echo htmlspecialchars($old['end_date'] ?? date('Y-m-d', strtotime($campaign['end_date']))); ?>"
                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
@@ -195,7 +195,7 @@ ob_start();
                               id="description_fr" 
                               rows="4"
                               placeholder="Décrivez la campagne promotionnelle..."
-                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_fr'] ?? $campaign['description_fr']); ?></textarea>
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_fr'] ?? $campaign['description_fr'] ?? ''); ?></textarea>
                     <p class="mt-1 text-sm text-gray-500">Description visible par les clients francophones (optionnel)</p>
                 </div>
 
@@ -218,7 +218,7 @@ ob_start();
                     <input type="text" 
                            name="title_nl" 
                            id="title_nl"
-                           value="<?php echo htmlspecialchars($old['title_nl'] ?? $campaign['title_nl']); ?>"
+                           value="<?php echo htmlspecialchars($old['title_nl'] ?? $campaign['title_nl'] ?? ''); ?>"
                            placeholder="Bv: Lentepromoties 2025"
                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                     <p class="mt-1 text-sm text-gray-500">Titre visible par les clients néerlandophones (optionnel)</p>
@@ -233,8 +233,167 @@ ob_start();
                               id="description_nl" 
                               rows="4"
                               placeholder="Beschrijf de promotiecampagne..."
-                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_nl'] ?? $campaign['description_nl']); ?></textarea>
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['description_nl'] ?? $campaign['description_nl'] ?? ''); ?></textarea>
                     <p class="mt-1 text-sm text-gray-500">Description visible par les clients néerlandophones (optionnel)</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- =============================================
+             SECTION : ATTRIBUTION CLIENTS (NOUVEAU)
+             ============================================= -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                👥 Attribution des clients
+            </h3>
+            
+            <div class="space-y-6">
+                
+                <!-- Type d'accès -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        Mode d'attribution <span class="text-red-500">*</span>
+                    </label>
+                    
+                    <div class="space-y-3">
+                        <!-- Option 1: Liste manuelle -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input type="radio" 
+                                       name="customer_access_type" 
+                                       id="access_manual" 
+                                       value="manual"
+                                       <?php echo ($old['customer_access_type'] ?? $campaign['customer_access_type'] ?? 'manual') === 'manual' ? 'checked' : ''; ?>
+                                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                       onclick="toggleCustomerFields('manual')">
+                            </div>
+                            <div class="ml-3">
+                                <label for="access_manual" class="font-medium text-gray-700">
+                                    📝 Liste manuelle
+                                </label>
+                                <p class="text-sm text-gray-500">Spécifier une liste de numéros clients autorisés</p>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Lecture dynamique -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input type="radio" 
+                                       name="customer_access_type" 
+                                       id="access_dynamic" 
+                                       value="dynamic"
+                                       <?php echo ($old['customer_access_type'] ?? $campaign['customer_access_type'] ?? '') === 'dynamic' ? 'checked' : ''; ?>
+                                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                       onclick="toggleCustomerFields('dynamic')">
+                            </div>
+                            <div class="ml-3">
+                                <label for="access_dynamic" class="font-medium text-gray-700">
+                                    🔄 Lecture dynamique (base externe)
+                                </label>
+                                <p class="text-sm text-gray-500">Les clients seront vérifiés en temps réel dans la base trendyblog_sig</p>
+                            </div>
+                        </div>
+
+                        <!-- Option 3: Accès protégé par mot de passe -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input type="radio" 
+                                       name="customer_access_type" 
+                                       id="access_protected" 
+                                       value="protected"
+                                       <?php echo ($old['customer_access_type'] ?? $campaign['customer_access_type'] ?? '') === 'protected' ? 'checked' : ''; ?>
+                                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                       onclick="toggleCustomerFields('protected')">
+                            </div>
+                            <div class="ml-3">
+                                <label for="access_protected" class="font-medium text-gray-700">
+                                    🔒 Accès protégé par mot de passe
+                                </label>
+                                <p class="text-sm text-gray-500">Mot de passe unique pour tous les clients</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Champ : Liste de clients (si manuel) -->
+                <div id="field_customer_list" style="display: none;">
+                    <label for="customer_list" class="block text-sm font-medium text-gray-700">
+                        Liste des numéros clients autorisés
+                    </label>
+                    <textarea name="customer_list" 
+                              id="customer_list" 
+                              rows="6"
+                              placeholder="Entrez les numéros clients (un par ligne ou séparés par virgules)&#10;Exemples :&#10;123456&#10;123456-12&#10;E12345-CB&#10;*12345"
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 font-mono text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"><?php echo htmlspecialchars($old['customer_list'] ?? $campaign['customer_list'] ?? ''); ?></textarea>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Formats acceptés : 123456, 123456-12, E12345-CB, *12345
+                    </p>
+                </div>
+
+                <!-- Champ : Mot de passe (si protégé) -->
+                <div id="field_order_password" style="display: none;">
+                    <label for="order_password" class="block text-sm font-medium text-gray-700">
+                        Mot de passe d'accès
+                    </label>
+                    <input type="text" 
+                           name="order_password" 
+                           id="order_password"
+                           value="<?php echo htmlspecialchars($old['order_password'] ?? $campaign['order_password'] ?? ''); ?>"
+                           placeholder="Ex: PROMO2025"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">
+                        Ce mot de passe sera demandé à tous les clients pour accéder à la campagne
+                    </p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- =============================================
+             SECTION : PARAMÈTRES COMMANDE (NOUVEAU)
+             ============================================= -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                🛒 Paramètres de commande
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Montant minimum -->
+                <div>
+                    <label for="order_min_amount" class="block text-sm font-medium text-gray-700">
+                        Montant minimum de commande (€)
+                    </label>
+                    <input type="number" 
+                           name="order_min_amount" 
+                           id="order_min_amount"
+                           step="0.01"
+                           min="0"
+                           value="<?php echo htmlspecialchars($old['order_min_amount'] ?? $campaign['order_min_amount'] ?? ''); ?>"
+                           placeholder="Ex: 100.00"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">
+                        Laisser vide pour aucun minimum
+                    </p>
+                </div>
+
+                <!-- Montant maximum total -->
+                <div>
+                    <label for="order_max_total" class="block text-sm font-medium text-gray-700">
+                        Montant maximum total campagne (€)
+                    </label>
+                    <input type="number" 
+                           name="order_max_total" 
+                           id="order_max_total"
+                           step="0.01"
+                           min="0"
+                           value="<?php echo htmlspecialchars($old['order_max_total'] ?? $campaign['order_max_total'] ?? ''); ?>"
+                           placeholder="Ex: 50000.00"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">
+                        Plafond global pour toutes les commandes de cette campagne
+                    </p>
                 </div>
 
             </div>
@@ -242,18 +401,20 @@ ob_start();
 
         <!-- Boutons d'action -->
         <div class="px-4 py-4 sm:px-6 flex items-center justify-between bg-gray-50">
-            <form method="POST" action="/stm/admin/campaigns/<?php echo $campaign['id']; ?>/delete" style="display: inline;">
-                <input type="hidden" name="_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                <button type="submit" 
-                        onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette campagne ?')"
-                        class="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    Supprimer
-                </button>
-            </form>
-            
+            <div class="flex items-center gap-3">
+                <!-- Bouton de suppression -->
+                <form method="POST" action="/stm/admin/campaigns/<?php echo $campaign['id']; ?>/delete" style="display: inline;">
+                    <input type="hidden" name="_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                    <button type="submit" 
+                            onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette campagne ?');"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Supprimer
+                    </button>
+                </form>
+            </div>
             <div class="flex items-center gap-3">
                 <a href="/stm/admin/campaigns/<?php echo $campaign['id']; ?>" 
                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -272,7 +433,7 @@ ob_start();
     </form>
 </div>
 
-<!-- Script pour validation des dates -->
+<!-- Scripts -->
 <script>
     // Validation : la date de fin doit être après la date de début
     const startDateInput = document.getElementById('start_date');
@@ -291,6 +452,32 @@ ob_start();
 
     startDateInput.addEventListener('change', validateDates);
     endDateInput.addEventListener('change', validateDates);
+
+    // Gestion affichage champs selon type d'accès
+    function toggleCustomerFields(type) {
+        const customerListField = document.getElementById('field_customer_list');
+        const passwordField = document.getElementById('field_order_password');
+        
+        // Masquer tous les champs
+        customerListField.style.display = 'none';
+        passwordField.style.display = 'none';
+        
+        // Afficher le champ approprié
+        if (type === 'manual') {
+            customerListField.style.display = 'block';
+        } else if (type === 'protected') {
+            passwordField.style.display = 'block';
+        }
+        // Si 'dynamic', aucun champ supplémentaire à afficher
+    }
+
+    // Initialiser l'affichage au chargement de la page
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkedRadio = document.querySelector('input[name="customer_access_type"]:checked');
+        if (checkedRadio) {
+            toggleCustomerFields(checkedRadio.value);
+        }
+    });
 </script>
 
 <?php
@@ -299,6 +486,13 @@ $content = ob_get_clean();
 
 // Définir le titre de la page (variable attendue par le layout)
 $title = 'Modifier la campagne';
+
+// Script pour la validation des dates
+$pageScripts = "
+<script>
+    console.log('Formulaire de modification de campagne chargé avec attribution clients');
+</script>
+";
 
 // Inclure le layout du dashboard (celui avec le beau design)
 require __DIR__ . '/../../layouts/admin.php';

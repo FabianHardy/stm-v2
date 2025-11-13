@@ -439,3 +439,27 @@ $router->post('/admin/customers/{id}/delete', function($id) {
     $controller = new CustomerController();
     $controller->delete((int)$id);
 });
+
+// ============================================
+// ROUTES PUBLIQUES CAMPAGNES (NOUVEAU)
+// ============================================
+
+use App\Controllers\PublicCampaignController;
+
+// Page d'accueil campagne publique (via UUID)
+$router->get('/c/{uuid}', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->show($uuid);
+});
+
+// Formulaire de connexion client (via UUID)
+$router->get('/c/{uuid}/login', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->login($uuid);
+});
+
+// Page catalogue promotions (après connexion)
+$router->get('/c/{uuid}/promotions', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->promotions($uuid);
+});
