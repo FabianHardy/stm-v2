@@ -9,8 +9,8 @@
  * 
  * @package    Config
  * @author     Fabian Hardy
- * @version    1.5.0
- * @modified   08/11/2025 15:30 - Ajout routes active/archives
+ * @version    1.6.0
+ * @modified   13/11/2025 - Correction routes publiques campagnes
  */
 
 // ============================================
@@ -107,7 +107,7 @@ $router->get('/admin/campaigns/create', function() {
     $controller->create();
 });
 
-// 🔥 NOUVEAU - Campagnes actives uniquement
+// Campagnes actives uniquement
 $router->get('/admin/campaigns/active', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -116,7 +116,7 @@ $router->get('/admin/campaigns/active', function() {
     $controller->active();
 });
 
-// 🔥 NOUVEAU - Campagnes archivées
+// Campagnes archivées
 $router->get('/admin/campaigns/archives', function() {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -179,18 +179,8 @@ $router->post('/admin/campaigns/{id}/toggle', function($id) {
     $controller->toggleActive((int)$id);
 });
 
-/**
- * ROUTES CATÉGORIES (CORRIGÉ)
- * À ajouter dans /config/routes.php (après les routes campaigns)
- * 
- * IMPORTANT : Routes sous /admin/products/categories pour correspondre à la sidebar
- * 
- * @created 11/11/2025 10:45
- * @modified 11/11/2025 10:45 - Routes sous /products/ au lieu de direct
- */
-
 // ============================================
-// ROUTES CATÉGORIES (protégées par AuthMiddleware)
+// ROUTES CATÉGORIES
 // Sous-menu de Promotions : /admin/products/categories
 // ============================================
 
@@ -266,18 +256,11 @@ $router->post('/admin/products/categories/{id}/toggle', function($id) {
     $controller->toggleActive((int)$id);
 });
 
-/**
- * Routes : Products
- * 
- * À ajouter dans /stm/config/routes.php
- * 
- * @created 11/11/2025 21:50
- */
-
 // ============================================
-// ROUTES Promotions (CRUD COMPLET)
+// ROUTES PROMOTIONS (CRUD COMPLET)
 // ============================================
 use App\Controllers\ProductController;
+
 // Liste des Promotions
 $router->get('/admin/products', function() {
     $middleware = new AuthMiddleware();
@@ -341,22 +324,9 @@ $router->post('/admin/products/{id}/delete', function($id) {
     $controller->destroy((int)$id);
 });
 
-/**
- * ============================================
- * ROUTES CLIENTS (À AJOUTER DANS routes.php)
- * ============================================
- * 
- * Instructions : Copier ce bloc APRÈS les routes des campagnes
- * et AVANT les routes des catégories (si elles existent)
- * 
- * Position dans le fichier : Ligne ~180 environ
- * (après la dernière route de campagnes)
- */
-
 // ============================================
 // ROUTES CLIENTS (CRUD COMPLET)
 // ============================================
-
 use App\Controllers\CustomerController;
 
 // Liste des clients
@@ -441,9 +411,8 @@ $router->post('/admin/customers/{id}/delete', function($id) {
 });
 
 // ============================================
-// ROUTES PUBLIQUES CAMPAGNES (NOUVEAU)
+// ROUTES PUBLIQUES CAMPAGNES (NOUVEAU - CORRIGÉ)
 // ============================================
-
 use App\Controllers\PublicCampaignController;
 
 // Page d'accueil campagne publique (via UUID)
@@ -452,8 +421,8 @@ $router->get('/c/{uuid}', function($uuid) {
     $controller->show($uuid);
 });
 
-// Formulaire de connexion client (via UUID)
-$router->get('/c/{uuid}/login', function($uuid) {
+// Traiter la connexion client (POST)
+$router->post('/c/{uuid}/login', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->login($uuid);
 });
@@ -462,4 +431,34 @@ $router->get('/c/{uuid}/login', function($uuid) {
 $router->get('/c/{uuid}/promotions', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->promotions($uuid);
+});
+
+// Panier
+$router->get('/c/{uuid}/cart', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->cart($uuid);
+});
+
+// Ajout au panier (AJAX)
+$router->post('/c/{uuid}/cart/add', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->addToCart($uuid);
+});
+
+// Validation de commande
+$router->post('/c/{uuid}/order', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->createOrder($uuid);
+});
+
+// Confirmation de commande
+$router->get('/c/{uuid}/order/{orderId}/confirmation', function($uuid, $orderId) {
+    $controller = new PublicCampaignController();
+    $controller->orderConfirmation($uuid, $orderId);
+});
+
+// Déconnexion client
+$router->get('/c/{uuid}/logout', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->logout($uuid);
 });

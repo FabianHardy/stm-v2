@@ -3,8 +3,8 @@
  * Vue : Détails d'une campagne
  * 
  * @package STM/Views/Admin/Campaigns
- * @version 2.1.0
- * @modified 11/11/2025 - Ajout URL publique avec QR code
+ * @version 2.2.0
+ * @modified 13/11/2025 - Ajout affichage type, livraison, quotas, attribution
  */
 
 $pageTitle = 'Détails de la campagne';
@@ -136,228 +136,277 @@ ob_start();
                                 Copier
                             </button>
                         </div>
-
-                        <div class="mt-3 flex items-center gap-x-4 text-xs text-purple-700">
-                            <div class="flex items-center gap-x-1">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.98 0 13.789" />
-                                </svg>
-                                <span>UUID: <code class="font-mono"><?= htmlspecialchars($campaign['uuid']) ?></code></span>
-                            </div>
-                            <div class="flex items-center gap-x-1">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5l-3.9 19.5m-2.1-19.5l-3.9 19.5" />
-                                </svg>
-                                <span>Slug: <code class="font-mono"><?= htmlspecialchars($campaign['slug']) ?></code></span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Informations générales -->
-        <div class="bg-white shadow-sm rounded-lg">
-            <div class="px-6 py-5 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Informations générales</h3>
-            </div>
-            <div class="px-6 py-5">
-                <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500">Nom de la campagne</dt>
-                        <dd class="mt-1 text-sm text-gray-900"><?= htmlspecialchars($campaign['name']) ?></dd>
-                    </div>
-                    
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500">Pays</dt>
-                        <dd class="mt-1">
-                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium 
-                                <?= $campaign['country'] === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800' ?>">
-                                <?= $campaign['country'] === 'BE' ? 'Belgique' : 'Luxembourg' ?>
+        <!-- Informations de base -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Informations de base</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Pays</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?= $campaign['country'] === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg' ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Statut</dt>
+                    <dd class="mt-1">
+                        <?php if ($campaign['is_active']): ?>
+                            <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                                Active
                             </span>
-                        </dd>
-                    </div>
+                        <?php else: ?>
+                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                                Inactive
+                            </span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Date de début</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?= date('d/m/Y', strtotime($campaign['start_date'])) ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Date de fin</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?= date('d/m/Y', strtotime($campaign['end_date'])) ?>
+                    </dd>
+                </div>
+            </dl>
+        </div>
 
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500">Date de début</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                            <?= date('d/m/Y', strtotime($campaign['start_date'])) ?>
-                        </dd>
-                    </div>
+        <!-- NOUVEAU : Type et Livraison -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">📦 Type et Livraison</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Type de commande</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?php if (($campaign['type'] ?? 'W') === 'V'): ?>
+                            <span class="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
+                                🎯 Prospection à livrer
+                            </span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                                📦 Commande normale
+                            </span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Date de livraison</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?php if (!empty($campaign['delivery_date'])): ?>
+                            📅 Différée au <?= date('d/m/Y', strtotime($campaign['delivery_date'])) ?>
+                        <?php else: ?>
+                            ⚡ Immédiate
+                        <?php endif; ?>
+                    </dd>
+                </div>
+            </dl>
+        </div>
 
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500">Date de fin</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                            <?= date('d/m/Y', strtotime($campaign['end_date'])) ?>
-                        </dd>
-                    </div>
+        <!-- NOUVEAU : Quotas de commande -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">🔢 Quotas de commande (quantités)</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Quota global</dt>
+                    <dd class="mt-1">
+                        <?php if (!empty($campaign['global_quota'])): ?>
+                            <span class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                                🌍 <?= number_format($campaign['global_quota'], 0, ',', ' ') ?> unités max
+                            </span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                                ∞ Illimité
+                            </span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Quota par client</dt>
+                    <dd class="mt-1">
+                        <?php if (!empty($campaign['quota_per_customer'])): ?>
+                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                                👤 <?= number_format($campaign['quota_per_customer'], 0, ',', ' ') ?> unités max
+                            </span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                                ∞ Illimité
+                            </span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+            </dl>
+        </div>
 
-                    <div class="sm:col-span-2">
-                        <dt class="text-sm font-medium text-gray-500">Statut</dt>
-                        <dd class="mt-1">
-                            <?php if ($campaign['is_active']): ?>
-                                <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                                    Active
-                                </span>
-                            <?php else: ?>
-                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                                    Inactive
-                                </span>
-                            <?php endif; ?>
-                        </dd>
-                    </div>
-                </dl>
+        <!-- NOUVEAU : Attribution des clients -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">👥 Attribution des clients</h3>
+            
+            <div class="mb-4">
+                <dt class="text-sm font-medium text-gray-500 mb-2">Mode d'accès</dt>
+                <dd>
+                    <?php 
+                    $accessType = $campaign['customer_access_type'] ?? 'manual';
+                    if ($accessType === 'manual'): ?>
+                        <span class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+                            📝 Liste manuelle
+                        </span>
+                    <?php elseif ($accessType === 'dynamic'): ?>
+                        <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
+                            🔄 Dynamique (tous les clients)
+                        </span>
+                    <?php else: ?>
+                        <span class="inline-flex items-center rounded-full bg-purple-100 px-3 py-1 text-sm font-medium text-purple-800">
+                            🔒 Protégé par mot de passe
+                        </span>
+                    <?php endif; ?>
+                </dd>
             </div>
+
+            <?php if ($accessType === 'manual' && !empty($campaign['customer_list'])): ?>
+                <div class="mt-4">
+                    <dt class="text-sm font-medium text-gray-500 mb-2">Clients autorisés</dt>
+                    <dd>
+                        <?php 
+                        $customerNumbers = array_filter(array_map('trim', explode("\n", $campaign['customer_list'])));
+                        $count = count($customerNumbers);
+                        ?>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="text-sm text-gray-900 mb-2">
+                                <?= $count ?> client<?= $count > 1 ? 's' : '' ?> autorisé<?= $count > 1 ? 's' : '' ?>
+                            </div>
+                            <details>
+                                <summary class="cursor-pointer text-sm text-indigo-600 hover:text-indigo-700">Voir la liste</summary>
+                                <div class="mt-3 max-h-48 overflow-y-auto bg-white rounded border p-3">
+                                    <ul class="space-y-1 font-mono text-xs">
+                                        <?php foreach ($customerNumbers as $number): ?>
+                                            <li class="py-1 border-b border-gray-100 last:border-0">
+                                                <?= htmlspecialchars($number) ?>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            </details>
+                        </div>
+                    </dd>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($accessType === 'protected' && !empty($campaign['order_password'])): ?>
+                <div class="mt-4">
+                    <dt class="text-sm font-medium text-gray-500 mb-2">Mot de passe de la campagne</dt>
+                    <dd class="bg-gray-50 rounded-lg p-4">
+                        <code class="text-sm text-gray-900 font-mono">
+                            <?= htmlspecialchars($campaign['order_password']) ?>
+                        </code>
+                    </dd>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($accessType === 'dynamic'): ?>
+                <div class="mt-4 bg-blue-50 rounded-lg p-4">
+                    <p class="text-sm text-blue-700">
+                        ℹ️ Les clients sont lus en temps réel depuis la base de données externe (<?= $campaign['country'] ?>_CLL)
+                    </p>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Contenu multilingue -->
-        <?php if (!empty($campaign['title_fr']) || !empty($campaign['title_nl'])): ?>
-        <div class="bg-white shadow-sm rounded-lg">
-            <div class="px-6 py-5 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Contenu</h3>
-            </div>
-            <div class="px-6 py-5 space-y-6">
-                
-                <?php if (!empty($campaign['title_fr']) || !empty($campaign['description_fr'])): ?>
-                <div>
-                    <h4 class="text-sm font-medium text-gray-900 mb-2 flex items-center gap-x-2">
-                        <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">
-                            FR
-                        </span>
-                        Français
-                    </h4>
-                    <?php if (!empty($campaign['title_fr'])): ?>
-                        <div class="mb-2">
-                            <dt class="text-xs font-medium text-gray-500">Titre</dt>
-                            <dd class="mt-1 text-sm text-gray-900"><?= htmlspecialchars($campaign['title_fr']) ?></dd>
-                        </div>
-                    <?php endif; ?>
-                    <?php if (!empty($campaign['description_fr'])): ?>
-                        <div>
-                            <dt class="text-xs font-medium text-gray-500">Description</dt>
-                            <dd class="mt-1 text-sm text-gray-900"><?= nl2br(htmlspecialchars($campaign['description_fr'])) ?></dd>
-                        </div>
-                    <?php endif; ?>
-                </div>
+        <?php if (!empty($campaign['title_fr']) || !empty($campaign['description_fr']) || !empty($campaign['title_nl']) || !empty($campaign['description_nl'])): ?>
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Contenu multilingue</h3>
+            
+            <?php if (!empty($campaign['title_fr']) || !empty($campaign['description_fr'])): ?>
+            <div class="mb-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">🇫🇷 Version française</h4>
+                <?php if (!empty($campaign['title_fr'])): ?>
+                    <p class="text-base font-semibold text-gray-900 mb-1">
+                        <?= htmlspecialchars($campaign['title_fr']) ?>
+                    </p>
                 <?php endif; ?>
-
-                <?php if (!empty($campaign['title_nl']) || !empty($campaign['description_nl'])): ?>
-                <div>
-                    <h4 class="text-sm font-medium text-gray-900 mb-2 flex items-center gap-x-2">
-                        <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-800">
-                            NL
-                        </span>
-                        Néerlandais
-                    </h4>
-                    <?php if (!empty($campaign['title_nl'])): ?>
-                        <div class="mb-2">
-                            <dt class="text-xs font-medium text-gray-500">Titre</dt>
-                            <dd class="mt-1 text-sm text-gray-900"><?= htmlspecialchars($campaign['title_nl']) ?></dd>
-                        </div>
-                    <?php endif; ?>
-                    <?php if (!empty($campaign['description_nl'])): ?>
-                        <div>
-                            <dt class="text-xs font-medium text-gray-500">Description</dt>
-                            <dd class="mt-1 text-sm text-gray-900"><?= nl2br(htmlspecialchars($campaign['description_nl'])) ?></dd>
-                        </div>
-                    <?php endif; ?>
-                </div>
+                <?php if (!empty($campaign['description_fr'])): ?>
+                    <p class="text-sm text-gray-600">
+                        <?= nl2br(htmlspecialchars($campaign['description_fr'])) ?>
+                    </p>
                 <?php endif; ?>
-
             </div>
+            <?php endif; ?>
+
+            <?php if (!empty($campaign['title_nl']) || !empty($campaign['description_nl'])): ?>
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">🇳🇱 Version néerlandaise</h4>
+                <?php if (!empty($campaign['title_nl'])): ?>
+                    <p class="text-base font-semibold text-gray-900 mb-1">
+                        <?= htmlspecialchars($campaign['title_nl']) ?>
+                    </p>
+                <?php endif; ?>
+                <?php if (!empty($campaign['description_nl'])): ?>
+                    <p class="text-sm text-gray-600">
+                        <?= nl2br(htmlspecialchars($campaign['description_nl'])) ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
     </div>
 
-    <!-- Sidebar -->
+    <!-- Colonne latérale -->
     <div class="space-y-6">
         
-        <!-- Métadonnées -->
-        <div class="bg-white shadow-sm rounded-lg">
-            <div class="px-6 py-5 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Métadonnées</h3>
-            </div>
-            <div class="px-6 py-5">
-                <dl class="space-y-4">
-                    <div>
-                        <dt class="text-xs font-medium text-gray-500">ID</dt>
-                        <dd class="mt-1 text-sm text-gray-900">#<?= $campaign['id'] ?></dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs font-medium text-gray-500">Créée le</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                            <?= date('d/m/Y à H:i', strtotime($campaign['created_at'])) ?>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs font-medium text-gray-500">Dernière modification</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                            <?= date('d/m/Y à H:i', strtotime($campaign['updated_at'])) ?>
-                        </dd>
-                    </div>
-                </dl>
-            </div>
-        </div>
-
-        <!-- Actions rapides -->
-        <div class="bg-white shadow-sm rounded-lg">
-            <div class="px-6 py-5 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Actions rapides</h3>
-            </div>
-            <div class="px-6 py-5 space-y-2">
-                <a href="#" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">
-                    <div class="flex items-center gap-x-2">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                        </svg>
-                        Gérer les produits
-                    </div>
-                </a>
-                <a href="#" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">
-                    <div class="flex items-center gap-x-2">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                        </svg>
-                        Gérer les clients
-                    </div>
-                </a>
-                <a href="#" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">
-                    <div class="flex items-center gap-x-2">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                        </svg>
-                        Voir les statistiques
-                    </div>
-                </a>
-            </div>
+        <!-- Informations système -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Informations système</h3>
+            <dl class="space-y-3">
+                <div>
+                    <dt class="text-xs font-medium text-gray-500 uppercase">UUID</dt>
+                    <dd class="mt-1 text-sm text-gray-900 font-mono break-all">
+                        <?= htmlspecialchars($campaign['uuid']) ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-gray-500 uppercase">Créée le</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?= date('d/m/Y à H:i', strtotime($campaign['created_at'])) ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-gray-500 uppercase">Modifiée le</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        <?= date('d/m/Y à H:i', strtotime($campaign['updated_at'])) ?>
+                    </dd>
+                </div>
+            </dl>
         </div>
 
     </div>
+
 </div>
 
-<!-- Script copie URL -->
 <script>
 function copyToClipboard(text, button) {
-    navigator.clipboard.writeText(text).then(() => {
-        // Feedback visuel
-        const originalHTML = button.innerHTML;
-        button.innerHTML = '<svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Copié !';
-        button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-        button.classList.add('bg-green-600');
-        
-        setTimeout(() => {
-            button.innerHTML = originalHTML;
-            button.classList.remove('bg-green-600');
-            button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+    navigator.clipboard.writeText(text).then(function() {
+        const originalText = button.innerHTML;
+        button.innerHTML = '<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Copié !';
+        setTimeout(function() {
+            button.innerHTML = originalText;
         }, 2000);
-    }).catch(err => {
-        alert('Erreur lors de la copie : ' + err);
     });
 }
 </script>
 
 <?php
 $content = ob_get_clean();
+$title = 'Détails de la campagne - ' . $campaign['name'];
 require __DIR__ . '/../../layouts/admin.php';
 ?>

@@ -3,9 +3,100 @@
 Historique centralisé de toutes les modifications du projet.
 
 ---
-# 📝 MISE À JOUR CHANGELOG - Sprint 5
+## [13/11/2025 23:45] - Sprint 5 : Vues campagnes COMPLÈTES (80%)
 
-**Copier cette entrée au début du CHANGELOG.md (après le titre)**
+### ✅ Créé
+**Vues campagnes finalisées** (4 fichiers) :
+- `create.php` (20 KB) : Formulaire création complet
+  - Section 1 : Infos base (name, country, **type W/V**, dates, **delivery_date**)
+  - Section 2 : **Quotas quantité** (global_quota, quota_per_customer)
+  - Section 3 : Attribution clients (customer_access_type, customer_list, order_password)
+  - Section 4 : Contenu multilingue (FR/NL)
+  - JavaScript toggle champs selon mode attribution
+  
+- `edit.php` (21 KB) : Formulaire modification avec pré-remplissage
+  - Mêmes 4 sections que create.php
+  - Pré-remplissage des valeurs existantes
+  - Method PUT
+  
+- `show.php` (21 KB) : Page détails campagne complète
+  - 4 cartes statistiques (Clients, Promotions, Commandes, Montant)
+  - Section Type + Livraison (Normal/Prospection, Immédiate/Différée)
+  - Section Quotas avec badges colorés (Global 🌍, Par client 👤, Illimité ∞)
+  - Section Attribution détaillée (mode + liste clients ou mot de passe)
+  - Contenu multilingue
+  - URL publique + Actions rapides
+  
+- `routes.php` (3.2 KB) : 8 routes publiques campagnes
+  - GET  `/c/{uuid}` - Page campagne
+  - POST `/c/{uuid}/login` - Connexion client
+  - GET  `/c/{uuid}/promotions` - Catalogue (authentifié)
+  - GET  `/c/{uuid}/cart` - Panier
+  - POST `/c/{uuid}/cart/add` - Ajout panier (AJAX)
+  - POST `/c/{uuid}/order` - Valider commande
+  - GET  `/c/{uuid}/order/{orderId}/confirmation` - Confirmation
+  - GET  `/c/{uuid}/logout` - Déconnexion
+
+**Documentation** :
+- `GUIDE_COMPLET_SPRINT5.md` (14 KB) : Guide complet avec code prêt à copier
+
+### 📊 Champs ajoutés à table campaigns (8 au total)
+
+**Type & Livraison** :
+- `type` ENUM('V', 'W') DEFAULT 'W' - Type commande (V=Prospection, W=Normal)
+- `delivery_date` DATETIME NULL - Date livraison différée (NULL=immédiate)
+
+**Quotas en QUANTITÉ** (pas en €) :
+- `global_quota` INT UNSIGNED NULL - Quota total en unités (tous clients)
+- `quota_per_customer` INT UNSIGNED NULL - Quota max par client en unités
+
+**Attribution clients** :
+- `customer_access_type` ENUM('manual', 'dynamic', 'protected') DEFAULT 'manual'
+- `customer_list` TEXT NULL - Liste numéros clients (si manuel)
+- `order_password` VARCHAR(255) NULL - Mot de passe (si protégé)
+
+### 🔧 À faire (backend)
+
+**Campaign.php** (Model) - 2 méthodes :
+- `create()` : Ajouter les 8 nouveaux champs dans INSERT
+- `update()` : Ajouter les 8 nouveaux champs dans UPDATE
+
+**CampaignController.php** - 3 méthodes :
+- `store()` : Récupérer et valider les 8 nouveaux champs
+- `update()` : Récupérer et valider les 8 nouveaux champs
+- `show()` : Passer $stats aux vues (countCustomers, countPromotions)
+
+**Migration SQL** :
+- Vérifier que les 8 colonnes existent dans la table `campaigns`
+
+### 🧪 Tests à faire
+1. Création campagne normale (type W, livraison immédiate)
+2. Création campagne prospection (type V, livraison différée)
+3. Test quotas quantité (global + par client)
+4. Test mode manuel (liste clients)
+5. Test mode dynamique (tous clients du pays)
+6. Test mode protégé (mot de passe)
+7. Modification campagne (changement type, quotas, mode)
+8. Affichage détails (badges quotas, section attribution)
+
+### 🎯 Statut Sprint 5
+- **Vues** : 100% ✅ (4 fichiers finalisés)
+- **Routes** : 100% ✅ (8 routes définies)
+- **Documentation** : 100% ✅
+- **Backend** : 0% ⬜ (Campaign.php + CampaignController.php à modifier)
+- **Tests** : 0% ⬜
+
+**Progression Sprint 5** : 80%  
+**Progression projet** : 62%
+
+### 📝 Notes importantes
+- Les quotas sont en **QUANTITÉ** (unités), pas en montant (€)
+- Les champs `order_min_amount` et `order_max_total` ont été **supprimés** (n'étaient pas demandés)
+- Tous les champs sont **optionnels** sauf name, country, type, dates, customer_access_type
+- Mode dynamique = lecture temps réel depuis DB externe (BE_CLL ou LU_CLL)
+- Le design sera affiné plus tard, focus sur le fonctionnel d'abord
+
+---
 
 ---
 

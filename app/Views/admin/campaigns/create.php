@@ -4,7 +4,7 @@
  * 
  * Formulaire de création d'une nouvelle campagne promotionnelle
  * 
- * @modified 08/11/2025 15:40 - Correction action formulaire
+ * @modified 13/11/2025 - Ajout type, livraison, quotas, attribution clients
  */
 
 // Démarrer la capture du contenu pour le layout
@@ -152,6 +152,169 @@ ob_start();
             </div>
         </div>
 
+        <!-- NOUVEAU : Section Type et livraison -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">📦 Type et livraison</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Type de commande -->
+                <div>
+                    <label for="type" class="block text-sm font-medium text-gray-700">
+                        Type de commande <span class="text-red-500">*</span>
+                    </label>
+                    <select name="type" 
+                            id="type" 
+                            required
+                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="W" <?php echo ($old['type'] ?? 'W') === 'W' ? 'selected' : ''; ?>>Commande normale</option>
+                        <option value="V" <?php echo ($old['type'] ?? '') === 'V' ? 'selected' : ''; ?>>Prospection à livrer</option>
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">Type W = Normal, V = Prospection</p>
+                </div>
+
+                <!-- Date de livraison différée -->
+                <div>
+                    <label for="delivery_date" class="block text-sm font-medium text-gray-700">
+                        Date de livraison différée
+                    </label>
+                    <input type="date" 
+                           name="delivery_date" 
+                           id="delivery_date"
+                           value="<?php echo htmlspecialchars($old['delivery_date'] ?? ''); ?>"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Si vide = livraison immédiate</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- NOUVEAU : Section Quotas de commande -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">🔢 Quotas de commande (quantités)</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Quota global -->
+                <div>
+                    <label for="global_quota" class="block text-sm font-medium text-gray-700">
+                        Quota global (tous clients)
+                    </label>
+                    <input type="number" 
+                           name="global_quota" 
+                           id="global_quota" 
+                           min="1"
+                           value="<?php echo htmlspecialchars($old['global_quota'] ?? ''); ?>"
+                           placeholder="Ex: 1000"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Quantité max totale (unités). Vide = illimité</p>
+                </div>
+
+                <!-- Quota par client -->
+                <div>
+                    <label for="quota_per_customer" class="block text-sm font-medium text-gray-700">
+                        Quota par client
+                    </label>
+                    <input type="number" 
+                           name="quota_per_customer" 
+                           id="quota_per_customer" 
+                           min="1"
+                           value="<?php echo htmlspecialchars($old['quota_per_customer'] ?? ''); ?>"
+                           placeholder="Ex: 50"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Quantité max par client (unités). Vide = illimité</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- NOUVEAU : Section Attribution des clients -->
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">👥 Attribution des clients</h3>
+            
+            <div class="space-y-6">
+                
+                <!-- Mode d'attribution -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        Mode d'attribution <span class="text-red-500">*</span>
+                    </label>
+                    
+                    <div class="space-y-3">
+                        <!-- Manuel -->
+                        <div class="flex items-center">
+                            <input type="radio" 
+                                   name="customer_access_type" 
+                                   id="access_manual" 
+                                   value="manual" 
+                                   <?php echo ($old['customer_access_type'] ?? 'manual') === 'manual' ? 'checked' : ''; ?>
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                            <label for="access_manual" class="ml-3">
+                                <span class="block text-sm font-medium text-gray-700">📝 Liste manuelle</span>
+                                <span class="block text-sm text-gray-500">Liste fixe de numéros clients</span>
+                            </label>
+                        </div>
+
+                        <!-- Dynamique -->
+                        <div class="flex items-center">
+                            <input type="radio" 
+                                   name="customer_access_type" 
+                                   id="access_dynamic" 
+                                   value="dynamic"
+                                   <?php echo ($old['customer_access_type'] ?? '') === 'dynamic' ? 'checked' : ''; ?>
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                            <label for="access_dynamic" class="ml-3">
+                                <span class="block text-sm font-medium text-gray-700">🔄 Dynamique (tous les clients)</span>
+                                <span class="block text-sm text-gray-500">Lecture temps réel depuis base externe</span>
+                            </label>
+                        </div>
+
+                        <!-- Protégé -->
+                        <div class="flex items-center">
+                            <input type="radio" 
+                                   name="customer_access_type" 
+                                   id="access_protected" 
+                                   value="protected"
+                                   <?php echo ($old['customer_access_type'] ?? '') === 'protected' ? 'checked' : ''; ?>
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                            <label for="access_protected" class="ml-3">
+                                <span class="block text-sm font-medium text-gray-700">🔒 Protégé par mot de passe</span>
+                                <span class="block text-sm text-gray-500">Accès libre avec mot de passe unique</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste clients (affiché si Manuel) -->
+                <div id="customer_list_section" style="display: none;">
+                    <label for="customer_list" class="block text-sm font-medium text-gray-700">
+                        Liste des numéros clients
+                    </label>
+                    <textarea name="customer_list" 
+                              id="customer_list" 
+                              rows="6"
+                              placeholder="123456&#10;654321&#10;789012"
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"><?php echo htmlspecialchars($old['customer_list'] ?? ''); ?></textarea>
+                    <p class="mt-1 text-sm text-gray-500">Un numéro par ligne. Formats acceptés: 123456, 123456-12, E12345-CB, *12345</p>
+                </div>
+
+                <!-- Mot de passe (affiché si Protégé) -->
+                <div id="order_password_section" style="display: none;">
+                    <label for="order_password" class="block text-sm font-medium text-gray-700">
+                        Mot de passe de la campagne
+                    </label>
+                    <input type="text" 
+                           name="order_password" 
+                           id="order_password"
+                           value="<?php echo htmlspecialchars($old['order_password'] ?? ''); ?>"
+                           placeholder="Ex: PROMO2025"
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Mot de passe demandé aux clients pour accéder</p>
+                </div>
+
+            </div>
+        </div>
+
         <!-- Section : Contenu en français -->
         <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
@@ -247,7 +410,7 @@ ob_start();
     </form>
 </div>
 
-<!-- Script pour validation des dates -->
+<!-- Script pour validation des dates et toggle attribution -->
 <script>
     // Validation : la date de fin doit être après la date de début
     const startDateInput = document.getElementById('start_date');
@@ -266,6 +429,31 @@ ob_start();
 
     startDateInput.addEventListener('change', validateDates);
     endDateInput.addEventListener('change', validateDates);
+
+    // Toggle affichage champs selon mode attribution
+    const radios = document.querySelectorAll('input[name="customer_access_type"]');
+    const customerListSection = document.getElementById('customer_list_section');
+    const passwordSection = document.getElementById('order_password_section');
+
+    function updateSections() {
+        const selectedValue = document.querySelector('input[name="customer_access_type"]:checked').value;
+        
+        customerListSection.style.display = 'none';
+        passwordSection.style.display = 'none';
+        
+        if (selectedValue === 'manual') {
+            customerListSection.style.display = 'block';
+        } else if (selectedValue === 'protected') {
+            passwordSection.style.display = 'block';
+        }
+    }
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', updateSections);
+    });
+
+    // Initialisation
+    updateSections();
 </script>
 
 <?php
