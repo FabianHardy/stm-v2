@@ -130,7 +130,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     </div>
                     <?php endif; ?>
 
-                    <form method="POST" action="/stm/campaign/<?= htmlspecialchars($campaign['uuid']) ?>/identify" class="space-y-6">
+                    <form method="POST" action="/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/identify" class="space-y-6">
                         
                         <!-- Token CSRF -->
                         <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
