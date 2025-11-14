@@ -1,13 +1,11 @@
 <?php
 /**
- * Contrôleur des campagnes
+ * CampaignController
  * 
- * Gère le CRUD complet des campagnes promotionnelles.
+ * Contrôleur pour la gestion des campagnes promotionnelles
  * 
- * @package STM
- * @version 2.1.0
- * @created 07/11/2025
- * @modified 14/11/2025 - Ajout enrichissement statistiques dans index() et show()
+ * @created  2025/11/07 10:00
+ * @modified 2025/11/14 01:00 - Sprint 5 : Ajout gestion nouveaux champs (customer_assignment_mode, order_password, order_type, deferred_delivery, delivery_date, quotas) + compteurs clients/promotions
  */
 
 namespace App\Controllers;
@@ -25,11 +23,9 @@ class CampaignController
     }
 
     /**
-     * Afficher la liste de toutes les campagnes avec filtres et statistiques enrichies
+     * Afficher la liste de toutes les campagnes avec filtres
      * 
      * @return void
-     * @created 07/11/2025
-     * @modified 14/11/2025 - Ajout statistiques clients et promotions pour chaque campagne
      */
     public function index(): void
     {
@@ -50,8 +46,18 @@ class CampaignController
         }
         unset($campaign); // Libérer la référence
         
-        // Récupérer les statistiques globales
+        // Récupérer les statistiques
         $stats = $this->campaignModel->getStats();
+        
+        // Ajouter statistiques par pays
+        $stats['be'] = $this->campaignModel->countByCountry('BE');
+        $stats['lu'] = $this->campaignModel->countByCountry('LU');
+        
+        // Calcul pagination (variables attendues par la vue)
+        $total = $this->campaignModel->count($filters);
+        $perPage = 20;
+        $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
         
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/campaigns/index.php';
@@ -73,79 +79,77 @@ class CampaignController
     }
 
     /**
-     * Enregistrer une nouvelle campagne
+     * Enregistrer une nouvelle campagne (POST)
      * 
      * @return void
      */
     public function store(): void
     {
-        // Vérifier le token CSRF
+        // 1. Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/campaigns/create');
             exit;
         }
 
-        // Récupérer les données du formulaire
+        // 2. Récupérer les données du formulaire
         $data = [
             'name' => $_POST['name'] ?? '',
             'country' => $_POST['country'] ?? '',
             'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'start_date' => $_POST['start_date'] ?? '',
-            'end_date' => $_POST['end_date'] ?? '',
+            'start_date' => !empty($_POST['start_date']) ? $_POST['start_date'] . ' 00:01:00' : '',
+            'end_date' => !empty($_POST['end_date']) ? $_POST['end_date'] . ' 23:59:00' : '',
             'title_fr' => $_POST['title_fr'] ?? '',
             'description_fr' => $_POST['description_fr'] ?? '',
             'title_nl' => $_POST['title_nl'] ?? '',
             'description_nl' => $_POST['description_nl'] ?? '',
+            
+            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
             'order_password' => $_POST['order_password'] ?? null,
             'order_type' => $_POST['order_type'] ?? 'W',
             'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
-            'delivery_date' => $_POST['delivery_date'] ?? null,
+            'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
         ];
 
-        // Valider les données
+        // 3. Valider les données
         $errors = $this->campaignModel->validate($data);
         
         if (!empty($errors)) {
-            // Erreurs de validation
             Session::setFlash('errors', $errors);
             Session::setFlash('old', $data);
             header('Location: /stm/admin/campaigns/create');
             exit;
         }
 
-        // Créer la campagne
+        // 4. Créer la campagne
         try {
             $campaignId = $this->campaignModel->create($data);
             
             if ($campaignId) {
-                // Si mode MANUAL et qu'il y a une liste de clients
+                // Si mode MANUAL, gérer la liste de clients
                 if ($data['customer_assignment_mode'] === 'manual' && !empty($_POST['customer_list'])) {
-                    $customerNumbers = array_filter(
-                        array_map('trim', explode("\n", $_POST['customer_list'])),
-                        fn($num) => !empty($num)
-                    );
+                    $customerList = $_POST['customer_list'];
+                    $customerNumbers = explode("\n", $customerList);
+                    $customerNumbers = array_map('trim', $customerNumbers);
+                    $customerNumbers = array_filter($customerNumbers); // Supprimer les lignes vides
                     
                     if (!empty($customerNumbers)) {
-                        $addedCount = $this->campaignModel->addCustomersToCampaign($campaignId, $customerNumbers);
-                        Session::setFlash('success', "Campagne créée avec succès. {$addedCount} client(s) ajouté(s).");
-                    } else {
-                        Session::setFlash('success', 'Campagne créée avec succès');
+                        $added = $this->campaignModel->addCustomersToCampaign($campaignId, $customerNumbers);
+                        Session::setFlash('info', "{$added} client(s) ajouté(s) à la campagne");
                     }
-                } else {
-                    Session::setFlash('success', 'Campagne créée avec succès');
                 }
                 
+                Session::setFlash('success', 'Campagne créée avec succès');
                 header('Location: /stm/admin/campaigns/' . $campaignId);
             } else {
-                Session::setFlash('error', 'Erreur lors de la création');
+                Session::setFlash('error', 'Erreur lors de la création de la campagne');
                 Session::setFlash('old', $data);
                 header('Location: /stm/admin/campaigns/create');
             }
         } catch (\Exception $e) {
             error_log("Erreur création campagne: " . $e->getMessage());
-            Session::setFlash('error', 'Erreur lors de la création');
+            Session::setFlash('error', 'Erreur lors de la création de la campagne');
             Session::setFlash('old', $data);
             header('Location: /stm/admin/campaigns/create');
         }
@@ -154,15 +158,13 @@ class CampaignController
     }
 
     /**
-     * Afficher les détails d'une campagne avec statistiques complètes
+     * Afficher les détails d'une campagne
      * 
      * @param int $id ID de la campagne
      * @return void
-     * @modified 14/11/2025 - Ajout $customersWithOrders
      */
     public function show(int $id): void
     {
-        // Récupérer la campagne
         $campaign = $this->campaignModel->findById($id);
         
         if (!$campaign) {
@@ -170,27 +172,30 @@ class CampaignController
             header('Location: /stm/admin/campaigns');
             exit;
         }
-
-        // Statistiques
+        
+        // Récupérer les compteurs pour les statistiques
         $customerCount = $this->campaignModel->countCustomers($id);
         $promotionCount = $this->campaignModel->countPromotions($id);
         
         // 🆕 Ajouter le nombre de clients ayant commandé
         $customersWithOrders = $this->campaignModel->countCustomersWithOrders($id);
         
+        // TODO: Ajouter compteurs commandes et montant total quand module Commandes sera prêt
+        $orderCount = 0;
+        $totalAmount = 0;
+        
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/campaigns/show.php';
     }
 
     /**
-     * Afficher le formulaire d'édition
+     * Afficher le formulaire de modification
      * 
      * @param int $id ID de la campagne
      * @return void
      */
     public function edit(int $id): void
     {
-        // Récupérer la campagne
         $campaign = $this->campaignModel->findById($id);
         
         if (!$campaign) {
@@ -198,30 +203,30 @@ class CampaignController
             header('Location: /stm/admin/campaigns');
             exit;
         }
-
-        // Si mode manual, récupérer la liste des clients
-        if ($campaign['customer_assignment_mode'] === 'manual') {
-            $customerNumbers = $this->campaignModel->getCustomerNumbers($id);
-            $campaign['customer_list'] = implode("\n", $customerNumbers);
-        }
-
+        
         // Préparer les variables pour la vue
         $errors = Session::getFlash('errors', []);
-        $old = Session::getFlash('old', $campaign);
+        $old = Session::getFlash('old', []);
+        
+        // Si mode manual, récupérer la liste actuelle des clients
+        if ($campaign['customer_assignment_mode'] === 'manual') {
+            $customers = $this->campaignModel->getCustomerNumbers($id);
+            $campaign['customer_list'] = implode("\n", $customers);
+        }
         
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/campaigns/edit.php';
     }
 
     /**
-     * Mettre à jour une campagne
+     * Mettre à jour une campagne (POST)
      * 
      * @param int $id ID de la campagne
      * @return void
      */
     public function update(int $id): void
     {
-        // Vérifier que la campagne existe
+        // 1. Vérifier que la campagne existe
         $campaign = $this->campaignModel->findById($id);
         
         if (!$campaign) {
@@ -230,80 +235,77 @@ class CampaignController
             exit;
         }
 
-        // Vérifier le token CSRF
+        // 2. Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/campaigns/' . $id . '/edit');
             exit;
         }
 
-        // Récupérer les données du formulaire
+        // 3. Récupérer les données du formulaire
         $data = [
             'name' => $_POST['name'] ?? '',
             'country' => $_POST['country'] ?? '',
             'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'start_date' => $_POST['start_date'] ?? '',
-            'end_date' => $_POST['end_date'] ?? '',
+            'start_date' => !empty($_POST['start_date']) ? substr($_POST['start_date'], 0, 10) . ' 00:01:00' : '',
+            'end_date' => !empty($_POST['end_date']) ? substr($_POST['end_date'], 0, 10) . ' 23:59:00' : '',
             'title_fr' => $_POST['title_fr'] ?? '',
             'description_fr' => $_POST['description_fr'] ?? '',
             'title_nl' => $_POST['title_nl'] ?? '',
             'description_nl' => $_POST['description_nl'] ?? '',
+            
+            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             'customer_assignment_mode' => $_POST['customer_assignment_mode'] ?? 'automatic',
             'order_password' => $_POST['order_password'] ?? null,
             'order_type' => $_POST['order_type'] ?? 'W',
             'deferred_delivery' => isset($_POST['deferred_delivery']) ? 1 : 0,
-            'delivery_date' => $_POST['delivery_date'] ?? null,
+            'delivery_date' => !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null,
         ];
 
-        // Valider les données
+        // 4. Valider les données
         $errors = $this->campaignModel->validate($data);
         
         if (!empty($errors)) {
-            // Erreurs de validation
             Session::setFlash('errors', $errors);
             Session::setFlash('old', $data);
             header('Location: /stm/admin/campaigns/' . $id . '/edit');
             exit;
         }
 
-        // Détecter changement de mode d'attribution
-        $oldMode = $campaign['customer_assignment_mode'];
-        $newMode = $data['customer_assignment_mode'];
-
-        // Mettre à jour la campagne
+        // 5. Mettre à jour la campagne
         try {
             $success = $this->campaignModel->update($id, $data);
             
             if ($success) {
-                // Gérer les clients selon le mode
+                // Gérer le changement de mode d'attribution
+                $oldMode = $campaign['customer_assignment_mode'];
+                $newMode = $data['customer_assignment_mode'];
+                
+                // Si passage de manual à autre mode : supprimer les clients
                 if ($oldMode === 'manual' && $newMode !== 'manual') {
-                    // Passage de manual vers autre mode : supprimer les clients
                     $this->campaignModel->removeAllCustomers($id);
                 }
                 
+                // Si passage à manual : gérer la nouvelle liste
                 if ($newMode === 'manual') {
-                    // Mode manual : gérer la liste de clients
-                    $this->campaignModel->removeAllCustomers($id); // D'abord vider
+                    // Supprimer l'ancienne liste
+                    $this->campaignModel->removeAllCustomers($id);
                     
+                    // Ajouter la nouvelle liste
                     if (!empty($_POST['customer_list'])) {
-                        $customerNumbers = array_filter(
-                            array_map('trim', explode("\n", $_POST['customer_list'])),
-                            fn($num) => !empty($num)
-                        );
+                        $customerList = $_POST['customer_list'];
+                        $customerNumbers = explode("\n", $customerList);
+                        $customerNumbers = array_map('trim', $customerNumbers);
+                        $customerNumbers = array_filter($customerNumbers);
                         
                         if (!empty($customerNumbers)) {
-                            $addedCount = $this->campaignModel->addCustomersToCampaign($id, $customerNumbers);
-                            Session::setFlash('success', "Campagne mise à jour. {$addedCount} client(s) ajouté(s).");
-                        } else {
-                            Session::setFlash('success', 'Campagne mise à jour');
+                            $added = $this->campaignModel->addCustomersToCampaign($id, $customerNumbers);
+                            Session::setFlash('info', "{$added} client(s) ajouté(s) à la campagne");
                         }
-                    } else {
-                        Session::setFlash('success', 'Campagne mise à jour');
                     }
-                } else {
-                    Session::setFlash('success', 'Campagne mise à jour avec succès');
                 }
                 
+                Session::setFlash('success', 'Campagne mise à jour avec succès');
                 header('Location: /stm/admin/campaigns/' . $id);
             } else {
                 Session::setFlash('error', 'Erreur lors de la mise à jour');
@@ -321,25 +323,25 @@ class CampaignController
     }
 
     /**
-     * Supprimer une campagne
+     * Supprimer une campagne (POST)
      * 
      * @param int $id ID de la campagne
      * @return void
      */
     public function destroy(int $id): void
     {
-        // Vérifier le token CSRF
-        if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
-
         // Vérifier que la campagne existe
         $campaign = $this->campaignModel->findById($id);
         
         if (!$campaign) {
             Session::setFlash('error', 'Campagne introuvable');
+            header('Location: /stm/admin/campaigns');
+            exit;
+        }
+
+        // Vérifier le token CSRF
+        if (!$this->validateCSRF()) {
+            Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/campaigns');
             exit;
         }
@@ -363,96 +365,86 @@ class CampaignController
     }
 
     /**
-     * Activer/désactiver une campagne
+     * Afficher les campagnes actives uniquement
+     * 
+     * @return void
+     */
+    public function active(): void
+    {
+        $campaigns = $this->campaignModel->getActive();
+        $stats = $this->campaignModel->getStats();
+        
+        // 🆕 Enrichir chaque campagne avec ses statistiques
+        foreach ($campaigns as &$campaign) {
+            $campaign['customer_stats'] = $this->campaignModel->getCustomerStats($campaign['id']);
+            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
+        }
+        unset($campaign); // Libérer la référence
+        
+        // Préparer les filtres pour la vue
+        $filters = ['status' => 'active'];
+        
+        // Charger la vue
+        $pageTitle = 'Campagnes actives';
+        require_once __DIR__ . '/../Views/admin/campaigns/active.php';
+    }
+
+    /**
+     * Afficher les campagnes archivées (terminées + inactives)
+     * 
+     * @return void
+     */
+    public function archives(): void
+    {
+        $campaigns = $this->campaignModel->getArchived();
+        $stats = $this->campaignModel->getStats();
+        
+        // 🆕 Enrichir chaque campagne avec ses statistiques
+        foreach ($campaigns as &$campaign) {
+            $campaign['customer_stats'] = $this->campaignModel->getCustomerStats($campaign['id']);
+            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
+        }
+        unset($campaign); // Libérer la référence
+        
+        // Préparer les filtres pour la vue
+        $filters = ['status' => 'archived'];
+        
+        // Charger la vue
+        $pageTitle = 'Campagnes archivées';
+        require_once __DIR__ . '/../Views/admin/campaigns/archives.php';
+    }
+
+    /**
+     * Activer/Désactiver une campagne (AJAX)
      * 
      * @param int $id ID de la campagne
      * @return void
      */
     public function toggleActive(int $id): void
     {
-        // Vérifier le token CSRF
-        if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/campaigns');
-            exit;
-        }
-
-        // Récupérer la campagne
         $campaign = $this->campaignModel->findById($id);
         
         if (!$campaign) {
-            Session::setFlash('error', 'Campagne introuvable');
-            header('Location: /stm/admin/campaigns');
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Campagne introuvable']);
             exit;
         }
-
-        // Inverser le statut
-        $newStatus = !$campaign['is_active'];
         
         try {
-            $success = $this->campaignModel->toggleActive($id, $newStatus);
+            $newStatus = !$campaign['is_active'];
+            $success = $this->campaignModel->update($id, ['is_active' => $newStatus]);
             
             if ($success) {
-                $message = $newStatus ? 'Campagne activée' : 'Campagne désactivée';
-                Session::setFlash('success', $message);
+                echo json_encode(['success' => true, 'is_active' => $newStatus]);
             } else {
-                Session::setFlash('error', 'Erreur lors de la modification du statut');
+                echo json_encode(['success' => false, 'message' => 'Erreur mise à jour']);
             }
         } catch (\Exception $e) {
             error_log("Erreur toggle active: " . $e->getMessage());
-            Session::setFlash('error', 'Erreur lors de la modification du statut');
+            echo json_encode(['success' => false, 'message' => 'Erreur serveur']);
         }
         
-        header('Location: /stm/admin/campaigns');
         exit;
-    }
-
-    /**
-     * Afficher les campagnes actives uniquement avec statistiques enrichies
-     * 
-     * @return void
-     * @modified 14/11/2025 - Ajout enrichissement statistiques
-     */
-    public function active(): void
-    {
-        $filters = ['is_active' => 1];
-        $campaigns = $this->campaignModel->getAll($filters);
-        
-        // 🆕 Enrichir chaque campagne avec ses statistiques
-        foreach ($campaigns as &$campaign) {
-            $campaign['customer_stats'] = $this->campaignModel->getCustomerStats($campaign['id']);
-            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
-        }
-        unset($campaign); // Libérer la référence
-        
-        $stats = $this->campaignModel->getStats();
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/active.php';
-    }
-
-    /**
-     * Afficher les campagnes archivées avec statistiques enrichies
-     * 
-     * @return void
-     * @modified 14/11/2025 - Ajout enrichissement statistiques
-     */
-    public function archives(): void
-    {
-        $filters = ['is_active' => 0];
-        $campaigns = $this->campaignModel->getAll($filters);
-        
-        // 🆕 Enrichir chaque campagne avec ses statistiques
-        foreach ($campaigns as &$campaign) {
-            $campaign['customer_stats'] = $this->campaignModel->getCustomerStats($campaign['id']);
-            $campaign['promotion_count'] = $this->campaignModel->countPromotions($campaign['id']);
-        }
-        unset($campaign); // Libérer la référence
-        
-        $stats = $this->campaignModel->getStats();
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/admin/campaigns/archives.php';
     }
 
     /**

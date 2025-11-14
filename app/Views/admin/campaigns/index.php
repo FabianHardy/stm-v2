@@ -3,8 +3,9 @@
  * Vue : Liste des campagnes
  * 
  * @package STM/Views/Admin/Campaigns
- * @version 2.1.0
- * @modified 11/11/2025 - Ajout URL publique + pays + amélioration affichage
+ * @version 2.2.0
+ * @created 07/11/2025
+ * @modified 14/11/2025 - Ajout colonne statistiques (clients + promotions)
  */
 
 $pageTitle = 'Campagnes';
@@ -137,15 +138,15 @@ ob_start();
                         id="is_active"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
                     <option value="">Tous les statuts</option>
-                    <option value="1" <?= ($_GET['is_active'] ?? '') === '1' ? 'selected' : '' ?>>Actives</option>
-                    <option value="0" <?= ($_GET['is_active'] ?? '') === '0' ? 'selected' : '' ?>>Inactives</option>
+                    <option value="1" <?= isset($_GET['is_active']) && $_GET['is_active'] === '1' ? 'selected' : '' ?>>Active</option>
+                    <option value="0" <?= isset($_GET['is_active']) && $_GET['is_active'] === '0' ? 'selected' : '' ?>>Inactive</option>
                 </select>
             </div>
 
             <div class="flex items-end">
                 <button type="submit" 
-                        class="w-full inline-flex justify-center items-center gap-x-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                    <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
                     Filtrer
@@ -170,6 +171,10 @@ ob_start();
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Période
                     </th>
+                    <!-- 🆕 NOUVELLE COLONNE STATISTIQUES -->
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Statistiques
+                    </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         URL Publique
                     </th>
@@ -184,14 +189,22 @@ ob_start();
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($campaigns)): ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">
+                        <!-- 🆕 COLSPAN MODIFIÉ : 7 au lieu de 6 -->
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                             </svg>
-                            <p class="mt-2">Aucune campagne trouvée</p>
-                            <a href="/stm/admin/campaigns/create" class="mt-2 inline-block text-purple-600 hover:text-purple-700">
-                                Créer la première campagne
-                            </a>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">Aucune campagne</h3>
+                            <p class="mt-1 text-sm text-gray-500">Commencez par créer une nouvelle campagne.</p>
+                            <div class="mt-6">
+                                <a href="/stm/admin/campaigns/create"
+                                   class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                    <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                    Créer une campagne
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 <?php else: ?>
@@ -199,47 +212,81 @@ ob_start();
                         <tr class="hover:bg-gray-50">
                             <!-- Nom -->
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-medium text-gray-900">
-                                    <?= htmlspecialchars($campaign['name']) ?>
-                                </div>
-                                <?php if (!empty($campaign['title_fr'])): ?>
-                                    <div class="text-xs text-gray-500 mt-1">
-                                        <?= htmlspecialchars($campaign['title_fr']) ?>
+                                <div class="flex items-center">
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">
+                                            <?= htmlspecialchars($campaign['name']) ?>
+                                        </div>
+                                        <?php if (!empty($campaign['title_fr'])): ?>
+                                            <div class="text-sm text-gray-500">
+                                                <?= htmlspecialchars(substr($campaign['title_fr'], 0, 50)) ?><?= strlen($campaign['title_fr']) > 50 ? '...' : '' ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
-                                <?php endif; ?>
+                                </div>
                             </td>
 
                             <!-- Pays -->
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium 
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
                                     <?= $campaign['country'] === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800' ?>">
-                                    <?= htmlspecialchars($campaign['country']) ?>
+                                    <?= $campaign['country'] ?>
                                 </span>
                             </td>
 
-                            <!-- Dates -->
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <div class="flex items-center gap-x-1">
-                                    <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                                    </svg>
-                                    <span>
-                                        <?= date('d/m/Y', strtotime($campaign['start_date'])) ?> - 
-                                        <?= date('d/m/Y', strtotime($campaign['end_date'])) ?>
-                                    </span>
+                            <!-- Période -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    <?= date('d/m/Y', strtotime($campaign['start_date'])) ?>
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    <?= date('d/m/Y', strtotime($campaign['end_date'])) ?>
                                 </div>
                             </td>
 
-                            <!-- URL publique -->
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <!-- 🆕 STATISTIQUES -->
+                            <td class="px-6 py-4">
                                 <?php 
-                                $baseUrl = rtrim($_ENV['APP_URL'] ?? 'https://actions.trendyfoods.com/stm', '/');
-                                $publicUrl = $baseUrl . '/c/' . $campaign['uuid'];
+                                $totalCustomers = $campaign['customer_stats']['total'];
+                                $withOrders = $campaign['customer_stats']['with_orders'];
+                                $promotions = $campaign['promotion_count'];
                                 ?>
-                                <button 
-                                    onclick="copyToClipboard('<?= htmlspecialchars($publicUrl) ?>', this)"
-                                    class="inline-flex items-center gap-x-1.5 text-sm text-purple-600 hover:text-purple-700"
-                                    title="Cliquer pour copier"
+                                <div class="space-y-1">
+                                    <!-- Clients -->
+                                    <div class="flex items-center text-xs">
+                                        <svg class="h-4 w-4 text-gray-400 mr-1.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                        </svg>
+                                        <span class="text-gray-600">
+                                            <?php if ($totalCustomers === 'Tous'): ?>
+                                                Tous <?= $campaign['country'] ?>
+                                            <?php else: ?>
+                                                <?= $totalCustomers ?> élig.
+                                            <?php endif; ?>
+                                            <span class="text-gray-400 mx-1">/</span>
+                                            <span class="font-medium text-gray-900"><?= $withOrders ?></span> cmd
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Promotions -->
+                                    <div class="flex items-center text-xs">
+                                        <svg class="h-4 w-4 text-gray-400 mr-1.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z" />
+                                        </svg>
+                                        <span class="text-gray-600">
+                                            <span class="font-medium text-gray-900"><?= $promotions ?></span> promo<?= $promotions > 1 ? 's' : '' ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- URL Publique -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <button type="button"
+                                        onclick="copyToClipboard('https://actions.trendyfoods.com/stm/campaign/<?= htmlspecialchars($campaign['unique_url']) ?>', this)"
+                                        class="inline-flex items-center gap-x-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                                        title="Copier le lien public"
                                 >
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />

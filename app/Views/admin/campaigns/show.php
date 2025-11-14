@@ -11,7 +11,7 @@
  * - Actions disponibles
  * 
  * @created  2025/11/14 02:00
- * @modified 2025/11/14 08:00 - Version finale avec design cohérent
+ * @modified 2025/11/14 16:00 - Ajout statistiques clients ayant commandé + % conversion
  */
 
 ob_start();
@@ -149,38 +149,75 @@ if ($now < $start) {
 
     <!-- SECTION : Statistiques rapides -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <!-- Carte Clients -->
+        <!-- 🆕 Carte Clients AMÉLIORÉE avec statistiques commandes -->
         <div class="bg-white overflow-hidden shadow-sm ring-1 ring-gray-900/5 rounded-lg hover:shadow-md transition">
             <div class="p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <div class="p-3 bg-blue-100 rounded-lg">
-                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                            </svg>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="p-3 bg-blue-100 rounded-lg">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <dt class="text-sm font-medium text-gray-500">
+                                Clients
+                            </dt>
                         </div>
                     </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">
-                                Clients éligibles
-                            </dt>
-                            <dd class="text-2xl font-semibold text-gray-900">
-                                <?php
-                                if ($campaign['customer_assignment_mode'] === 'manual') {
-                                    echo number_format($customerCount ?? 0);
-                                } else {
-                                    echo '<span class="text-blue-600">Tous</span>';
-                                }
-                                ?>
-                            </dd>
-                        </dl>
-                    </div>
+                    
+                    <!-- Badge % de conversion (si mode manual) -->
+                    <?php 
+                    $conversionRate = 0;
+                    $isManual = $campaign['customer_assignment_mode'] === 'manual';
+                    $totalClients = $customerCount ?? 0;
+                    $commandeClients = $customersWithOrders ?? 0;
+                    
+                    if ($isManual && $totalClients > 0) {
+                        $conversionRate = round(($commandeClients / $totalClients) * 100);
+                    }
+                    ?>
+                    <?php if ($isManual && $totalClients > 0): ?>
+                        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold
+                            <?php if ($conversionRate >= 50): ?>
+                                bg-green-100 text-green-800
+                            <?php elseif ($conversionRate >= 25): ?>
+                                bg-yellow-100 text-yellow-800
+                            <?php else: ?>
+                                bg-gray-100 text-gray-800
+                            <?php endif; ?>">
+                            <?= $conversionRate ?>% conversion
+                        </span>
+                    <?php endif; ?>
                 </div>
+                
+                <dl class="space-y-3">
+                    <!-- Clients éligibles -->
+                    <div class="flex items-center justify-between">
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Éligibles</dt>
+                        <dd class="text-lg font-semibold text-gray-900">
+                            <?php if ($isManual): ?>
+                                <?= number_format($totalClients) ?>
+                            <?php else: ?>
+                                <span class="text-blue-600">Tous <?= $campaign['country'] ?></span>
+                            <?php endif; ?>
+                        </dd>
+                    </div>
+                    
+                    <!-- Clients ayant commandé -->
+                    <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Ont commandé</dt>
+                        <dd class="text-lg font-bold text-blue-600">
+                            <?= number_format($commandeClients) ?>
+                        </dd>
+                    </div>
+                </dl>
             </div>
         </div>
 
-        <!-- Carte Promotions -->
+        <!-- Carte Promotions (INCHANGÉE) -->
         <div class="bg-white overflow-hidden shadow-sm ring-1 ring-gray-900/5 rounded-lg hover:shadow-md transition">
             <div class="p-6">
                 <div class="flex items-center">
@@ -205,7 +242,7 @@ if ($now < $start) {
             </div>
         </div>
 
-        <!-- Carte Commandes -->
+        <!-- Carte Commandes (INCHANGÉE) -->
         <div class="bg-white overflow-hidden shadow-sm ring-1 ring-gray-900/5 rounded-lg hover:shadow-md transition">
             <div class="p-6">
                 <div class="flex items-center">
