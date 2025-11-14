@@ -3,6 +3,32 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+
+## [13/11/2025 15:30] - 🐛 Correction suppression campagnes
+
+### 🐛 Corrigé
+
+**Vues campagnes** :
+- `index.php` : Token CSRF incorrect (`csrf_token` → `_token`)
+- `show.php` : URL action formulaire incorrect (manquait `/delete`)
+
+### 📋 Détails techniques
+
+**Problèmes identifiés** :
+1. index.php envoyait `$_POST['csrf_token']` mais controller attendait `$_POST['_token']`
+2. show.php envoyait vers `/campaigns/{id}` (UPDATE) au lieu de `/campaigns/{id}/delete` (DELETE)
+
+**Solutions** :
+- ✅ Uniformisation token CSRF sur `_token` dans toutes les vues
+- ✅ Correction action formulaire show.php vers route DELETE
+
+### ✅ Résultat
+
+La suppression fonctionne maintenant depuis :
+- ✅ Liste complète (index.php)
+- ✅ Page détails (show.php)
+- ✅ Avec validation CSRF complète
+--
 ## [13/11/2025 15:00] - 🐛 Correction token CSRF suppression
 
 ### 🐛 Corrigé
