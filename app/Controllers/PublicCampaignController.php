@@ -199,10 +199,9 @@ class PublicCampaignController
         
         $query = "
             SELECT 
-                IDE_CLL as customer_number,
+                CLL_NCLIXX as customer_number,
                 CLL_NOM as company_name,
-                CLL_EMAIL as email,
-                CLL_LANGUE as language
+                CLL_PRENOM as contact_name
             FROM {$table}
             WHERE CLL_NCLIXX = :customer_number
             LIMIT 1
