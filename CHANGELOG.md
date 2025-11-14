@@ -3,6 +3,69 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+## [13/11/2025 15:00] - 🐛 Correction token CSRF suppression
+
+### 🐛 Corrigé
+- **index.php** : Correction formulaire suppression (`csrf_token` → `_token`)
+- La suppression de campagnes fonctionne maintenant depuis toutes les vues
+
+### 📋 Détail
+- **Problème** : index.php utilisait `name="csrf_token"` au lieu de `name="_token"`
+- **Controller** : Attend `$_POST['_token']` → Validation CSRF échouait
+- **Solution** : Uniformisation sur `_token` dans toutes les vues
+--
+
+## [13/11/2025 14:45] - 🐛 Correction suppression campagnes
+
+### 🐛 Corrigé
+
+**CampaignController.php** :
+- ❌ Méthode `delete()` renommée en `destroy()` (cohérence avec route)
+- ✅ Ajout validation CSRF dans `destroy()` avant suppression
+- 🔒 Sécurité renforcée : impossible de supprimer sans token valide
+
+**Vues campagnes** (show.php, index.php) :
+- ❌ Formulaires utilisaient `name="csrf_token"` (incorrect)
+- ✅ Correction : `name="_token"` (attendu par le controller)
+
+**Routes** (config/routes.php) :
+- ✅ Déjà correct : appelle bien `destroy()` sur POST `/admin/campaigns/{id}/delete`
+
+### 📋 Détails techniques
+
+**Problèmes identifiés** :
+
+1. **Incohérence nom de méthode** :
+   - Route appelait `$controller->destroy($id)`
+   - Mais méthode s'appelait `delete()`
+   - → Erreur fatale silencieuse
+
+2. **Token CSRF incorrect** :
+   - Vues envoyaient `$_POST['csrf_token']`
+   - Controller attendait `$_POST['_token']`
+   - → Validation échouait
+
+3. **Pas de validation CSRF** :
+   - La méthode `delete()` ne vérifiait pas le token
+   - → Faille de sécurité potentielle
+
+**Solutions appliquées** :
+- ✅ Méthode renommée `delete()` → `destroy()`
+- ✅ Ajout `if (!$this->validateCSRF())` au début de `destroy()`
+- ✅ Correction token dans toutes les vues : `_token` au lieu de `csrf_token`
+
+### ✅ Résultat
+
+La suppression fonctionne maintenant depuis :
+- ✅ Page détails (show.php)
+- ✅ Liste complète (index.php)
+- ✅ Liste actives (active.php)
+- ✅ Liste archives (archives.php)
+
+Avec sécurité CSRF complète et messages flash appropriés.
+
+---
+
 ## [14/11/2025 02:15] - Sprint 5 : Vues edit.php et show.php TERMINÉES - 100% ✅
 
 ### ✅ Ajouté
