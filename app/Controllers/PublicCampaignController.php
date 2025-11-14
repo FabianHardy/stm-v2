@@ -6,7 +6,7 @@
  * Gère l'accès client, l'identification et la commande
  * 
  * @created  2025/11/14 16:30
- * @modified 2025/11/14 16:30 - Création initiale
+ * @modified 2025/11/14 17:30 - Corrections : mode PROTECTED, is_authorized, langue
  */
 
 namespace App\Controllers;
@@ -147,7 +147,7 @@ class PublicCampaignController
                 'company_name' => $customerData['company_name'],
                 'campaign_uuid' => $uuid,
                 'campaign_id' => $campaign['id'],
-                'language' => $customerData['language'] ?? 'fr',
+                'language' => 'fr', // TODO: Sprint traductions FR/NL
                 'logged_at' => date('Y-m-d H:i:s')
             ]);
             
@@ -237,7 +237,6 @@ class PublicCampaignController
                 WHERE campaign_id = :campaign_id
                   AND customer_number = :customer_number
                   AND country = :country
-                  AND is_authorized = 1
             ";
             
             $result = $this->db->query($query, [
@@ -249,6 +248,21 @@ class PublicCampaignController
             return ($result[0]['count'] ?? 0) > 0;
         }
         
+        // Mode PROTECTED : vérifier mot de passe + existence client
+        if ($campaign['customer_assignment_mode'] === 'protected') {
+            $password = $_POST['password'] ?? '';
+            
+            // Vérifier d'abord le mot de passe
+            if (empty($password) || $password !== $campaign['order_password']) {
+                return false;
+            }
+            
+            // Mot de passe correct : client déjà vérifié dans identify()
+            // (on a déjà appelé getCustomerFromExternal avant)
+            return true;
+        }
+        
+        // Mode inconnu ou non géré
         return false;
     }
 
