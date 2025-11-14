@@ -1,6 +1,228 @@
 # 📝 CHANGELOG - STM v2
 
 Historique centralisé de toutes les modifications du projet.
+
+--
+
+## [14/11/2025 18:30] - Sprint 7 : Catalogue + Panier (Sous-tâche 2) ✅
+
+### ✅ Ajouté
+
+**PublicCampaignController.php** - Version 2 avec panier complet :
+
+1. **Méthode `catalog()`** :
+   - Vérification session client
+   - Récupération catégories actives avec produits
+   - Calcul quotas disponibles pour chaque produit
+   - Variables : `$categories` (avec products imbriqués), `$cart`
+   
+2. **Méthode `addToCart()`** (AJAX) :
+   - Validation produit + quantité
+   - Vérification quotas en temps réel
+   - Ajout ou mise à jour produit dans session
+   - Retour JSON : `{ success: true, cart: {...}, message: '...' }`
+   
+3. **Méthode `updateCart()`** (AJAX) :
+   - Modification quantité produit
+   - Suppression si quantité = 0
+   - Validation quotas
+   - Retour JSON avec panier mis à jour
+   
+4. **Méthode `removeFromCart()`** (AJAX) :
+   - Retrait produit du panier
+   - Recalcul total automatique
+   
+5. **Méthode `clearCart()`** (AJAX) :
+   - Vidage complet du panier
+   - Réinitialisation session
+   
+6. **Méthode privée `calculateAvailableQuotas()`** :
+   - Calcul quotas client et global
+   - Retourne : `available_for_customer`, `available_global`, `max_orderable`, `is_orderable`
+   - Utilisée dans catalog() et addToCart()
+
+**catalog.php** - Vue complète responsive :
+
+1. **Layout responsive** :
+   - Desktop : Sidebar panier sticky (320px) + Zone produits (flex-1)
+   - Mobile : Modal panier fullscreen + Bouton flottant
+   - Menu catégories sticky sous le header
+   
+2. **Navigation catégories** :
+   - Menu horizontal sticky avec couleurs dynamiques
+   - Scroll smooth vers sections (#category-X)
+   - Badges colorés par catégorie
+   
+3. **Grid produits** :
+   - 2 colonnes desktop / 1 colonne mobile
+   - Cards produits avec :
+     * Image cliquable (lightbox zoom)
+     * Nom produit (sans code article)
+     * Prix barré + prix promo
+     * Infos quotas (par client + global)
+     * Input quantité + bouton ajout
+     * Badge "Épuisé" si quota atteint
+   
+4. **Panier Alpine.js dynamique** :
+   - State : `cart.items[]`, `cart.total`, `cartItemCount`
+   - Méthodes :
+     * `addToCart()` : Appel AJAX POST /cart/add
+     * `updateQuantity()` : Appel AJAX POST /cart/update
+     * `removeFromCart()` : Appel AJAX POST /cart/remove
+     * `clearCart()` : Appel AJAX POST /cart/clear
+     * `validateOrder()` : Redirection vers /order
+   - Synchronisation temps réel avec session PHP
+   
+5. **Lightbox images** :
+   - Clic image → overlay fullscreen
+   - Icône zoom en bas à droite
+   - Fermeture : clic overlay ou bouton X
+   
+6. **Notifications** :
+   - Toast temporaire (3s) pour feedback utilisateur
+   - "✓ Produit ajouté au panier"
+
+**routes.php** - 5 nouvelles routes publiques :
+- `GET /c/{uuid}/catalog` : Afficher catalogue
+- `POST /c/{uuid}/cart/add` : Ajouter produit (AJAX)
+- `POST /c/{uuid}/cart/update` : Modifier quantité (AJAX)
+- `POST /c/{uuid}/cart/remove` : Retirer produit (AJAX)
+- `POST /c/{uuid}/cart/clear` : Vider panier (AJAX)
+
+### 🔧 Modifié
+
+**PublicCampaignController.php** :
+- Méthode `identify()` : Ajout initialisation panier vide en session
+- Structure session panier : `['campaign_uuid' => '...', 'items' => [], 'total' => 0]`
+
+### 🎨 Design & UX
+
+**Responsive** :
+- Desktop : Layout 2 colonnes (produits + sidebar panier)
+- Mobile : Layout 1 colonne + modal panier
+- Breakpoint : `lg` (1024px)
+
+**Couleurs** :
+- Prix promo : text-green-600
+- Boutons primaires : bg-blue-600
+- Bouton validation : bg-green-600
+- Badge épuisé : bg-red-500
+
+**Interactions** :
+- Scroll smooth vers catégories
+- Hover sur cards produits (shadow-lg)
+- Transitions sur boutons
+- Lightbox zoom image
+
+### ✅ Fonctionnalités complètes
+
+**Validation quotas** :
+- ✅ Quota par client respecté
+- ✅ Quota global respecté
+- ✅ Maximum commandable = min(quota_client, quota_global)
+- ✅ Feedback immédiat si quota atteint
+
+**Panier persistant** :
+- ✅ Sauvegardé en session PHP
+- ✅ Synchronisé avec Alpine.js
+- ✅ Survit aux rechargements page
+- ✅ Validation côté serveur
+
+**Gestion erreurs** :
+- ✅ Quantité invalide → alert
+- ✅ Quota dépassé → message erreur
+- ✅ Session expirée → redirection
+- ✅ Erreur serveur → console.error + alert
+
+### 📊 Progression Sprint 7
+
+**Sous-tâche 1** : ✅ 100% (Identification)
+**Sous-tâche 2** : ✅ 100% (Catalogue + Panier)
+**Sous-tâche 3** : ⏳ 0% (Validation commande)
+**Sous-tâche 4** : ⏳ 0% (Interface admin)
+
+**Progression globale Sprint 7** : ~50%
+
+### 🧪 Tests à effectuer
+
+1. **Catalogue** :
+   - ✅ Affichage produits par catégorie
+   - ✅ Navigation catégories (scroll smooth)
+   - ✅ Images produits affichées
+   - ✅ Lightbox zoom fonctionne
+
+2. **Panier** :
+   - ✅ Ajout produit → Apparaît dans panier
+   - ✅ Modification quantité → Total recalculé
+   - ✅ Retrait produit → Disparaît du panier
+   - ✅ Vider panier → Panier vide
+   - ✅ Rechargement page → Panier persiste
+
+3. **Quotas** :
+   - ✅ Dépasser quota client → Erreur
+   - ✅ Dépasser quota global → Erreur
+   - ✅ Produit épuisé → Badge + bouton désactivé
+
+4. **Responsive** :
+   - ✅ Desktop : Sidebar visible
+   - ✅ Mobile : Bouton flottant + modal
+
+5. **Validation** :
+   - ✅ Bouton "Valider commande" → Redirection /order (404 normal)
+
+### 📝 Notes techniques
+
+**Session structure** :
+```php
+$_SESSION['public_customer'] = [
+    'customer_number' => '802412',
+    'country' => 'BE',
+    'company_name' => '...',
+    'campaign_uuid' => '668c4701...',
+    'campaign_id' => 1,
+    'language' => 'fr',
+    'logged_at' => '2025-11-14 18:00:00'
+];
+
+$_SESSION['cart'] = [
+    'campaign_uuid' => '668c4701...',
+    'items' => [
+        [
+            'product_id' => 12,
+            'product_code' => 'COCA33',
+            'product_name' => 'Coca-Cola 33cl x24',
+            'quantity' => 2,
+            'unit_price' => 15.50,
+            'line_total' => 31.00,
+            'image_path' => 'uploads/products/coca.jpg'
+        ]
+    ],
+    'total' => 31.00
+];
+```
+
+**Calcul quotas** :
+```php
+$availableForCustomer = $max_per_customer - $customerUsed;
+$availableGlobal = $max_total - $globalUsed;
+$maxOrderable = min($availableForCustomer, $availableGlobal);
+```
+
+### 🔜 Prochaine étape
+
+**Sous-tâche 3** : Page validation commande
+- Récap panier (noms produits + quantités)
+- Input email obligatoire
+- Checkboxes CGV/CGU obligatoires
+- Affichage date livraison SI deferred_delivery = 1
+- Bouton "Confirmer la commande"
+- Enregistrement en DB + génération fichier TXT + email
+
+---
+
+--
+
+
 ## [14/11/2025 17:30] - Sprint 7 : Corrections PublicCampaignController (Sous-tâche 1)
 
 ### 🔧 Modifié
