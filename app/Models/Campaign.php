@@ -656,5 +656,42 @@ class Campaign
             error_log("Erreur removeAllCustomers: " . $e->getMessage());
             return false;
         }
+
+    /**
+     * Compter le nombre de clients DISTINCTS ayant passé commande pour une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return int
+     * @created 14/11/2025 - Ajout statistiques clients avec commandes
+     */
+    public function countCustomersWithOrders(int $campaignId): int
+    {
+        $query = "SELECT COUNT(DISTINCT customer_id) as total 
+                  FROM orders 
+                  WHERE campaign_id = :campaign_id";
+        
+        try {
+            $result = $this->db->queryOne($query, [':campaign_id' => $campaignId]);
+            return $result['total'] ?? 0;
+        } catch (\PDOException $e) {
+            error_log("Erreur countCustomersWithOrders: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Récupérer les statistiques clients complètes pour une campagne
+     * Retourne le nombre de clients éligibles ET le nombre ayant commandé
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return array ['total' => int|string, 'with_orders' => int]
+     * @created 14/11/2025 - Ajout statistiques clients avec commandes
+     */
+    public function getCustomerStats(int $campaignId): array
+    {
+        return [
+            'total' => $this->countCustomers($campaignId),
+            'with_orders' => $this->countCustomersWithOrders($campaignId)
+        ];
     }
 }
