@@ -9,8 +9,8 @@
  * 
  * @package    Config
  * @author     Fabian Hardy
- * @version    1.7.0
- * @modified   14/11/2025 - Sprint 7 : Routes publiques campagnes fonctionnelles
+ * @version    1.8.0
+ * @modified   14/11/2025 - Sprint 7 Sous-tâche 2 : Routes panier complètes
  */
 
 // ============================================
@@ -422,7 +422,37 @@ $router->post('/c/{uuid}/identify', function($uuid) {
     $controller->identify($uuid);
 });
 
-// NOTE : Les routes suivantes seront ajoutées dans la SOUS-TÂCHE 2 :
-// - GET /c/{uuid}/catalog (affichage produits)
-// - POST /c/{uuid}/order (validation commande)
+// Afficher le catalogue de produits
+$router->get('/c/{uuid}/catalog', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->catalog($uuid);
+});
+
+// Ajouter un produit au panier (AJAX)
+$router->post('/c/{uuid}/cart/add', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->addToCart($uuid);
+});
+
+// Modifier quantité panier (AJAX)
+$router->post('/c/{uuid}/cart/update', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->updateCart($uuid);
+});
+
+// Retirer produit du panier (AJAX)
+$router->post('/c/{uuid}/cart/remove', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->removeFromCart($uuid);
+});
+
+// Vider le panier (AJAX)
+$router->post('/c/{uuid}/cart/clear', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->clearCart($uuid);
+});
+
+// NOTE : Les routes suivantes seront ajoutées dans la SOUS-TÂCHE 3 :
+// - GET /c/{uuid}/order (page validation commande avec CGV + email)
+// - POST /c/{uuid}/order/submit (enregistrement commande)
 // - GET /c/{uuid}/confirmation/{order_id} (confirmation)
