@@ -462,3 +462,28 @@ $router->get('/c/{uuid}/logout', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->logout($uuid);
 });
+
+/**
+ * Routes publiques pour le Sprint 7
+ * À ajouter dans routes/web.php
+ * 
+ * @created 2025/11/14
+ */
+
+use App\Controllers\PublicCampaignController;
+
+// =====================================================
+// ROUTES PUBLIQUES - CAMPAGNES
+// =====================================================
+
+// Accès campagne via UUID (page d'identification)
+$router->get('/campaign/{uuid}', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->show($uuid);
+});
+
+// Identification client
+$router->post('/campaign/{uuid}/identify', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->identify($uuid);
+});
