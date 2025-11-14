@@ -154,8 +154,7 @@ class PublicCampaignController
             // Initialiser le panier vide
             Session::set('cart', [
                 'campaign_uuid' => $uuid,
-                'items' => [],
-                'total' => 0
+                'items' => []
             ]);
             
             // Rediriger vers le catalogue
@@ -228,7 +227,7 @@ class PublicCampaignController
                     WHERE p.category_id = :category_id
                       AND p.campaign_id = :campaign_id
                       AND p.is_active = 1
-                    ORDER BY p.display_order ASC, p.name ASC
+                    ORDER BY p.display_order ASC, p.name_fr ASC
                 ";
                 
                 $products = $this->db->query($productsQuery, [
@@ -258,8 +257,7 @@ class PublicCampaignController
             // Récupérer le panier depuis la session
             $cart = Session::get('cart', [
                 'campaign_uuid' => $uuid,
-                'items' => [],
-                'total' => 0
+                'items' => []
             ]);
             
             // Afficher la vue
@@ -358,22 +356,16 @@ class PublicCampaignController
             if ($existingIndex !== null) {
                 // Mise à jour quantité
                 $cart['items'][$existingIndex]['quantity'] = $newTotalQty;
-                $cart['items'][$existingIndex]['line_total'] = $newTotalQty * $product['promo_price'];
             } else {
                 // Nouveau produit
                 $cart['items'][] = [
                     'product_id' => $productId,
                     'product_code' => $product['product_code'],
-                    'product_name' => $product['name'],
+                    'product_name' => $product['name_fr'],
                     'quantity' => $quantity,
-                    'unit_price' => $product['promo_price'],
-                    'line_total' => $quantity * $product['promo_price'],
-                    'image_path' => $product['image_path']
+                    'image_fr' => $product['image_fr'] ?? null
                 ];
             }
-            
-            // Recalculer le total
-            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
             
             // Sauvegarder le panier en session
             Session::set('cart', $cart);
