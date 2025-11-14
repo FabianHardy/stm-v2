@@ -146,18 +146,7 @@
                                 </p>
                                 <?php endif; ?>
                                 
-                                <!-- Prix -->
-                                <div class="mb-3">
-                                    <?php if ($product['regular_price'] && $product['regular_price'] != $product['promo_price']): ?>
-                                    <span class="text-gray-500 line-through text-sm mr-2">
-                                        <?= number_format($product['regular_price'], 2, ',', ' ') ?> €
-                                    </span>
-                                    <?php endif; ?>
-                                    <span class="text-2xl font-bold text-green-600">
-                                        <?= number_format($product['promo_price'], 2, ',', ' ') ?> €
-                                    </span>
-                                </div>
-                                
+
                                 <!-- Quotas disponibles -->
                                 <div class="text-sm text-gray-600 mb-4 space-y-1">
                                     <?php if (!is_null($product['max_per_customer'])): ?>
@@ -249,22 +238,14 @@
                                             <i class="fas fa-plus text-xs"></i>
                                         </button>
                                     </div>
-                                    
-                                    <div class="text-right">
-                                        <div class="text-gray-600" x-text="formatPrice(item.unit_price) + ' €'"></div>
-                                        <div class="font-bold text-green-600" x-text="formatPrice(item.line_total) + ' €'"></div>
-                                    </div>
+
                                 </div>
                             </div>
                         </template>
                     </div>
                     
-                    <!-- Total -->
+                    <!-- Actions -->
                     <div x-show="cart.items.length > 0" class="border-t pt-4">
-                        <div class="flex justify-between items-center mb-4">
-                            <span class="text-lg font-bold">Total</span>
-                            <span class="text-2xl font-bold text-green-600" x-text="formatPrice(cart.total) + ' €'"></span>
-                        </div>
                         
                         <button @click="validateOrder()" 
                                 class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition mb-2">
@@ -338,11 +319,7 @@
                                         <i class="fas fa-plus text-xs"></i>
                                     </button>
                                 </div>
-                                
-                                <div class="text-right">
-                                    <div class="text-gray-600" x-text="formatPrice(item.unit_price) + ' €'"></div>
-                                    <div class="font-bold text-green-600" x-text="formatPrice(item.line_total) + ' €'"></div>
-                                </div>
+
                             </div>
                         </div>
                     </template>
@@ -351,10 +328,6 @@
             
             <!-- Footer modal -->
             <div x-show="cart.items.length > 0" class="border-t bg-gray-50 p-4">
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-lg font-bold">Total</span>
-                    <span class="text-2xl font-bold text-green-600" x-text="formatPrice(cart.total) + ' €'"></span>
-                </div>
                 
                 <button @click="validateOrder()" 
                         class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition mb-2">
@@ -416,9 +389,6 @@
                     this.showLightbox = false;
                 },
                 
-                formatPrice(price) {
-                    return parseFloat(price).toFixed(2).replace('.', ',');
-                },
                 
                 async addToCart(productId, maxOrderable) {
                     const qtyInput = document.getElementById('qty-' + productId);
