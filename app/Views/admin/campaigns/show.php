@@ -512,7 +512,7 @@ if ($now < $start) {
                 </button>
 
                 <!-- Formulaire de suppression caché -->
-                <form id="delete-form" method="POST" action="/stm/admin/campaigns/<?= $campaign['id'] ?>" class="hidden">
+                <form id="delete-form" method="POST" action="/stm/admin/campaigns/<?= $campaign['id'] ?>/delete" class="hidden">
                     <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
                     <input type="hidden" name="_method" value="DELETE">
                 </form>
