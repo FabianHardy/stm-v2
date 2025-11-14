@@ -125,7 +125,7 @@
                             <!-- Image -->
                             <div class="relative h-48 bg-gray-100 cursor-pointer" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
                                 <?php if (!empty($product['image_fr'])): ?>
-                                    <img src="/stm/<?= htmlspecialchars($product['image_fr']) ?>" 
+                                    <img src="<?= htmlspecialchars($product['image_fr']) ?>" 
                                          alt="<?= htmlspecialchars($product['name_fr']) ?>"
                                          class="w-full h-full object-contain p-4">
                                 <?php else: ?>
