@@ -9,8 +9,8 @@
  * 
  * @package    Config
  * @author     Fabian Hardy
- * @version    1.6.0
- * @modified   13/11/2025 - Correction routes publiques campagnes
+ * @version    1.7.0
+ * @modified   14/11/2025 - Sprint 7 : Routes publiques campagnes fonctionnelles
  */
 
 // ============================================
@@ -28,6 +28,9 @@ use Middleware\AuthMiddleware;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\CampaignController;
+use App\Controllers\ProductController;
+use App\Controllers\CustomerController;
+use App\Controllers\PublicCampaignController;
 
 // ============================================
 // ROUTES PUBLIQUES
@@ -67,13 +70,9 @@ $router->get('/admin/logout', function() {
 
 // Dashboard principal
 $router->get('/admin/dashboard', function() {
-    // Créer une instance du middleware
     $middleware = new AuthMiddleware();
-    
-    // Vérifier l'authentification
     $middleware->handle();
     
-    // Si on arrive ici, l'utilisateur est authentifié
     $controller = new DashboardController();
     $controller->index();
 });
@@ -91,9 +90,8 @@ $router->get('/admin', function() {
 // Liste des campagnes
 $router->get('/admin/campaigns', function() {
     $middleware = new AuthMiddleware();
-    $middleware->handle(); // ✅ Vérifier auth
+    $middleware->handle();
     
-    // ✅ Si on arrive ici = authentifié
     $controller = new CampaignController();
     $controller->index();
 });
@@ -238,7 +236,7 @@ $router->post('/admin/products/categories/{id}', function($id) {
     $controller->update((int)$id);
 });
 
-// Supprimer une catégorie (formulaire POST)
+// Supprimer une catégorie
 $router->post('/admin/products/categories/{id}/delete', function($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -259,7 +257,6 @@ $router->post('/admin/products/categories/{id}/toggle', function($id) {
 // ============================================
 // ROUTES PROMOTIONS (CRUD COMPLET)
 // ============================================
-use App\Controllers\ProductController;
 
 // Liste des Promotions
 $router->get('/admin/products', function() {
@@ -327,7 +324,6 @@ $router->post('/admin/products/{id}/delete', function($id) {
 // ============================================
 // ROUTES CLIENTS (CRUD COMPLET)
 // ============================================
-use App\Controllers\CustomerController;
 
 // Liste des clients
 $router->get('/admin/customers', function() {
@@ -411,79 +407,22 @@ $router->post('/admin/customers/{id}/delete', function($id) {
 });
 
 // ============================================
-// ROUTES PUBLIQUES CAMPAGNES (NOUVEAU - CORRIGÉ)
+// ROUTES PUBLIQUES - CAMPAGNES (SPRINT 7)
 // ============================================
-use App\Controllers\PublicCampaignController;
 
-// Page d'accueil campagne publique (via UUID)
+// Page d'accès campagne via UUID (identification client)
 $router->get('/c/{uuid}', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->show($uuid);
 });
 
-// Traiter la connexion client (POST)
-$router->post('/c/{uuid}/login', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->login($uuid);
-});
-
-// Page catalogue promotions (après connexion)
-$router->get('/c/{uuid}/promotions', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->promotions($uuid);
-});
-
-// Panier
-$router->get('/c/{uuid}/cart', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->cart($uuid);
-});
-
-// Ajout au panier (AJAX)
-$router->post('/c/{uuid}/cart/add', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->addToCart($uuid);
-});
-
-// Validation de commande
-$router->post('/c/{uuid}/order', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->createOrder($uuid);
-});
-
-// Confirmation de commande
-$router->get('/c/{uuid}/order/{orderId}/confirmation', function($uuid, $orderId) {
-    $controller = new PublicCampaignController();
-    $controller->orderConfirmation($uuid, $orderId);
-});
-
-// Déconnexion client
-$router->get('/c/{uuid}/logout', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->logout($uuid);
-});
-
-/**
- * Routes publiques pour le Sprint 7
- * À ajouter dans routes/web.php
- * 
- * @created 2025/11/14
- */
-
-use App\Controllers\PublicCampaignController;
-
-// =====================================================
-// ROUTES PUBLIQUES - CAMPAGNES
-// =====================================================
-
-// Accès campagne via UUID (page d'identification)
-$router->get('/campaign/{uuid}', function($uuid) {
-    $controller = new PublicCampaignController();
-    $controller->show($uuid);
-});
-
-// Identification client
-$router->post('/campaign/{uuid}/identify', function($uuid) {
+// Traiter l'identification client
+$router->post('/c/{uuid}/identify', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->identify($uuid);
 });
+
+// NOTE : Les routes suivantes seront ajoutées dans la SOUS-TÂCHE 2 :
+// - GET /c/{uuid}/catalog (affichage produits)
+// - POST /c/{uuid}/order (validation commande)
+// - GET /c/{uuid}/confirmation/{order_id} (confirmation)
