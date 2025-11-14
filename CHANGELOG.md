@@ -3,7 +3,74 @@
 Historique centralisé de toutes les modifications du projet.
 
 ---
+[14/11/2025 17:00] - Sprint 7 : SOUS-TÂCHE 1 - Structure BDD + Page d'accès campagne
+✅ Ajouté
+Migration BDD : migration_sprint7_tracking.sql
 
+ALTER TABLE orders : Ajout colonnes tracking email
+
+email_sent TINYINT(1) : Email envoyé ou non
+email_sent_at DATETIME : Date d'envoi de l'email
+Index sur email_sent pour optimisation
+
+
+CREATE TABLE terms_conditions : CGV modifiables par langue (FR/NL)
+
+Structure : id, language (ENUM), term_1, term_2, term_3, timestamps
+UNIQUE sur language (1 ligne par langue max)
+Données par défaut insérées (CGV FR + NL)
+
+
+CREATE TABLE email_templates : Templates email modifiables
+
+Structure : id, type, subject_fr, subject_nl, body_fr, body_nl, variables, timestamps
+UNIQUE sur type (1 template par type)
+Template par défaut : order_confirmation (email HTML bilingue)
+Variables disponibles : {customer_name}, {order_number}, {campaign_name}, etc.
+
+
+
+Controller : app/Controllers/PublicCampaignController.php
+
+Nouveau controller pour l'interface publique des campagnes
+2 méthodes principales :
+
+show($uuid) : Affiche page d'identification client
+identify($uuid) : Traite l'identification client
+
+
+8 méthodes privées utilitaires pour vérifications
+
+Vues publiques : app/Views/public/campaign/
+
+show.php : Page d'identification client (formulaire responsive bilingue)
+access_denied.php : Page accès refusé (7 raisons différentes)
+
+Routes : Ajout 2 routes publiques
+
+GET /campaign/{uuid}
+POST /campaign/{uuid}/identify
+
+📊 Tests
+Tests manuels à effectuer :
+
+✅ Accès campagne active via UUID
+✅ Identification client valide/invalide
+✅ Accès campagne à venir/terminée
+✅ UUID inexistant
+
+🎯 Progression
+
+Sprint 7 - Sous-tâche 1/4 : 100% ✅
+Progression Sprint 7 : 25%
+Progression projet : 70% → 72%
+
+🚀 Prochaine étape
+SOUS-TÂCHE 2 : Catalogue avec quotas temps réel
+
+Méthode catalog() dans PublicCampaignController
+Vue catalog.php avec panier Alpine.js
+Model Order.php (méthodes calcul quotas)
 ## [14/11/2025 16:00] - Sprint 5 : FINALISÉ avec statistiques + Préparation Sprint 7
 
 ### ✅ Ajouté
