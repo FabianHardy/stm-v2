@@ -157,7 +157,9 @@ class PublicCampaignController
             
         } catch (\PDOException $e) {
             error_log("Erreur identify() : " . $e->getMessage());
-            Session::set('error', 'Une erreur est survenue. Veuillez réessayer.');
+            // En développement, afficher l'erreur détaillée
+            $errorDetail = ($_ENV['APP_DEBUG'] ?? false) ? $e->getMessage() : 'Une erreur est survenue. Veuillez réessayer.';
+            Session::set('error', $errorDetail);
             header("Location: /stm/c/{$uuid}");
             exit;
         }
