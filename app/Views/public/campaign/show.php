@@ -11,7 +11,7 @@ $lang = $campaign['country'] === 'LU' ? 'nl' : 'fr';
 
 // Récupérer les erreurs de session
 $error = \Core\Session::get('error');
-\Core\Session::delete('error');
+\Core\Session::remove('error');
 
 $title = $lang === 'fr' ? $campaign['title_fr'] : $campaign['title_nl'];
 $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['description_nl'];
