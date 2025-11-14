@@ -3,7 +3,270 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+# 📝 MISE À JOUR CHANGELOG - Session 14/11/2025
 
+## À ajouter en HAUT du CHANGELOG.md (après le titre)
+
+---
+
+## [14/11/2025 22:30] - Sprint 7 Sous-tâche 2 : Catalogue + Panier FINALISÉ (SANS PRIX)
+
+### 🎯 Décision Architecture Majeure
+**SUPPRESSION COMPLÈTE de la gestion des prix dans STM v2**
+- ❌ Plus de colonnes prix dans la table `products`
+- ❌ Plus de calculs de totaux dans le panier
+- ❌ Plus d'affichage de prix dans l'interface client
+- ✅ Focus unique : gestion des quotas et quantités
+
+**Justification** : Le client ne gère pas les prix dans l'outil de campagnes promotionnelles. Les prix sont gérés dans un autre système (ERP).
+
+---
+
+### ✅ Ajouté
+
+**PublicCampaignController.php** - Module catalogue et panier complet :
+- Méthode `catalog()` : Affichage du catalogue avec quotas calculés
+  - Récupération catégories actives avec produits
+  - Calcul quotas disponibles par produit (`calculateAvailableQuotas()`)
+  - Filtrage produits commandables (`is_orderable`)
+  - Variables passées à la vue : `$categories`, `$campaign`, `$customer`, `$cart`
+
+- Méthode `addToCart()` : Ajout produit au panier (AJAX)
+  - Vérification session client
+  - Validation quotas disponibles
+  - Gestion quantités (ajout ou mise à jour)
+  - Structure panier : `['campaign_uuid' => '...', 'items' => [...]]`
+  - Items : `['product_id', 'product_code', 'product_name', 'quantity', 'image_fr']`
+  - ❌ PAS de `unit_price`, `line_total`, ou `total`
+
+- Méthode `updateCart()` : Modification quantité produit (AJAX)
+  - Validation quotas avant modification
+  - Suppression si quantité = 0
+  - Pas de recalcul de total
+
+- Méthode `removeFromCart()` : Suppression produit (AJAX)
+  - Filtrage du tableau items
+  - Réindexation avec `array_values()`
+
+- Méthode `clearCart()` : Vider le panier (AJAX)
+  - Réinitialisation : `['campaign_uuid' => '...', 'items' => []]`
+
+**catalog.php** (Vue) - Interface catalogue complète :
+- Navigation catégories sticky avec badges colorés
+- Affichage produits par catégorie avec :
+  - Images (correction : `image_fr` au lieu de `image_path`)
+  - Noms en français (`name_fr`)
+  - Descriptions (`description_fr`)
+  - Quotas dans encadré bleu :
+    - 📦 Maximum autorisé : X unités (si `max_per_customer`)
+    - ✅ Reste disponible : Y unités
+  - ❌ AUCUN affichage de prix
+
+- Layout dynamique responsive :
+  - 1 produit dans catégorie → Pleine largeur (`grid-cols-1`)
+  - 2+ produits → 2 colonnes desktop (`grid-cols-1 md:grid-cols-2`)
+  - Décision automatique avec filtrage des produits commandables
+
+- Panier sidebar (desktop) et modal (mobile) avec :
+  - Liste des produits avec image miniature
+  - Quantités modifiables (+/-)
+  - Suppression par produit
+  - Bouton "Vider le panier"
+  - Bouton "Valider ma commande"
+  - ❌ Aucun prix ni total
+
+- Lightbox zoom image avec Alpine.js
+  - Correction : pas de double `/stm/` dans le chemin
+
+**Routes** (config/routes.php) - 5 nouvelles routes AJAX :
+- `GET /c/{uuid}/catalog` → PublicCampaignController@catalog
+- `POST /c/{uuid}/cart/add` → PublicCampaignController@addToCart
+- `POST /c/{uuid}/cart/update` → PublicCampaignController@updateCart
+- `POST /c/{uuid}/cart/remove` → PublicCampaignController@removeFromCart
+- `POST /c/{uuid}/cart/clear` → PublicCampaignController@clearCart
+
+---
+
+### 🔧 Modifié
+
+**PublicCampaignController.php** :
+- Ligne 331 : Panier sans `'total' => 0` dans `addToCart()`
+- Ligne 415 : Panier sans `'total' => 0` dans `updateCart()`
+- Ligne 453 : Supprimé calcul `line_total` dans `updateCart()`
+- Lignes 459-460 : Supprimé recalcul total panier dans `updateCart()`
+- Ligne 494 : Panier sans `'total' => 0` dans `removeFromCart()`
+- Lignes 501-502 : Supprimé recalcul total panier dans `removeFromCart()`
+- Ligne 531 : Panier sans `'total' => 0` dans `clearCart()`
+- **Lignes 222-255** : Correction bug références PHP `&$category` et `&$product`
+  - Remplacé par accès par clé : `$categories[$key]` et `$products[$productKey]`
+  - **Fix majeur** : Résolvait duplication catégories dans l'affichage
+
+**catalog.php** :
+- Ligne 113 : `image_path` → `image_fr` (click lightbox)
+- Lignes 127-128 : `image_path` → `image_fr` (affichage image)
+- Ligne 114 : Supprimé `file_exists()` (inutile)
+- Lignes 149-159 : **Supprimé section prix produits**
+- Lignes 158-171 : **Amélioré affichage quotas** avec encadré bleu
+- Ligne 162 : Supprimé affichage `max_total` (quota global)
+- Lignes 107-120 : **Ajouté filtrage produits commandables AVANT affichage catégorie**
+  - Correction placement : filtrage avant `<section>` pour éviter titres vides
+  - Grid dynamique selon nombre de produits
+  - `continue` si aucun produit commandable
+- Lignes 253-256 : Supprimé prix panier desktop
+- Lignes 262-266 : Supprimé total panier desktop
+- Lignes 342-345 : Supprimé prix panier mobile
+- Lignes 354-356 : Supprimé total panier mobile
+- Lignes 419-421 : Supprimé fonction `formatPrice()`
+- Ligne 385 : Lightbox : `imagePath` au lieu de `'/stm/' + imagePath`
+
+---
+
+### 🐛 Corrigé
+
+**Bug critique - Duplication catégories** :
+- **Cause** : Références PHP `&$category` et `&$product` dans les boucles
+- **Symptôme** : Affichait 2x la même catégorie au lieu de 2 catégories distinctes
+- **Solution** : Remplacé par `$categories[$key]` et `$products[$productKey]`
+- **Fichier** : PublicCampaignController.php lignes 222-255
+
+**Bug - Images ne s'affichent pas** :
+- **Cause** : Double `/stm/` dans le chemin (`/stm//stm/uploads/...`)
+- **Raison** : DB contient `/stm/uploads/...`, code ajoutait `/stm/` en préfixe
+- **Solution** : Retirer préfixe `/stm/` dans catalog.php
+- **Fichiers** : catalog.php lignes 128, 385
+
+**Bug - Catégories avec titres vides** :
+- **Cause** : Filtrage produits APRÈS affichage du titre `<h2>`
+- **Solution** : Déplacer filtrage AVANT `<section>`
+- **Fichier** : catalog.php lignes 107-120
+
+**Bug - Zoom lightbox ne fonctionne pas** :
+- **Cause** : Double `/stm/` dans `openLightbox()`
+- **Solution** : Utiliser `imagePath` tel quel (déjà complet)
+- **Fichier** : catalog.php ligne 385
+
+---
+
+### 📊 Structure Données
+
+**Session client** (`$_SESSION['public_customer']`) :
+```php
+[
+    'customer_number' => '802412',
+    'country' => 'BE',
+    'company_name' => 'Nom société',
+    'campaign_uuid' => '668c4701...',
+    'campaign_id' => 33,
+    'language' => 'fr',
+    'logged_at' => '2025-11-14 19:00:00'
+]
+```
+
+**Panier simplifié** (`$_SESSION['cart']`) - SANS PRIX :
+```php
+[
+    'campaign_uuid' => '668c4701...',
+    'items' => [
+        [
+            'product_id' => 12,
+            'product_code' => 'COCA33',
+            'product_name' => 'Coca-Cola 33cl x24',
+            'quantity' => 2,
+            'image_fr' => '/stm/uploads/products/coca.jpg'
+            // ❌ PAS de unit_price
+            // ❌ PAS de line_total
+        ]
+    ]
+    // ❌ PAS de total
+]
+```
+
+**Produit avec quotas** (dans `$categories`) :
+```php
+[
+    'id' => 12,
+    'product_code' => 'COCA33',
+    'name_fr' => 'Coca-Cola 33cl',
+    'image_fr' => '/stm/uploads/products/coca.jpg',
+    'max_per_customer' => 10,
+    'max_total' => 100,
+    'available_for_customer' => 8,  // Reste pour ce client
+    'available_global' => 75,        // Reste global
+    'max_orderable' => 8,            // Min des 2
+    'is_orderable' => true           // Booléen
+]
+```
+
+---
+
+### 🧪 Tests Validés
+
+✅ **Catalogue** :
+- 2 catégories distinctes affichées (Boissons sans alcool + Hygiène)
+- Couleurs catégories visibles (barre colorée + badges navigation)
+- Layout adaptatif : 1 colonne si 1 produit, 2 colonnes sinon
+- Images affichées correctement
+- Quotas clairs dans encadré bleu
+- Aucun prix affiché
+
+✅ **Panier** :
+- Ajout produit fonctionne (AJAX)
+- Modification quantité fonctionne (+/-)
+- Suppression produit fonctionne
+- Vider panier fonctionne
+- Quotas respectés (impossible de dépasser max)
+- Compteur items visible (8)
+- Pas de prix ni total
+
+✅ **Lightbox** :
+- Zoom image fonctionne
+- Fermeture avec X ou clic extérieur
+
+---
+
+### 📁 Fichiers Modifiés
+
+1. **app/Controllers/PublicCampaignController.php** (804 lignes)
+   - 7 corrections suppression prix
+   - 1 correction majeure bug références PHP
+
+2. **app/Views/public/campaign/catalog.php** (519 lignes)
+   - 6 sections prix supprimées
+   - Layout dynamique implémenté
+   - Filtrage produits commandables amélioré
+   - 2 corrections chemins images
+
+3. **config/routes.php**
+   - 5 routes AJAX panier ajoutées
+
+---
+
+### 🚀 Progression Sprint 7
+
+- ✅ Sous-tâche 1 (100%) : Identification client + vérification droits
+- ✅ Sous-tâche 2 (100%) : Catalogue + Panier (SANS PRIX)
+- ⬜ Sous-tâche 3 (0%) : Page validation commande
+
+**Progression globale** : ~65% (Sprints 0-4 + Sprint 7 ST1-2)
+
+---
+
+### ⚠️ Notes Importantes
+
+1. **Aucune gestion de prix** dans tout le module public
+2. **Quotas** : Seul critère de limitation (par client + global)
+3. **Images** : Toujours utiliser `image_fr` (pas `image_path`)
+4. **Chemins** : DB contient déjà `/stm/`, ne pas ajouter en préfixe
+5. **Références PHP** : Éviter `&$var` dans les boucles (bugs de référence)
+6. **Layout** : Automatiquement adaptatif selon nombre de produits
+
+---
+
+### 🐛 Bugs Connus Restants
+
+- ⚠️ Problème ID promotions lors de la création (mentionné par Fabian, à investiguer)
+
+---
 ## [14/11/2025 18:30] - Sprint 7 : Catalogue + Panier (Sous-tâche 2) ✅
 
 ### ✅ Ajouté
