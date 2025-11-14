@@ -592,10 +592,17 @@ class Campaign
             return 0;
         }
     }
+    /**
+     * Compter le nombre de promotions (produits) actives pour une campagne
+     * 
+     * @param int $campaignId ID de la campagne
+     * @return int
+     */
     public function countPromotions(int $campaignId): int
     {
-        $query = "SELECT COUNT(*) as count FROM promotions 
-                  WHERE campaign_id = :campaign_id";
+        $query = "SELECT COUNT(*) as count FROM products 
+                  WHERE campaign_id = :campaign_id 
+                  AND is_active = 1";
         
         try {
             $result = $this->db->queryOne($query, [':campaign_id' => $campaignId]);
@@ -605,7 +612,6 @@ class Campaign
             return 0;
         }
     }
-
     /**
      * Compter le nombre de campagnes par pays
      * 
