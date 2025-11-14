@@ -3,10 +3,10 @@
  * PublicCampaignController.php
  * 
  * Contrôleur pour l'interface publique des campagnes
- * Gère l'accès client, l'identification et la commande
+ * Gère l'accès client, l'identification, le catalogue et la commande
  * 
  * @created  2025/11/14 16:30
- * @modified 2025/11/14 17:30 - Corrections : mode PROTECTED, is_authorized, langue
+ * @modified 2025/11/14 18:00 - Ajout catalogue + panier (Sous-tâche 2)
  */
 
 namespace App\Controllers;
@@ -151,6 +151,13 @@ class PublicCampaignController
                 'logged_at' => date('Y-m-d H:i:s')
             ]);
             
+            // Initialiser le panier vide
+            Session::set('cart', [
+                'campaign_uuid' => $uuid,
+                'items' => [],
+                'total' => 0
+            ]);
+            
             // Rediriger vers le catalogue
             header("Location: /stm/c/{$uuid}/catalog");
             exit;
@@ -163,6 +170,428 @@ class PublicCampaignController
             header("Location: /stm/c/{$uuid}");
             exit;
         }
+    }
+
+    /**
+     * Afficher le catalogue de produits
+     * Route : GET /c/{uuid}/catalog
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     */
+    public function catalog(string $uuid): void
+    {
+        try {
+            // Vérifier que le client est identifié
+            $customer = Session::get('public_customer');
+            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+                header("Location: /stm/c/{$uuid}");
+                exit;
+            }
+            
+            // Récupérer la campagne
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaign = $this->db->query($query, [':uuid' => $uuid]);
+            
+            if (empty($campaign)) {
+                Session::remove('public_customer');
+                header("Location: /stm/c/{$uuid}");
+                exit;
+            }
+            
+            $campaign = $campaign[0];
+            
+            // Récupérer toutes les catégories actives avec leurs produits
+            $categoriesQuery = "
+                SELECT DISTINCT
+                    cat.id,
+                    cat.code,
+                    cat.name_fr,
+                    cat.color,
+                    cat.display_order
+                FROM product_categories cat
+                INNER JOIN products p ON p.category_id = cat.id
+                WHERE p.campaign_id = :campaign_id
+                  AND p.is_active = 1
+                  AND cat.is_active = 1
+                ORDER BY cat.display_order ASC, cat.name_fr ASC
+            ";
+            
+            $categories = $this->db->query($categoriesQuery, [':campaign_id' => $campaign['id']]);
+            
+            // Pour chaque catégorie, récupérer ses produits avec quotas
+            foreach ($categories as &$category) {
+                $productsQuery = "
+                    SELECT 
+                        p.*
+                    FROM products p
+                    WHERE p.category_id = :category_id
+                      AND p.campaign_id = :campaign_id
+                      AND p.is_active = 1
+                    ORDER BY p.display_order ASC, p.name ASC
+                ";
+                
+                $products = $this->db->query($productsQuery, [
+                    ':category_id' => $category['id'],
+                    ':campaign_id' => $campaign['id']
+                ]);
+                
+                // Calculer les quotas disponibles pour chaque produit
+                foreach ($products as &$product) {
+                    $quotas = $this->calculateAvailableQuotas(
+                        $product['id'],
+                        $customer['customer_number'],
+                        $customer['country'],
+                        $product['max_per_customer'],
+                        $product['max_total']
+                    );
+                    
+                    $product['available_for_customer'] = $quotas['customer'];
+                    $product['available_global'] = $quotas['global'];
+                    $product['max_orderable'] = $quotas['max_orderable'];
+                    $product['is_orderable'] = $quotas['is_orderable'];
+                }
+                
+                $category['products'] = $products;
+            }
+            
+            // Récupérer le panier depuis la session
+            $cart = Session::get('cart', [
+                'campaign_uuid' => $uuid,
+                'items' => [],
+                'total' => 0
+            ]);
+            
+            // Afficher la vue
+            require __DIR__ . '/../Views/public/campaign/catalog.php';
+            
+        } catch (\PDOException $e) {
+            error_log("Erreur catalog() : " . $e->getMessage());
+            Session::set('error', 'Une erreur est survenue lors du chargement du catalogue.');
+            header("Location: /stm/c/{$uuid}");
+            exit;
+        }
+    }
+
+    /**
+     * Ajouter un produit au panier
+     * Route : POST /c/{uuid}/cart/add
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     */
+    public function addToCart(string $uuid): void
+    {
+        header('Content-Type: application/json');
+        
+        try {
+            // Vérifier session client
+            $customer = Session::get('public_customer');
+            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+                echo json_encode(['success' => false, 'error' => 'Session expirée']);
+                exit;
+            }
+            
+            // Récupérer les données
+            $productId = (int)($_POST['product_id'] ?? 0);
+            $quantity = (int)($_POST['quantity'] ?? 0);
+            
+            if ($productId <= 0 || $quantity <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Données invalides']);
+                exit;
+            }
+            
+            // Récupérer le produit
+            $productQuery = "SELECT * FROM products WHERE id = :id AND campaign_id = :campaign_id AND is_active = 1";
+            $product = $this->db->query($productQuery, [
+                ':id' => $productId,
+                ':campaign_id' => $customer['campaign_id']
+            ]);
+            
+            if (empty($product)) {
+                echo json_encode(['success' => false, 'error' => 'Produit introuvable']);
+                exit;
+            }
+            
+            $product = $product[0];
+            
+            // Vérifier les quotas disponibles
+            $quotas = $this->calculateAvailableQuotas(
+                $productId,
+                $customer['customer_number'],
+                $customer['country'],
+                $product['max_per_customer'],
+                $product['max_total']
+            );
+            
+            if (!$quotas['is_orderable']) {
+                echo json_encode(['success' => false, 'error' => 'Produit plus disponible']);
+                exit;
+            }
+            
+            // Récupérer le panier
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            
+            // Chercher si le produit existe déjà dans le panier
+            $existingIndex = null;
+            foreach ($cart['items'] as $index => $item) {
+                if ($item['product_id'] == $productId) {
+                    $existingIndex = $index;
+                    break;
+                }
+            }
+            
+            // Calculer la nouvelle quantité totale
+            $currentQtyInCart = $existingIndex !== null ? $cart['items'][$existingIndex]['quantity'] : 0;
+            $newTotalQty = $currentQtyInCart + $quantity;
+            
+            // Vérifier que la nouvelle quantité ne dépasse pas les quotas
+            if ($newTotalQty > $quotas['max_orderable']) {
+                echo json_encode([
+                    'success' => false, 
+                    'error' => "Quantité maximale : {$quotas['max_orderable']}"
+                ]);
+                exit;
+            }
+            
+            // Ajouter ou mettre à jour le produit dans le panier
+            if ($existingIndex !== null) {
+                // Mise à jour quantité
+                $cart['items'][$existingIndex]['quantity'] = $newTotalQty;
+                $cart['items'][$existingIndex]['line_total'] = $newTotalQty * $product['promo_price'];
+            } else {
+                // Nouveau produit
+                $cart['items'][] = [
+                    'product_id' => $productId,
+                    'product_code' => $product['product_code'],
+                    'product_name' => $product['name'],
+                    'quantity' => $quantity,
+                    'unit_price' => $product['promo_price'],
+                    'line_total' => $quantity * $product['promo_price'],
+                    'image_path' => $product['image_path']
+                ];
+            }
+            
+            // Recalculer le total
+            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
+            
+            // Sauvegarder le panier en session
+            Session::set('cart', $cart);
+            
+            // Retourner le succès avec le panier mis à jour
+            echo json_encode([
+                'success' => true,
+                'cart' => $cart,
+                'message' => 'Produit ajouté au panier'
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log("Erreur addToCart() : " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
+        }
+        
+        exit;
+    }
+
+    /**
+     * Mettre à jour la quantité d'un produit dans le panier
+     * Route : POST /c/{uuid}/cart/update
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     */
+    public function updateCart(string $uuid): void
+    {
+        header('Content-Type: application/json');
+        
+        try {
+            // Vérifier session client
+            $customer = Session::get('public_customer');
+            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+                echo json_encode(['success' => false, 'error' => 'Session expirée']);
+                exit;
+            }
+            
+            $productId = (int)($_POST['product_id'] ?? 0);
+            $quantity = (int)($_POST['quantity'] ?? 0);
+            
+            if ($productId <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Données invalides']);
+                exit;
+            }
+            
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            
+            // Si quantité = 0, supprimer le produit
+            if ($quantity <= 0) {
+                $cart['items'] = array_values(array_filter($cart['items'], function($item) use ($productId) {
+                    return $item['product_id'] != $productId;
+                }));
+            } else {
+                // Vérifier les quotas
+                $product = $this->db->query("SELECT * FROM products WHERE id = :id", [':id' => $productId]);
+                
+                if (empty($product)) {
+                    echo json_encode(['success' => false, 'error' => 'Produit introuvable']);
+                    exit;
+                }
+                
+                $product = $product[0];
+                
+                $quotas = $this->calculateAvailableQuotas(
+                    $productId,
+                    $customer['customer_number'],
+                    $customer['country'],
+                    $product['max_per_customer'],
+                    $product['max_total']
+                );
+                
+                if ($quantity > $quotas['max_orderable']) {
+                    echo json_encode([
+                        'success' => false, 
+                        'error' => "Quantité maximale : {$quotas['max_orderable']}"
+                    ]);
+                    exit;
+                }
+                
+                // Mettre à jour la quantité
+                foreach ($cart['items'] as &$item) {
+                    if ($item['product_id'] == $productId) {
+                        $item['quantity'] = $quantity;
+                        $item['line_total'] = $quantity * $item['unit_price'];
+                        break;
+                    }
+                }
+            }
+            
+            // Recalculer le total
+            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
+            
+            Session::set('cart', $cart);
+            
+            echo json_encode(['success' => true, 'cart' => $cart]);
+            
+        } catch (\Exception $e) {
+            error_log("Erreur updateCart() : " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
+        }
+        
+        exit;
+    }
+
+    /**
+     * Retirer un produit du panier
+     * Route : POST /c/{uuid}/cart/remove
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     */
+    public function removeFromCart(string $uuid): void
+    {
+        header('Content-Type: application/json');
+        
+        try {
+            $customer = Session::get('public_customer');
+            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+                echo json_encode(['success' => false, 'error' => 'Session expirée']);
+                exit;
+            }
+            
+            $productId = (int)($_POST['product_id'] ?? 0);
+            
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            
+            // Retirer le produit
+            $cart['items'] = array_values(array_filter($cart['items'], function($item) use ($productId) {
+                return $item['product_id'] != $productId;
+            }));
+            
+            // Recalculer le total
+            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
+            
+            Session::set('cart', $cart);
+            
+            echo json_encode(['success' => true, 'cart' => $cart]);
+            
+        } catch (\Exception $e) {
+            error_log("Erreur removeFromCart() : " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
+        }
+        
+        exit;
+    }
+
+    /**
+     * Vider complètement le panier
+     * Route : POST /c/{uuid}/cart/clear
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     */
+    public function clearCart(string $uuid): void
+    {
+        header('Content-Type: application/json');
+        
+        try {
+            $customer = Session::get('public_customer');
+            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+                echo json_encode(['success' => false, 'error' => 'Session expirée']);
+                exit;
+            }
+            
+            Session::set('cart', [
+                'campaign_uuid' => $uuid,
+                'items' => [],
+                'total' => 0
+            ]);
+            
+            echo json_encode(['success' => true, 'cart' => Session::get('cart')]);
+            
+        } catch (\Exception $e) {
+            error_log("Erreur clearCart() : " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
+        }
+        
+        exit;
+    }
+
+    /**
+     * Calculer les quotas disponibles pour un produit
+     * 
+     * @param int $productId ID du produit
+     * @param string $customerNumber Numéro client
+     * @param string $country Pays
+     * @param int|null $maxPerCustomer Quota max par client
+     * @param int|null $maxTotal Quota max global
+     * @return array ['customer' => int, 'global' => int, 'max_orderable' => int, 'is_orderable' => bool]
+     */
+    private function calculateAvailableQuotas(
+        int $productId,
+        string $customerNumber,
+        string $country,
+        ?int $maxPerCustomer,
+        ?int $maxTotal
+    ): array {
+        // Quota utilisé par le client (commandes validées uniquement)
+        $customerUsed = $this->getCustomerQuotaUsed($productId, $customerNumber, $country);
+        
+        // Quota utilisé globalement (toutes commandes validées)
+        $globalUsed = $this->getGlobalQuotaUsed($productId);
+        
+        // Calculer disponibles
+        $availableForCustomer = is_null($maxPerCustomer) ? PHP_INT_MAX : ($maxPerCustomer - $customerUsed);
+        $availableGlobal = is_null($maxTotal) ? PHP_INT_MAX : ($maxTotal - $globalUsed);
+        
+        // Maximum commandable = minimum des 2
+        $maxOrderable = min($availableForCustomer, $availableGlobal);
+        $isOrderable = $maxOrderable > 0;
+        
+        return [
+            'customer' => max(0, $availableForCustomer),
+            'global' => max(0, $availableGlobal),
+            'max_orderable' => max(0, $maxOrderable),
+            'is_orderable' => $isOrderable
+        ];
     }
 
     /**
@@ -258,7 +687,6 @@ class PublicCampaignController
             }
             
             // Mot de passe correct : client déjà vérifié dans identify()
-            // (on a déjà appelé getCustomerFromExternal avant)
             return true;
         }
         
@@ -294,18 +722,16 @@ class PublicCampaignController
         }
         
         foreach ($products as $product) {
-            // Vérifier quota client
-            $customerQuota = $this->getCustomerQuotaUsed($product['id'], $customerNumber, $country);
-            $customerAvailable = is_null($product['max_per_customer']) || 
-                                 $customerQuota < $product['max_per_customer'];
-            
-            // Vérifier quota global
-            $globalQuota = $this->getGlobalQuotaUsed($product['id']);
-            $globalAvailable = is_null($product['max_total']) || 
-                              $globalQuota < $product['max_total'];
+            $quotas = $this->calculateAvailableQuotas(
+                $product['id'],
+                $customerNumber,
+                $country,
+                $product['max_per_customer'],
+                $product['max_total']
+            );
             
             // Si au moins 1 produit est disponible
-            if ($customerAvailable && $globalAvailable) {
+            if ($quotas['is_orderable']) {
                 return true;
             }
         }
