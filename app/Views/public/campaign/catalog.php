@@ -382,7 +382,7 @@
                 },
                 
                 openLightbox(imagePath) {
-                    this.lightboxImage = '/stm/' + imagePath;
+                    this.lightboxImage = imagePath;
                     this.showLightbox = true;
                 },
                 
