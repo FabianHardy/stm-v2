@@ -284,7 +284,7 @@ ob_start();
                             <!-- URL Publique -->
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <button type="button"
-                                        onclick="copyToClipboard('https://actions.trendyfoods.com/stm/campaign/<?= htmlspecialchars($campaign['unique_url']) ?>', this)"
+                                        onclick="copyToClipboard('https://actions.trendyfoods.com/stm/c/<?= htmlspecialchars($campaign['unique_url']) ?>', this)"
                                         class="inline-flex items-center gap-x-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                                         title="Copier le lien public"
                                 >
