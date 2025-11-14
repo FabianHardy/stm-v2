@@ -289,7 +289,7 @@ ob_start();
                                           action="/stm/admin/campaigns/<?= $campaign['id'] ?>/delete" 
                                           onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette campagne ?')"
                                           class="inline">
-                                        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                                        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                                         <button type="submit" 
                                                 class="text-red-600 hover:text-red-900"
                                                 title="Supprimer">
