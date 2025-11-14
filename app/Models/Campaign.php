@@ -561,13 +561,26 @@ class Campaign
     }
 
     /**
-     * Compter le nombre de clients pour une campagne
+    /**
+     * Compter le nombre de clients éligibles pour une campagne
      * 
      * @param int $campaignId ID de la campagne
-     * @return int
+     * @return int|string Nombre de clients ou "Tous" pour mode automatic/protected
      */
-    public function countCustomers(int $campaignId): int
+    public function countCustomers(int $campaignId): int|string
     {
+        $campaign = $this->findById($campaignId);
+        
+        if (!$campaign) {
+            return 0;
+        }
+
+        // Mode automatic ou protected : Tous les clients du pays
+        if (in_array($campaign['customer_assignment_mode'], ['automatic', 'protected'])) {
+            return 'Tous';
+        }
+
+        // Mode manual : Compter dans campaign_customers
         $query = "SELECT COUNT(*) as count FROM campaign_customers 
                   WHERE campaign_id = :campaign_id";
         
@@ -579,13 +592,6 @@ class Campaign
             return 0;
         }
     }
-
-    /**
-     * Compter le nombre de promotions pour une campagne
-     * 
-     * @param int $campaignId ID de la campagne
-     * @return int
-     */
     public function countPromotions(int $campaignId): int
     {
         $query = "SELECT COUNT(*) as count FROM promotions 
@@ -656,6 +662,7 @@ class Campaign
             error_log("Erreur removeAllCustomers: " . $e->getMessage());
             return false;
         }
+    }
 
     /**
      * Compter le nombre de clients DISTINCTS ayant passé commande pour une campagne
