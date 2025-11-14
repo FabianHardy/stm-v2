@@ -219,7 +219,7 @@ class PublicCampaignController
             $categories = $this->db->query($categoriesQuery, [':campaign_id' => $campaign['id']]);
             
             // Pour chaque catégorie, récupérer ses produits avec quotas
-            foreach ($categories as &$category) {
+            foreach ($categories as $key => $category) {
                 $productsQuery = "
                     SELECT 
                         p.*
@@ -236,7 +236,7 @@ class PublicCampaignController
                 ]);
                 
                 // Calculer les quotas disponibles pour chaque produit
-                foreach ($products as &$product) {
+                foreach ($products as $productKey => $product) {
                     $quotas = $this->calculateAvailableQuotas(
                         $product['id'],
                         $customer['customer_number'],
@@ -245,13 +245,13 @@ class PublicCampaignController
                         $product['max_total']
                     );
                     
-                    $product['available_for_customer'] = $quotas['customer'];
-                    $product['available_global'] = $quotas['global'];
-                    $product['max_orderable'] = $quotas['max_orderable'];
-                    $product['is_orderable'] = $quotas['is_orderable'];
+                    $products[$productKey]['available_for_customer'] = $quotas['customer'];
+                    $products[$productKey]['available_global'] = $quotas['global'];
+                    $products[$productKey]['max_orderable'] = $quotas['max_orderable'];
+                    $products[$productKey]['is_orderable'] = $quotas['is_orderable'];
                 }
                 
-                $category['products'] = $products;
+                $categories[$key]['products'] = $products;
             }
             
             // Récupérer le panier depuis la session
