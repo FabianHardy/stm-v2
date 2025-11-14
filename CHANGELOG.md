@@ -1,7 +1,49 @@
 # 📝 CHANGELOG - STM v2
 
 Historique centralisé de toutes les modifications du projet.
+## [14/11/2025 17:30] - Sprint 7 : Corrections PublicCampaignController (Sous-tâche 1)
 
+### 🔧 Modifié
+
+**PublicCampaignController.php** - 3 corrections critiques :
+
+1. **Mode PROTECTED ajouté** dans `checkCustomerAccess()` :
+   - Vérifie le mot de passe (`$_POST['password']` vs `$campaign['order_password']`)
+   - Si mot de passe correct : client déjà validé dans DB externe
+   - Retourne `true` si password OK, `false` sinon
+   
+2. **Colonne `is_authorized` retirée** :
+   - Ligne 240 : `AND is_authorized = 1` supprimé (colonne inexistante)
+   - Requête mode MANUAL simplifiée : seulement campaign_id + customer_number + country
+   
+3. **Langue hardcodée** :
+   - Ligne 150 : `'language' => 'fr'` au lieu de `$customerData['language'] ?? 'fr'`
+   - TODO ajouté pour futur sprint traductions FR/NL
+
+### 📄 Créé
+
+**SPRINT_FUTUR_TRADUCTIONS.md** :
+- Document de référence complet pour système traductions FR/NL
+- Phase 1 : Fichiers PHP (fr.php, nl.php) - 4h
+- Phase 2 : Interface admin DB (optionnel) - 5h30
+- Détection langue navigateur + bouton switch
+- Fonction `__()` pour traductions
+- À implémenter dans Sprint 8 ou 9
+
+### ✅ Prêt pour tests
+
+PublicCampaignController.php fonctionnel avec :
+- ✅ 3 modes d'attribution (automatic, manual, protected)
+- ✅ Vérification quotas produits
+- ✅ Gestion erreurs complète
+- ✅ Langue FR par défaut (traductions = futur sprint)
+
+**Tests à effectuer** :
+1. Passer campagne "test" en mode `automatic`
+2. Tester avec client 802412
+3. Vérifier redirection vers /catalog (404 attendu = normal)
+
+---
 ---
 [14/11/2025 17:00] - Sprint 7 : SOUS-TÂCHE 1 - Structure BDD + Page d'accès campagne
 ✅ Ajouté
