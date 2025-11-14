@@ -12,7 +12,6 @@
 namespace App\Controllers;
 
 use Core\Database;
-use Core\Request;
 use Core\Session;
 
 class PublicCampaignController
@@ -105,8 +104,8 @@ class PublicCampaignController
             $campaign = $campaign[0];
             
             // Récupérer les données du formulaire
-            $customerNumber = trim(Request::post('customer_number'));
-            $country = Request::post('country', $campaign['country'] === 'BOTH' ? 'BE' : $campaign['country']);
+            $customerNumber = trim($_POST['customer_number'] ?? '');
+            $country = $_POST['country'] ?? ($campaign['country'] === 'BOTH' ? 'BE' : $campaign['country']);
             
             // Validation
             if (empty($customerNumber)) {
@@ -153,7 +152,7 @@ class PublicCampaignController
             ]);
             
             // Rediriger vers le catalogue
-            header("Location: /stm/campaign/{$uuid}/catalog");
+            header("Location: /stm/c/{$uuid}/catalog");
             exit;
             
         } catch (\PDOException $e) {
