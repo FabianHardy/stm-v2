@@ -328,7 +328,7 @@ class PublicCampaignController
             }
             
             // Récupérer le panier
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
             
             // Chercher si le produit existe déjà dans le panier
             $existingIndex = null;
@@ -412,7 +412,7 @@ class PublicCampaignController
                 exit;
             }
             
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
             
             // Si quantité = 0, supprimer le produit
             if ($quantity <= 0) {
@@ -450,14 +450,11 @@ class PublicCampaignController
                 foreach ($cart['items'] as &$item) {
                     if ($item['product_id'] == $productId) {
                         $item['quantity'] = $quantity;
-                        $item['line_total'] = $quantity * $item['unit_price'];
                         break;
                     }
                 }
             }
             
-            // Recalculer le total
-            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
             
             Session::set('cart', $cart);
             
@@ -491,15 +488,13 @@ class PublicCampaignController
             
             $productId = (int)($_POST['product_id'] ?? 0);
             
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => [], 'total' => 0]);
+            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
             
             // Retirer le produit
             $cart['items'] = array_values(array_filter($cart['items'], function($item) use ($productId) {
                 return $item['product_id'] != $productId;
             }));
             
-            // Recalculer le total
-            $cart['total'] = array_sum(array_column($cart['items'], 'line_total'));
             
             Session::set('cart', $cart);
             
@@ -533,8 +528,7 @@ class PublicCampaignController
             
             Session::set('cart', [
                 'campaign_uuid' => $uuid,
-                'items' => [],
-                'total' => 0
+                'items' => []
             ]);
             
             echo json_encode(['success' => true, 'cart' => Session::get('cart')]);

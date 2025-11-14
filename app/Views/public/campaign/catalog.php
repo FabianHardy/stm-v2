@@ -113,7 +113,7 @@
                             <div class="relative h-48 bg-gray-100 cursor-pointer" @click="openLightbox('<?= htmlspecialchars($product['image_path']) ?>')">
                                 <?php if (!empty($product['image_path']) && file_exists(__DIR__ . '/../../../../../public/' . $product['image_path'])): ?>
                                     <img src="/stm/<?= htmlspecialchars($product['image_path']) ?>" 
-                                         alt="<?= htmlspecialchars($product['name']) ?>"
+                                         alt="<?= htmlspecialchars($product['name_fr']) ?>"
                                          class="w-full h-full object-contain p-4">
                                 <?php else: ?>
                                     <div class="w-full h-full flex items-center justify-center text-gray-400">
@@ -137,12 +137,12 @@
                             <!-- Infos produit -->
                             <div class="p-4">
                                 <h3 class="text-lg font-bold text-gray-800 mb-2">
-                                    <?= htmlspecialchars($product['name']) ?>
+                                    <?= htmlspecialchars($product['name_fr']) ?>
                                 </h3>
                                 
                                 <?php if (!empty($product['description'])): ?>
                                 <p class="text-sm text-gray-600 mb-3 line-clamp-2">
-                                    <?= htmlspecialchars($product['description']) ?>
+                                    <?= htmlspecialchars($product['description_fr']) ?>
                                 </p>
                                 <?php endif; ?>
                                 
