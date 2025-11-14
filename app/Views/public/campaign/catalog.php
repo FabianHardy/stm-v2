@@ -104,28 +104,34 @@
                     </h2>
                     
                     <!-- Grid produits -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <?php foreach ($category['products'] as $product): ?>
+                    <?php 
+                    // Filtrer les produits commandables uniquement
+                    $orderableProducts = array_filter($category['products'], function($p) {
+                        return $p['is_orderable'] === true;
+                    });
+                    $productCount = count($orderableProducts);
+                    
+                    // Si aucun produit disponible, ne pas afficher la catégorie
+                    if ($productCount === 0) continue;
+                    
+                    // Grid dynamique : 1 colonne si 1 produit, 2 colonnes sinon
+                    $gridClass = $productCount === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+                    ?>
+                    <div class="grid <?= $gridClass ?> gap-6">
+                        <?php foreach ($orderableProducts as $product): ?>
                         <!-- Card produit -->
-                        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition <?= !$product['is_orderable'] ? 'opacity-60' : '' ?>">
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
                             
                             <!-- Image -->
-                            <div class="relative h-48 bg-gray-100 cursor-pointer" @click="openLightbox('<?= htmlspecialchars($product['image_path']) ?>')">
-                                <?php if (!empty($product['image_path']) && file_exists(__DIR__ . '/../../../../../public/' . $product['image_path'])): ?>
-                                    <img src="/stm/<?= htmlspecialchars($product['image_path']) ?>" 
+                            <div class="relative h-48 bg-gray-100 cursor-pointer" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
+                                <?php if (!empty($product['image_fr'])): ?>
+                                    <img src="/stm/<?= htmlspecialchars($product['image_fr']) ?>" 
                                          alt="<?= htmlspecialchars($product['name_fr']) ?>"
                                          class="w-full h-full object-contain p-4">
                                 <?php else: ?>
                                     <div class="w-full h-full flex items-center justify-center text-gray-400">
                                         <i class="fas fa-image text-6xl"></i>
                                     </div>
-                                <?php endif; ?>
-                                
-                                <!-- Badge quota atteint -->
-                                <?php if (!$product['is_orderable']): ?>
-                                <div class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                    Épuisé
-                                </div>
                                 <?php endif; ?>
                                 
                                 <!-- Icône zoom -->
@@ -150,25 +156,23 @@
                                 <!-- Quotas disponibles -->
                                 <div class="text-sm text-gray-600 mb-4 space-y-1">
                                     <?php if (!is_null($product['max_per_customer'])): ?>
-                                    <div class="flex items-center">
-                                        <i class="fas fa-user w-4 text-blue-500 mr-2"></i>
-                                        <span>Max par client : <strong><?= $product['max_per_customer'] ?></strong></span>
-                                        <?php if ($product['available_for_customer'] < $product['max_per_customer']): ?>
-                                        <span class="ml-2 text-orange-600">(reste <?= $product['available_for_customer'] ?>)</span>
-                                        <?php endif; ?>
+                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                                        <div class="flex items-center text-sm">
+                                            <i class="fas fa-box w-4 text-blue-600 mr-2"></i>
+                                            <span class="font-semibold">Maximum autorisé :</span>
+                                            <span class="ml-1 font-bold text-blue-600"><?= $product['max_per_customer'] ?> unités</span>
+                                        </div>
+                                        <div class="flex items-center text-sm">
+                                            <i class="fas fa-check-circle w-4 text-green-600 mr-2"></i>
+                                            <span class="font-semibold">Reste disponible :</span>
+                                            <span class="ml-1 font-bold text-green-600"><?= $product['available_for_customer'] ?> unités</span>
+                                        </div>
                                     </div>
                                     <?php endif; ?>
-                                    
-                                    <?php if (!is_null($product['max_total'])): ?>
-                                    <div class="flex items-center">
-                                        <i class="fas fa-globe w-4 text-green-500 mr-2"></i>
-                                        <span>Disponible : <strong><?= $product['available_global'] ?></strong></span>
-                                    </div>
-                                    <?php endif; ?>
+
                                 </div>
                                 
                                 <!-- Formulaire ajout panier -->
-                                <?php if ($product['is_orderable']): ?>
                                 <div class="flex items-center gap-2">
                                     <input type="number" 
                                            min="1" 
@@ -182,11 +186,6 @@
                                         <i class="fas fa-cart-plus mr-2"></i>Ajouter
                                     </button>
                                 </div>
-                                <?php else: ?>
-                                <div class="bg-gray-100 text-gray-600 text-center py-2 rounded-lg font-semibold">
-                                    <i class="fas fa-ban mr-2"></i>Plus disponible
-                                </div>
-                                <?php endif; ?>
                             </div>
                         </div>
                         <?php endforeach; ?>
