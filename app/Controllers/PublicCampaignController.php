@@ -204,7 +204,7 @@ class PublicCampaignController
                 CLL_EMAIL as email,
                 CLL_LANGUE as language
             FROM {$table}
-            WHERE IDE_CLL = :customer_number
+            WHERE CLL_NCLIXX = :customer_number
             LIMIT 1
         ";
         
