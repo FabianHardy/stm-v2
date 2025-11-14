@@ -25,7 +25,7 @@ class PublicCampaignController
 
     /**
      * Afficher la page d'accès à une campagne via UUID
-     * Route : GET /campaign/{uuid}
+     * Route : GET /c/{uuid}
      * 
      * @param string $uuid UUID de la campagne
      * @return void
@@ -84,7 +84,7 @@ class PublicCampaignController
 
     /**
      * Traiter l'identification du client
-     * Route : POST /campaign/{uuid}/identify
+     * Route : POST /c/{uuid}/identify
      * 
      * @param string $uuid UUID de la campagne
      * @return void
@@ -110,7 +110,7 @@ class PublicCampaignController
             // Validation
             if (empty($customerNumber)) {
                 Session::set('error', 'Le numéro client est obligatoire.');
-                header("Location: /stm/campaign/{$uuid}");
+                header("Location: /stm/c/{$uuid}");
                 exit;
             }
             
@@ -120,7 +120,7 @@ class PublicCampaignController
             
             if (!$customerData) {
                 Session::set('error', 'Numéro client introuvable. Veuillez vérifier votre numéro.');
-                header("Location: /stm/campaign/{$uuid}");
+                header("Location: /stm/c/{$uuid}");
                 exit;
             }
             
@@ -158,7 +158,7 @@ class PublicCampaignController
         } catch (\PDOException $e) {
             error_log("Erreur identify() : " . $e->getMessage());
             Session::set('error', 'Une erreur est survenue. Veuillez réessayer.');
-            header("Location: /stm/campaign/{$uuid}");
+            header("Location: /stm/c/{$uuid}");
             exit;
         }
     }
