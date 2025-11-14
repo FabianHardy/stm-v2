@@ -103,7 +103,7 @@ if ($now < $start) {
                 <div class="flex items-center space-x-3">
                     <div class="flex-1 bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
                         <code id="campaign-url" class="text-white font-mono text-sm break-all">
-                            https://actions.trendyfoods.com/stm/campaign/<?= htmlspecialchars($campaign['unique_url']) ?>
+                            https://actions.trendyfoods.com/stm/c/<?= htmlspecialchars($campaign['unique_url']) ?>
                         </code>
                     </div>
                     <button type="button"
