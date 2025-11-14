@@ -96,6 +96,21 @@
             <div class="flex-1">
                 
                 <?php foreach ($categories as $category): ?>
+                    
+                <?php 
+                // Filtrer les produits commandables uniquement AVANT d'afficher la catégorie
+                $orderableProducts = array_filter($category['products'], function($p) {
+                    return $p['is_orderable'] === true;
+                });
+                $productCount = count($orderableProducts);
+                
+                // Si aucun produit disponible, ne pas afficher la catégorie
+                if ($productCount === 0) continue;
+                
+                // Grid dynamique : 1 colonne si 1 produit, 2 colonnes sinon
+                $gridClass = $productCount === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+                ?>
+                
                 <!-- Section catégorie -->
                 <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
                     <h2 class="text-3xl font-bold mb-6 flex items-center">
@@ -104,19 +119,6 @@
                     </h2>
                     
                     <!-- Grid produits -->
-                    <?php 
-                    // Filtrer les produits commandables uniquement
-                    $orderableProducts = array_filter($category['products'], function($p) {
-                        return $p['is_orderable'] === true;
-                    });
-                    $productCount = count($orderableProducts);
-                    
-                    // Si aucun produit disponible, ne pas afficher la catégorie
-                    if ($productCount === 0) continue;
-                    
-                    // Grid dynamique : 1 colonne si 1 produit, 2 colonnes sinon
-                    $gridClass = $productCount === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
-                    ?>
                     <div class="grid <?= $gridClass ?> gap-6">
                         <?php foreach ($orderableProducts as $product): ?>
                         <!-- Card produit -->
