@@ -173,8 +173,17 @@
                                             <p class="text-lg font-bold text-blue-700 mt-1">
                                                 <?php
                                                 $deliveryDate = new DateTime($campaign['delivery_date']);
-                                                $locale = $customer['language'] === 'fr' ? 'fr_FR' : 'nl_NL';
-                                                echo strftime('%d %B %Y', $deliveryDate->getTimestamp());
+                                                
+                                                // Traduction des mois
+                                                $monthsFr = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+                                                $monthsNl = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+                                                
+                                                $day = $deliveryDate->format('d');
+                                                $monthIndex = (int)$deliveryDate->format('m') - 1;
+                                                $year = $deliveryDate->format('Y');
+                                                
+                                                $monthName = $customer['language'] === 'fr' ? $monthsFr[$monthIndex] : $monthsNl[$monthIndex];
+                                                echo "$day $monthName $year";
                                                 ?>
                                             </p>
                                         </div>
