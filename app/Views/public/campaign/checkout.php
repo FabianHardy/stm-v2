@@ -33,6 +33,31 @@
         </div>
     </div>
 
+    <!-- Messages d'erreur/succès -->
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="container mx-auto px-4 mt-4">
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">
+                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span><?= htmlspecialchars($_SESSION['error']) ?></span>
+            </div>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="container mx-auto px-4 mt-4">
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg flex items-center">
+                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span><?= htmlspecialchars($_SESSION['success']) ?></span>
+            </div>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
     <!-- Contenu principal -->
     <div class="container mx-auto px-4 py-8">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
