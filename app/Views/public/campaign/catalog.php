@@ -500,7 +500,7 @@
                     }
                     
                     // Redirection vers page de validation (sous-tâche 3)
-                    window.location.href = '/stm/c/<?= $uuid ?>/order';
+                    window.location.href = '/stm/c/<?= $uuid ?>/checkout';
                 },
                 
                 showNotification(message) {
