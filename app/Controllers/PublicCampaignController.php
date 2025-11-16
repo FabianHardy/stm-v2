@@ -1015,11 +1015,6 @@ class PublicCampaignController
                     ':quantity' => $item['quantity']
                 ]);
 
-                // Mettre à jour le total_ordered du produit
-                $this->db->execute(
-                    "UPDATE products SET total_ordered = total_ordered + :qty WHERE id = :id",
-                    [':qty' => $item['quantity'], ':id' => $item['product_id']]
-                );
             }
 
             // 6. Générer le fichier TXT pour l'ERP
