@@ -1,234 +1,215 @@
 <?php
 /**
- * Vue : Page de confirmation de commande
+ * Vue : Page de confirmation après validation de commande
  * 
- * Affichée après la validation réussie d'une commande
+ * Affiche le message de succès et les détails de la commande validée
  * 
  * @package STM
  * @created 17/11/2025
  */
 
-// Vérifier que la commande existe en session
-if (!isset($_SESSION['last_order_uuid']) || !isset($_SESSION['public_customer'])) {
+// Vérifier que l'utilisateur a bien une session client
+if (!isset($_SESSION['public_customer'])) {
     header('Location: /stm/');
     exit;
 }
 
 $customer = $_SESSION['public_customer'];
-$orderUuid = $_SESSION['last_order_uuid'];
 
-// Récupérer les détails de la commande
-$db = \Core\Database::getInstance();
+// Récupérer l'UUID de la campagne depuis l'URL
+$urlParts = explode('/', $_SERVER['REQUEST_URI']);
+$uuidIndex = array_search('c', $urlParts);
+$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
 
+// Récupérer les infos de la campagne
 try {
-    $query = "SELECT o.*, c.name as campaign_name, c.unique_url
-              FROM orders o
-              JOIN campaigns c ON o.campaign_id = c.id
-              WHERE o.uuid = :uuid
-              LIMIT 1";
-    
-    $order = $db->queryOne($query, [':uuid' => $orderUuid]);
-
-    if (!$order) {
-        throw new \Exception("Commande introuvable");
-    }
-
-    // Récupérer les lignes de commande
-    $queryLines = "SELECT * FROM order_lines WHERE order_id = :order_id ORDER BY id";
-    $orderLines = $db->query($queryLines, [':order_id' => $order['id']]);
-
+    $db = \Core\Database::getInstance();
+    $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+    $campaignResult = $db->query($query, [':uuid' => $uuid]);
+    $campaign = !empty($campaignResult) ? $campaignResult[0] : null;
 } catch (\PDOException $e) {
     error_log("Erreur confirmation: " . $e->getMessage());
+    $campaign = null;
+}
+
+// Si pas de campagne, rediriger
+if (!$campaign) {
     header('Location: /stm/');
     exit;
 }
 
-// Nettoyer la session
-unset($_SESSION['last_order_uuid']);
-
-ob_start();
+// Récupérer l'UUID de la dernière commande si disponible
+$orderUuid = $_SESSION['last_order_uuid'] ?? null;
 ?>
+<!DOCTYPE html>
+<html lang="<?= $customer['language'] ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $customer['language'] === 'fr' ? 'Commande validée' : 'Bestelling bevestigd' ?> - <?= htmlspecialchars($campaign['name']) ?></title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
 
-<!-- Animation de succès -->
-<div class="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center px-4 py-8">
-    <div class="max-w-2xl w-full">
-        
-        <!-- Carte de confirmation -->
-        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-            
-            <!-- En-tête avec icône de succès -->
-            <div class="bg-gradient-to-r from-green-500 to-green-600 p-8 text-center">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4 animate-bounce">
-                    <svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                    </svg>
-                </div>
-                <h1 class="text-3xl font-bold text-white mb-2">
-                    <?= $customer['language'] === 'fr' ? 'Commande validée !' : 'Bestelling gevalideerd!' ?>
-                </h1>
-                <p class="text-green-100 text-lg">
-                    <?= $customer['language'] === 'fr' 
-                        ? 'Merci pour votre confiance' 
-                        : 'Bedankt voor uw vertrouwen' ?>
-                </p>
-            </div>
-
-            <!-- Contenu -->
-            <div class="p-8">
-                
-                <!-- Message de confirmation -->
-                <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-                    <p class="text-green-800 text-center">
-                        <?= $customer['language'] === 'fr' 
-                            ? 'Votre commande a été enregistrée avec succès. Un email de confirmation vous a été envoyé.' 
-                            : 'Uw bestelling is succesvol geregistreerd. Er is een bevestigingsmail naar u verzonden.' ?>
+    <!-- En-tête de la page -->
+    <div class="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold"><?= htmlspecialchars($campaign['title_' . $customer['language']]) ?></h1>
+                    <p class="text-green-100 text-sm mt-1">
+                        <?= $customer['language'] === 'fr' ? 'Commande validée avec succès' : 'Bestelling succesvol bevestigd' ?>
                     </p>
                 </div>
-
-                <!-- Détails de la commande -->
-                <div class="space-y-4 mb-6">
-                    
-                    <!-- Référence commande -->
-                    <div class="flex justify-between items-center py-3 border-b border-gray-200">
-                        <span class="text-gray-600">
-                            <?= $customer['language'] === 'fr' ? 'Référence' : 'Referentie' ?>
-                        </span>
-                        <span class="font-mono font-bold text-blue-600">
-                            <?= htmlspecialchars(strtoupper(substr($order['uuid'], 0, 8))) ?>
-                        </span>
-                    </div>
-
-                    <!-- Campagne -->
-                    <div class="flex justify-between items-center py-3 border-b border-gray-200">
-                        <span class="text-gray-600">
-                            <?= $customer['language'] === 'fr' ? 'Campagne' : 'Campagne' ?>
-                        </span>
-                        <span class="font-semibold text-gray-800">
-                            <?= htmlspecialchars($order['campaign_name']) ?>
-                        </span>
-                    </div>
-
-                    <!-- Numéro client -->
-                    <div class="flex justify-between items-center py-3 border-b border-gray-200">
-                        <span class="text-gray-600">
-                            <?= $customer['language'] === 'fr' ? 'Numéro client' : 'Klantnummer' ?>
-                        </span>
-                        <span class="font-semibold text-gray-800">
-                            <?= htmlspecialchars($customer['customer_number']) ?>
-                        </span>
-                    </div>
-
-                    <!-- Email -->
-                    <div class="flex justify-between items-center py-3 border-b border-gray-200">
-                        <span class="text-gray-600">Email</span>
-                        <span class="font-semibold text-gray-800">
-                            <?= htmlspecialchars($order['customer_email']) ?>
-                        </span>
-                    </div>
-
-                    <!-- Date -->
-                    <div class="flex justify-between items-center py-3 border-b border-gray-200">
-                        <span class="text-gray-600">Date</span>
-                        <span class="font-semibold text-gray-800">
-                            <?php
-                            $orderDate = new DateTime($order['created_at']);
-                            echo $orderDate->format('d/m/Y H:i');
-                            ?>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Récapitulatif produits -->
-                <div class="mb-6">
-                    <h3 class="font-bold text-gray-800 mb-4">
-                        <?= $customer['language'] === 'fr' ? 'Produits commandés' : 'Bestelde producten' ?>
-                    </h3>
-                    <div class="bg-gray-50 rounded-lg p-4 space-y-3">
-                        <?php foreach ($orderLines as $line): ?>
-                            <div class="flex justify-between items-center">
-                                <div class="flex-1">
-                                    <p class="font-medium text-gray-800">
-                                        <?= htmlspecialchars($line['product_name']) ?>
-                                    </p>
-                                    <p class="text-sm text-gray-500">
-                                        <?= $customer['language'] === 'fr' ? 'Code' : 'Code' ?>: 
-                                        <?= htmlspecialchars($line['product_code']) ?>
-                                    </p>
-                                </div>
-                                <div class="text-right">
-                                    <span class="text-2xl font-bold text-blue-600">
-                                        <?= $line['quantity'] ?>
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                        
-                        <!-- Total -->
-                        <div class="pt-3 border-t border-gray-300 flex justify-between items-center">
-                            <span class="font-bold text-gray-800">
-                                <?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?>
-                            </span>
-                            <span class="text-2xl font-bold text-blue-600">
-                                <?= $order['total_items'] ?>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Informations complémentaires -->
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <div class="flex items-start">
-                        <svg class="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <div class="text-sm text-blue-800">
-                            <?= $customer['language'] === 'fr' 
-                                ? '<strong>Prochaines étapes :</strong><br>Votre commande a été transmise à notre service logistique. Vous serez informé de la date de livraison par email.' 
-                                : '<strong>Volgende stappen:</strong><br>Uw bestelling is doorgestuurd naar onze logistieke dienst. U wordt per e-mail geïnformeerd over de leveringsdatum.' ?>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Boutons d'action -->
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <a href="/stm/c/<?= htmlspecialchars($order['unique_url']) ?>/catalog" 
-                       class="flex-1 bg-blue-600 text-white text-center py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                        <?= $customer['language'] === 'fr' ? 'Nouvelle commande' : 'Nieuwe bestelling' ?>
-                    </a>
-                    <button onclick="window.print()" 
-                            class="flex-1 bg-gray-200 text-gray-700 text-center py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
-                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                        </svg>
-                        <?= $customer['language'] === 'fr' ? 'Imprimer' : 'Afdrukken' ?>
-                    </button>
+                <div class="text-right">
+                    <p class="text-green-100 text-sm">
+                        <?= $customer['language'] === 'fr' ? 'Client N°' : 'Klant Nr.' ?>
+                    </p>
+                    <p class="text-xl font-bold"><?= htmlspecialchars($customer['customer_number']) ?></p>
                 </div>
             </div>
         </div>
-
-        <!-- Footer -->
-        <p class="text-center text-gray-500 text-sm mt-6">
-            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-            </svg>
-            <?= $customer['language'] === 'fr' 
-                ? 'Un email récapitulatif vous a été envoyé' 
-                : 'Er is een overzichtsmail naar u verzonden' ?>
-        </p>
     </div>
-</div>
 
-<style>
-@media print {
-    .bg-gradient-to-br { background: white !important; }
-    button { display: none !important; }
-}
-</style>
+    <!-- Message de succès -->
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="container mx-auto px-4 mt-6">
+            <div class="bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg flex items-center shadow-md">
+                <svg class="w-8 h-8 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <p class="font-semibold text-lg"><?= htmlspecialchars($_SESSION['success']) ?></p>
+                    <?php if ($orderUuid): ?>
+                        <p class="text-sm mt-1">
+                            <?= $customer['language'] === 'fr' ? 'Numéro de commande' : 'Bestelnummer' ?> : 
+                            <span class="font-mono font-bold"><?= htmlspecialchars($orderUuid) ?></span>
+                        </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
 
-<?php
-$content = ob_get_clean();
-$title = ($customer['language'] === 'fr' ? 'Confirmation de commande' : 'Bestelbevestiging') . ' - Trendy Foods';
+    <!-- Contenu principal -->
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-3xl mx-auto">
+            
+            <!-- Carte de confirmation -->
+            <div class="bg-white rounded-lg shadow-md p-8 text-center">
+                <!-- Icône de succès -->
+                <div class="mb-6">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full">
+                        <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                </div>
 
-// Layout simplifié pour interface publique
-require __DIR__ . '/../../layouts/admin.php';
-?>
+                <!-- Titre -->
+                <h2 class="text-3xl font-bold text-gray-800 mb-4">
+                    <?= $customer['language'] === 'fr' ? 'Merci pour votre commande !' : 'Bedankt voor uw bestelling!' ?>
+                </h2>
+
+                <!-- Message -->
+                <div class="text-gray-600 space-y-3 mb-8">
+                    <p>
+                        <?= $customer['language'] === 'fr' 
+                            ? 'Votre commande a été enregistrée et sera traitée dans les plus brefs délais.' 
+                            : 'Uw bestelling is geregistreerd en wordt zo spoedig mogelijk verwerkt.' ?>
+                    </p>
+                    <p>
+                        <?= $customer['language'] === 'fr' 
+                            ? 'Vous recevrez un email de confirmation à l\'adresse indiquée.' 
+                            : 'U ontvangt een bevestigingsmail op het opgegeven adres.' ?>
+                    </p>
+                    <?php if ($campaign['deferred_delivery'] == 1 && !empty($campaign['delivery_date'])): ?>
+                        <p class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <span class="font-semibold text-blue-900">
+                                <?= $customer['language'] === 'fr' ? 'Date de livraison prévue :' : 'Geplande leveringsdatum:' ?>
+                            </span>
+                            <br>
+                            <span class="text-lg font-bold text-blue-700">
+                                <?php
+                                $deliveryDate = new DateTime($campaign['delivery_date']);
+                                $monthsFr = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+                                $monthsNl = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+                                $day = $deliveryDate->format('d');
+                                $monthIndex = (int)$deliveryDate->format('m') - 1;
+                                $year = $deliveryDate->format('Y');
+                                $monthName = $customer['language'] === 'fr' ? $monthsFr[$monthIndex] : $monthsNl[$monthIndex];
+                                echo "$day $monthName $year";
+                                ?>
+                            </span>
+                        </p>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Informations commande -->
+                <?php if ($orderUuid): ?>
+                    <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                            <?= $customer['language'] === 'fr' ? 'Informations de commande' : 'Bestelgegevens' ?>
+                        </h3>
+                        <div class="space-y-2 text-left">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">
+                                    <?= $customer['language'] === 'fr' ? 'Numéro de commande' : 'Bestelnummer' ?> :
+                                </span>
+                                <span class="font-mono font-semibold"><?= htmlspecialchars($orderUuid) ?></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">
+                                    <?= $customer['language'] === 'fr' ? 'Client' : 'Klant' ?> :
+                                </span>
+                                <span class="font-semibold"><?= htmlspecialchars($customer['customer_number']) ?></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">
+                                    <?= $customer['language'] === 'fr' ? 'Date' : 'Datum' ?> :
+                                </span>
+                                <span class="font-semibold"><?= date('d/m/Y H:i') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Actions -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/catalog" 
+                       class="inline-flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <?= $customer['language'] === 'fr' ? 'Retour au catalogue' : 'Terug naar catalogus' ?>
+                    </a>
+                    <a href="/stm/c/<?= htmlspecialchars($uuid) ?>" 
+                       class="inline-flex items-center justify-center bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                        <?= $customer['language'] === 'fr' ? 'Se déconnecter' : 'Afmelden' ?>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Note informative -->
+            <div class="mt-6 text-center text-sm text-gray-500">
+                <p>
+                    <i class="fas fa-info-circle mr-1"></i>
+                    <?= $customer['language'] === 'fr' 
+                        ? 'Pour toute question concernant votre commande, contactez votre commercial habituel.' 
+                        : 'Voor vragen over uw bestelling kunt u contact opnemen met uw vaste vertegenwoordiger.' ?>
+                </p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
