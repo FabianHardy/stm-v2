@@ -452,7 +452,23 @@ $router->post('/c/{uuid}/cart/clear', function($uuid) {
     $controller->clearCart($uuid);
 });
 
-// NOTE : Les routes suivantes seront ajoutées dans la SOUS-TÂCHE 3 :
-// - GET /c/{uuid}/order (page validation commande avec CGV + email)
-// - POST /c/{uuid}/order/submit (enregistrement commande)
-// - GET /c/{uuid}/confirmation/{order_id} (confirmation)
+// ============================================
+// ROUTES VALIDATION COMMANDE (SPRINT 7 - SOUS-TÂCHE 3)
+// ============================================
+
+// Page de validation commande (checkout)
+$router->get('/c/{uuid}/checkout', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->checkout($uuid);
+});
+
+// Traiter la soumission de commande
+$router->post('/c/{uuid}/order/submit', function($uuid) {
+    $controller = new PublicCampaignController();
+    $controller->submitOrder($uuid);
+});
+
+// Page de confirmation après validation
+$router->get('/c/{uuid}/order/confirmation', function($uuid) {
+    require __DIR__ . '/../app/Views/public/campaign/confirmation.php';
+});
