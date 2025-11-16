@@ -801,4 +801,445 @@ class PublicCampaignController
         // Inclure la vue
         require __DIR__ . '/../Views/public/campaign/access_denied.php';
     }
+
+    /**
+     * Afficher la page de validation de commande (checkout)
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 17/11/2025
+     */
+    public function checkout(string $uuid): void
+    {
+        // Vérifier session client
+        if (!isset($_SESSION['public_customer']) || $_SESSION['public_customer']['campaign_uuid'] !== $uuid) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
+
+        // Récupérer les données de session
+        $customer = $_SESSION['public_customer'];
+        $cart = $_SESSION['cart'] ?? ['campaign_uuid' => $uuid, 'items' => []];
+
+        // Vérifier que le panier n'est pas vide
+        if (empty($cart['items'])) {
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Votre panier est vide. Veuillez ajouter des produits avant de valider.' 
+                : 'Uw winkelwagen is leeg. Voeg producten toe voordat u valideert.';
+            header('Location: /stm/c/' . $uuid . '/catalog');
+            exit;
+        }
+
+        // Récupérer la campagne depuis la DB
+        try {
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaign = $this->db->query($query, [':uuid' => $uuid]);
+
+            if (empty($campaign)) {
+                header('Location: /stm/c/' . $uuid);
+                exit;
+            }
+
+            $campaign = $campaign[0];
+
+            // Charger la vue checkout
+            require __DIR__ . '/../Views/public/campaign/checkout.php';
+            
+        } catch (\PDOException $e) {
+            error_log("Erreur checkout: " . $e->getMessage());
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Une erreur est survenue. Veuillez réessayer.' 
+                : 'Er is een fout opgetreden. Probeer het opnieuw.';
+            header('Location: /stm/c/' . $uuid . '/catalog');
+            exit;
+        }
+    }
+
+    /**
+     * Traiter la soumission de commande
+     * 
+     * Processus complet :
+     * 1. Validation email + CGV
+     * 2. Validation quotas finale
+     * 3. Création/récupération client dans table customers
+     * 4. Création commande dans table orders
+     * 5. Création lignes dans table order_lines
+     * 6. Génération fichier TXT pour ERP
+     * 7. Vidage panier
+     * 8. Redirection page confirmation
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 17/11/2025
+     */
+    public function submitOrder(string $uuid): void
+    {
+        // Vérifier session client
+        if (!isset($_SESSION['public_customer']) || $_SESSION['public_customer']['campaign_uuid'] !== $uuid) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
+
+        $customer = $_SESSION['public_customer'];
+        $cart = $_SESSION['cart'] ?? ['campaign_uuid' => $uuid, 'items' => []];
+
+        // Vérifier panier non vide
+        if (empty($cart['items'])) {
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Votre panier est vide.' 
+                : 'Uw winkelwagen is leeg.';
+            header('Location: /stm/c/' . $uuid . '/catalog');
+            exit;
+        }
+
+        // Vérifier token CSRF
+        if (!isset($_POST['_token']) || $_POST['_token'] !== $_SESSION['csrf_token']) {
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Token de sécurité invalide.' 
+                : 'Ongeldig beveiligingstoken.';
+            header('Location: /stm/c/' . $uuid . '/checkout');
+            exit;
+        }
+
+        // Récupérer et valider l'email
+        $customerEmail = trim($_POST['customer_email'] ?? '');
+        if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Veuillez saisir une adresse email valide.' 
+                : 'Gelieve een geldig e-mailadres in te voeren.';
+            header('Location: /stm/c/' . $uuid . '/checkout');
+            exit;
+        }
+
+        // Vérifier CGV
+        if (!isset($_POST['cgv_1']) || !isset($_POST['cgv_2']) || !isset($_POST['cgv_3'])) {
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Vous devez accepter toutes les conditions.' 
+                : 'U moet alle voorwaarden aanvaarden.';
+            header('Location: /stm/c/' . $uuid . '/checkout');
+            exit;
+        }
+
+        try {
+            // Démarrer transaction
+            $this->db->beginTransaction();
+
+            // 1. Récupérer la campagne
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaignResult = $this->db->query($query, [':uuid' => $uuid]);
+
+            if (empty($campaignResult)) {
+                throw new \Exception("Campagne introuvable");
+            }
+
+            $campaign = $campaignResult[0];
+
+            // 2. VALIDATION FINALE DES QUOTAS pour chaque produit
+            foreach ($cart['items'] as $item) {
+                // Récupérer le produit
+                $productQuery = "SELECT * FROM products WHERE id = :id AND campaign_id = :campaign_id";
+                $productResult = $this->db->query($productQuery, [
+                    ':id' => $item['product_id'], 
+                    ':campaign_id' => $campaign['id']
+                ]);
+
+                if (empty($productResult)) {
+                    throw new \Exception("Produit introuvable : " . $item['product_name']);
+                }
+
+                $product = $productResult[0];
+
+                // Calculer quotas disponibles
+                $quotas = $this->calculateAvailableQuotas(
+                    $product['id'],
+                    $customer['customer_number'],
+                    $customer['country'],
+                    $product['max_per_customer'],
+                    $product['max_total']
+                );
+
+                // Vérifier si quantité demandée est disponible
+                if ($item['quantity'] > $quotas['max_orderable']) {
+                    throw new \Exception(
+                        "Quota dépassé pour " . $item['product_name'] . 
+                        ". Maximum disponible : " . $quotas['max_orderable']
+                    );
+                }
+            }
+
+            // 3. Créer ou récupérer le client dans table customers
+            $customerId = $this->getOrCreateCustomer(
+                $customer['customer_number'],
+                $customer['country'],
+                $customer['company_name'] ?? '',
+                $customerEmail
+            );
+
+            // 4. Créer la commande dans table orders
+            $orderUuid = $this->generateUuid();
+            $totalItems = array_sum(array_column($cart['items'], 'quantity'));
+            $totalProducts = count($cart['items']);
+
+            $queryOrder = "INSERT INTO orders (
+                uuid, campaign_id, customer_id, customer_email,
+                total_items, total_products, status, created_at
+            ) VALUES (
+                :uuid, :campaign_id, :customer_id, :customer_email,
+                :total_items, :total_products, 'pending', NOW()
+            )";
+
+            $this->db->execute($queryOrder, [
+                ':uuid' => $orderUuid,
+                ':campaign_id' => $campaign['id'],
+                ':customer_id' => $customerId,
+                ':customer_email' => $customerEmail,
+                ':total_items' => $totalItems,
+                ':total_products' => $totalProducts
+            ]);
+
+            $orderId = $this->db->lastInsertId();
+
+            // 5. Créer les lignes de commande dans order_lines
+            foreach ($cart['items'] as $item) {
+                $queryLine = "INSERT INTO order_lines (
+                    order_id, product_id, product_code, product_name, quantity, created_at
+                ) VALUES (
+                    :order_id, :product_id, :product_code, :product_name, :quantity, NOW()
+                )";
+
+                $this->db->execute($queryLine, [
+                    ':order_id' => $orderId,
+                    ':product_id' => $item['product_id'],
+                    ':product_code' => $item['product_code'],
+                    ':product_name' => $item['product_name'],
+                    ':quantity' => $item['quantity']
+                ]);
+
+                // Mettre à jour le total_ordered du produit
+                $this->db->execute(
+                    "UPDATE products SET total_ordered = total_ordered + :qty WHERE id = :id",
+                    [':qty' => $item['quantity'], ':id' => $item['product_id']]
+                );
+            }
+
+            // 6. Générer le fichier TXT pour l'ERP
+            $filePath = $this->generateOrderFile(
+                $orderId,
+                $campaign,
+                $customer['customer_number'],
+                $customer['country'],
+                $cart['items']
+            );
+
+            // Mettre à jour le chemin du fichier dans la commande
+            $this->db->execute(
+                "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), status = 'validated' WHERE id = :id",
+                [':file_path' => $filePath, ':id' => $orderId]
+            );
+
+            // 7. Valider la transaction
+            $this->db->commit();
+
+            // 8. Vider le panier
+            $_SESSION['cart'] = ['campaign_uuid' => $uuid, 'items' => []];
+
+            // 9. Stocker l'UUID de la commande en session pour la page de confirmation
+            $_SESSION['last_order_uuid'] = $orderUuid;
+
+            // 10. Message de succès
+            $_SESSION['success'] = $customer['language'] === 'fr' 
+                ? 'Votre commande a été validée avec succès !' 
+                : 'Uw bestelling is succesvol gevalideerd!';
+
+            // 11. Redirection vers page confirmation
+            header('Location: /stm/c/' . $uuid . '/order/confirmation');
+            exit;
+
+        } catch (\Exception $e) {
+            // Rollback en cas d'erreur
+            $this->db->rollBack();
+            
+            error_log("Erreur submitOrder: " . $e->getMessage());
+            
+            $_SESSION['error'] = $customer['language'] === 'fr' 
+                ? 'Erreur lors de la validation de votre commande : ' . $e->getMessage()
+                : 'Fout bij het valideren van uw bestelling: ' . $e->getMessage();
+            
+            header('Location: /stm/c/' . $uuid . '/checkout');
+            exit;
+        }
+    }
+
+    /**
+     * Récupérer ou créer un client dans la table customers
+     * 
+     * @param string $customerNumber Numéro client
+     * @param string $country Pays (BE/LU)
+     * @param string $companyName Nom société
+     * @param string $email Email
+     * @return int ID du client
+     * @created 17/11/2025
+     */
+    private function getOrCreateCustomer(
+        string $customerNumber, 
+        string $country, 
+        string $companyName, 
+        string $email
+    ): int {
+        // Chercher client existant
+        $query = "SELECT id FROM customers WHERE customer_number = :number AND country = :country LIMIT 1";
+        $existingResult = $this->db->query($query, [
+            ':number' => $customerNumber,
+            ':country' => $country
+        ]);
+
+        if (!empty($existingResult)) {
+            $existing = $existingResult[0];
+            // Client existe : mettre à jour email et last_order_date
+            $this->db->execute(
+                "UPDATE customers SET email = :email, last_order_date = CURDATE(), total_orders = total_orders + 1 WHERE id = :id",
+                [':email' => $email, ':id' => $existing['id']]
+            );
+            return (int)$existing['id'];
+        }
+
+        // Client n'existe pas : créer
+        $queryInsert = "INSERT INTO customers (
+            customer_number, country, company_name, email, 
+            total_orders, last_order_date, is_active, created_at
+        ) VALUES (
+            :number, :country, :company, :email, 
+            1, CURDATE(), 1, NOW()
+        )";
+
+        $this->db->execute($queryInsert, [
+            ':number' => $customerNumber,
+            ':country' => $country,
+            ':company' => $companyName,
+            ':email' => $email
+        ]);
+
+        return $this->db->lastInsertId();
+    }
+
+    /**
+     * Générer le fichier TXT pour l'ERP
+     * 
+     * Format traitement.php :
+     * I00{DDMMYY}{DDMMYY_livraison}
+     * H{numClient8}{V/W}{NomCampagne}
+     * D{numProduit}{qte10digits}
+     * 
+     * @param int $orderId ID de la commande
+     * @param array $campaign Données campagne
+     * @param string $customerNumber Numéro client
+     * @param string $country Pays (BE/LU)
+     * @param array $items Produits du panier
+     * @return string Chemin relatif du fichier généré
+     * @created 17/11/2025
+     */
+    private function generateOrderFile(
+        int $orderId,
+        array $campaign,
+        string $customerNumber,
+        string $country,
+        array $items
+    ): string {
+        $today = date('dmy'); // Format: 171125
+
+        // Ligne I00 : Date commande + date livraison (si applicable)
+        if ($campaign['deferred_delivery'] == 1 && !empty($campaign['delivery_date'])) {
+            $deliveryDate = date('dmy', strtotime($campaign['delivery_date']));
+            $lineI = "I00{$today}{$deliveryDate}\n";
+        } else {
+            $lineI = "I00{$today}\n";
+        }
+
+        // Formater numéro client sur 8 caractères
+        $customerNumber8 = $this->formatCustomerNumber($customerNumber);
+
+        // Ligne H : Numéro client + Type commande + Nom campagne
+        $orderType = $campaign['order_type']; // V ou W
+        $campaignName = str_replace([' ', '-', '_'], '', $campaign['name']); // Enlever espaces et tirets
+        $lineH = "H{$customerNumber8}{$orderType}{$campaignName}\n";
+
+        // Lignes D : Détails produits
+        $linesD = '';
+        foreach ($items as $item) {
+            $productCode = $item['product_code'];
+            $quantity = sprintf("%'.010d", $item['quantity']); // Padding 10 digits avec 0
+            $linesD .= "D{$productCode}{$quantity}\n";
+        }
+
+        // Contenu complet du fichier
+        $content = $lineI . $lineH . $linesD;
+
+        // Créer le répertoire si nécessaire
+        $directory = $country === 'BE' ? 'commande_BE' : 'commande_LU';
+        $fullPath = __DIR__ . '/../../public/' . $directory;
+        
+        if (!is_dir($fullPath)) {
+            mkdir($fullPath, 0755, true);
+        }
+
+        // Nom du fichier : WebAction_{Ymd-His}_{numClient8}.txt
+        $filename = 'WebAction_' . date('Ymd-His') . '_' . $customerNumber8 . '.txt';
+        $filepath = $fullPath . '/' . $filename;
+
+        // Écrire le fichier
+        file_put_contents($filepath, $content);
+
+        // Retourner chemin relatif pour stockage en DB
+        return '/' . $directory . '/' . $filename;
+    }
+
+    /**
+     * Formater un numéro client sur 8 caractères
+     * 
+     * Règles (basées sur traitement.php) :
+     * - Si 6 chiffres (ex: 802412) → Ajouter "00" à la fin (80241200)
+     * - Si plus de 6 → Enlever les tirets (ex: 802412-12 → 80241212)
+     * - Enlever aussi les * et les lettres E, CB
+     * 
+     * @param string $number Numéro client brut
+     * @return string Numéro sur 8 caractères
+     * @created 17/11/2025
+     */
+    private function formatCustomerNumber(string $number): string
+    {
+        // Enlever *, tirets, E, CB
+        $cleaned = str_replace(['*', '-', 'E', 'CB'], '', $number);
+        
+        $length = strlen($cleaned);
+        
+        if ($length === 6) {
+            return $cleaned . '00'; // Ajouter 00 à la fin
+        }
+        
+        // Si plus de 8, tronquer à 8
+        if ($length > 8) {
+            return substr($cleaned, 0, 8);
+        }
+        
+        // Si moins de 8, padding avec 0 à droite
+        return str_pad($cleaned, 8, '0', STR_PAD_RIGHT);
+    }
+
+    /**
+     * Générer un UUID v4
+     * 
+     * @return string UUID
+     * @created 17/11/2025
+     */
+    private function generateUuid(): string
+    {
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+    }
 }
