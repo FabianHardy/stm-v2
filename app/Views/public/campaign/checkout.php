@@ -7,6 +7,7 @@
  * 
  * @package STM
  * @created 17/11/2025
+ * @modified 17/11/2025 - Correction action formulaire
  */
 
 // Vérifier que les variables nécessaires sont définies
@@ -145,9 +146,10 @@ ob_start();
                         <?= $customer['language'] === 'fr' ? 'Informations de commande' : 'Bestelgegevens' ?>
                     </h2>
 
-                    <form id="checkoutForm" method="POST" action="/stm/c/<?= $campaign['unique_url'] ?>/order/submit">
+                    <!-- CORRECTION ICI : action complète avec /submit -->
+                    <form id="checkoutForm" method="POST" action="/stm/c/<?= htmlspecialchars($campaign['unique_url']) ?>/order/submit">
                         <!-- Token CSRF -->
-                        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
+                        <input type="hidden" name="_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
 
                         <!-- Email obligatoire -->
                         <div class="mb-6">
@@ -160,7 +162,8 @@ ob_start();
                                    name="customer_email" 
                                    required
                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                   placeholder="<?= $customer['language'] === 'fr' ? 'votre@email.com' : 'uw@email.com' ?>">
+                                   placeholder="<?= $customer['language'] === 'fr' ? 'votre@email.com' : 'uw@email.com' ?>"
+                                   value="<?= htmlspecialchars($customer['email'] ?? '') ?>">
                         </div>
 
                         <!-- Date de livraison (si deferred_delivery = 1) -->
