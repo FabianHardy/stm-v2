@@ -262,6 +262,7 @@ class Product
      * @param int $id ID de la promotion
      * @return bool True si des commandes existent, False sinon
      * @created 17/11/2025
+     * @modified 17/11/2025 - Ajout debug pour diagnostic
      */
     public function hasOrders(int $id): bool
     {
@@ -270,11 +271,29 @@ class Product
                 WHERE product_id = :product_id";
         
         try {
+            error_log("Product::hasOrders() - Vérification pour product_id: " . $id);
+            
             $result = $this->db->query($sql, [':product_id' => $id]);
-            return isset($result[0]['count']) && (int)$result[0]['count'] > 0;
+            
+            error_log("Product::hasOrders() - Résultat brut: " . print_r($result, true));
+            
+            if (!is_array($result) || empty($result)) {
+                error_log("Product::hasOrders() - Résultat vide ou invalide");
+                return false;
+            }
+            
+            $count = isset($result[0]['count']) ? (int)$result[0]['count'] : 0;
+            error_log("Product::hasOrders() - Nombre de commandes trouvées: " . $count);
+            
+            return $count > 0;
+            
         } catch (\PDOException $e) {
-            error_log("Product::hasOrders() - SQL Error: " . $e->getMessage());
-            // En cas d'erreur, on considère qu'il y a des commandes (sécurité)
+            error_log("Product::hasOrders() - ERREUR SQL: " . $e->getMessage());
+            // En cas d'erreur SQL, on bloque la suppression par sécurité
+            return true;
+        } catch (\Exception $e) {
+            error_log("Product::hasOrders() - ERREUR: " . $e->getMessage());
+            // En cas d'erreur, on bloque la suppression par sécurité
             return true;
         }
     }

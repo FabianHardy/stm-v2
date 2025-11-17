@@ -10,7 +10,7 @@
 
 namespace App\Services;
 
-use App\Core\Database;
+use Core\Database;
 
 class EmailService
 {

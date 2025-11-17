@@ -332,8 +332,19 @@ class ProductController
             exit;
         }
 
+        // ✅ DEBUG TEMPORAIRE : Afficher les détails
+        $hasOrders = $this->productModel->hasOrders($id);
+        
+        // Vérifier manuellement dans la DB
+        $db = \Core\Database::getInstance();
+        $checkQuery = "SELECT COUNT(*) as count FROM order_lines WHERE product_id = :id";
+        $checkResult = $db->query($checkQuery, [':id' => $id]);
+        $manualCount = isset($checkResult[0]['count']) ? (int)$checkResult[0]['count'] : 0;
+        
+        Session::setFlash('warning', "DEBUG - Product ID: $id | hasOrders(): " . ($hasOrders ? 'TRUE' : 'FALSE') . " | Commandes trouvées manuellement: $manualCount");
+
         // ✅ NOUVEAU : Vérifier si la promotion a des commandes associées
-        if ($this->productModel->hasOrders($id)) {
+        if ($hasOrders) {
             Session::setFlash('error', 'Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.');
             header('Location: /stm/admin/products');
             exit;
