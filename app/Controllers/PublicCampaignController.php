@@ -231,6 +231,7 @@ class PublicCampaignController
                     cat.id,
                     cat.code,
                     cat.name_fr,
+                    cat.name_nl,
                     cat.color,
                     cat.icon_path,
                     cat.display_order
@@ -386,10 +387,12 @@ class PublicCampaignController
                 // Nouveau produit
                 $cart['items'][] = [
                     'product_id' => $productId,
-                    'product_code' => $product['product_code'],
-                    'product_name' => $product['name_fr'],
-                    'quantity' => $quantity,
-                    'image_fr' => $product['image_fr'] ?? null
+                    'code' => $product['product_code'],
+                    'name_fr' => $product['name_fr'],
+                    'name_nl' => $product['name_nl'] ?? $product['name_fr'],
+                    'image_fr' => $product['image_fr'] ?? null,
+                    'image_nl' => $product['image_nl'] ?? $product['image_fr'],
+                    'quantity' => $quantity
                 ];
             }
             
