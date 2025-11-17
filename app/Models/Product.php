@@ -4,9 +4,9 @@
  * Gestion des promotions par campagne
  * 
  * @package STM/Models
- * @version 2.2.0
+ * @version 2.3.0
  * @created 11/11/2025
- * @modified 12/11/2025 17:30 - Ajout quotas (max_total, max_per_customer)
+ * @modified 17/11/2025 - Ajout méthode hasOrders() pour vérification avant suppression
  */
 
 namespace App\Models;
@@ -254,6 +254,29 @@ class Product
         $sql = "DELETE FROM products WHERE id = :id";
         
         return $this->db->execute($sql, [':id' => $id]);
+    }
+
+    /**
+     * Vérifier si une promotion a des commandes associées
+     * 
+     * @param int $id ID de la promotion
+     * @return bool True si des commandes existent, False sinon
+     * @created 17/11/2025
+     */
+    public function hasOrders(int $id): bool
+    {
+        $sql = "SELECT COUNT(*) as count 
+                FROM order_lines 
+                WHERE product_id = :product_id";
+        
+        try {
+            $result = $this->db->query($sql, [':product_id' => $id]);
+            return isset($result[0]['count']) && (int)$result[0]['count'] > 0;
+        } catch (\PDOException $e) {
+            error_log("Product::hasOrders() - SQL Error: " . $e->getMessage());
+            // En cas d'erreur, on considère qu'il y a des commandes (sécurité)
+            return true;
+        }
     }
 
     /**

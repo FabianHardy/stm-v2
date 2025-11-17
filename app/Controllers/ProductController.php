@@ -3,7 +3,7 @@
  * ProductController - Gestion des Promotions
  * 
  * @created 11/11/2025
- * @modified 12/11/2025 17:30 - Ajout quotas (max_total, max_per_customer)
+ * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
  */
 
 namespace App\Controllers;
@@ -311,6 +311,8 @@ class ProductController
 
     /**
      * Supprimer un Promotion
+     * 
+     * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
      */
     public function destroy(int $id): void
     {
@@ -330,6 +332,13 @@ class ProductController
             exit;
         }
 
+        // ✅ NOUVEAU : Vérifier si la promotion a des commandes associées
+        if ($this->productModel->hasOrders($id)) {
+            Session::set('error', 'Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.');
+            header('Location: /stm/admin/products');
+            exit;
+        }
+
         // Supprimer les images
         $this->deleteImage($product['image_fr']);
         if ($product['image_nl'] !== $product['image_fr']) {
@@ -338,7 +347,7 @@ class ProductController
 
         // Supprimer le Promotion
         if ($this->productModel->delete($id)) {
-            Session::set('success', 'Promotion supprimée avec succès');
+            Session::set('success', 'Promotion supprimée avec succès (incluant les images)');
         } else {
             Session::set('error', 'Erreur lors de la suppression');
         }
