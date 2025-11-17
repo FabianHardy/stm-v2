@@ -142,9 +142,12 @@
                 <a href="#category-<?= $category['id'] ?>" 
                    class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
                    id="cat-btn-<?= $category['id'] ?>"
-                   style="background-color: <?= htmlspecialchars($category['color']) ?>20; color: <?= htmlspecialchars($category['color']) ?>;">
+                   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= htmlspecialchars($category['color']) ?>;">
                     <?php if (!empty($category['icon'])): ?>
-                        <i class="<?= htmlspecialchars($category['icon']) ?> w-5" style="color: <?= htmlspecialchars($category['color']) ?>;"></i>
+                        <img src="<?= htmlspecialchars($category['icon']) ?>" 
+                             alt="<?= htmlspecialchars($category['name_fr']) ?>" 
+                             class="w-5 h-5 object-contain"
+                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon']) ?>');">
                     <?php else: ?>
                         <i class="fas fa-tag w-5" style="color: <?= htmlspecialchars($category['color']) ?>;"></i>
                     <?php endif; ?>
@@ -178,7 +181,7 @@
                 <!-- Section catégorie -->
                 <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
                     <h2 class="text-2xl font-bold mb-6 flex items-center">
-                        <span class="w-1 h-8 mr-3 bg-red-600 rounded"></span>
+                        <span class="w-1 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars($category['color']) ?>;"></span>
                         <?= htmlspecialchars($category['name_fr']) ?>
                     </h2>
                     
