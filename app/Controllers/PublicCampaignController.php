@@ -7,6 +7,7 @@
  * 
  * @created  2025/11/14 16:30
  * @modified 2025/11/14 18:00 - Ajout catalogue + panier (Sous-tâche 2)
+ * @modified 2025/11/18 10:00 - Ajout envoi email confirmation (Sprint 7.3.2)
  */
 
 namespace App\Controllers;
@@ -1034,6 +1035,28 @@ class PublicCampaignController
 
             // 7. Valider la transaction
             $this->db->commit();
+
+
+            // 7bis. Envoyer email de confirmation
+            try {
+                require_once __DIR__ . '/../Services/EmailService.php';
+                
+                $emailService = new \App\Services\EmailService();
+                $emailSent = $emailService->sendOrderConfirmation(
+                    $orderId,
+                    $customerEmail,
+                    $customer['language'] ?? 'fr'
+                );
+                
+                if ($emailSent) {
+                    error_log("Email confirmation envoyé pour commande #{$orderId} à {$customerEmail}");
+                } else {
+                    error_log("Échec envoi email pour commande #{$orderId}");
+                }
+            } catch (\Exception $e) {
+                // IMPORTANT : Log l'erreur mais ne bloque PAS la commande
+                error_log("Erreur email confirmation : " . $e->getMessage());
+            }
 
             // 8. Vider le panier
             $_SESSION['cart'] = ['campaign_uuid' => $uuid, 'items' => []];
