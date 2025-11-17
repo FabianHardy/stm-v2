@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= $customer['language'] ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($campaign['name']) ?> - Catalogue</title>
+    <title><?= htmlspecialchars($campaign['name']) ?> - <?= $customer['language'] === 'fr' ? 'Catalogue' : 'Catalogus' ?></title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -37,6 +37,12 @@
             opacity: 0.6;
             pointer-events: none;
             z-index: 0;
+        }
+        
+        /* Contenu au-dessus du fond */
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
         }
         
         /* Lightbox overlay */
@@ -95,436 +101,406 @@
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
+
+        /* Truncate text */
+        .truncate-2-lines {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body class="bg-gray-50" x-data="cartManager()" x-init="init()">
 
-    <!-- Header -->
-    <header class="bg-white shadow-md sticky top-0 z-40">
-        <div class="container mx-auto px-4 py-4">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center space-x-4">
-                    <!-- Logo Trendy Foods -->
-                    <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
-                        <p class="text-sm text-gray-600">
-                            <i class="fas fa-building mr-1"></i>
-                            <?= htmlspecialchars($customer['company_name']) ?> 
-                            <span class="mx-2">•</span>
-                            <?= htmlspecialchars($customer['customer_number']) ?>
-                        </p>
-                    </div>
-                </div>
-                
-                <!-- Bouton panier mobile -->
-                <button @click="toggleCartMobile()" class="lg:hidden relative bg-blue-600 text-white px-4 py-2 rounded-lg">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span x-show="cartItemCount > 0" 
-                          x-text="cartItemCount" 
-                          class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
-                    </span>
-                </button>
-                
-                <!-- Déconnexion desktop -->
-                <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">
-                    <i class="fas fa-sign-out-alt mr-2"></i>Déconnexion
-                </a>
-            </div>
-        </div>
-    </header>
-
-    <!-- Navigation catégories horizontale (sticky) -->
-    <nav class="bg-white border-b sticky top-[72px] z-30 shadow-sm">
-        <div class="container mx-auto px-4">
-            <div class="category-nav flex gap-3 py-3">
-                <?php foreach ($categories as $category): ?>
-                <?php
-                // Calculer la couleur de texte optimale (blanc ou noir) selon la luminosité du fond
-                $color = $category['color'];
-                $hex = ltrim($color, '#');
-                $r = hexdec(substr($hex, 0, 2));
-                $g = hexdec(substr($hex, 2, 2));
-                $b = hexdec(substr($hex, 4, 2));
-                // Formule de luminosité perçue
-                $luminosity = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-                $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
-                ?>
-                <a href="#category-<?= $category['id'] ?>" 
-                   class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
-                   id="cat-btn-<?= $category['id'] ?>"
-                   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
-                    <?php if (!empty($category['icon_path'])): ?>
-                        <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
-                             alt="<?= htmlspecialchars($category['name_fr']) ?>" 
-                             class="w-5 h-5 object-contain"
-                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon_path']) ?>');">
-                    <?php else: ?>
-                        <i class="fas fa-tag w-5"></i>
-                    <?php endif; ?>
-                    <span><?= htmlspecialchars($category['name_fr']) ?></span>
-                </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Layout principal -->
-    <div class="container mx-auto px-4 py-6">
-        <div class="flex flex-col lg:flex-row gap-6">
-            
-            <!-- Zone produits (gauche) -->
-            <div class="flex-1">
-                
-                <?php foreach ($categories as $category): ?>
-                    
-                <?php 
-                // Filtrer les produits commandables uniquement AVANT d'afficher la catégorie
-                $orderableProducts = array_filter($category['products'], function($p) {
-                    return $p['is_orderable'] === true;
-                });
-                $productCount = count($orderableProducts);
-                
-                // Si aucun produit disponible, ne pas afficher la catégorie
-                if ($productCount === 0) continue;
-                ?>
-                
-                <!-- Section catégorie -->
-                <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
-                    <h2 class="text-2xl font-bold mb-6 flex items-center">
-                        <span class="w-1 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars($category['color']) ?>;"></span>
-                        <?= htmlspecialchars($category['name_fr']) ?>
-                    </h2>
-                    
-                    <!-- Grid produits - 2 COLONNES MAX -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <?php foreach ($orderableProducts as $product): ?>
-                        <!-- Card produit -->
-                        <div class="product-card bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
-                            
-                            <!-- Image A4 paysage -->
-                            <div class="relative bg-gray-100 cursor-pointer" style="height: 213px;" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
-                                <?php if (!empty($product['image_fr'])): ?>
-                                    <img src="<?= htmlspecialchars($product['image_fr']) ?>" 
-                                         alt="<?= htmlspecialchars($product['name_fr']) ?>"
-                                         class="w-full h-full object-contain p-4">
-                                <?php else: ?>
-                                    <div class="w-full h-full flex items-center justify-center text-gray-400">
-                                        <i class="fas fa-image text-6xl"></i>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <!-- Icône zoom -->
-                                <div class="absolute top-2 right-2 bg-white bg-opacity-90 rounded-full p-2 shadow-lg hover:bg-white transition">
-                                    <i class="fas fa-search-plus text-gray-600"></i>
-                                </div>
-
-                                <!-- Badge ÉPUISÉ si quotas à 0 -->
-                                <?php if (!$product['is_orderable']): ?>
-                                <div class="absolute top-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                                    ÉPUISÉ
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <!-- Infos produit -->
-                            <div class="p-4">
-                                <!-- Titre 12px uppercase -->
-                                <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
-                                    <?= htmlspecialchars($product['name_fr']) ?>
-                                </h3>
-                                
-                                <!-- Quotas sur 1 SEULE LIGNE -->
-                                <?php if (!is_null($product['max_per_customer']) && $product['is_orderable']): ?>
-                                <div class="text-sm mb-3 flex items-center justify-between">
-                                    <span class="flex items-center">
-                                        <i class="fas fa-box w-4 text-blue-600 mr-1"></i>
-                                        <span class="font-semibold text-blue-600">
-                                            Maximum : <?= $product['max_per_customer'] ?> <?= $product['max_per_customer'] > 1 ? 'unités' : 'unité' ?>
-                                        </span>
-                                    </span>
-                                    <span class="flex items-center">
-                                        <?php if ($product['available_for_customer'] > 1): ?>
-                                            <i class="fas fa-check-circle w-4 text-green-600 mr-1"></i>
-                                            <span class="font-semibold text-green-600">
-                                                Reste : <?= $product['available_for_customer'] ?> unités
-                                            </span>
-                                        <?php elseif ($product['available_for_customer'] == 1): ?>
-                                            <i class="fas fa-exclamation-circle w-4 text-orange-600 mr-1"></i>
-                                            <span class="font-semibold text-orange-600">
-                                                Reste : 1 unité
-                                            </span>
-                                        <?php else: ?>
-                                            <i class="fas fa-times-circle w-4 text-red-600 mr-1"></i>
-                                            <span class="font-semibold text-red-600">
-                                                Reste : 0 unité
-                                            </span>
-                                        <?php endif; ?>
-                                    </span>
-                                </div>
-                                <?php endif; ?>
-
-                                <!-- Alerte si quota global proche -->
-                                <?php if (!is_null($product['max_total']) && $product['available_global'] <= 10 && $product['available_global'] > 0): ?>
-                                <div class="bg-amber-50 border-l-4 border-amber-400 p-2 mb-3 text-xs">
-                                    <i class="fas fa-exclamation-triangle text-amber-600 mr-1"></i>
-                                    <span class="text-amber-800">Stock global limité : <?= $product['available_global'] ?> restants</span>
-                                </div>
-                                <?php endif; ?>
-
-                                <!-- Boutons action -->
-                                <?php if ($product['is_orderable']): ?>
-                                <div class="flex items-center gap-3">
-                                    <input 
-                                        type="number" 
-                                        id="qty-<?= $product['id'] ?>" 
-                                        value="1" 
-                                        min="1" 
-                                        max="<?= $product['max_orderable'] ?>"
-                                        class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                                    >
-                                    <button 
-                                        @click="addToCart(<?= $product['id'] ?>, <?= $product['max_orderable'] ?>)"
-                                        class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition shadow-md hover:shadow-lg flex items-center justify-center"
-                                    >
-                                        <i class="fas fa-shopping-cart mr-2"></i>
-                                        Ajouter
-                                    </button>
-                                </div>
-                                <?php else: ?>
-                                <button 
-                                    disabled 
-                                    class="w-full bg-gray-300 text-gray-500 font-semibold py-2 px-4 rounded-lg cursor-not-allowed flex items-center justify-center"
-                                >
-                                    <i class="fas fa-ban mr-2"></i>
-                                    Stock épuisé
-                                </button>
-                                <?php endif; ?>
-                            </div>
+    <div class="content-wrapper">
+        <!-- Header -->
+        <header class="bg-white shadow-md sticky top-0 z-40">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <!-- Logo Trendy Foods -->
+                        <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
+                            <p class="text-sm text-gray-600">
+                                <i class="fas fa-building mr-1"></i>
+                                <?= htmlspecialchars($customer['company_name']) ?> 
+                                <span class="mx-2">•</span>
+                                <?= htmlspecialchars($customer['customer_number']) ?>
+                            </p>
                         </div>
-                        <?php endforeach; ?>
                     </div>
-                </section>
-                
-                <?php endforeach; ?>
-            </div>
-
-            <!-- Panier sidebar (droite) -->
-            <div class="lg:w-80 hidden lg:block">
-                <div class="bg-white rounded-lg shadow-lg p-6 sticky top-32">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-bold text-gray-800 flex items-center">
-                            <i class="fas fa-shopping-cart mr-2"></i>
-                            Mon panier
+                    
+                    <div class="flex items-center gap-4">
+                        <!-- Switch langue FR/NL (visible uniquement pour campagnes BE) -->
+                        <?php if ($campaign['country'] === 'BE'): ?>
+                        <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
+                            <button onclick="window.location.href='?lang=fr'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                FR
+                            </button>
+                            <button onclick="window.location.href='?lang=nl'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                NL
+                            </button>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Bouton panier mobile -->
+                        <button @click="toggleCartMobile()" class="lg:hidden relative bg-blue-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-shopping-cart"></i>
                             <span x-show="cartItemCount > 0" 
                                   x-text="cartItemCount" 
-                                  class="ml-2 bg-red-600 text-white text-sm px-2 py-1 rounded-full">
+                                  class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
                             </span>
-                        </h3>
-                    </div>
-                    
-                    <!-- Items panier -->
-                    <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
-                        <template x-if="cart.items.length === 0">
-                            <div class="text-center py-8 text-gray-400">
-                                <i class="fas fa-shopping-basket text-4xl mb-2"></i>
-                                <p class="text-sm">Votre panier est vide</p>
-                            </div>
-                        </template>
+                        </button>
                         
-                        <template x-for="item in cart.items" :key="item.product_id">
-                            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                <img :src="item.image" 
-                                     :alt="item.name"
-                                     class="w-12 h-12 object-cover rounded"
-                                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 60 60\'%3E%3Crect fill=\'%23e0e0e0\' width=\'60\' height=\'60\'/%3E%3C/svg%3E'">
-                                <div class="flex-1 text-sm">
-                                    <p class="font-semibold text-gray-800 line-clamp-2" x-text="item.name"></p>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
-                                                class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
-                                            <i class="fas fa-minus text-xs"></i>
-                                        </button>
-                                        <span class="font-bold" x-text="item.quantity"></span>
-                                        <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
-                                                class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
-                                            <i class="fas fa-plus text-xs"></i>
-                                        </button>
-                                    </div>
+                        <!-- Déconnexion desktop -->
+                        <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            <?= $customer['language'] === 'fr' ? 'Déconnexion' : 'Afmelden' ?>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation catégories horizontale (sticky) -->
+        <nav class="bg-white border-b sticky top-[72px] z-30 shadow-sm">
+            <div class="container mx-auto px-4">
+                <div class="category-nav flex gap-3 py-3">
+                    <?php foreach ($categories as $category): ?>
+                    <?php
+                    // Calculer la couleur de texte optimale (blanc ou noir) selon la luminosité du fond
+                    $color = $category['color'];
+                    $hex = ltrim($color, '#');
+                    $r = hexdec(substr($hex, 0, 2));
+                    $g = hexdec(substr($hex, 2, 2));
+                    $b = hexdec(substr($hex, 4, 2));
+                    // Formule de luminosité perçue
+                    $luminosity = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
+                    $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
+                    ?>
+                    <a href="#category-<?= $category['id'] ?>" 
+                       class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
+                       id="cat-btn-<?= $category['id'] ?>"
+                       style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
+                        <?php if (!empty($category['icon_path'])): ?>
+                            <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
+                                 alt="<?= htmlspecialchars($category['name_' . $customer['language']]) ?>" 
+                                 class="w-5 h-5 object-contain"
+                                 onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon_path']) ?>');">
+                        <?php else: ?>
+                            <i class="fas fa-tag w-5"></i>
+                        <?php endif; ?>
+                        <span><?= htmlspecialchars($category['name_' . $customer['language']]) ?></span>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Layout principal -->
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex flex-col lg:flex-row gap-6">
+                
+                <!-- Zone produits (gauche) -->
+                <div class="flex-1">
+                    
+                    <?php foreach ($categories as $category): ?>
+                        
+                    <?php if (!empty($category['products'])): ?>
+                    <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+                            <?php if (!empty($category['icon_path'])): ?>
+                                <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
+                                     alt="" 
+                                     class="w-8 h-8 object-contain"
+                                     onerror="this.style.display='none'">
+                            <?php endif; ?>
+                            <?= htmlspecialchars($category['name_' . $customer['language']]) ?>
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <?php foreach ($category['products'] as $product): ?>
+                            <div class="product-card bg-white rounded-lg shadow-md overflow-hidden">
+                                <!-- Image produit -->
+                                <div class="relative bg-gray-50" style="height: 213px;">
+                                    <?php if (!empty($product['image_' . $customer['language']])): ?>
+                                        <img src="<?= htmlspecialchars($product['image_' . $customer['language']]) ?>" 
+                                             alt="<?= htmlspecialchars($product['name_' . $customer['language']]) ?>"
+                                             class="w-full h-full object-contain cursor-pointer"
+                                             onclick="openLightbox('<?= htmlspecialchars($product['image_' . $customer['language']]) ?>')">
+                                    <?php else: ?>
+                                        <div class="w-full h-full flex items-center justify-center">
+                                            <i class="fas fa-image text-6xl text-gray-300"></i>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
-                                <button @click="removeFromCart(item.product_id)" 
-                                        class="text-red-600 hover:text-red-700">
-                                    <i class="fas fa-trash"></i>
+                                
+                                <!-- Infos produit -->
+                                <div class="p-4">
+                                    <h3 class="font-bold text-gray-800 mb-2 uppercase text-xs leading-tight" style="font-size: 12px; min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                        <?= htmlspecialchars($product['name_' . $customer['language']]) ?>
+                                    </h3>
+                                    
+                                    <!-- Quotas sur 1 ligne -->
+                                    <div class="text-sm text-gray-600 mb-3">
+                                        <?php
+                                        $maxOrderable = $product['quota_available'];
+                                        $remaining = $product['quota_available'];
+                                        $unit = $customer['language'] === 'fr' ? 'unité' : 'eenheid';
+                                        $units = $customer['language'] === 'fr' ? 'unités' : 'eenheden';
+                                        $maxLabel = $customer['language'] === 'fr' ? 'Maximum' : 'Maximum';
+                                        $remainLabel = $customer['language'] === 'fr' ? 'Reste' : 'Resterend';
+                                        ?>
+                                        <span class="font-medium"><?= $maxLabel ?> : <?= $maxOrderable ?> <?= $maxOrderable > 1 ? $units : $unit ?></span>
+                                        <span class="mx-2">|</span>
+                                        <span class="font-medium"><?= $remainLabel ?> : <?= $remaining ?> <?= $remaining > 1 ? $units : $unit ?></span>
+                                    </div>
+                                    
+                                    <?php if ($maxOrderable > 0): ?>
+                                        <!-- Formulaire ajout panier -->
+                                        <div class="flex items-center gap-2">
+                                            <input type="number" 
+                                                   id="qty-<?= $product['id'] ?>" 
+                                                   min="1" 
+                                                   max="<?= $maxOrderable ?>" 
+                                                   value="1"
+                                                   class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center">
+                                            <button @click="addToCart(<?= $product['id'] ?>, <?= $maxOrderable ?>)"
+                                                    class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition">
+                                                <i class="fas fa-cart-plus mr-2"></i>
+                                                <?= $customer['language'] === 'fr' ? 'Ajouter' : 'Toevoegen' ?>
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <!-- Badge épuisé -->
+                                        <div class="bg-gray-200 text-gray-600 text-center py-2 rounded-lg font-semibold">
+                                            <i class="fas fa-times-circle mr-2"></i>
+                                            <?= $customer['language'] === 'fr' ? 'Épuisé' : 'Uitverkocht' ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+                    
+                    <?php endforeach; ?>
+                    
+                </div>
+                
+                <!-- Panier (sidebar droite - sticky) -->
+                <aside class="hidden lg:block w-96 shrink-0">
+                    <div class="bg-white rounded-lg shadow-lg p-6 sticky top-32">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center justify-between">
+                            <span>
+                                <i class="fas fa-shopping-cart mr-2"></i>
+                                <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelwagen' ?>
+                            </span>
+                            <span x-show="cartItemCount > 0" 
+                                  class="bg-red-500 text-white text-sm rounded-full w-8 h-8 flex items-center justify-center font-bold"
+                                  x-text="cartItemCount">
+                            </span>
+                        </h2>
+                        
+                        <div x-show="cart.items.length === 0" class="text-center py-12 text-gray-400">
+                            <i class="fas fa-shopping-cart text-5xl mb-3"></i>
+                            <p><?= $customer['language'] === 'fr' ? 'Panier vide' : 'Winkelwagen leeg' ?></p>
+                        </div>
+                        
+                        <div x-show="cart.items.length > 0">
+                            <!-- Liste des articles -->
+                            <div class="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                                <template x-for="item in cart.items" :key="item.product_id">
+                                    <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                        <!-- Image produit -->
+                                        <img :src="item.image_<?= $customer['language'] ?>" 
+                                             :alt="item.name_<?= $customer['language'] ?>"
+                                             class="w-16 h-16 object-contain rounded"
+                                             onerror="this.src='/stm/assets/images/placeholder.png'">
+                                        
+                                        <!-- Nom + Contrôles -->
+                                        <div class="flex-1 min-w-0">
+                                            <!-- Nom du produit (tronqué) -->
+                                            <p class="font-medium text-sm text-gray-800 truncate mb-2" 
+                                               x-text="item.name_<?= $customer['language'] ?>">
+                                            </p>
+                                            
+                                            <!-- Contrôles quantité -->
+                                            <div class="flex items-center gap-2">
+                                                <button @click="updateQuantity(item.product_id, item.quantity - 1)"
+                                                        class="w-7 h-7 bg-gray-200 hover:bg-gray-300 rounded flex items-center justify-center">
+                                                    <i class="fas fa-minus text-xs"></i>
+                                                </button>
+                                                <span class="w-8 text-center font-bold" x-text="item.quantity"></span>
+                                                <button @click="updateQuantity(item.product_id, item.quantity + 1)"
+                                                        class="w-7 h-7 bg-gray-200 hover:bg-gray-300 rounded flex items-center justify-center">
+                                                    <i class="fas fa-plus text-xs"></i>
+                                                </button>
+                                                <button @click="removeFromCart(item.product_id)"
+                                                        class="ml-auto text-red-600 hover:text-red-800">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <!-- Total articles -->
+                            <div class="border-t pt-4 mb-4">
+                                <div class="flex justify-between items-center text-lg font-semibold">
+                                    <span><?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?> :</span>
+                                    <span class="text-blue-600 text-2xl" x-text="cartItemCount"></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="space-y-2">
+                                <button @click="validateOrder()"
+                                        class="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition">
+                                    <i class="fas fa-check mr-2"></i>
+                                    <?= $customer['language'] === 'fr' ? 'Valider ma commande' : 'Mijn bestelling bevestigen' ?>
+                                </button>
+                                <button @click="clearCart()"
+                                        class="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                                    <i class="fas fa-trash mr-2"></i>
+                                    <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelwagen legen' ?>
                                 </button>
                             </div>
-                        </template>
-                    </div>
-                    
-                    <!-- Total -->
-                    <div class="border-t pt-4 mb-4" x-show="cart.items.length > 0">
-                        <div class="flex justify-between text-lg font-bold">
-                            <span>Total articles :</span>
-                            <span class="text-blue-600" x-text="cartItemCount"></span>
                         </div>
                     </div>
-                    
-                    <!-- Actions -->
-                    <template x-if="cart.items.length > 0">
-                        <div>
-                            <button @click="validateOrder()" 
-                                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg mb-2 transition shadow-md hover:shadow-lg flex items-center justify-center">
-                                <i class="fas fa-check mr-2"></i>
-                                Valider ma commande
-                            </button>
-                            <button @click="clearCart()" 
-                                    class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center">
-                                <i class="fas fa-trash mr-2"></i>
-                                Vider le panier
-                            </button>
+                </aside>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Panier mobile (overlay) -->
+    <div x-show="showCartMobile" 
+         @click.self="toggleCartMobile()"
+         class="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden"
+         style="display: none;">
+        <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl p-6 overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold flex items-center">
+                    <i class="fas fa-shopping-cart mr-2"></i>
+                    <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelwagen' ?>
+                    <span x-show="cartItemCount > 0" 
+                          class="ml-2 bg-red-500 text-white text-sm rounded-full w-6 h-6 flex items-center justify-center"
+                          x-text="cartItemCount">
+                    </span>
+                </h2>
+                <button @click="toggleCartMobile()" class="text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            
+            <div x-show="cart.items.length === 0" class="text-center py-12 text-gray-400">
+                <i class="fas fa-shopping-cart text-5xl mb-3"></i>
+                <p><?= $customer['language'] === 'fr' ? 'Panier vide' : 'Winkelwagen leeg' ?></p>
+            </div>
+            
+            <div x-show="cart.items.length > 0">
+                <!-- Liste des articles -->
+                <div class="space-y-3 mb-6">
+                    <template x-for="item in cart.items" :key="item.product_id">
+                        <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                            <img :src="item.image_<?= $customer['language'] ?>" 
+                                 :alt="item.name_<?= $customer['language'] ?>"
+                                 class="w-16 h-16 object-contain rounded"
+                                 onerror="this.src='/stm/assets/images/placeholder.png'">
+                            
+                            <div class="flex-1 min-w-0">
+                                <p class="font-medium text-sm text-gray-800 truncate mb-2" 
+                                   x-text="item.name_<?= $customer['language'] ?>">
+                                </p>
+                                
+                                <div class="flex items-center gap-2">
+                                    <button @click="updateQuantity(item.product_id, item.quantity - 1)"
+                                            class="w-7 h-7 bg-gray-200 hover:bg-gray-300 rounded flex items-center justify-center">
+                                        <i class="fas fa-minus text-xs"></i>
+                                    </button>
+                                    <span class="w-8 text-center font-bold" x-text="item.quantity"></span>
+                                    <button @click="updateQuantity(item.product_id, item.quantity + 1)"
+                                            class="w-7 h-7 bg-gray-200 hover:bg-gray-300 rounded flex items-center justify-center">
+                                        <i class="fas fa-plus text-xs"></i>
+                                    </button>
+                                    <button @click="removeFromCart(item.product_id)"
+                                            class="ml-auto text-red-600 hover:text-red-800">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </template>
                 </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Panier mobile (modal plein écran) -->
-    <div x-show="showCartMobile" 
-         x-transition
-         class="fixed inset-0 bg-white z-50 overflow-y-auto lg:hidden"
-         style="display: none;">
-        
-        <!-- Header modal -->
-        <div class="bg-blue-600 text-white px-4 py-4 flex items-center justify-between sticky top-0">
-            <h3 class="text-xl font-bold flex items-center">
-                <i class="fas fa-shopping-cart mr-2"></i>
-                Mon panier
-                <span x-show="cartItemCount > 0" 
-                      x-text="'(' + cartItemCount + ')'" 
-                      class="ml-2">
-                </span>
-            </h3>
-            <button @click="toggleCartMobile()" class="text-white text-2xl">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- Contenu panier -->
-        <div class="p-4">
-            <template x-if="cart.items.length === 0">
-                <div class="text-center py-12 text-gray-400">
-                    <i class="fas fa-shopping-basket text-6xl mb-4"></i>
-                    <p>Votre panier est vide</p>
-                    <button @click="toggleCartMobile()" 
-                            class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">
-                        Continuer mes achats
-                    </button>
+                
+                <!-- Total -->
+                <div class="border-t pt-4 mb-4">
+                    <div class="flex justify-between items-center text-lg font-semibold">
+                        <span><?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?> :</span>
+                        <span class="text-blue-600 text-2xl" x-text="cartItemCount"></span>
+                    </div>
                 </div>
-            </template>
-
-            <div class="space-y-4">
-                <template x-for="item in cart.items" :key="item.product_id">
-                    <div class="bg-white border rounded-lg p-4 flex items-center gap-4">
-                        <img :src="item.image" 
-                             :alt="item.name"
-                             class="w-16 h-16 object-cover rounded">
-                        <div class="flex-1">
-                            <p class="font-semibold text-gray-800" x-text="item.name"></p>
-                            <div class="flex items-center gap-3 mt-2">
-                                <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
-                                        class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300">
-                                    -
-                                </button>
-                                <span class="font-bold text-lg" x-text="item.quantity"></span>
-                                <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
-                                        class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300">
-                                    +
-                                </button>
-                            </div>
-                        </div>
-                        <button @click="removeFromCart(item.product_id)" 
-                                class="text-red-600 hover:text-red-700 text-xl">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Actions mobile -->
-            <template x-if="cart.items.length > 0">
-                <div class="mt-6 space-y-3">
-                    <div class="bg-gray-100 rounded-lg p-4 flex justify-between items-center">
-                        <span class="font-semibold">Total articles :</span>
-                        <span class="text-2xl font-bold text-blue-600" x-text="cartItemCount"></span>
-                    </div>
-                    <button @click="validateOrder()" 
-                            class="w-full bg-green-600 text-white font-bold py-4 rounded-lg text-lg">
+                
+                <!-- Actions -->
+                <div class="space-y-2">
+                    <button @click="validateOrder()"
+                            class="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition">
                         <i class="fas fa-check mr-2"></i>
-                        Valider ma commande
+                        <?= $customer['language'] === 'fr' ? 'Valider ma commande' : 'Mijn bestelling bevestigen' ?>
                     </button>
-                    <button @click="clearCart()" 
-                            class="w-full bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg">
+                    <button @click="clearCart()"
+                            class="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition">
                         <i class="fas fa-trash mr-2"></i>
-                        Vider le panier
+                        <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelwagen legen' ?>
                     </button>
                 </div>
-            </template>
+            </div>
         </div>
     </div>
 
-    <!-- Lightbox zoom image -->
-    <div x-show="showLightbox" 
-         x-transition
-         @click="closeLightbox()"
-         class="lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
-         style="display: none;">
-        <div class="relative max-w-4xl max-h-full">
-            <button @click="closeLightbox()" 
-                    class="absolute -top-10 right-0 text-white hover:text-gray-300 text-3xl">
-                <i class="fas fa-times"></i>
-            </button>
-            <img :src="lightboxImage" 
-                 alt="Zoom produit"
-                 class="max-w-full max-h-screen object-contain rounded-lg">
-        </div>
+    <!-- Lightbox -->
+    <div id="lightbox" 
+         class="lightbox-overlay fixed inset-0 z-50 hidden items-center justify-center p-4" 
+         onclick="closeLightbox()">
+        <img id="lightbox-img" src="" alt="" class="max-w-full max-h-full object-contain">
     </div>
 
-    <!-- Alpine.js Script -->
     <script>
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('lightbox').classList.remove('hidden');
+            document.getElementById('lightbox').classList.add('flex');
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.add('hidden');
+            document.getElementById('lightbox').classList.remove('flex');
+        }
+        
         function cartManager() {
             return {
                 cart: <?= json_encode($cart) ?>,
                 showCartMobile: false,
-                showLightbox: false,
-                lightboxImage: '',
-                
-                init() {
-                    console.log('Cart initialized', this.cart);
-                    // Gérer les catégories actives au scroll
-                    this.handleCategoryHighlight();
-                },
                 
                 get cartItemCount() {
-                    return this.cart.items.reduce((total, item) => total + item.quantity, 0);
+                    return this.cart.items?.reduce((sum, item) => sum + parseInt(item.quantity), 0) || 0;
                 },
                 
                 toggleCartMobile() {
                     this.showCartMobile = !this.showCartMobile;
                 },
                 
-                openLightbox(imagePath) {
-                    this.lightboxImage = imagePath;
-                    this.showLightbox = true;
-                },
-                
-                closeLightbox() {
-                    this.showLightbox = false;
-                },
-                
-                handleCategoryHighlight() {
-                    // Observer pour mettre en surbrillance la catégorie active
-                    const sections = document.querySelectorAll('section[id^="category-"]');
+                init() {
+                    // Observer pour activer le bon bouton catégorie au scroll
+                    const sections = document.querySelectorAll('[id^="category-"]');
+                    
                     const options = {
                         root: null,
                         rootMargin: '-50% 0px -50% 0px',
@@ -585,7 +561,7 @@
                     const quantity = parseInt(qtyInput.value);
                     
                     if (quantity <= 0 || quantity > maxOrderable) {
-                        alert('Quantité invalide. Maximum : ' + maxOrderable);
+                        alert('<?= $customer['language'] === 'fr' ? 'Quantité invalide. Maximum' : 'Ongeldige hoeveelheid. Maximum' ?> : ' + maxOrderable);
                         return;
                     }
                     
@@ -604,13 +580,13 @@
                         if (data.success) {
                             this.cart = data.cart;
                             qtyInput.value = 1; // Reset
-                            this.showNotification('✓ Produit ajouté au panier');
+                            this.showNotification('<?= $customer['language'] === 'fr' ? '✓ Produit ajouté au panier' : '✓ Product toegevoegd aan winkelwagen' ?>');
                         } else {
-                            alert('Erreur : ' + data.error);
+                            alert('<?= $customer['language'] === 'fr' ? 'Erreur' : 'Fout' ?> : ' + data.error);
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        alert('Erreur de connexion');
+                        alert('<?= $customer['language'] === 'fr' ? 'Erreur de connexion' : 'Verbindingsfout' ?>');
                     }
                 },
                 
@@ -634,7 +610,7 @@
                         if (data.success) {
                             this.cart = data.cart;
                         } else {
-                            alert('Erreur : ' + data.error);
+                            alert('<?= $customer['language'] === 'fr' ? 'Erreur' : 'Fout' ?> : ' + data.error);
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -642,7 +618,7 @@
                 },
                 
                 async removeFromCart(productId) {
-                    if (!confirm('Retirer ce produit du panier ?')) return;
+                    if (!confirm('<?= $customer['language'] === 'fr' ? 'Retirer ce produit du panier ?' : 'Dit product uit winkelwagen verwijderen?' ?>')) return;
                     
                     try {
                         const formData = new FormData();
@@ -664,7 +640,7 @@
                 },
                 
                 async clearCart() {
-                    if (!confirm('Vider complètement le panier ?')) return;
+                    if (!confirm('<?= $customer['language'] === 'fr' ? 'Vider complètement le panier ?' : 'Winkelwagen volledig legen?' ?>')) return;
                     
                     try {
                         const response = await fetch('/stm/c/<?= $uuid ?>/cart/clear', {
@@ -675,7 +651,7 @@
                         
                         if (data.success) {
                             this.cart = data.cart;
-                            this.showNotification('Panier vidé');
+                            this.showNotification('<?= $customer['language'] === 'fr' ? 'Panier vidé' : 'Winkelwagen geleegd' ?>');
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -684,7 +660,7 @@
                 
                 validateOrder() {
                     if (this.cart.items.length === 0) {
-                        alert('Votre panier est vide');
+                        alert('<?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelwagen is leeg' ?>');
                         return;
                     }
                     
