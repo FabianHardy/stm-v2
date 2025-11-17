@@ -182,6 +182,30 @@ class PublicCampaignController
     public function catalog(string $uuid): void
     {
         try {
+            // ========================================
+            // GESTION DU SWITCH LANGUE (FR/NL)
+            // ========================================
+            
+            // Récupérer le paramètre ?lang de l'URL
+            $requestedLang = $_GET['lang'] ?? null;
+            
+            // Si une langue est demandée ET que c'est FR ou NL
+            if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+                // Récupérer le client de la session
+                $tempCustomer = Session::get('public_customer');
+                
+                // Si le client existe, mettre à jour sa langue
+                if ($tempCustomer) {
+                    $tempCustomer['language'] = $requestedLang;
+                    Session::set('public_customer', $tempCustomer);
+                }
+                
+                // Rediriger vers l'URL propre (sans ?lang=)
+                $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+                header("Location: {$cleanUrl}");
+                exit;
+            }
+
             // Vérifier que le client est identifié
             $customer = Session::get('public_customer');
             if (!$customer || $customer['campaign_uuid'] !== $uuid) {
