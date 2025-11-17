@@ -139,17 +139,28 @@
         <div class="container mx-auto px-4">
             <div class="category-nav flex gap-3 py-3">
                 <?php foreach ($categories as $category): ?>
+                <?php
+                // Calculer la couleur de texte optimale (blanc ou noir) selon la luminosité du fond
+                $color = $category['color'];
+                $hex = ltrim($color, '#');
+                $r = hexdec(substr($hex, 0, 2));
+                $g = hexdec(substr($hex, 2, 2));
+                $b = hexdec(substr($hex, 4, 2));
+                // Formule de luminosité perçue
+                $luminosity = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
+                $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
+                ?>
                 <a href="#category-<?= $category['id'] ?>" 
                    class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
                    id="cat-btn-<?= $category['id'] ?>"
-                   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= htmlspecialchars($category['color']) ?>;">
-                    <?php if (!empty($category['icon'])): ?>
-                        <img src="<?= htmlspecialchars($category['icon']) ?>" 
+                   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
+                    <?php if (!empty($category['icon_path'])): ?>
+                        <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
                              alt="<?= htmlspecialchars($category['name_fr']) ?>" 
                              class="w-5 h-5 object-contain"
-                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon']) ?>');">
+                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon_path']) ?>');">
                     <?php else: ?>
-                        <i class="fas fa-tag w-5" style="color: <?= htmlspecialchars($category['color']) ?>;"></i>
+                        <i class="fas fa-tag w-5"></i>
                     <?php endif; ?>
                     <span><?= htmlspecialchars($category['name_fr']) ?></span>
                 </a>
@@ -532,6 +543,11 @@
                                     const originalColor = btn.getAttribute('data-original-color');
                                     if (originalBg) btn.style.backgroundColor = originalBg;
                                     if (originalColor) btn.style.color = originalColor;
+                                    // Réinitialiser l'icône aussi
+                                    const img = btn.querySelector('img');
+                                    if (img && btn.getAttribute('data-original-filter')) {
+                                        img.style.filter = btn.getAttribute('data-original-filter');
+                                    }
                                 });
                                 // Ajouter active au bon
                                 const btn = document.getElementById('cat-btn-' + catId);
@@ -545,9 +561,17 @@
                                     // Appliquer le style actif (rouge avec texte blanc)
                                     btn.style.backgroundColor = '#e73029';
                                     btn.style.color = 'white';
-                                    // Icônes en blanc aussi
+                                    // Icône en blanc aussi (si c'est une icône Font Awesome)
                                     const icon = btn.querySelector('i');
                                     if (icon) icon.style.color = 'white';
+                                    // Pour les images, on peut appliquer un filtre pour les rendre blanches
+                                    const img = btn.querySelector('img');
+                                    if (img) {
+                                        if (!btn.getAttribute('data-original-filter')) {
+                                            btn.setAttribute('data-original-filter', img.style.filter || 'none');
+                                        }
+                                        img.style.filter = 'brightness(0) invert(1)';
+                                    }
                                 }
                             }
                         });

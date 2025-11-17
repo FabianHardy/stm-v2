@@ -208,7 +208,7 @@ class PublicCampaignController
                     cat.code,
                     cat.name_fr,
                     cat.color,
-                    cat.icon,
+                    cat.icon_path,
                     cat.display_order
                 FROM categories cat
                 INNER JOIN products p ON p.category_id = cat.id
