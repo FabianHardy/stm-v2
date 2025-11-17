@@ -86,7 +86,7 @@ class ProductController
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::set('error', 'Token de sécurité invalide');
+            Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/products/create');
             exit;
         }
@@ -121,13 +121,13 @@ class ProductController
             if (!empty($_FILES['image_fr']['tmp_name'])) {
                 $data['image_fr'] = $this->handleImageUpload($_FILES['image_fr'], 'fr');
             } else {
-                Session::set('error', 'L\'image française est obligatoire');
+                Session::setFlash('error', 'L\'image française est obligatoire');
                 Session::set('old', $data);
                 header('Location: /stm/admin/products/create');
                 exit;
             }
         } catch (\Exception $e) {
-            Session::set('error', 'Erreur image FR : ' . $e->getMessage());
+            Session::setFlash('error', 'Erreur image FR : ' . $e->getMessage());
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
             exit;
@@ -150,10 +150,10 @@ class ProductController
         $productId = $this->productModel->create($data);
 
         if ($productId) {
-            Session::set('success', 'Promotion créée avec succès');
+            Session::setFlash('success', 'Promotion créée avec succès');
             header('Location: /stm/admin/products/' . $productId);
         } else {
-            Session::set('error', 'Erreur lors de la création de la Promotion');
+            Session::setFlash('error', 'Erreur lors de la création de la Promotion');
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
@@ -169,7 +169,7 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvée');
+            Session::setFlash('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -187,7 +187,7 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvée');
+            Session::setFlash('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -223,7 +223,7 @@ class ProductController
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::set('error', 'Token de sécurité invalide');
+            Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/products/' . $id . '/edit');
             exit;
         }
@@ -233,7 +233,7 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvée');
+            Session::setFlash('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -275,7 +275,7 @@ class ProductController
                 // Upload nouvelle
                 $data['image_fr'] = $this->handleImageUpload($_FILES['image_fr'], 'fr');
             } catch (\Exception $e) {
-                Session::set('error', 'Erreur image FR : ' . $e->getMessage());
+                Session::setFlash('error', 'Erreur image FR : ' . $e->getMessage());
             }
         }
 
@@ -300,10 +300,10 @@ class ProductController
 
         // Mettre à jour
         if ($this->productModel->update($id, $data)) {
-            Session::set('success', 'Promotion modifiée avec succès');
+            Session::setFlash('success', 'Promotion modifiée avec succès');
             header('Location: /stm/admin/products/' . $id);
         } else {
-            Session::set('error', 'Erreur lors de la modification');
+            Session::setFlash('error', 'Erreur lors de la modification');
             header('Location: /stm/admin/products/' . $id . '/edit');
         }
         exit;
@@ -318,7 +318,7 @@ class ProductController
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::set('error', 'Token de sécurité invalide');
+            Session::setFlash('error', 'Token de sécurité invalide');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -327,14 +327,14 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::set('error', 'Promotion non trouvée');
+            Session::setFlash('error', 'Promotion non trouvée');
             header('Location: /stm/admin/products');
             exit;
         }
 
         // ✅ NOUVEAU : Vérifier si la promotion a des commandes associées
         if ($this->productModel->hasOrders($id)) {
-            Session::set('error', 'Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.');
+            Session::setFlash('error', 'Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.');
             header('Location: /stm/admin/products');
             exit;
         }
@@ -347,9 +347,9 @@ class ProductController
 
         // Supprimer le Promotion
         if ($this->productModel->delete($id)) {
-            Session::set('success', 'Promotion supprimée avec succès (incluant les images)');
+            Session::setFlash('success', 'Promotion supprimée avec succès (incluant les images)');
         } else {
-            Session::set('error', 'Erreur lors de la suppression');
+            Session::setFlash('error', 'Erreur lors de la suppression');
         }
 
         header('Location: /stm/admin/products');
