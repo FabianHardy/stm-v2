@@ -1,264 +1,305 @@
 <?php
 /**
- * Vue : Accès refusé à une campagne
- * Affiche un message selon la raison du refus
+ * Vue : Page d'accès refusé
  * 
- * @created  2025/11/14 16:50
+ * Affichée lorsqu'un client n'a pas accès à une campagne spécifique
+ * 
+ * @package STM
+ * @created 18/11/2025
  */
 
-// Déterminer la langue
-$lang = isset($campaign) && $campaign['country'] === 'LU' ? 'nl' : 'fr';
+// Récupérer l'UUID de la campagne depuis l'URL
+$urlParts = explode('/', $_SERVER['REQUEST_URI']);
+$uuidIndex = array_search('c', $urlParts);
+$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
 
-// Messages selon la raison
-$messages = [
-    'campaign_not_found' => [
-        'title_fr' => 'Campagne introuvable',
-        'title_nl' => 'Campagne niet gevonden',
-        'message_fr' => 'Cette campagne n\'existe pas ou a été supprimée.',
-        'message_nl' => 'Deze campagne bestaat niet of is verwijderd.',
-        'icon' => 'search',
-        'color' => 'red'
-    ],
-    'upcoming' => [
-        'title_fr' => 'Campagne à venir',
-        'title_nl' => 'Aankomende campagne',
-        'message_fr' => 'Cette campagne n\'a pas encore commencé. Elle sera disponible à partir du ',
-        'message_nl' => 'Deze campagne is nog niet begonnen. Deze zal beschikbaar zijn vanaf ',
-        'icon' => 'clock',
-        'color' => 'blue'
-    ],
-    'ended' => [
-        'title_fr' => 'Campagne terminée',
-        'title_nl' => 'Campagne beëindigd',
-        'message_fr' => 'Cette campagne est terminée depuis le ',
-        'message_nl' => 'Deze campagne is afgelopen sinds ',
-        'icon' => 'calendar',
-        'color' => 'gray'
-    ],
-    'inactive' => [
-        'title_fr' => 'Campagne inactive',
-        'title_nl' => 'Campagne inactief',
-        'message_fr' => 'Cette campagne est actuellement inactive. Veuillez réessayer plus tard.',
-        'message_nl' => 'Deze campagne is momenteel inactief. Probeer het later opnieuw.',
-        'icon' => 'ban',
-        'color' => 'gray'
-    ],
-    'no_access' => [
-        'title_fr' => 'Accès non autorisé',
-        'title_nl' => 'Geen toegang',
-        'message_fr' => 'Votre numéro client n\'est pas autorisé à accéder à cette campagne.',
-        'message_nl' => 'Uw klantnummer is niet gemachtigd om toegang te krijgen tot deze campagne.',
-        'icon' => 'lock',
-        'color' => 'red'
-    ],
-    'quotas_reached' => [
-        'title_fr' => 'Campagne fermée',
-        'title_nl' => 'Campagne gesloten',
-        'message_fr' => 'Tous les produits de cette campagne ont atteint leur quota maximum. La campagne est fermée.',
-        'message_nl' => 'Alle producten van deze campagne hebben hun maximale quotum bereikt. De campagne is gesloten.',
-        'icon' => 'check',
-        'color' => 'green'
-    ],
-    'error' => [
-        'title_fr' => 'Erreur',
-        'title_nl' => 'Fout',
-        'message_fr' => 'Une erreur est survenue. Veuillez réessayer plus tard.',
-        'message_nl' => 'Er is een fout opgetreden. Probeer het later opnieuw.',
-        'icon' => 'exclamation',
-        'color' => 'red'
-    ]
-];
-
-$msg = $messages[$reason] ?? $messages['error'];
-$title = $lang === 'fr' ? $msg['title_fr'] : $msg['title_nl'];
-$message = $lang === 'fr' ? $msg['message_fr'] : $msg['message_nl'];
-
-// Ajouter la date si campagne à venir ou terminée
-if ($reason === 'upcoming' && isset($campaign['start_date'])) {
-    $message .= '<strong>' . date('d/m/Y', strtotime($campaign['start_date'])) . '</strong>.';
-}
-if ($reason === 'ended' && isset($campaign['end_date'])) {
-    $message .= '<strong>' . date('d/m/Y', strtotime($campaign['end_date'])) . '</strong>.';
+// Récupérer les infos de la campagne si disponibles
+try {
+    $db = \Core\Database::getInstance();
+    $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+    $campaignResult = $db->query($query, [':uuid' => $uuid]);
+    $campaign = !empty($campaignResult) ? $campaignResult[0] : null;
+} catch (\PDOException $e) {
+    error_log("Erreur access_denied: " . $e->getMessage());
+    $campaign = null;
 }
 
-// Définir les couleurs selon le type
-$colors = [
-    'red' => 'bg-red-50 border-red-200 text-red-800',
-    'blue' => 'bg-blue-50 border-blue-200 text-blue-800',
-    'gray' => 'bg-gray-50 border-gray-200 text-gray-800',
-    'green' => 'bg-green-50 border-green-200 text-green-800'
-];
-$colorClass = $colors[$msg['color']] ?? $colors['gray'];
+// Récupérer la langue depuis la session ou par défaut FR
+$currentLanguage = $_SESSION['temp_language'] ?? $_SESSION['public_customer']['language'] ?? 'fr';
 
-// Icons SVG
-$icons = [
-    'search' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>',
-    'clock' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>',
-    'calendar' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
-    'ban' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>',
-    'lock' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>',
-    'check' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>',
-    'exclamation' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>'
-];
-$icon = $icons[$msg['icon']] ?? $icons['exclamation'];
+// Récupérer le client si connecté
+$customer = $_SESSION['public_customer'] ?? null;
 ?>
 <!DOCTYPE html>
-<html lang="<?= $lang ?>">
+<html lang="<?= $currentLanguage ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($title) ?> - Trendy Foods</title>
+    <title><?= $currentLanguage === 'fr' ? 'Accès refusé' : 'Toegang geweigerd' ?> - <?= $campaign ? htmlspecialchars($campaign['name']) : 'STM' ?></title>
     
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Custom Tailwind Config -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'trendy': {
-                            50: '#fef2f2',
-                            100: '#fee2e2',
-                            200: '#fecaca',
-                            300: '#fca5a5',
-                            400: '#f87171',
-                            500: '#ef4444',
-                            600: '#e74c3c',
-                            700: '#b91c1c',
-                            800: '#991b1b',
-                            900: '#7f1d1d'
-                        }
-                    }
-                }
-            }
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            position: relative;
         }
-    </script>
+
+        /* Fond Trendy Foods en bas à droite */
+        body::before {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: url('/stm/assets/images/fond.png') no-repeat;
+            background-size: contain;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Contenu principal au-dessus du fond */
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
 </head>
 <body class="bg-gray-50">
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b border-gray-200">
-        <div class="container mx-auto px-4 py-6">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
+    <div class="content-wrapper">
+        <!-- Header blanc avec logo -->
+        <header class="bg-white shadow-sm sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <!-- Logo Trendy Foods -->
                     <div>
-                        <h1 class="text-2xl font-bold text-gray-900">Trendy Foods</h1>
-                        <p class="text-sm text-gray-600">
-                            <?= $lang === 'fr' ? 'Votre grossiste de confiance' : 'Uw vertrouwde groothandel' ?>
-                        </p>
+                        <img src="/stm/assets/images/logo.png" 
+                             alt="Trendy Foods" 
+                             class="h-12"
+                             onerror="this.style.display='none'">
                     </div>
+
+                    <!-- Switch langue FR/NL (visible uniquement pour BE) -->
+                    <?php if (!$customer || $customer['country'] === 'BE'): ?>
+                    <div class="flex bg-gray-100 rounded-lg p-1">
+                        <button onclick="switchLanguage('fr')" 
+                                class="px-4 py-2 rounded-md <?= $currentLanguage === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                            FR
+                        </button>
+                        <button onclick="switchLanguage('nl')" 
+                                class="px-4 py-2 rounded-md <?= $currentLanguage === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                            NL
+                        </button>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </header>
+
+        <!-- Bande bleue d'information -->
+        <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg relative z-10" 
+             style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);">
+            <div class="container mx-auto px-4 py-6">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center">
+                        <div class="bg-white bg-opacity-20 rounded-full p-3 mr-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <?php if ($campaign): ?>
+                                <h1 class="text-2xl font-bold"><?= htmlspecialchars($campaign['title_' . $currentLanguage]) ?></h1>
+                            <?php else: ?>
+                                <h1 class="text-2xl font-bold">
+                                    <?= $currentLanguage === 'fr' ? 'Campagne promotionnelle' : 'Promotiecampagne' ?>
+                                </h1>
+                            <?php endif; ?>
+                            <p class="text-blue-100 text-sm mt-1">
+                                <?= $currentLanguage === 'fr' ? 'Accès restreint' : 'Beperkte toegang' ?>
+                            </p>
+                        </div>
+                    </div>
+                    <?php if ($customer): ?>
+                    <div class="text-right">
+                        <p class="text-blue-100 text-sm">
+                            <?= $currentLanguage === 'fr' ? 'Client N°' : 'Klant Nr.' ?>
+                        </p>
+                        <p class="text-xl font-bold"><?= htmlspecialchars($customer['customer_number']) ?></p>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-12">
-        
-        <div class="max-w-2xl mx-auto">
-            
-            <!-- Access Denied Message -->
-            <div class="bg-white rounded-lg shadow-md p-8">
+        <!-- Contenu principal -->
+        <div class="container mx-auto px-4 py-12">
+            <div class="max-w-2xl mx-auto">
                 
-                <!-- Icon -->
-                <div class="flex justify-center mb-6">
-                    <div class="p-4 <?= $colorClass ?> rounded-full border-2">
-                        <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <?= $icon ?>
-                        </svg>
+                <!-- Carte d'accès refusé -->
+                <div class="bg-white rounded-lg shadow-lg p-8">
+                    
+                    <!-- Icône d'avertissement -->
+                    <div class="text-center mb-6">
+                        <div class="inline-flex items-center justify-center w-24 h-24 bg-blue-100 rounded-full mb-4">
+                            <svg class="w-16 h-16 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        
+                        <h2 class="text-3xl font-bold text-gray-800 mb-4">
+                            <?= $currentLanguage === 'fr' ? 'Accès non autorisé' : 'Toegang niet toegestaan' ?>
+                        </h2>
+                    </div>
+
+                    <!-- Message principal -->
+                    <div class="text-center text-gray-600 space-y-4 mb-8">
+                        <p class="text-lg">
+                            <?= $currentLanguage === 'fr' 
+                                ? 'Vous n\'avez pas accès à cette campagne promotionnelle.' 
+                                : 'U heeft geen toegang tot deze promotiecampagne.' ?>
+                        </p>
+                        
+                        <?php if ($customer): ?>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                                <p class="text-sm text-blue-800">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    <?= $currentLanguage === 'fr' 
+                                        ? 'Votre compte client <strong>' . htmlspecialchars($customer['customer_number']) . '</strong> n\'est pas autorisé à participer à cette campagne.' 
+                                        : 'Uw klantaccount <strong>' . htmlspecialchars($customer['customer_number']) . '</strong> is niet gemachtigd om deel te nemen aan deze campagne.' ?>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Raisons possibles -->
+                    <div class="bg-gray-50 rounded-lg p-6 mb-8">
+                        <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            <?= $currentLanguage === 'fr' ? 'Raisons possibles' : 'Mogelijke redenen' ?>
+                        </h3>
+                        <ul class="space-y-3 text-sm text-gray-700">
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' 
+                                    ? 'La campagne est réservée à certains clients spécifiques' 
+                                    : 'De campagne is gereserveerd voor bepaalde specifieke klanten' ?>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' 
+                                    ? 'Votre compte n\'est pas inclus dans la liste des participants' 
+                                    : 'Uw account is niet opgenomen in de deelnemerslijst' ?>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' 
+                                    ? 'La campagne concerne une zone géographique différente' 
+                                    : 'De campagne betreft een ander geografisch gebied' ?>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' 
+                                    ? 'La campagne est terminée ou n\'a pas encore débuté' 
+                                    : 'De campagne is afgelopen of nog niet begonnen' ?>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <?php if ($customer): ?>
+                            <!-- Bouton retour (si client connecté) -->
+                            <a href="/stm/c/<?= htmlspecialchars($uuid) ?>" 
+                               class="inline-flex items-center justify-center bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' ? 'Retour' : 'Terug' ?>
+                            </a>
+                        <?php else: ?>
+                            <!-- Bouton essayer avec un autre compte -->
+                            <a href="/stm/c/<?= htmlspecialchars($uuid) ?>" 
+                               class="inline-flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                                </svg>
+                                <?= $currentLanguage === 'fr' ? 'Essayer un autre compte' : 'Probeer een ander account' ?>
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
 
-                <!-- Title -->
-                <h2 class="text-3xl font-bold text-center text-gray-900 mb-4">
-                    <?= htmlspecialchars($title) ?>
-                </h2>
-
-                <!-- Message -->
-                <div class="<?= $colorClass ?> border-2 rounded-lg p-6 mb-8">
-                    <p class="text-center text-lg leading-relaxed">
-                        <?= $message ?>
-                    </p>
-                </div>
-
-                <!-- Campaign Info (si disponible) -->
-                <?php if (isset($campaign) && $reason !== 'campaign_not_found'): ?>
-                <div class="border-t border-gray-200 pt-6 mb-6">
-                    <h3 class="font-semibold text-gray-900 mb-3 text-center">
-                        <?= $lang === 'fr' ? 'Informations sur la campagne' : 'Informatie over de campagne' ?>
+                <!-- Section aide / contact -->
+                <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <h3 class="font-semibold text-blue-900 mb-3 flex items-center">
+                        <i class="fas fa-life-ring mr-2"></i>
+                        <?= $currentLanguage === 'fr' ? 'Besoin d\'aide ?' : 'Hulp nodig?' ?>
                     </h3>
-                    <div class="space-y-2 text-center text-gray-700">
-                        <p class="font-medium text-lg">
-                            <?= htmlspecialchars($lang === 'fr' ? $campaign['title_fr'] : $campaign['title_nl']) ?>
+                    <div class="text-sm text-blue-800 space-y-3">
+                        <p>
+                            <?= $currentLanguage === 'fr' 
+                                ? 'Si vous pensez qu\'il s\'agit d\'une erreur ou si vous souhaitez plus d\'informations sur cette campagne, veuillez contacter votre représentant commercial.' 
+                                : 'Als u denkt dat dit een vergissing is of als u meer informatie wenst over deze campagne, neem dan contact op met uw vertegenwoordiger.' ?>
                         </p>
-                        <p class="text-sm text-gray-500">
-                            <?= date('d/m/Y', strtotime($campaign['start_date'])) ?>
-                            -
-                            <?= date('d/m/Y', strtotime($campaign['end_date'])) ?>
-                        </p>
-                        <p class="text-sm">
-                            <span class="px-3 py-1 bg-gray-100 rounded-full">
-                                <?= $campaign['country'] === 'BOTH' 
-                                    ? ($lang === 'fr' ? 'BE + LU' : 'BE + LU') 
-                                    : $campaign['country'] 
-                                ?>
-                            </span>
-                        </p>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <!-- Help Section -->
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-6">
-                    <div class="flex items-start space-x-3">
-                        <svg class="w-6 h-6 text-gray-600 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <div>
-                            <h4 class="font-semibold text-gray-900 mb-2">
-                                <?= $lang === 'fr' ? 'Besoin d\'aide ?' : 'Hulp nodig?' ?>
-                            </h4>
-                            <p class="text-sm text-gray-700 leading-relaxed mb-3">
-                                <?= $lang === 'fr' 
-                                    ? 'Si vous pensez qu\'il s\'agit d\'une erreur ou si vous avez des questions, n\'hésitez pas à nous contacter :' 
-                                    : 'Als u denkt dat dit een vergissing is of als u vragen heeft, aarzel dan niet om contact met ons op te nemen:' 
-                                ?>
-                            </p>
-                            <div class="space-y-1 text-sm text-gray-700">
-                                <p>
-                                    <span class="font-medium">
-                                        <?= $lang === 'fr' ? 'Téléphone :' : 'Telefoon:' ?>
-                                    </span>
-                                    +32 (0)4 XXX XX XX
-                                </p>
-                                <p>
-                                    <span class="font-medium">Email:</span>
-                                    info@trendyfoods.be
-                                </p>
+                        <div class="pt-3 border-t border-blue-300">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-phone text-blue-600 w-6 mr-2"></i>
+                                <span class="font-medium">+32 2 123 45 67</span>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fas fa-envelope text-blue-600 w-6 mr-2"></i>
+                                <span class="font-medium">support@trendyfoods.com</span>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
-
         </div>
-
-    </main>
+    </div>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-gray-300 mt-16">
-        <div class="container mx-auto px-4 py-8">
-            <div class="text-center text-sm">
-                <p>&copy; <?= date('Y') ?> Trendy Foods. 
-                    <?= $lang === 'fr' ? 'Tous droits réservés.' : 'Alle rechten voorbehouden.' ?>
-                </p>
-            </div>
+    <footer class="bg-gray-800 text-gray-300 py-6 mt-12 relative z-10">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-sm">
+                © <?= date('Y') ?> Trendy Foods - 
+                <?= $currentLanguage === 'fr' ? 'Tous droits réservés' : 'Alle rechten voorbehouden' ?>
+            </p>
         </div>
     </footer>
+
+    <!-- Script switch langue -->
+    <script>
+    function switchLanguage(lang) {
+        // Stocker la langue dans la session temporaire via AJAX
+        fetch('/stm/c/<?= htmlspecialchars($uuid) ?>/set-language', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ language: lang })
+        }).then(() => {
+            // Recharger la page pour appliquer la langue
+            window.location.reload();
+        });
+    }
+    </script>
 
 </body>
 </html>
