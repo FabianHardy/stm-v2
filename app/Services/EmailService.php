@@ -204,26 +204,19 @@ class EmailService
      */
     private function send(string $to, string $subject, string $html): bool
     {
-        // Headers optimisés pour éviter le spam
+        // Headers pour email HTML
         $headers = [
             'MIME-Version: 1.0',
             'Content-type: text/html; charset=UTF-8',
-            "From: Trendy Foods <{$this->fromEmail}>",
-            "Reply-To: contact@trendyfoods.com",
-            'X-Mailer: PHP/' . phpversion(),
-            'X-Priority: 3',
-            'Importance: Normal',
-            'Message-ID: <' . time() . '.' . md5($to . time()) . '@trendyfoods.com>',
-            'Return-Path: ' . $this->fromEmail,
+            "From: {$this->fromName} <{$this->fromEmail}>",
+            "Reply-To: {$this->fromEmail}",
+            'X-Mailer: PHP/' . phpversion()
         ];
         
         // Joindre les headers
         $headersString = implode("\r\n", $headers);
         
-        // Paramètres additionnels pour améliorer la délivrabilité
-        $additionalParams = '-f' . $this->fromEmail;
-        
         // Envoyer l'email
-        return mail($to, $subject, $html, $headersString, $additionalParams);
+        return mail($to, $subject, $html, $headersString);
     }
 }
