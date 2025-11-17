@@ -227,7 +227,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                         <div class="mt-3 space-y-1 text-sm text-blue-900">
                             <p>
                                 <i class="fas fa-phone mr-2"></i>
-                                <strong>+32 (0)4 XXX XX XX</strong>
+                                <strong>+32 (0)87 321 888 </strong>
                             </p>
                             <p>
                                 <i class="fas fa-envelope mr-2"></i>
