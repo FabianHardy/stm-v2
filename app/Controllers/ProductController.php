@@ -57,7 +57,7 @@ class ProductController
     {
         // Récupérer les catégories depuis product_categories
         $db = \Core\Database::getInstance();
-        $categories = $db->query("SELECT * FROM product_categories ORDER BY display_order ASC");
+        $categories = $db->query("SELECT * FROM categories ORDER BY display_order ASC");
 
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
