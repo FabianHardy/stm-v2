@@ -2,6 +2,64 @@
 
 Historique centralisé de toutes les modifications du projet.
 
+
+---
+
+## [17/11/2025] - Sprint 5 : Corrections module Promotions
+
+### 🐛 Corrigé
+
+**Bug création de promotions** :
+- **Problème** : Erreur Foreign Key lors de la création de promotions
+- **Cause** : Contrainte FK `products_ibfk_1` pointait vers `product_categories` au lieu de `categories`
+- **Solution** : Correction de la contrainte FK dans la table `products`
+  ```sql
+  ALTER TABLE products DROP FOREIGN KEY products_ibfk_1;
+  ALTER TABLE products ADD CONSTRAINT products_ibfk_1 
+    FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL;
+  ```
+
+**Bug formulaires (perte des valeurs après erreur)** :
+- **Problème** : Champs vidés lors du retour après erreur de validation
+- **Cause** : Utilisation incorrecte de `$old = $old ?? []` au lieu de `Session::get('old')`
+- **Solution** : Correction dans toutes les vues de formulaires
+  ```php
+  // ❌ AVANT
+  $old = $old ?? [];
+  $errors = $errors ?? [];
+  
+  // ✅ APRÈS
+  $old = Session::get('old') ?? [];
+  $errors = Session::get('errors') ?? [];
+  Session::remove('old');
+  Session::remove('errors');
+  ```
+
+**Bug méthode Session inexistante** :
+- **Problème** : Appel à `Session::forget()` qui n'existe pas
+- **Solution** : Utilisation de `Session::remove()` (méthode correcte)
+
+**Configuration PHP upload** :
+- Augmentation de `upload_max_filesize` dans php.ini O2switch
+- Limite passée à 10MB pour les images produits
+
+### 🔧 Modifié
+
+**Vues corrigées** :
+- `products/create.php` : Récupération correcte de `$old` et `$errors`
+- `products/edit.php` : Idem
+
+**Contrôleurs** :
+- `ProductController::store()` : Ajout gestion d'erreurs SQL temporaire (debug)
+- `ProductController::update()` : Idem
+
+### ✅ Validé
+
+- ✅ Création de promotions fonctionnelle
+- ✅ Conservation des valeurs après erreur de validation
+- ✅ Upload d'images jusqu'à 10MB
+- ✅ Contraintes FK cohérentes avec l'architecture
+
 --
 ## [17/11/2025] - Sécurisation suppression promotions
 
