@@ -209,7 +209,7 @@ class PublicCampaignController
                     cat.name_fr,
                     cat.color,
                     cat.display_order
-                FROM product_categories cat
+                FROM categories cat
                 INNER JOIN products p ON p.category_id = cat.id
                 WHERE p.campaign_id = :campaign_id
                   AND p.is_active = 1
