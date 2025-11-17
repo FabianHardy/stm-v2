@@ -168,11 +168,11 @@
                 <h3>Details van uw bestelling</h3>
                 <div class="info-row">
                     <span class="info-label">Bestelnummer:</span>
-                    <span class="info-value"><?= htmlspecialchars($order['order_number']) ?></span>
+                    <span class="info-value"><?= htmlspecialchars($order['order_number'] ?? 'In behandeling') ?></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Klantnummer:</span>
-                    <span class="info-value"><?= htmlspecialchars($order['customer_number']) ?></span>
+                    <span class="info-value"><?= htmlspecialchars($order['customer_number'] ?? '') ?></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Besteldatum:</span>
@@ -197,7 +197,6 @@
             <table class="products-table">
                 <thead>
                     <tr>
-                        <th>Code</th>
                         <th>Product</th>
                         <th style="text-align: center;">Aantal</th>
                     </tr>
@@ -209,13 +208,12 @@
                         $totalQuantity += $line['quantity'];
                     ?>
                     <tr>
-                        <td><?= htmlspecialchars($line['product_code']) ?></td>
                         <td><?= htmlspecialchars($line['name_nl']) ?></td>
                         <td style="text-align: center;"><?= htmlspecialchars($line['quantity']) ?></td>
                     </tr>
                     <?php endforeach; ?>
                     <tr class="total-row">
-                        <td colspan="2" style="text-align: right;">Totaal artikelen:</td>
+                        <td style="text-align: right;">Totaal artikelen:</td>
                         <td style="text-align: center;"><?= $totalQuantity ?></td>
                     </tr>
                 </tbody>
@@ -236,7 +234,7 @@
                 <p>Luxemburg</p>
                 <?php endif; ?>
                 <p style="margin-top: 10px;">
-                    Email: <a href="mailto:contact@trendyfoods.com" style="color: #006eb8;">contact@trendyfoods.com</a>
+                    Email: <a href="/cdn-cgi/l/email-protection#87e4e8e9f3e6e4f3c7f3f5e2e9e3fee1e8e8e3f4a9e4e8ea" style="color: #006eb8;"><span class="__cf_email__" data-cfemail="31525e5f45505245714543545f5548575e5e55421f525e5c">[email&#160;protected]</span></a>
                 </p>
             </div>
 
@@ -250,9 +248,3 @@
         <div class="footer">
             <p>&copy; <?= date('Y') ?> Trendy Foods. Alle rechten voorbehouden.</p>
             <p style="margin-top: 10px; font-size: 11px; color: #999999;">
-                Deze e-mail is automatisch verzonden, gelieve er niet op te antwoorden.
-            </p>
-        </div>
-    </div>
-</body>
-</html>

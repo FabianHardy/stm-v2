@@ -168,11 +168,11 @@
                 <h3>Détails de votre commande</h3>
                 <div class="info-row">
                     <span class="info-label">Numéro de commande :</span>
-                    <span class="info-value"><?= htmlspecialchars($order['order_number']) ?></span>
+                    <span class="info-value"><?= htmlspecialchars($order['order_number'] ?? 'En cours de génération') ?></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Numéro client :</span>
-                    <span class="info-value"><?= htmlspecialchars($order['customer_number']) ?></span>
+                    <span class="info-value"><?= htmlspecialchars($order['customer_number'] ?? '') ?></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Date de commande :</span>
@@ -197,7 +197,6 @@
             <table class="products-table">
                 <thead>
                     <tr>
-                        <th>Code</th>
                         <th>Produit</th>
                         <th style="text-align: center;">Quantité</th>
                     </tr>
@@ -209,13 +208,12 @@
                         $totalQuantity += $line['quantity'];
                     ?>
                     <tr>
-                        <td><?= htmlspecialchars($line['product_code']) ?></td>
                         <td><?= htmlspecialchars($line['name_fr']) ?></td>
                         <td style="text-align: center;"><?= htmlspecialchars($line['quantity']) ?></td>
                     </tr>
                     <?php endforeach; ?>
                     <tr class="total-row">
-                        <td colspan="2" style="text-align: right;">Total articles :</td>
+                        <td style="text-align: right;">Total articles :</td>
                         <td style="text-align: center;"><?= $totalQuantity ?></td>
                     </tr>
                 </tbody>
@@ -236,7 +234,7 @@
                 <p>Luxembourg</p>
                 <?php endif; ?>
                 <p style="margin-top: 10px;">
-                    Email : <a href="mailto:contact@trendyfoods.com" style="color: #006eb8;">contact@trendyfoods.com</a>
+                    Email : <a href="/cdn-cgi/l/email-protection#4e2d21203a2f2d3a0e3a3c2b202a372821212a3d602d2123" style="color: #006eb8;"><span class="__cf_email__" data-cfemail="f0939f9e84919384b08482959e9489969f9f9483de939f9d">[email&#160;protected]</span></a>
                 </p>
             </div>
 
@@ -250,9 +248,3 @@
         <div class="footer">
             <p>&copy; <?= date('Y') ?> Trendy Foods. Tous droits réservés.</p>
             <p style="margin-top: 10px; font-size: 11px; color: #999999;">
-                Cet email a été envoyé automatiquement, merci de ne pas y répondre.
-            </p>
-        </div>
-    </div>
-</body>
-</html>
