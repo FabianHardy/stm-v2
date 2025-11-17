@@ -20,23 +20,80 @@
             scroll-behavior: smooth;
         }
         
+        /* Fond Trendy Foods en arrière-plan */
+        body {
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: url('/stm/assets/images/fond.png') no-repeat;
+            background-size: contain;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
         /* Lightbox overlay */
         .lightbox-overlay {
             background: rgba(0, 0, 0, 0.9);
         }
         
-        /* Badge catégorie avec couleur dynamique */
-        .category-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 0.375rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-        
         /* Sticky nav offset */
         .scroll-mt {
-            scroll-margin-top: 8rem;
+            scroll-margin-top: 10rem;
+        }
+
+        /* Barre catégories horizontale avec scroll */
+        .category-nav {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scroll-behavior: smooth;
+        }
+        
+        .category-nav::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .category-nav::-webkit-scrollbar-thumb {
+            background: #006eb8;
+            border-radius: 4px;
+        }
+
+        .category-nav::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        /* Style des boutons catégories */
+        .category-btn {
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .category-btn:hover {
+            border-color: #006eb8;
+            transform: translateY(-2px);
+        }
+
+        .category-btn.active {
+            border-color: #e73029;
+            box-shadow: 0 4px 6px rgba(231, 48, 41, 0.3);
+        }
+
+        /* Hover effect produits */
+        .product-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
     </style>
 </head>
@@ -46,14 +103,18 @@
     <header class="bg-white shadow-md sticky top-0 z-40">
         <div class="container mx-auto px-4 py-4">
             <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
-                    <p class="text-sm text-gray-600">
-                        <i class="fas fa-building mr-1"></i>
-                        <?= htmlspecialchars($customer['company_name']) ?> 
-                        <span class="mx-2">•</span>
-                        <?= htmlspecialchars($customer['customer_number']) ?>
-                    </p>
+                <div class="flex items-center space-x-4">
+                    <!-- Logo Trendy Foods -->
+                    <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
+                        <p class="text-sm text-gray-600">
+                            <i class="fas fa-building mr-1"></i>
+                            <?= htmlspecialchars($customer['company_name']) ?> 
+                            <span class="mx-2">•</span>
+                            <?= htmlspecialchars($customer['customer_number']) ?>
+                        </p>
+                    </div>
                 </div>
                 
                 <!-- Bouton panier mobile -->
@@ -73,15 +134,21 @@
         </div>
     </header>
 
-    <!-- Navigation catégories (sticky) -->
+    <!-- Navigation catégories horizontale (sticky) -->
     <nav class="bg-white border-b sticky top-[72px] z-30 shadow-sm">
         <div class="container mx-auto px-4">
-            <div class="flex overflow-x-auto py-3 space-x-4">
+            <div class="category-nav flex gap-3 py-3">
                 <?php foreach ($categories as $category): ?>
                 <a href="#category-<?= $category['id'] ?>" 
-                   class="category-badge whitespace-nowrap hover:opacity-80 transition"
+                   class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
+                   id="cat-btn-<?= $category['id'] ?>"
                    style="background-color: <?= htmlspecialchars($category['color']) ?>20; color: <?= htmlspecialchars($category['color']) ?>;">
-                    <?= htmlspecialchars($category['name_fr']) ?>
+                    <?php if (!empty($category['icon'])): ?>
+                        <i class="<?= htmlspecialchars($category['icon']) ?> w-5" style="color: <?= htmlspecialchars($category['color']) ?>;"></i>
+                    <?php else: ?>
+                        <i class="fas fa-tag w-5" style="color: <?= htmlspecialchars($category['color']) ?>;"></i>
+                    <?php endif; ?>
+                    <span><?= htmlspecialchars($category['name_fr']) ?></span>
                 </a>
                 <?php endforeach; ?>
             </div>
@@ -106,26 +173,23 @@
                 
                 // Si aucun produit disponible, ne pas afficher la catégorie
                 if ($productCount === 0) continue;
-                
-                // Grid dynamique : 1 colonne si 1 produit, 2 colonnes sinon
-                $gridClass = $productCount === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
                 ?>
                 
                 <!-- Section catégorie -->
                 <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
-                    <h2 class="text-3xl font-bold mb-6 flex items-center">
-                        <span class="w-2 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars($category['color']) ?>;"></span>
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <span class="w-1 h-8 mr-3 bg-red-600 rounded"></span>
                         <?= htmlspecialchars($category['name_fr']) ?>
                     </h2>
                     
-                    <!-- Grid produits -->
-                    <div class="grid <?= $gridClass ?> gap-6">
+                    <!-- Grid produits - 2 COLONNES MAX -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <?php foreach ($orderableProducts as $product): ?>
                         <!-- Card produit -->
-                        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
+                        <div class="product-card bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
                             
-                            <!-- Image -->
-                            <div class="relative h-48 bg-gray-100 cursor-pointer" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
+                            <!-- Image A4 paysage -->
+                            <div class="relative bg-gray-100 cursor-pointer" style="height: 213px;" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
                                 <?php if (!empty($product['image_fr'])): ?>
                                     <img src="<?= htmlspecialchars($product['image_fr']) ?>" 
                                          alt="<?= htmlspecialchars($product['name_fr']) ?>"
@@ -137,217 +201,269 @@
                                 <?php endif; ?>
                                 
                                 <!-- Icône zoom -->
-                                <div class="absolute bottom-2 right-2 bg-white bg-opacity-90 rounded-full p-2">
+                                <div class="absolute top-2 right-2 bg-white bg-opacity-90 rounded-full p-2 shadow-lg hover:bg-white transition">
                                     <i class="fas fa-search-plus text-gray-600"></i>
                                 </div>
+
+                                <!-- Badge ÉPUISÉ si quotas à 0 -->
+                                <?php if (!$product['is_orderable']): ?>
+                                <div class="absolute top-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                                    ÉPUISÉ
+                                </div>
+                                <?php endif; ?>
                             </div>
                             
                             <!-- Infos produit -->
                             <div class="p-4">
-                                <h3 class="text-lg font-bold text-gray-800 mb-2">
+                                <!-- Titre 12px uppercase -->
+                                <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
                                     <?= htmlspecialchars($product['name_fr']) ?>
                                 </h3>
                                 
-                                <?php if (!empty($product['description'])): ?>
-                                <p class="text-sm text-gray-600 mb-3 line-clamp-2">
-                                    <?= htmlspecialchars($product['description_fr']) ?>
-                                </p>
-                                <?php endif; ?>
-                                
-
-                                <!-- Quotas disponibles -->
-                                <div class="text-sm text-gray-600 mb-4 space-y-1">
-                                    <?php if (!is_null($product['max_per_customer'])): ?>
-                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                                        <div class="flex items-center text-sm">
-                                            <i class="fas fa-box w-4 text-blue-600 mr-2"></i>
-                                            <span class="font-semibold">Maximum autorisé :</span>
-                                            <span class="ml-1 font-bold text-blue-600"><?= $product['max_per_customer'] ?> unités</span>
-                                        </div>
-                                        <div class="flex items-center text-sm">
-                                            <i class="fas fa-check-circle w-4 text-green-600 mr-2"></i>
-                                            <span class="font-semibold">Reste disponible :</span>
-                                            <span class="ml-1 font-bold text-green-600"><?= $product['available_for_customer'] ?> unités</span>
-                                        </div>
-                                    </div>
-                                    <?php endif; ?>
-
+                                <!-- Quotas sur 1 SEULE LIGNE -->
+                                <?php if (!is_null($product['max_per_customer']) && $product['is_orderable']): ?>
+                                <div class="text-sm mb-3 flex items-center justify-between">
+                                    <span class="flex items-center">
+                                        <i class="fas fa-box w-4 text-blue-600 mr-1"></i>
+                                        <span class="font-semibold text-blue-600">
+                                            Maximum : <?= $product['max_per_customer'] ?> <?= $product['max_per_customer'] > 1 ? 'unités' : 'unité' ?>
+                                        </span>
+                                    </span>
+                                    <span class="flex items-center">
+                                        <?php if ($product['available_for_customer'] > 1): ?>
+                                            <i class="fas fa-check-circle w-4 text-green-600 mr-1"></i>
+                                            <span class="font-semibold text-green-600">
+                                                Reste : <?= $product['available_for_customer'] ?> unités
+                                            </span>
+                                        <?php elseif ($product['available_for_customer'] == 1): ?>
+                                            <i class="fas fa-exclamation-circle w-4 text-orange-600 mr-1"></i>
+                                            <span class="font-semibold text-orange-600">
+                                                Reste : 1 unité
+                                            </span>
+                                        <?php else: ?>
+                                            <i class="fas fa-times-circle w-4 text-red-600 mr-1"></i>
+                                            <span class="font-semibold text-red-600">
+                                                Reste : 0 unité
+                                            </span>
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
-                                
-                                <!-- Formulaire ajout panier -->
-                                <div class="flex items-center gap-2">
-                                    <input type="number" 
-                                           min="1" 
-                                           max="<?= $product['max_orderable'] ?>" 
-                                           value="1"
-                                           id="qty-<?= $product['id'] ?>"
-                                           class="w-20 px-3 py-2 border rounded-lg text-center">
-                                    
-                                    <button @click="addToCart(<?= $product['id'] ?>, <?= $product['max_orderable'] ?>)"
-                                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
-                                        <i class="fas fa-cart-plus mr-2"></i>Ajouter
+                                <?php endif; ?>
+
+                                <!-- Alerte si quota global proche -->
+                                <?php if (!is_null($product['max_total']) && $product['available_global'] <= 10 && $product['available_global'] > 0): ?>
+                                <div class="bg-amber-50 border-l-4 border-amber-400 p-2 mb-3 text-xs">
+                                    <i class="fas fa-exclamation-triangle text-amber-600 mr-1"></i>
+                                    <span class="text-amber-800">Stock global limité : <?= $product['available_global'] ?> restants</span>
+                                </div>
+                                <?php endif; ?>
+
+                                <!-- Boutons action -->
+                                <?php if ($product['is_orderable']): ?>
+                                <div class="flex items-center gap-3">
+                                    <input 
+                                        type="number" 
+                                        id="qty-<?= $product['id'] ?>" 
+                                        value="1" 
+                                        min="1" 
+                                        max="<?= $product['max_orderable'] ?>"
+                                        class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                    >
+                                    <button 
+                                        @click="addToCart(<?= $product['id'] ?>, <?= $product['max_orderable'] ?>)"
+                                        class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition shadow-md hover:shadow-lg flex items-center justify-center"
+                                    >
+                                        <i class="fas fa-shopping-cart mr-2"></i>
+                                        Ajouter
                                     </button>
                                 </div>
+                                <?php else: ?>
+                                <button 
+                                    disabled 
+                                    class="w-full bg-gray-300 text-gray-500 font-semibold py-2 px-4 rounded-lg cursor-not-allowed flex items-center justify-center"
+                                >
+                                    <i class="fas fa-ban mr-2"></i>
+                                    Stock épuisé
+                                </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <?php endforeach; ?>
                     </div>
                 </section>
-                <?php endforeach; ?>
                 
+                <?php endforeach; ?>
             </div>
-            
-            <!-- Panier (sidebar desktop) -->
-            <aside class="hidden lg:block w-80 sticky top-[145px] self-start">
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <h2 class="text-2xl font-bold mb-4 flex items-center">
-                        <i class="fas fa-shopping-cart mr-2 text-blue-600"></i>
-                        Mon panier
-                        <span x-show="cartItemCount > 0" 
-                              x-text="'(' + cartItemCount + ')'" 
-                              class="ml-2 text-blue-600">
-                        </span>
-                    </h2>
-                    
-                    <!-- Panier vide -->
-                    <div x-show="cart.items.length === 0" class="text-center py-8 text-gray-500">
-                        <i class="fas fa-shopping-cart text-6xl mb-4 text-gray-300"></i>
-                        <p>Votre panier est vide</p>
+
+            <!-- Panier sidebar (droite) -->
+            <div class="lg:w-80 hidden lg:block">
+                <div class="bg-white rounded-lg shadow-lg p-6 sticky top-32">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-shopping-cart mr-2"></i>
+                            Mon panier
+                            <span x-show="cartItemCount > 0" 
+                                  x-text="cartItemCount" 
+                                  class="ml-2 bg-red-600 text-white text-sm px-2 py-1 rounded-full">
+                            </span>
+                        </h3>
                     </div>
                     
-                    <!-- Liste produits panier -->
-                    <div x-show="cart.items.length > 0" class="space-y-4 mb-4 max-h-96 overflow-y-auto">
+                    <!-- Items panier -->
+                    <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                        <template x-if="cart.items.length === 0">
+                            <div class="text-center py-8 text-gray-400">
+                                <i class="fas fa-shopping-basket text-4xl mb-2"></i>
+                                <p class="text-sm">Votre panier est vide</p>
+                            </div>
+                        </template>
+                        
                         <template x-for="item in cart.items" :key="item.product_id">
-                            <div class="border-b pb-4">
-                                <div class="flex justify-between items-start mb-2">
-                                    <h4 class="font-semibold text-sm flex-1" x-text="item.product_name"></h4>
-                                    <button @click="removeFromCart(item.product_id)" 
-                                            class="text-red-500 hover:text-red-700 ml-2">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                                
-                                <div class="flex items-center justify-between text-sm">
-                                    <div class="flex items-center gap-2">
-                                        <button @click="updateQuantity(item.product_id, item.quantity - 1)"
-                                                class="w-6 h-6 bg-gray-200 rounded hover:bg-gray-300">
+                            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                <img :src="item.image" 
+                                     :alt="item.name"
+                                     class="w-12 h-12 object-cover rounded"
+                                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 60 60\'%3E%3Crect fill=\'%23e0e0e0\' width=\'60\' height=\'60\'/%3E%3C/svg%3E'">
+                                <div class="flex-1 text-sm">
+                                    <p class="font-semibold text-gray-800 line-clamp-2" x-text="item.name"></p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
+                                                class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
                                             <i class="fas fa-minus text-xs"></i>
                                         </button>
-                                        <span class="w-8 text-center font-bold" x-text="item.quantity"></span>
-                                        <button @click="updateQuantity(item.product_id, item.quantity + 1)"
-                                                class="w-6 h-6 bg-gray-200 rounded hover:bg-gray-300">
+                                        <span class="font-bold" x-text="item.quantity"></span>
+                                        <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
+                                                class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
                                             <i class="fas fa-plus text-xs"></i>
                                         </button>
                                     </div>
-
                                 </div>
+                                <button @click="removeFromCart(item.product_id)" 
+                                        class="text-red-600 hover:text-red-700">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </template>
                     </div>
                     
-                    <!-- Actions -->
-                    <div x-show="cart.items.length > 0" class="border-t pt-4">
-                        
-                        <button @click="validateOrder()" 
-                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition mb-2">
-                            <i class="fas fa-check mr-2"></i>Valider ma commande
-                        </button>
-                        
-                        <button @click="clearCart()" 
-                                class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition">
-                            <i class="fas fa-trash mr-2"></i>Vider le panier
-                        </button>
+                    <!-- Total -->
+                    <div class="border-t pt-4 mb-4" x-show="cart.items.length > 0">
+                        <div class="flex justify-between text-lg font-bold">
+                            <span>Total articles :</span>
+                            <span class="text-blue-600" x-text="cartItemCount"></span>
+                        </div>
                     </div>
-                </div>
-            </aside>
-            
-        </div>
-    </div>
-
-    <!-- Modal panier mobile -->
-    <div x-show="showCartMobile" 
-         x-cloak
-         @click.self="toggleCartMobile()"
-         class="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden"
-         style="display: none;">
-        <div class="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-2xl max-h-[80vh] overflow-hidden"
-             @click.away="showCartMobile = false">
-            
-            <!-- Header modal -->
-            <div class="flex justify-between items-center p-4 border-b bg-gray-50">
-                <h3 class="text-xl font-bold flex items-center">
-                    <i class="fas fa-shopping-cart mr-2 text-blue-600"></i>
-                    Mon panier
-                    <span x-show="cartItemCount > 0" 
-                          x-text="'(' + cartItemCount + ')'" 
-                          class="ml-2 text-blue-600">
-                    </span>
-                </h3>
-                <button @click="toggleCartMobile()" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times text-2xl"></i>
-                </button>
-            </div>
-            
-            <!-- Contenu panier mobile -->
-            <div class="p-4 overflow-y-auto" style="max-height: calc(80vh - 200px);">
-                <!-- Panier vide -->
-                <div x-show="cart.items.length === 0" class="text-center py-8 text-gray-500">
-                    <i class="fas fa-shopping-cart text-6xl mb-4 text-gray-300"></i>
-                    <p>Votre panier est vide</p>
-                </div>
-                
-                <!-- Liste produits -->
-                <div x-show="cart.items.length > 0" class="space-y-4 mb-4">
-                    <template x-for="item in cart.items" :key="item.product_id">
-                        <div class="border-b pb-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <h4 class="font-semibold text-sm flex-1" x-text="item.product_name"></h4>
-                                <button @click="removeFromCart(item.product_id)" 
-                                        class="text-red-500 hover:text-red-700 ml-2">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="flex items-center justify-between text-sm">
-                                <div class="flex items-center gap-2">
-                                    <button @click="updateQuantity(item.product_id, item.quantity - 1)"
-                                            class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">
-                                        <i class="fas fa-minus text-xs"></i>
-                                    </button>
-                                    <span class="w-10 text-center font-bold" x-text="item.quantity"></span>
-                                    <button @click="updateQuantity(item.product_id, item.quantity + 1)"
-                                            class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">
-                                        <i class="fas fa-plus text-xs"></i>
-                                    </button>
-                                </div>
-
-                            </div>
+                    
+                    <!-- Actions -->
+                    <template x-if="cart.items.length > 0">
+                        <div>
+                            <button @click="validateOrder()" 
+                                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg mb-2 transition shadow-md hover:shadow-lg flex items-center justify-center">
+                                <i class="fas fa-check mr-2"></i>
+                                Valider ma commande
+                            </button>
+                            <button @click="clearCart()" 
+                                    class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center">
+                                <i class="fas fa-trash mr-2"></i>
+                                Vider le panier
+                            </button>
                         </div>
                     </template>
                 </div>
             </div>
-            
-            <!-- Footer modal -->
-            <div x-show="cart.items.length > 0" class="border-t bg-gray-50 p-4">
-                
-                <button @click="validateOrder()" 
-                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition mb-2">
-                    <i class="fas fa-check mr-2"></i>Valider ma commande
-                </button>
-                
-                <button @click="clearCart()" 
-                        class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition">
-                    <i class="fas fa-trash mr-2"></i>Vider le panier
-                </button>
-            </div>
+
         </div>
     </div>
 
-    <!-- Lightbox image -->
+    <!-- Panier mobile (modal plein écran) -->
+    <div x-show="showCartMobile" 
+         x-transition
+         class="fixed inset-0 bg-white z-50 overflow-y-auto lg:hidden"
+         style="display: none;">
+        
+        <!-- Header modal -->
+        <div class="bg-blue-600 text-white px-4 py-4 flex items-center justify-between sticky top-0">
+            <h3 class="text-xl font-bold flex items-center">
+                <i class="fas fa-shopping-cart mr-2"></i>
+                Mon panier
+                <span x-show="cartItemCount > 0" 
+                      x-text="'(' + cartItemCount + ')'" 
+                      class="ml-2">
+                </span>
+            </h3>
+            <button @click="toggleCartMobile()" class="text-white text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Contenu panier -->
+        <div class="p-4">
+            <template x-if="cart.items.length === 0">
+                <div class="text-center py-12 text-gray-400">
+                    <i class="fas fa-shopping-basket text-6xl mb-4"></i>
+                    <p>Votre panier est vide</p>
+                    <button @click="toggleCartMobile()" 
+                            class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">
+                        Continuer mes achats
+                    </button>
+                </div>
+            </template>
+
+            <div class="space-y-4">
+                <template x-for="item in cart.items" :key="item.product_id">
+                    <div class="bg-white border rounded-lg p-4 flex items-center gap-4">
+                        <img :src="item.image" 
+                             :alt="item.name"
+                             class="w-16 h-16 object-cover rounded">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800" x-text="item.name"></p>
+                            <div class="flex items-center gap-3 mt-2">
+                                <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
+                                        class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300">
+                                    -
+                                </button>
+                                <span class="font-bold text-lg" x-text="item.quantity"></span>
+                                <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
+                                        class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300">
+                                    +
+                                </button>
+                            </div>
+                        </div>
+                        <button @click="removeFromCart(item.product_id)" 
+                                class="text-red-600 hover:text-red-700 text-xl">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Actions mobile -->
+            <template x-if="cart.items.length > 0">
+                <div class="mt-6 space-y-3">
+                    <div class="bg-gray-100 rounded-lg p-4 flex justify-between items-center">
+                        <span class="font-semibold">Total articles :</span>
+                        <span class="text-2xl font-bold text-blue-600" x-text="cartItemCount"></span>
+                    </div>
+                    <button @click="validateOrder()" 
+                            class="w-full bg-green-600 text-white font-bold py-4 rounded-lg text-lg">
+                        <i class="fas fa-check mr-2"></i>
+                        Valider ma commande
+                    </button>
+                    <button @click="clearCart()" 
+                            class="w-full bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg">
+                        <i class="fas fa-trash mr-2"></i>
+                        Vider le panier
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Lightbox zoom image -->
     <div x-show="showLightbox" 
-         x-cloak
+         x-transition
          @click="closeLightbox()"
-         class="fixed inset-0 lightbox-overlay z-50 flex items-center justify-center p-4"
+         class="lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
          style="display: none;">
         <div class="relative max-w-4xl max-h-full">
             <button @click="closeLightbox()" 
@@ -371,6 +487,8 @@
                 
                 init() {
                     console.log('Cart initialized', this.cart);
+                    // Gérer les catégories actives au scroll
+                    this.handleCategoryHighlight();
                 },
                 
                 get cartItemCount() {
@@ -390,6 +508,50 @@
                     this.showLightbox = false;
                 },
                 
+                handleCategoryHighlight() {
+                    // Observer pour mettre en surbrillance la catégorie active
+                    const sections = document.querySelectorAll('section[id^="category-"]');
+                    const options = {
+                        root: null,
+                        rootMargin: '-50% 0px -50% 0px',
+                        threshold: 0
+                    };
+                    
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                const catId = entry.target.id.replace('category-', '');
+                                // Retirer active de tous
+                                document.querySelectorAll('.category-btn').forEach(btn => {
+                                    btn.classList.remove('active');
+                                    // Réinitialiser le style original
+                                    const originalBg = btn.getAttribute('data-original-bg');
+                                    const originalColor = btn.getAttribute('data-original-color');
+                                    if (originalBg) btn.style.backgroundColor = originalBg;
+                                    if (originalColor) btn.style.color = originalColor;
+                                });
+                                // Ajouter active au bon
+                                const btn = document.getElementById('cat-btn-' + catId);
+                                if (btn) {
+                                    // Sauvegarder les styles originaux si pas déjà fait
+                                    if (!btn.getAttribute('data-original-bg')) {
+                                        btn.setAttribute('data-original-bg', btn.style.backgroundColor);
+                                        btn.setAttribute('data-original-color', btn.style.color);
+                                    }
+                                    btn.classList.add('active');
+                                    // Appliquer le style actif (rouge avec texte blanc)
+                                    btn.style.backgroundColor = '#e73029';
+                                    btn.style.color = 'white';
+                                    // Icônes en blanc aussi
+                                    const icon = btn.querySelector('i');
+                                    if (icon) icon.style.color = 'white';
+                                }
+                            }
+                        });
+                    }, options);
+                    
+                    sections.forEach(section => observer.observe(section));
+                },
                 
                 async addToCart(productId, maxOrderable) {
                     const qtyInput = document.getElementById('qty-' + productId);
@@ -499,12 +661,10 @@
                         return;
                     }
                     
-                    // Redirection vers page de validation (sous-tâche 3)
                     window.location.href = '/stm/c/<?= $uuid ?>/checkout';
                 },
                 
                 showNotification(message) {
-                    // Simple notification (peut être amélioré avec un toast)
                     const notification = document.createElement('div');
                     notification.className = 'fixed top-20 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
                     notification.textContent = message;
