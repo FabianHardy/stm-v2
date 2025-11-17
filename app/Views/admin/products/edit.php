@@ -13,9 +13,13 @@ use Core\Session;
 // Démarrer la capture du contenu pour le layout
 ob_start();
 
-// Récupérer les anciennes valeurs et erreurs
-$old = $old ?? [];
-$errors = $errors ?? [];
+// Récupérer les anciennes valeurs et erreurs depuis la session
+$old = Session::get('old') ?? [];
+$errors = Session::get('errors') ?? [];
+
+// Nettoyer la session après récupération
+Session::remove('old');
+Session::remove('errors');
 ?>
 
 <!-- En-tête de la page -->

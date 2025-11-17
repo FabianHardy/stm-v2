@@ -147,13 +147,18 @@ class ProductController
         }
 
         // Créer le Promotion
-        $productId = $this->productModel->create($data);
+        try {
+            $productId = $this->productModel->create($data);
 
-        if ($productId) {
-            Session::setFlash('success', 'Promotion créée avec succès');
-            header('Location: /stm/admin/products/' . $productId);
+            if ($productId) {
+                Session::setFlash('success', 'Promotion créée avec succès');
+                header('Location: /stm/admin/products/' . $productId);
         } else {
             Session::setFlash('error', 'Erreur lors de la création de la Promotion');
+            Session::set('old', $data);
+            header('Location: /stm/admin/products/create');
+        }
+        } catch (\Exception $e) {
             Session::set('old', $data);
             header('Location: /stm/admin/products/create');
         }
