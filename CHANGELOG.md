@@ -1,6 +1,63 @@
 # 📝 CHANGELOG - STM v2
 
 Historique centralisé de toutes les modifications du projet.
+
+--
+## [17/11/2025] - Sécurisation suppression promotions
+
+### 🛡️ Sécurité ajoutée
+
+**Product.php** (Modèle) :
+- Ajout méthode `hasOrders(int $id): bool`
+- Vérifie si une promotion a des commandes dans `order_lines`
+- Retourne `true` si des commandes existent, `false` sinon
+- Gestion d'erreur : retourne `true` en cas d'erreur SQL (sécurité)
+
+**ProductController.php** (Contrôleur) :
+- Modification méthode `destroy()`
+- Vérification `hasOrders()` AVANT suppression
+- Si commandes existent → Message d'erreur + redirection
+- Message : *"Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt."*
+- Si pas de commandes → Suppression normale (promotion + images)
+- Message succès : *"Promotion supprimée avec succès (incluant les images)"*
+- **Correction messages flash** : Utilisation de `Session::setFlash()` au lieu de `Session::set()`
+
+**products/index.php** (Vue) :
+- **Correction duplication messages** : Retrait de l'inclusion du partial `flash.php`
+- Le partial est déjà inclus dans le layout `admin.php`
+- Les messages s'affichent maintenant **une seule fois** sur la bonne page
+
+### ✅ Résultat
+
+Protection de l'intégrité des données :
+- ✅ Impossible de supprimer une promotion avec des ventes
+- ✅ Message clair pour l'utilisateur
+- ✅ Suggestion alternative (désactivation)
+- ✅ Images supprimées uniquement si suppression réussie
+- ✅ Notification explicite de la suppression des images
+
+### 📋 Tests à effectuer
+
+1. **Promotion SANS commandes** :
+   - Tenter de supprimer → Doit fonctionner
+   - Vérifier message : "Promotion supprimée avec succès (incluant les images)"
+   - Vérifier que les images sont bien supprimées du serveur
+
+2. **Promotion AVEC commandes** :
+   - Tenter de supprimer → Doit afficher le message d'erreur
+   - Vérifier message : "Impossible de supprimer cette promotion..."
+   - Vérifier que la promotion ET les images sont conservées
+
+3. **Vérifier l'intégrité** :
+   - La table `order_lines` doit garder ses références vers `products`
+   - Aucune erreur de contrainte de clé étrangère
+
+---
+
+### 📝 Instructions d'intégration
+
+--
+
 ## [17/11/2025] - Sécurisation suppression promotions
 
 ### 🛡️ Sécurité ajoutée

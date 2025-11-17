@@ -14,9 +14,6 @@ use Core\Session;
 ob_start();
 ?>
 
-<!-- Messages flash -->
-<?php require __DIR__ . '/../partials/flash.php'; ?>
-
 <!-- En-tête de la page -->
 <div class="mb-6">
     <div class="flex items-center justify-between">

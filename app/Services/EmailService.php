@@ -110,11 +110,13 @@ class EmailService
                 WHERE o.id = :order_id
             ";
             
-            $order = $this->db->fetch($query, [':order_id' => $orderId]);
+            $orderResult = $this->db->query($query, [':order_id' => $orderId]);
             
-            if (!$order) {
+            if (empty($orderResult)) {
                 return null;
             }
+            
+            $order = $orderResult[0];
             
             // Récupérer les lignes de commande
             $queryLines = "
@@ -129,7 +131,7 @@ class EmailService
                 ORDER BY p.name_fr
             ";
             
-            $lines = $this->db->fetchAll($queryLines, [':order_id' => $orderId]);
+            $lines = $this->db->query($queryLines, [':order_id' => $orderId]);
             
             $order['lines'] = $lines;
             
