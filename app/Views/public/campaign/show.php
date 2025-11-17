@@ -71,10 +71,10 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                 <!-- Switch langue (BE uniquement) -->
                 <?php if ($campaign['country'] === 'BE' || $campaign['country'] === 'BOTH'): ?>
                 <div class="flex bg-gray-100 rounded-lg p-1">
-                    <button class="px-4 py-2 rounded-md <?= $lang === 'fr' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                    <button class="px-4 py-2 rounded-md <?= $lang === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
                         FR
                     </button>
-                    <button class="px-4 py-2 rounded-md <?= $lang === 'nl' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                    <button class="px-4 py-2 rounded-md <?= $lang === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
                         NL
                     </button>
                 </div>
@@ -84,19 +84,19 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
     </header>
 
     <!-- Bande d'information campagne (VERT #27ae60) -->
-    <div class="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg relative z-10" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%);">
+    <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg relative z-10" style="background: linear-gradient(135deg, #277caeff 0%, #225a99ff 100%);">
         <div class="container mx-auto px-4 py-6">
             <div class="text-center">
                 <h2 class="text-3xl font-bold mb-2"><?= htmlspecialchars($title) ?></h2>
                 
                 <?php if ($description): ?>
-                <p class="text-green-100 leading-relaxed max-w-2xl mx-auto">
+                <p class="text-blue-100 leading-relaxed max-w-2xl mx-auto">
                     <?= nl2br(htmlspecialchars($description)) ?>
                 </p>
                 <?php endif; ?>
                 
                 <!-- Dates et pays -->
-                <div class="flex items-center justify-center gap-6 mt-4 text-sm text-green-100">
+                <div class="flex items-center justify-center gap-6 mt-4 text-sm text-blue-100">
                     <div class="flex items-center space-x-2">
                         <i class="fas fa-calendar-alt"></i>
                         <span>
@@ -125,8 +125,8 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
             <!-- Card formulaire -->
             <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
                 <div class="text-center mb-8">
-                    <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                        <i class="fas fa-user-check text-3xl text-green-600"></i>
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                        <i class="fas fa-user-check text-3xl text-blue-600"></i>
                     </div>
                     <h3 class="text-2xl font-bold text-gray-900 mb-2">
                         <?= $lang === 'fr' ? 'Accès client' : 'Toegang klant' ?>
@@ -155,7 +155,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     <!-- Numéro client -->
                     <div>
                         <label for="customer_number" class="block text-sm font-semibold text-gray-700 mb-2">
-                            <i class="fas fa-id-card mr-2 text-green-600"></i>
+                            <i class="fas fa-id-card mr-2 text-blue-600"></i>
                             <?= $lang === 'fr' ? 'Numéro client' : 'Klantnummer' ?>
                             <span class="text-red-500">*</span>
                         </label>
@@ -165,7 +165,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                             name="customer_number" 
                             required
                             placeholder="<?= $lang === 'fr' ? 'Ex: 123456' : 'Bijv: 123456' ?>"
-                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         >
                         <p class="mt-2 text-sm text-gray-500">
                             <i class="fas fa-info-circle mr-1"></i>
@@ -180,7 +180,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     <?php if ($campaign['country'] === 'BOTH'): ?>
                     <div>
                         <label for="country" class="block text-sm font-semibold text-gray-700 mb-2">
-                            <i class="fas fa-flag mr-2 text-green-600"></i>
+                            <i class="fas fa-flag mr-2 text-blue-600"></i>
                             <?= $lang === 'fr' ? 'Pays' : 'Land' ?>
                             <span class="text-red-500">*</span>
                         </label>
@@ -188,7 +188,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                             id="country" 
                             name="country" 
                             required
-                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         >
                             <option value="BE"><?= $lang === 'fr' ? 'Belgique' : 'België' ?></option>
                             <option value="LU"><?= $lang === 'fr' ? 'Luxembourg' : 'Luxemburg' ?></option>
@@ -201,7 +201,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     <!-- Submit Button -->
                     <button 
                         type="submit" 
-                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                     >
                         <span><?= $lang === 'fr' ? 'Accéder au catalogue' : 'Toegang tot catalogus' ?></span>
                         <i class="fas fa-arrow-right"></i>
