@@ -993,7 +993,7 @@ class PublicCampaignController
                 ]);
 
                 if (empty($productResult)) {
-                    throw new \Exception("Produit introuvable : " . $item['product_name']);
+                    throw new \Exception("Produit introuvable : " . $item['name_' . $customer['language']]);
                 }
 
                 $product = $productResult[0];
@@ -1010,7 +1010,7 @@ class PublicCampaignController
                 // Vérifier si quantité demandée est disponible
                 if ($item['quantity'] > $quotas['max_orderable']) {
                     throw new \Exception(
-                        "Quota dépassé pour " . $item['product_name'] . 
+                        "Quota dépassé pour " . $item['name_' . $customer['language']] .
                         ". Maximum disponible : " . $quotas['max_orderable']
                     );
                 }
@@ -1059,8 +1059,8 @@ class PublicCampaignController
                 $this->db->execute($queryLine, [
                     ':order_id' => $orderId,
                     ':product_id' => $item['product_id'],
-                    ':product_code' => $item['product_code'],
-                    ':product_name' => $item['product_name'],
+                    ':product_code' => $item['code'],
+                    ':product_name' => $item['name_' . $customer['language']],
                     ':quantity' => $item['quantity']
                 ]);
 
