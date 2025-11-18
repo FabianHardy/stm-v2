@@ -303,7 +303,7 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
                             </p>
                             <p>
                                 <?= $customer['language'] === 'fr' 
-                                    ? 'Pour toute question concernant votre commande, contactez votre commercial habituel.' 
+                                    ? 'Pour toute question concernant votre commande, contactez votre représentant.' 
                                     : 'Voor vragen over uw bestelling kunt u contact opnemen met uw vaste vertegenwoordiger.' ?>
                             </p>
                         </div>
