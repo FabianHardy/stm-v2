@@ -7,8 +7,13 @@
  * @modified 2025/11/18 18:00 - Redesign avec logo, fond et code couleur vert
  */
 
-// Déterminer la langue (par défaut FR)
-$lang = $campaign['country'] === 'LU' ? 'fr' : 'fr'; // TODO: gérer la détection navigateur pour BE
+// Déterminer la langue selon le paramètre ?lang ou FR par défaut
+$requestedLang = $_GET['lang'] ?? 'fr';
+$lang = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
+// Pour LU, forcer FR
+if ($campaign['country'] === 'LU') {
+    $lang = 'fr';
+}
 
 // Récupérer les erreurs de session
 $error = \Core\Session::get('error');
@@ -71,10 +76,10 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                 <!-- Switch langue (BE uniquement) -->
                 <?php if ($campaign['country'] === 'BE' || $campaign['country'] === 'BOTH'): ?>
                 <div class="flex bg-gray-100 rounded-lg p-1">
-                    <button class="px-4 py-2 rounded-md <?= $lang === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                    <button onclick="switchLanguage('fr')" class="px-4 py-2 rounded-md <?= $lang === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
                         FR
                     </button>
-                    <button class="px-4 py-2 rounded-md <?= $lang === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                    <button onclick="switchLanguage('nl')" class="px-4 py-2 rounded-md <?= $lang === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
                         NL
                     </button>
                 </div>
@@ -149,8 +154,11 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
 
                 <form method="POST" action="/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/identify" class="space-y-6">
                     
-                    <!-- Token CSRF -->
-                    <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <!-- Token CSRF -->
+                <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+
+                <!-- Langue choisie -->
+                <input type="hidden" name="language" id="language-input" value="<?= $lang ?>">
 
                     <!-- Numéro client -->
                     <div>
@@ -252,6 +260,17 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
             </div>
         </div>
     </footer>
-
+    <script>
+        // Fonction pour changer la langue
+        function switchLanguage(lang) {
+            // Mettre à jour le champ caché du formulaire
+            document.getElementById('language-input').value = lang;
+            
+            // Recharger la page avec le paramètre lang
+            const url = new URL(window.location.href);
+            url.searchParams.set('lang', lang);
+            window.location.href = url.toString();
+        }
+    </script>
 </body>
 </html>

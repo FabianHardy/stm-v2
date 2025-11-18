@@ -17,6 +17,20 @@ if (!isset($_SESSION['public_customer'])) {
 
 $customer = $_SESSION['public_customer'];
 
+// ========================================
+// GESTION DU SWITCH LANGUE (FR/NL)
+// ========================================
+$requestedLang = $_GET['lang'] ?? null;
+
+if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+    $_SESSION['public_customer']['language'] = $requestedLang;
+    $customer['language'] = $requestedLang;
+    
+    $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: {$cleanUrl}");
+    exit;
+}
+
 // Récupérer l'UUID de la campagne depuis l'URL
 $urlParts = explode('/', $_SERVER['REQUEST_URI']);
 $uuidIndex = array_search('c', $urlParts);

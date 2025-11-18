@@ -172,13 +172,13 @@
                    style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
                     <?php if (!empty($category['icon_path'])): ?>
                         <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
-                             alt="<?= htmlspecialchars($category['name_fr']) ?>" 
+                             alt="<?= htmlspecialchars($category['name_' . $customer['language']]) ?>" 
                              class="w-5 h-5 object-contain"
                              onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon_path']) ?>');">
                     <?php else: ?>
                         <i class="fas fa-tag w-5"></i>
                     <?php endif; ?>
-                    <span><?= htmlspecialchars($category['name_fr']) ?></span>
+                    <span><?= htmlspecialchars($category['name_' . $customer['language']]) ?></span>
                 </a>
                 <?php endforeach; ?>
             </div>
@@ -209,7 +209,7 @@
                 <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
                     <h2 class="text-2xl font-bold mb-6 flex items-center">
                         <span class="w-1 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars($category['color']) ?>;"></span>
-                        <?= htmlspecialchars($category['name_fr']) ?>
+                        <?= htmlspecialchars($category['name_' . $customer['language']]) ?>
                     </h2>
                     
                     <!-- Grid produits - 2 COLONNES MAX -->
@@ -219,10 +219,14 @@
                         <div class="product-card bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
                             
                             <!-- Image A4 paysage -->
-                            <div class="relative bg-gray-100 cursor-pointer" style="height: 213px;" @click="openLightbox('<?= htmlspecialchars($product['image_fr']) ?>')">
-                                <?php if (!empty($product['image_fr'])): ?>
-                                    <img src="<?= htmlspecialchars($product['image_fr']) ?>" 
-                                         alt="<?= htmlspecialchars($product['name_fr']) ?>"
+                            <?php 
+                            $productImage = $product['image_' . $customer['language']] ?? $product['image_fr'];
+                            $productName = $product['name_' . $customer['language']];
+                            ?>
+                            <div class="relative bg-gray-100 cursor-pointer" style="height: 213px;" @click="openLightbox('<?= htmlspecialchars($productImage) ?>')">
+                                <?php if (!empty($productImage)): ?>
+                                    <img src="<?= htmlspecialchars($productImage) ?>" 
+                                         alt="<?= htmlspecialchars($productName) ?>"
                                          class="w-full h-full object-contain p-4">
                                 <?php else: ?>
                                     <div class="w-full h-full flex items-center justify-center text-gray-400">
@@ -238,7 +242,7 @@
                                 <!-- Badge ÉPUISÉ si quotas à 0 -->
                                 <?php if (!$product['is_orderable']): ?>
                                 <div class="absolute top-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                                    ÉPUISÉ
+                                    <?= $customer['language'] === 'fr' ? 'ÉPUISÉ' : 'UITVERKOCHT' ?>
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -247,33 +251,39 @@
                             <div class="p-4">
                                 <!-- Titre 12px uppercase -->
                                 <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
-                                    <?= htmlspecialchars($product['name_fr']) ?>
+                                    <?= htmlspecialchars($productName) ?>
                                 </h3>
                                 
                                 <!-- Quotas sur 1 SEULE LIGNE -->
                                 <?php if (!is_null($product['max_per_customer']) && $product['is_orderable']): ?>
+                                <?php
+                                $maxLabel = $customer['language'] === 'fr' ? 'Maximum' : 'Maximum';
+                                $remainLabel = $customer['language'] === 'fr' ? 'Reste' : 'Resterend';
+                                $unitSingle = $customer['language'] === 'fr' ? 'unité' : 'eenheid';
+                                $unitPlural = $customer['language'] === 'fr' ? 'unités' : 'eenheden';
+                                ?>
                                 <div class="text-sm mb-3 flex items-center justify-between">
                                     <span class="flex items-center">
                                         <i class="fas fa-box w-4 text-blue-600 mr-1"></i>
                                         <span class="font-semibold text-blue-600">
-                                            Maximum : <?= $product['max_per_customer'] ?> <?= $product['max_per_customer'] > 1 ? 'unités' : 'unité' ?>
+                                            <?= $maxLabel ?> : <?= $product['max_per_customer'] ?> <?= $product['max_per_customer'] > 1 ? $unitPlural : $unitSingle ?>
                                         </span>
                                     </span>
                                     <span class="flex items-center">
                                         <?php if ($product['available_for_customer'] > 1): ?>
                                             <i class="fas fa-check-circle w-4 text-green-600 mr-1"></i>
                                             <span class="font-semibold text-green-600">
-                                                Reste : <?= $product['available_for_customer'] ?> unités
+                                                <?= $remainLabel ?> : <?= $product['available_for_customer'] ?> <?= $unitPlural ?>
                                             </span>
                                         <?php elseif ($product['available_for_customer'] == 1): ?>
                                             <i class="fas fa-exclamation-circle w-4 text-orange-600 mr-1"></i>
                                             <span class="font-semibold text-orange-600">
-                                                Reste : 1 unité
+                                                <?= $remainLabel ?> : 1 <?= $unitSingle ?>
                                             </span>
                                         <?php else: ?>
                                             <i class="fas fa-times-circle w-4 text-red-600 mr-1"></i>
                                             <span class="font-semibold text-red-600">
-                                                Reste : 0 unité
+                                                <?= $remainLabel ?> : 0 <?= $unitSingle ?>
                                             </span>
                                         <?php endif; ?>
                                     </span>
@@ -284,7 +294,9 @@
                                 <?php if (!is_null($product['max_total']) && $product['available_global'] <= 10 && $product['available_global'] > 0): ?>
                                 <div class="bg-amber-50 border-l-4 border-amber-400 p-2 mb-3 text-xs">
                                     <i class="fas fa-exclamation-triangle text-amber-600 mr-1"></i>
-                                    <span class="text-amber-800">Stock global limité : <?= $product['available_global'] ?> restants</span>
+                                    <span class="text-amber-800">
+                                        <?= $customer['language'] === 'fr' ? 'Stock global limité' : 'Beperkte globale voorraad' ?> : <?= $product['available_global'] ?> <?= $customer['language'] === 'fr' ? 'restants' : 'resterend' ?>
+                                    </span>
                                 </div>
                                 <?php endif; ?>
 
@@ -507,6 +519,32 @@
 
     <!-- Alpine.js Script -->
     <script>
+        // Traductions selon la langue
+        const lang = '<?= $customer['language'] ?>';
+        const translations = {
+            fr: {
+                invalidQty: 'Quantité invalide. Maximum',
+                added: '✓ Produit ajouté au panier',
+                error: 'Erreur',
+                connectionError: 'Erreur de connexion',
+                removeConfirm: 'Retirer ce produit du panier ?',
+                clearConfirm: 'Vider complètement le panier ?',
+                cartCleared: 'Panier vidé',
+                emptyCart: 'Votre panier est vide'
+            },
+            nl: {
+                invalidQty: 'Ongeldige hoeveelheid. Maximum',
+                added: '✓ Product toegevoegd aan winkelwagen',
+                error: 'Fout',
+                connectionError: 'Verbindingsfout',
+                removeConfirm: 'Dit product uit winkelwagen verwijderen?',
+                clearConfirm: 'Winkelwagen volledig legen?',
+                cartCleared: 'Winkelwagen geleegd',
+                emptyCart: 'Uw winkelwagen is leeg'
+            }
+        };
+        const t = translations[lang];
+        
         // Fonction pour changer la langue
         function switchLanguage(lang) {
             // Construire l'URL avec le paramètre lang
@@ -609,7 +647,7 @@
                     const quantity = parseInt(qtyInput.value);
                     
                     if (quantity <= 0 || quantity > maxOrderable) {
-                        alert('Quantité invalide. Maximum : ' + maxOrderable);
+                        alert(t.invalidQty + ' : ' + maxOrderable);
                         return;
                     }
                     
@@ -628,13 +666,13 @@
                         if (data.success) {
                             this.cart = data.cart;
                             qtyInput.value = 1; // Reset
-                            this.showNotification('✓ Produit ajouté au panier');
+                            this.showNotification(t.added);
                         } else {
-                            alert('Erreur : ' + data.error);
+                            alert(t.error + ' : ' + data.error);
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        alert('Erreur de connexion');
+                        alert(t.connectionError);
                     }
                 },
                 
@@ -658,7 +696,7 @@
                         if (data.success) {
                             this.cart = data.cart;
                         } else {
-                            alert('Erreur : ' + data.error);
+                            alert(t.error + ' : ' + data.error);
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -666,7 +704,7 @@
                 },
                 
                 async removeFromCart(productId) {
-                    if (!confirm('Retirer ce produit du panier ?')) return;
+                    if (!confirm(t.removeConfirm)) return;
                     
                     try {
                         const formData = new FormData();
@@ -688,7 +726,7 @@
                 },
                 
                 async clearCart() {
-                    if (!confirm('Vider complètement le panier ?')) return;
+                    if (!confirm(t.clearConfirm)) return;
                     
                     try {
                         const response = await fetch('/stm/c/<?= $uuid ?>/cart/clear', {
@@ -699,7 +737,7 @@
                         
                         if (data.success) {
                             this.cart = data.cart;
-                            this.showNotification('Panier vidé');
+                            this.showNotification(t.cartCleared);
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -708,7 +746,7 @@
                 
                 validateOrder() {
                     if (this.cart.items.length === 0) {
-                        alert('<?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelwagen is leeg' ?>');
+                        alert(t.emptyCart);
                         return;
                     }
                     

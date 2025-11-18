@@ -229,7 +229,7 @@ $customer = $_SESSION['public_customer'];
                             <?= $customer['language'] === 'fr' ? 'Finaliser la commande' : 'Bestelling afronden' ?>
                         </h2>
 
-                        <form method="POST" action="/stm/c/<?= $campaign['uuid'] ?>/checkout/process" id="checkoutForm">
+                        <form method="POST" action="/stm/c/<?= $campaign['uuid'] ?>/order" id="checkoutForm">
                             <!-- Token CSRF -->
                             <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 

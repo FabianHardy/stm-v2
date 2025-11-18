@@ -141,6 +141,10 @@ class PublicCampaignController
                 return;
             }
             
+            // Déterminer la langue selon le paramètre transmis ou FR par défaut
+            $requestedLang = $_POST['language'] ?? 'fr';
+            $defaultLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
+
             // Tout est OK - créer la session client
             Session::set('public_customer', [
                 'customer_number' => $customerNumber,
@@ -148,7 +152,7 @@ class PublicCampaignController
                 'company_name' => $customerData['company_name'],
                 'campaign_uuid' => $uuid,
                 'campaign_id' => $campaign['id'],
-                'language' => 'fr', // TODO: Sprint traductions FR/NL
+                'language' => $defaultLanguage,
                 'logged_at' => date('Y-m-d H:i:s')
             ]);
             
@@ -840,6 +844,22 @@ class PublicCampaignController
      */
     public function checkout(string $uuid): void
     {
+
+        // ========================================
+        // GESTION DU SWITCH LANGUE (FR/NL)
+        // ========================================
+        $requestedLang = $_GET['lang'] ?? null;
+        
+        if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+            if (isset($_SESSION['public_customer'])) {
+                $_SESSION['public_customer']['language'] = $requestedLang;
+            }
+            
+            $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+            header("Location: {$cleanUrl}");
+            exit;
+        }
+
         // Vérifier session client
         if (!isset($_SESSION['public_customer']) || $_SESSION['public_customer']['campaign_uuid'] !== $uuid) {
             header('Location: /stm/c/' . $uuid);
