@@ -68,7 +68,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">Trendy Foods</h1>
                         <p class="text-sm text-gray-600">
-                            <?= $lang === 'fr' ? 'Votre grossiste de confiance' : 'Uw vertrouwde groothandel' ?>
+                            <?= $lang === 'fr' ? 'Ëtre proche pour voir loin' : 'Dichtbij zijn om ver te kunnen kijken' ?>
                         </p>
                     </div>
                 </div>
