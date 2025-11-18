@@ -1086,52 +1086,52 @@ class PublicCampaignController
             $this->db->commit();
 
             // 7bis. Envoyer email de confirmation via Mailchimp Transactional
-            try {
-                // Générer un numéro de commande lisible
-                $orderNumber = 'ORD-' . date('Y') . '-' . str_pad($orderId, 6, '0', STR_PAD_LEFT);
-                
-                // Déterminer la langue
-                $language = $customer['language'] ?? 'fr';
-                
-                // Préparer les données pour le template email
-                $orderData = [
-                    'order_number' => $orderNumber,
-                    'campaign_title_fr' => $campaign['title_fr'],
-                    'campaign_title_nl' => $campaign['title_nl'],
-                    'customer_number' => $customer['customer_number'],
-                    'company_name' => $customer['company_name'] ?? ('Client ' . $customer['customer_number']),
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'country' => $campaign['country'],
-                    'deferred_delivery' => $campaign['deferred_delivery'] ?? 0,
-                    'delivery_date' => $campaign['delivery_date'] ?? null,
-                    'lines' => []
-                ];
-                
-                // Ajouter les lignes de commande avec noms multilingues
-                foreach ($cart['items'] as $item) {
-                    $orderData['lines'][] = [
-                        'name_fr' => $item['name_fr'] ?? $item['name_' . $language],
-                        'name_nl' => $item['name_nl'] ?? $item['name_' . $language],
-                        'quantity' => $item['quantity'],
-                        'product_code' => $item['code']
-                    ];
-                }
-                
-                // Envoyer via Mailchimp Transactional
-                $mailchimpService = new MailchimpEmailService();
-                $emailSent = $mailchimpService->sendOrderConfirmation($customerEmail, $orderData, $language);
-                
-                if ($emailSent) {
-                    error_log("Email confirmation envoyé avec succès via Mailchimp à: {$customerEmail} (Commande: {$orderNumber})");
-                } else {
-                    error_log("Échec envoi email confirmation via Mailchimp à: {$customerEmail} (Commande: {$orderNumber})");
-                }
-                
-            } catch (\Exception $e) {
-                // IMPORTANT : Log l'erreur mais ne bloque PAS la commande
-                error_log("Erreur envoi email Mailchimp: " . $e->getMessage());
-                $emailSent = false;
-            }
+try {
+    // Générer un numéro de commande lisible
+    $orderNumber = 'ORD-' . date('Y') . '-' . str_pad($orderId, 6, '0', STR_PAD_LEFT);
+    
+    // Déterminer la langue
+    $language = $customer['language'] ?? 'fr';
+    
+    // Préparer les données pour le template email
+    $orderData = [
+        'order_number' => $orderNumber,
+        'campaign_title_fr' => $campaign['title_fr'],
+        'campaign_title_nl' => $campaign['title_nl'],
+        'customer_number' => $customer['customer_number'],
+        'company_name' => $customer['company_name'] ?? ('Client ' . $customer['customer_number']),
+        'created_at' => date('Y-m-d H:i:s'),
+        'country' => $campaign['country'],
+        'deferred_delivery' => $campaign['deferred_delivery'] ?? 0,
+        'delivery_date' => $campaign['delivery_date'] ?? null,
+        'lines' => []
+    ];
+    
+    // Ajouter les lignes de commande avec noms multilingues
+    foreach ($cart['items'] as $item) {
+        $orderData['lines'][] = [
+            'name_fr' => $item['name_fr'],
+            'name_nl' => $item['name_nl'],
+            'quantity' => $item['quantity'],
+            'product_code' => $item['code']  // ← CORRECTION : utilise 'code'
+        ];
+    }
+    
+    // Envoyer via Mailchimp Transactional
+    $mailchimpService = new MailchimpEmailService();
+    $emailSent = $mailchimpService->sendOrderConfirmation($customerEmail, $orderData, $language);
+    
+    if ($emailSent) {
+        error_log("Email confirmation envoyé avec succès via Mailchimp à: {$customerEmail} (Commande: {$orderNumber})");
+    } else {
+        error_log("Échec envoi email confirmation via Mailchimp à: {$customerEmail} (Commande: {$orderNumber})");
+    }
+    
+} catch (\Exception $e) {
+    // IMPORTANT : Log l'erreur mais ne bloque PAS la commande
+    error_log("Erreur envoi email Mailchimp: " . $e->getMessage());
+    $emailSent = false;
+}
 
             // 8. Vider le panier
             $_SESSION['cart'] = ['campaign_uuid' => $uuid, 'items' => []];
@@ -1259,7 +1259,7 @@ class PublicCampaignController
         // Lignes D : Détails produits
         $linesD = '';
         foreach ($items as $item) {
-            $productCode = $item['product_code'];
+            $productCode = $item['code'];
             $quantity = sprintf("%'.010d", $item['quantity']); // Padding 10 digits avec 0
             $linesD .= "D{$productCode}{$quantity}\n";
         }

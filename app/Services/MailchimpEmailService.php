@@ -162,6 +162,10 @@ class MailchimpEmailService
     public function sendOrderConfirmation(string $to, array $order, string $language = 'fr'): bool
     {
         try {
+            // Convertir objet en array si nécessaire
+            if (is_object($order)) {
+                $order = json_decode(json_encode($order), true);
+            }
             // Déterminer le template selon la langue
             $templateFile = dirname(__DIR__) . "/Views/emails/order_confirmation_{$language}.php";
             
@@ -179,6 +183,11 @@ class MailchimpEmailService
             $htmlContent = ob_get_clean();
 
             // Déterminer le sujet selon la langue
+            // Convertir l'objet en array si nécessaire
+            if (is_object($order)) {
+                $order = (array) $order;
+            }
+
             $campaignName = $language === 'nl' 
                 ? ($order['campaign_title_nl'] ?? 'Campagne')
                 : ($order['campaign_title_fr'] ?? 'Campagne');
