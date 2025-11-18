@@ -2,7 +2,81 @@
 
 Historique centralisé de toutes les modifications du projet.
 
+## [18/11/2025 11:30] - Sprint 7 : Finalisation Template Email NL
 
+### ✅ Ajouté
+
+**Template email néerlandais complet** :
+- `order_confirmation_nl_FINAL.php` : Template email NL harmonisé avec le FR
+  - Structure 100% identique au template FR (HTML/CSS)
+  - Logo Trendy Foods : https://actions.trendyfoods.com/stm/uploads/emails/logo.png
+  - Couleurs : Bleu #006eb8, Rouge #e73029
+  - Traductions complètes en néerlandais (tous les textes)
+  - Variables adaptées : `campaign_title_nl`, `name_nl`
+  - Logique BE/LU : Adresses différenciées selon pays
+  - IntlDateFormatter avec locale `nl_BE`
+  - Structure de données : `$order['lines']`
+
+### 🔧 Traductions appliquées
+
+Textes traduits FR → NL :
+- "Votre commande a été validée" → "Uw bestelling is bevestigd"
+- "Bonjour" → "Goedendag"
+- "Détails de votre commande" → "Details van uw bestelling"
+- "Numéro de commande" → "Bestelnummer"
+- "Numéro client" → "Klantnummer"
+- "Date de commande" → "Besteldatum"
+- "Date de livraison prévue" → "Geplande leveringsdatum"
+- "Récapitulatif de votre commande" → "Overzicht van uw bestelling"
+- "Produit" → "Product"
+- "Quantité" → "Aantal"
+- "Total articles" → "Totaal artikelen"
+- "Une question ? Contactez-nous" → "Een vraag? Neem contact met ons op"
+- "Merci pour votre confiance" → "Bedankt voor uw vertrouwen"
+- "L'équipe Trendy Foods" → "Het Trendy Foods team"
+- "Belgique" → "België"
+- "Luxembourg" → "Luxemburg"
+
+### 📋 Structure des données
+
+Variables attendues par le template :
+```php
+$order = [
+    'order_number' => 'ORD-2025-001234',
+    'campaign_title_nl' => 'Lente Campagne 2025',
+    'customer_number' => '802412',
+    'company_name' => 'Restaurant Le Gourmet',
+    'created_at' => '2025-11-18 14:30:00',
+    'country' => 'BE',  // ou 'LU'
+    'deferred_delivery' => 1,  // 0 ou 1
+    'delivery_date' => '2025-12-15',  // optionnel
+    'lines' => [
+        ['name_nl' => '...', 'quantity' => X],
+        ...
+    ]
+];
+```
+
+### 📦 Fichiers de documentation créés
+
+- `GUIDE_DEPLOIEMENT_EMAILS.md` : Guide complet de déploiement et tests
+- `RESUME_RAPIDE.md` : Résumé ultra-concis pour déploiement rapide
+
+### ✅ Tests suggérés
+
+1. Email NL client BE : Textes NL + adresse Vottem
+2. Email NL client LU : Textes NL + adresse Dudelange
+3. Livraison différée : Box jaune avec date formatée
+4. Compatibilité : Gmail, Outlook, Apple Mail
+
+### 🚀 Déploiement
+
+```bash
+cp order_confirmation_nl_FINAL.php app/Views/emails/order_confirmation_nl.php
+chmod 644 app/Views/emails/order_confirmation_nl.php
+```
+
+---
 ---
 
 ## [17/11/2025] - Sprint 5 : Corrections module Promotions
