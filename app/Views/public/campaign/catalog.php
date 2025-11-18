@@ -343,7 +343,7 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-bold text-gray-800 flex items-center">
                             <i class="fas fa-shopping-cart mr-2"></i>
-                            <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelwagen' ?>
+                            <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelmandje' ?>
                             <span x-show="cartItemCount > 0" 
                                   x-text="cartItemCount" 
                                   class="ml-2 bg-red-600 text-white text-sm px-2 py-1 rounded-full">
@@ -356,7 +356,7 @@
                         <template x-if="cart.items.length === 0">
                             <div class="text-center py-8 text-gray-400">
                                 <i class="fas fa-shopping-basket text-4xl mb-2"></i>
-                                <p class="text-sm"><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelwagen is leeg' ?></p>
+                                <p class="text-sm"><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelmandje is leeg' ?></p>
                             </div>
                         </template>
                         
@@ -406,7 +406,7 @@
                             <button @click="clearCart()" 
                                     class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center">
                                 <i class="fas fa-trash mr-2"></i>
-                                <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelwagen legen' ?>
+                                <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelmandje legen' ?>
                             </button>
                         </div>
                     </template>
@@ -426,7 +426,7 @@
         <div class="bg-blue-600 text-white px-4 py-4 flex items-center justify-between sticky top-0">
             <h3 class="text-xl font-bold flex items-center">
                 <i class="fas fa-shopping-cart mr-2"></i>
-                <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelwagen' ?>
+                <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelmandje' ?>
                 <span x-show="cartItemCount > 0" 
                       x-text="'(' + cartItemCount + ')'" 
                       class="ml-2">
@@ -442,7 +442,7 @@
             <template x-if="cart.items.length === 0">
                 <div class="text-center py-12 text-gray-400">
                     <i class="fas fa-shopping-basket text-6xl mb-4"></i>
-                    <p><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelwagen is leeg' ?></p>
+                    <p><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelmandje is leeg' ?></p>
                     <button @click="toggleCartMobile()" 
                             class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">
                         <?= $customer['language'] === 'fr' ? 'Continuer mes achats' : 'Verder winkelen' ?>
@@ -493,7 +493,7 @@
                     <button @click="clearCart()" 
                             class="w-full bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg">
                         <i class="fas fa-trash mr-2"></i>
-                        <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelwagen legen' ?>
+                        <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelmandje legen' ?>
                     </button>
                 </div>
             </template>
@@ -534,13 +534,13 @@
             },
             nl: {
                 invalidQty: 'Ongeldige hoeveelheid. Maximum',
-                added: '✓ Product toegevoegd aan winkelwagen',
+                added: '✓ Product toegevoegd aan winkelmandje',
                 error: 'Fout',
                 connectionError: 'Verbindingsfout',
-                removeConfirm: 'Dit product uit winkelwagen verwijderen?',
-                clearConfirm: 'Winkelwagen volledig legen?',
-                cartCleared: 'Winkelwagen geleegd',
-                emptyCart: 'Uw winkelwagen is leeg'
+                removeConfirm: 'Dit product uit winkelmandje verwijderen?',
+                clearConfirm: 'Winkelmandje volledig legen?',
+                cartCleared: 'Winkelmandje geleegd',
+                emptyCart: 'Uw winkelmandje is leeg'
             }
         };
         const t = translations[lang];
