@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orderbevestiging</title>
+    <title>Bevestiging van bestelling</title>
     <style>
         body {
             margin: 0;
@@ -158,9 +158,9 @@
             <div class="greeting">
                 Goedendag <strong><?= htmlspecialchars($order['company_name']) ?></strong>,
                 <br><br>
-                Wij hebben uw bestelling voor de campagne <strong><?= htmlspecialchars($order['campaign_title_nl']) ?></strong> goed ontvangen.
+                We hebben uw bestelling voor de campagne <strong><?= htmlspecialchars($order['campaign_title_nl']) ?></strong> goed ontvangen.
                 <br><br>
-                Uw bestelling zal zo spoedig mogelijk worden verwerkt.
+                Uw bestelling wordt zo snel mogelijk verwerkt.
             </div>
 
             <!-- Bestelinformatie -->
@@ -168,7 +168,7 @@
                 <h3>Details van uw bestelling</h3>
                 <div class="info-row">
                     <span class="info-label">Bestelnummer:</span>
-                    <span class="info-value"><?= htmlspecialchars($order['order_number'] ?? 'In behandeling') ?></span>
+                    <span class="info-value"><?= htmlspecialchars($order['order_number'] ?? 'Wordt aangemaakt') ?></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Klantnummer:</span>
@@ -234,7 +234,7 @@
                 <p>Luxemburg</p>
                 <?php endif; ?>
                 <p style="margin-top: 10px;">
-                    Email: <a href="/cdn-cgi/l/email-protection#87e4e8e9f3e6e4f3c7f3f5e2e9e3fee1e8e8e3f4a9e4e8ea" style="color: #006eb8;"><span class="__cf_email__" data-cfemail="31525e5f45505245714543545f5548575e5e55421f525e5c">[email&#160;protected]</span></a>
+                    Email: <a href="mailto:info@trendyfoods.be" style="color: #006eb8;">info@trendyfoods.be</a>
                 </p>
             </div>
 
@@ -248,3 +248,9 @@
         <div class="footer">
             <p>&copy; <?= date('Y') ?> Trendy Foods. Alle rechten voorbehouden.</p>
             <p style="margin-top: 10px; font-size: 11px; color: #999999;">
+                Deze e-mail werd automatisch verzonden, gelieve hier niet op te antwoorden.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
