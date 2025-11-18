@@ -234,7 +234,7 @@
                 <p>Luxembourg</p>
                 <?php endif; ?>
                 <p style="margin-top: 10px;">
-                    Email : <a href="/cdn-cgi/l/email-protection#4e2d21203a2f2d3a0e3a3c2b202a372821212a3d602d2123" style="color: #006eb8;"><span class="__cf_email__" data-cfemail="f0939f9e84919384b08482959e9489969f9f9483de939f9d">[email&#160;protected]</span></a>
+                    Email : <a href="mailto:info@trendyfoods.be" style="color: #006eb8;">info@trendyfoods.be</a>
                 </p>
             </div>
 
@@ -248,3 +248,9 @@
         <div class="footer">
             <p>&copy; <?= date('Y') ?> Trendy Foods. Tous droits réservés.</p>
             <p style="margin-top: 10px; font-size: 11px; color: #999999;">
+                Cet email a été envoyé automatiquement, merci de ne pas y répondre.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
