@@ -205,7 +205,7 @@ class PublicCampaignController
                 header("Location: {$cleanUrl}");
                 exit;
             }
-
+            
             // Vérifier que le client est identifié
             $customer = Session::get('public_customer');
             if (!$customer || $customer['campaign_uuid'] !== $uuid) {
@@ -384,7 +384,7 @@ class PublicCampaignController
                 // Mise à jour quantité
                 $cart['items'][$existingIndex]['quantity'] = $newTotalQty;
             } else {
-                // Nouveau produit
+                // Nouveau produit - Stocker FR et NL pour le switch langue
                 $cart['items'][] = [
                     'product_id' => $productId,
                     'code' => $product['product_code'],
