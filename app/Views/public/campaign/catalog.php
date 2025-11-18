@@ -351,7 +351,7 @@
                         <template x-for="item in cart.items" :key="item.product_id">
                             <div class="p-3 bg-gray-50 rounded-lg">
                                 <!-- Nom du produit bien visible -->
-                                <p class="font-bold text-gray-800 mb-3" x-text="item.name"></p>
+                                <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer['language'] ?>"></p>
                                 
                                 <!-- Contrôles quantité + poubelle -->
                                 <div class="flex items-center justify-between">
@@ -442,7 +442,7 @@
                 <template x-for="item in cart.items" :key="item.product_id">
                     <div class="bg-white border rounded-lg p-4">
                         <!-- Nom du produit bien visible -->
-                        <p class="font-bold text-gray-800 mb-3" x-text="item.name"></p>
+                        <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer['language'] ?>"></p>
                         
                         <!-- Contrôles quantité + poubelle -->
                         <div class="flex items-center justify-between">
