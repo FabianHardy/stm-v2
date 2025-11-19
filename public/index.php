@@ -1,6 +1,4 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 /**
  * Point d'entrée principal de l'application STM v2
  * 
@@ -45,8 +43,10 @@ if ($debug) {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
 } else {
-    error_reporting(0);
+    // En production : logger les erreurs mais NE PAS les afficher
+    error_reporting(E_ALL);
     ini_set('display_errors', 0);
+    ini_set('log_errors', 1);
 }
 
 // Timezone
@@ -143,7 +143,7 @@ try {
         echo '<title>Erreur - STM v2</title>';
         echo '<style>';
         echo 'body { font-family: system-ui, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ';
-        echo 'display: flex; align-items: center; justify-center; min-height: 100vh; margin: 0; }';
+        echo 'display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }';
         echo '.error-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-width: 500px; text-align: center; }';
         echo 'h1 { color: #667eea; margin: 0 0 20px 0; font-size: 24px; }';
         echo 'p { color: #666; line-height: 1.6; margin: 0 0 20px 0; }';
@@ -153,7 +153,7 @@ try {
         echo '</head>';
         echo '<body>';
         echo '<div class="error-card">';
-        echo '<h1>❌ Une erreur est survenue</h1>';
+        echo '<h1>⚠ Une erreur est survenue</h1>';
         echo '<p>Nous sommes désolés, mais une erreur inattendue s\'est produite.</p>';
         echo '<p>Veuillez réessayer dans quelques instants.</p>';
         echo '<a href="/stm/admin/login">← Retour à la page de connexion</a>';
@@ -162,7 +162,7 @@ try {
         echo '</html>';
     }
     
-    // Logger l'erreur (optionnel)
+    // Logger l'erreur
     error_log(sprintf(
         "[STM v2] Erreur: %s dans %s ligne %d",
         $e->getMessage(),
