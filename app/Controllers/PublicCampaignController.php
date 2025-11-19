@@ -1315,36 +1315,8 @@ class PublicCampaignController
         // Envoyer l'email en arrière-plan (si pending)
         $this->sendPendingEmail();
         
-        // Vérifier la session
-        if (!isset($_SESSION['last_order_uuid'])) {
-            header('Location: /stm/c/' . $uuid);
-            exit;
-        }
-        
-        // Récupérer les infos de la campagne
-        $campaign = $this->campaignModel->findByUuid($uuid);
-        
-        if (!$campaign) {
-            header('Location: /stm/');
-            exit;
-        }
-        
-        // Récupérer la commande
-        $orderUuid = $_SESSION['last_order_uuid'];
-        $order = $this->db->query(
-            "SELECT * FROM orders WHERE uuid = :uuid",
-            [':uuid' => $orderUuid]
-        );
-        
-        if (empty($order)) {
-            header('Location: /stm/c/' . $uuid);
-            exit;
-        }
-        
-        $order = $order[0];
-        
-        // Charger la vue
-        require_once __DIR__ . '/../Views/public/campaigns/order_confirmation.php';
+        // Charger la vue de confirmation
+        require __DIR__ . '/../Views/public/campaign/confirmation.php';
     }
     /**
      * Envoyer l'email de confirmation de manière asynchrone
