@@ -119,8 +119,10 @@ switch($reason) {
     // ==========================================
     case 'quotas_reached':
         $pageTitle = $currentLanguage === 'fr' ? 'Plus de promotions disponibles' : 'Geen promoties meer beschikbaar';
-        $iconSvg = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>';
-        $iconColor = 'text-green-600 bg-green-100';
+        $iconSvg = '<path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />';
+  
+
+        $iconColor = 'text-red-600 bg-red-100';
         
         $mainMessage = $currentLanguage === 'fr' 
             ? 'Il n\'y a plus de promotions disponibles pour cette campagne.' 
@@ -463,17 +465,26 @@ switch($reason) {
                     <div class="text-sm text-blue-800 space-y-3">
                         <p>
                             <?= $currentLanguage === 'fr' 
-                                ? 'Si vous pensez qu\'il s\'agit d\'une erreur ou si vous souhaitez plus d\'informations sur cette campagne, veuillez contacter votre représentant commercial.' 
+                                ? 'Si vous pensez qu\'il s\'agit d\'une erreur ou si vous souhaitez plus d\'informations sur cette campagne promotionelle, veuillez contacter votre représentant.' 
                                 : 'Als u denkt dat dit een vergissing is of als u meer informatie wenst over deze campagne, neem dan contact op met uw vertegenwoordiger.' ?>
                         </p>
                         <div class="pt-3 border-t border-blue-300">
                             <div class="flex items-center mb-2">
                                 <i class="fas fa-phone text-blue-600 w-6 mr-2"></i>
-                                <span class="font-medium">+32 2 123 45 67</span>
+                               <?php if ($campaign['country'] === 'BE'): ?>
+                                  <span class="font-medium">+32 (0)87 321 888</span>
+                                <?php else: ?>
+                                  <span class="font-medium">+352 35 71 791</span>
+                                <?php endif; ?> 
                             </div>
                             <div class="flex items-center">
                                 <i class="fas fa-envelope text-blue-600 w-6 mr-2"></i>
-                                <span class="font-medium">support@trendyfoods.com</span>
+                                <?php if ($campaign['country'] === 'BE'): ?>
+                                   <span class="font-medium">info@trendyfoods.com</span>
+                                <?php else: ?>
+                                    <span class="font-medium">info@lu.trendyfoods.com</span>
+                                <?php endif; ?>  
+                                
                             </div>
                         </div>
                     </div>
