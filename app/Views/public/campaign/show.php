@@ -283,14 +283,13 @@ footer {
 
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-gray-300 mt-16 relative z-10">
-        <div class="container mx-auto px-4 py-8">
-            <div class="text-center text-sm">
-                <p>&copy; <?= date('Y') ?> Trendy Foods. 
-                    <?= $lang === 'fr' ? 'Tous droits réservés.' : 'Alle rechten voorbehouden.' ?>
-                </p>
-            </div>
+      <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-6 mt-12 relative z-10">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-sm">
+                © <?= date('Y') ?> Trendy Foods - 
+                <?= $lang === 'fr' ? 'Tous droits réservés.' : 'Alle rechten voorbehouden.' ?>
+            </p>
         </div>
     </footer>
     <script>
