@@ -158,7 +158,7 @@
             <div class="greeting">
                 Goedendag <strong><?= htmlspecialchars($order['company_name']) ?></strong>,
                 <br><br>
-                We hebben uw bestelling voor de campagne <strong><?= htmlspecialchars($order['campaign_title_nl']) ?></strong> goed ontvangen.
+                Wij hebben uw bestelling ontvangen voor: <strong><?= htmlspecialchars($order['campaign_title_nl']) ?></strong>.
                 <br><br>
                 Uw bestelling wordt zo snel mogelijk verwerkt.
             </div>

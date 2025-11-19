@@ -1303,13 +1303,6 @@ class PublicCampaignController
         );
     }
 
-    /**
-     * Afficher la page de confirmation de commande
-     * 
-     * @param string $uuid UUID de la campagne
-     * @return void
-     * @created 19/11/2025
-     */
 /**
      * Afficher la page de confirmation de commande
      * 
@@ -1319,13 +1312,50 @@ class PublicCampaignController
      */
     public function orderConfirmation(string $uuid): void
     {
-        // Envoyer l'email en arrière-plan (si pending)
-        $this->sendPendingEmail();
+        // Programmer l'envoi email APRÈS la réponse HTTP
+        if (isset($_SESSION['pending_email'])) {
+            $data = $_SESSION['pending_email'];
+            unset($_SESSION['pending_email']);
+            
+            register_shutdown_function(function() use ($data) {
+                @ini_set('display_errors', '0');
+                error_reporting(0);
+                
+                try {
+                    $orderData = [
+                        'order_number' => $data['order_number'],
+                        'campaign_title_fr' => $data['campaign_title_fr'],
+                        'campaign_title_nl' => $data['campaign_title_nl'],
+                        'customer_number' => $data['customer_number'],
+                        'company_name' => $data['company_name'],
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'country' => $data['country'],
+                        'deferred_delivery' => $data['deferred_delivery'],
+                        'delivery_date' => $data['delivery_date'],
+                        'lines' => []
+                    ];
+                    
+                    foreach ($data['lines'] as $item) {
+                        $orderData['lines'][] = [
+                            'name_fr' => $item['name_fr'],
+                            'name_nl' => $item['name_nl'],
+                            'quantity' => $item['quantity'],
+                            'product_code' => $item['code']
+                        ];
+                    }
+                    
+                    $mailchimpService = new \App\Services\MailchimpEmailService();
+                    @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
+                } catch (\Exception $e) {
+                    // Ignorer silencieusement
+                }
+            });
+        }
         
-        // Récupérer la langue depuis la session
+        // Récupérer la langue
         $language = $_SESSION['customer']['language'] ?? 'fr';
         
-        // Afficher une page de confirmation simple
+        // Afficher la page
         echo '<!DOCTYPE html>
 <html lang="' . $language . '">
 <head>
@@ -1358,64 +1388,5 @@ class PublicCampaignController
 </body>
 </html>';
     }
-    /**
-     * Envoyer l'email de confirmation de manière asynchrone
-     * Appelé depuis la page de confirmation
-     * 
-     * @return void
-     * @created 19/11/2025
-     */
-    public function sendPendingEmail(): void
-    {
-        // Vérifier s'il y a un email en attente
-        if (!isset($_SESSION['pending_email'])) {
-            return;
-        }
-        
-        $data = $_SESSION['pending_email'];
-        unset($_SESSION['pending_email']);
-        
-        // Envoyer en arrière-plan (ignorer tous les warnings)
-        @ini_set('display_errors', '0');
-        error_reporting(0);
-        
-        try {
-            $orderData = [
-                'order_number' => $data['order_number'],
-                'campaign_title_fr' => $data['campaign_title_fr'],
-                'campaign_title_nl' => $data['campaign_title_nl'],
-                'customer_number' => $data['customer_number'],
-                'company_name' => $data['company_name'],
-                'created_at' => date('Y-m-d H:i:s'),
-                'country' => $data['country'],
-                'deferred_delivery' => $data['deferred_delivery'],
-                'delivery_date' => $data['delivery_date'],
-                'lines' => []
-            ];
-            
-            foreach ($data['lines'] as $item) {
-                $orderData['lines'][] = [
-                    'name_fr' => $item['name_fr'],
-                    'name_nl' => $item['name_nl'],
-                    'quantity' => $item['quantity'],
-                    'product_code' => $item['code']
-                ];
-            }
-            
-            $mailchimpService = new \App\Services\MailchimpEmailService();
-            $emailSent = @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
-            
-            if ($emailSent) {
-                error_log("Email confirmation envoyé avec succès via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
-            } else {
-                error_log("Échec envoi email confirmation via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
-            }
-            
-        } catch (\Exception $e) {
-            error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
-        }
-        
-        // Rétablir les erreurs
-        error_reporting(E_ALL);
-    }
+
 }

@@ -158,7 +158,7 @@
             <div class="greeting">
                 Bonjour <strong><?= htmlspecialchars($order['company_name']) ?></strong>,
                 <br><br>
-                Nous avons bien reçu votre commande pour la campagne <strong><?= htmlspecialchars($order['campaign_title_fr']) ?></strong>.
+                Nous avons bien reçu votre commande pour : <strong><?= htmlspecialchars($order['campaign_title_fr']) ?></strong>.
                 <br><br>
                 Votre commande sera traitée dans les plus brefs délais.
             </div>
