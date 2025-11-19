@@ -432,4 +432,79 @@ class Validator
         $this->errors[$field][] = $message;
         return $this;
     }
+
+/**
+ * Vérifie qu'une combinaison de valeurs est unique en base de données
+ * 
+ * Utile pour les contraintes UNIQUE composites (ex: product_code + campaign_id)
+ * 
+ * @param array $fields Tableau associatif [champ => colonne_db]
+ *                     Ex: ['product_code' => 'product_code', 'campaign_id' => 'campaign_id']
+ * @param string $table Nom de la table
+ * @param int|null $excludeId ID à exclure (pour updates)
+ * @param string|null $message Message d'erreur personnalisé
+ * @return self
+ * 
+ * @example
+ * // Dans ProductController::store()
+ * $validator->uniqueComposite(
+ *     ['product_code' => 'product_code', 'campaign_id' => 'campaign_id'],
+ *     'products',
+ *     null,
+ *     'Ce code produit existe déjà dans cette campagne.'
+ * );
+ * 
+ * @example
+ * // Dans ProductController::update()
+ * $validator->uniqueComposite(
+ *     ['product_code' => 'product_code', 'campaign_id' => 'campaign_id'],
+ *     'products',
+ *     $productId,
+ *     'Ce code produit existe déjà dans cette campagne.'
+ * );
+ */
+public function uniqueComposite(array $fields, string $table, ?int $excludeId = null, ?string $message = null): self
+{
+    // Récupérer les valeurs depuis $this->data
+    $values = [];
+    $whereClauses = [];
+    $params = [];
+    
+    foreach ($fields as $fieldName => $columnName) {
+        $value = $this->data[$fieldName] ?? null;
+        
+        if (empty($value)) {
+            // Si une des valeurs est vide, on ne peut pas vérifier l'unicité
+            return $this;
+        }
+        
+        $values[$fieldName] = $value;
+        $whereClauses[] = "$columnName = ?";
+        $params[] = $value;
+    }
+    
+    // Construire la requête SQL
+    $db = Database::getInstance()->getConnection();
+    $query = "SELECT COUNT(*) as count FROM $table WHERE " . implode(' AND ', $whereClauses);
+    
+    // Exclure l'ID actuel lors d'un update
+    if ($excludeId !== null) {
+        $query .= " AND id != ?";
+        $params[] = $excludeId;
+    }
+    
+    $stmt = $db->prepare($query);
+    $stmt->execute($params);
+    $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+    
+    // Si un doublon existe
+    if ($result['count'] > 0) {
+        // Déterminer quel champ afficher dans l'erreur (le premier par défaut)
+        $firstField = array_key_first($fields);
+        
+        $this->errors[$firstField][] = $message ?? "Cette combinaison de valeurs existe déjà.";
+    }
+    
+    return $this;
+}
 }
