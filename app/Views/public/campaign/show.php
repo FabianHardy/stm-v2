@@ -178,8 +178,8 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                         <p class="mt-2 text-sm text-gray-500">
                             <i class="fas fa-info-circle mr-1"></i>
                             <?= $lang === 'fr' 
-                                ? 'Entrez votre numéro client à 6 chiffres' 
-                                : 'Voer uw klantnummer van 6 cijfers in' 
+                                ? 'Entrez votre numéro de client' 
+                                : 'Voer uw klantnummer in' 
                             ?>
                         </p>
                     </div>
