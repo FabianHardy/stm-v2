@@ -6,7 +6,7 @@
  * 
  * @package STM
  * @created 17/11/2025
- * @modified 19/11/2025 - Harmonisation header + Suppression UUID + Retrait bouton déconnexion
+ * @modified 19/11/2025 - Harmonisation header + Bande verte "Confirmation de commande" + Suppression UUID
  */
 
 // Vérifier que l'utilisateur a bien une session client
@@ -146,37 +146,19 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
             </div>
         </header>
 
-        <!-- Bande verte succès avec infos -->
-        <div class="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg relative z-10" 
+        <!-- Bande verte avec icône + "Confirmation de commande" centré -->
+        <div class="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg sticky top-[72px] z-30" 
              style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);">
             <div class="container mx-auto px-4 py-6">
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div class="flex items-center">
-                        <div class="bg-white bg-opacity-20 rounded-full p-3 mr-4">
-                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <h1 class="text-2xl font-bold"><?= htmlspecialchars($campaign['title_' . $customer['language']]) ?></h1>
-                            <p class="text-green-100 text-sm mt-1">
-                                <?= $customer['language'] === 'fr' ? 'Commande validée avec succès' : 'Bestelling succesvol bevestigd' ?>
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-2 text-green-100 text-sm">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                <div class="flex items-center justify-center">
+                    <div class="bg-white bg-opacity-20 rounded-full p-3 mr-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
-                        <span>
-                            <?php
-                            $startDate = new DateTime($campaign['start_date']);
-                            $endDate = new DateTime($campaign['end_date']);
-                            echo $startDate->format('d/m/Y') . ' - ' . $endDate->format('d/m/Y');
-                            ?>
-                        </span>
                     </div>
+                    <h2 class="text-3xl font-bold">
+                        <?= $customer['language'] === 'fr' ? 'Confirmation de commande' : 'Bevestiging bestelling' ?>
+                    </h2>
                 </div>
             </div>
         </div>
