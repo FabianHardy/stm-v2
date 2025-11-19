@@ -102,14 +102,24 @@ class PublicCampaignController
     public function identify(string $uuid): void
     {
         try {
-            // Récupérer la campagne
-            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
-            $campaign = $this->db->query($query, [':uuid' => $uuid]);
-            
-            if (empty($campaign)) {
-                $this->renderAccessDenied('campaign_not_found', $uuid);
-                return;
-            }
+        // ========================================
+        // STOCKER LA LANGUE DÈS LE DÉBUT
+        // ========================================
+        // Récupérer la langue du formulaire AVANT les vérifications
+        $requestedLang = $_POST['language'] ?? 'fr';
+        $selectedLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
+        
+        // Stocker dans session temporaire pour access_denied
+        Session::set('temp_language', $selectedLanguage);
+        
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+        $campaign = $this->db->query($query, [':uuid' => $uuid]);
+        
+        if (empty($campaign)) {
+            $this->renderAccessDenied('campaign_not_found', $uuid);
+            return;
+        }
             
             $campaign = $campaign[0];
             
@@ -151,8 +161,8 @@ class PublicCampaignController
             }
             
             // Déterminer la langue selon le paramètre transmis ou FR par défaut
-            $requestedLang = $_POST['language'] ?? 'fr';
-            $defaultLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
+        //    $requestedLang = $_POST['language'] ?? 'fr';
+        //    $defaultLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
 
             // Tout est OK - créer la session client
             Session::set('public_customer', [
@@ -161,7 +171,7 @@ class PublicCampaignController
                 'company_name' => $customerData['company_name'],
                 'campaign_uuid' => $uuid,
                 'campaign_id' => $campaign['id'],
-                'language' => $defaultLanguage,
+                'language' => $selectedLanguage,
                 'logged_at' => date('Y-m-d H:i:s')
             ]);
             
