@@ -358,10 +358,27 @@ class Product
         if (empty($data['product_code'])) {
             $errors['product_code'] = 'Le code produit est obligatoire';
         } else {
-            // Vérifier l'unicité (sauf si update avec même code)
-            $existing = $this->findByCode($data['product_code']);
-            if ($existing && (!isset($data['id']) || $existing['id'] != $data['id'])) {
-                $errors['product_code'] = 'Ce code produit existe déjà';
+            // ⭐ NOUVEAU : Vérifier l'unicité (product_code + campaign_id)
+            // Permet le même code dans différentes campagnes
+            $sql = "SELECT id FROM products 
+                    WHERE product_code = :product_code 
+                    AND campaign_id = :campaign_id";
+            
+            $params = [
+                ':product_code' => $data['product_code'],
+                ':campaign_id' => $data['campaign_id']
+            ];
+            
+            // Si c'est un UPDATE, exclure l'ID actuel
+            if (isset($data['id'])) {
+                $sql .= " AND id != :id";
+                $params[':id'] = $data['id'];
+            }
+            
+            $existing = $this->db->queryOne($sql, $params);
+            
+            if ($existing) {
+                $errors['product_code'] = 'Ce code produit existe déjà dans cette campagne';
             }
         }
 
