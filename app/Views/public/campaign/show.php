@@ -211,7 +211,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                         type="submit" 
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                     >
-                        <span><?= $lang === 'fr' ? 'Accéder au catalogue' : 'Toegang tot catalogus' ?></span>
+                        <span><?= $lang === 'fr' ? 'Accéder aux promotions' : 'Toegang tot promoties' ?></span>
                         <i class="fas fa-arrow-right"></i>
                     </button>
 
