@@ -19,7 +19,7 @@
                 <div class="text-center mb-8">
                     <img src="/stm/public/assets/images/logo.png" 
                          alt="Trendy Foods" 
-                         class="h-20 mx-auto mb-4">
+                         class="h-40 mx-auto mb-4">
                     <p class="text-blue-200 text-sm tracking-widest">PROFESSIONAL ACCESS</p>
                 </div>
                 
