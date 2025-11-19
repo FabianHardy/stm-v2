@@ -167,7 +167,7 @@
                 $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
                 ?>
                 <a href="#category-<?= $category['id'] ?>" 
-   class="category-btn flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium whitespace-nowrap max-w-xs truncate"
+   class="category-btn flex items-center gap-2 pl-2 pr-6 py-2.5 rounded-lg font-medium whitespace-nowrap"
    id="cat-btn-<?= $category['id'] ?>"
    style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
                     <?php if (!empty($category['icon_path'])): ?>
@@ -339,7 +339,7 @@
 
             <!-- Panier sidebar (droite) -->
             <div class="lg:w-80 hidden lg:block">
-                <div class="bg-white rounded-lg shadow-lg p-6 sticky top-32">
+                <div class="bg-white rounded-lg shadow-lg p-6 sticky top-40">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-bold text-gray-800 flex items-center">
                             <i class="fas fa-shopping-cart mr-2"></i>
