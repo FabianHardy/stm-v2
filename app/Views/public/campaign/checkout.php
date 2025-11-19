@@ -28,10 +28,18 @@ $customer = $_SESSION['public_customer'];
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
+        /* Alpine.js cloak */
+        [x-cloak] {
+            display: none !important;
+        }
+
         body {
             position: relative;
         }
@@ -58,7 +66,7 @@ $customer = $_SESSION['public_customer'];
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50" x-data="{ showCGU: false, showRGPD: false }">
 
     <div class="content-wrapper">
         <!-- Header blanc avec logo + infos (identique catalog.php) -->
@@ -308,16 +316,40 @@ $customer = $_SESSION['public_customer'];
                                     <span class="text-red-500">*</span>
                                 </p>
 
-                                <!-- CGV 1 -->
+                                <!-- CGV 1 : CGU + RGPD avec liens cliquables -->
                                 <label class="flex items-start cursor-pointer">
                                     <input type="checkbox" 
                                            name="cgv_1" 
                                            required
                                            class="mt-1 h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
                                     <span class="ml-3 text-sm text-gray-700">
-                                        <?= $customer['language'] === 'fr' 
-                                            ? "J'accepte les conditions générales de vente" 
-                                            : "Ik aanvaard de algemene verkoopvoorwaarden" ?>
+                                        <?php if ($customer['language'] === 'fr'): ?>
+                                            J'accepte les 
+                                            <button type="button" 
+                                                    @click.prevent="showCGU = true"
+                                                    class="text-blue-600 hover:text-blue-800 underline font-medium">
+                                                Conditions Générales d'Utilisation
+                                            </button>
+                                            et la 
+                                            <button type="button" 
+                                                    @click.prevent="showRGPD = true"
+                                                    class="text-blue-600 hover:text-blue-800 underline font-medium">
+                                                Politique Vie Privée
+                                            </button>
+                                        <?php else: ?>
+                                            Ik aanvaard de 
+                                            <button type="button" 
+                                                    @click.prevent="showCGU = true"
+                                                    class="text-blue-600 hover:text-blue-800 underline font-medium">
+                                                Algemene Gebruiksvoorwaarden
+                                            </button>
+                                            en het 
+                                            <button type="button" 
+                                                    @click.prevent="showRGPD = true"
+                                                    class="text-blue-600 hover:text-blue-800 underline font-medium">
+                                                Privacybeleid
+                                            </button>
+                                        <?php endif; ?>
                                     </span>
                                 </label>
 
@@ -373,6 +405,223 @@ $customer = $_SESSION['public_customer'];
                 </div>
                 <?php endif; ?>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal CGU -->
+    <div x-show="showCGU" 
+         x-cloak
+         @click.away="showCGU = false"
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Overlay -->
+            <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" 
+                 @click="showCGU = false"></div>
+
+            <!-- Modal Content -->
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <!-- Header -->
+                <div class="bg-blue-600 px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-xl font-bold text-white">
+                        <?= $customer['language'] === 'fr' ? "Conditions générales d'utilisation du Site internet" : "Algemene gebruiksvoorwaarden van de website" ?>
+                    </h3>
+                    <button @click="showCGU = false" 
+                            class="text-white hover:text-gray-200">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+
+                <!-- Body -->
+                <div class="bg-white px-6 py-6 max-h-96 overflow-y-auto">
+                    <div class="prose prose-sm max-w-none">
+                        <?php if ($customer['language'] === 'fr'): ?>
+                            <p>Ce site Internet (à l'exclusion des sites liés) est géré par TRENDY FOODS BELGIUM SA.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 1 : Consentement à être lié par ces conditions</h3>
+                            <p>Votre utilisation de ce site internet et de tous les logiciels, applications, données, produits, concours, tombolas, ou de tout autre service offert sur ce site, au départ ou par l'intermédiaire de celui-ci par TRENDY FOODS BELGIUM SA (collectivement dénommés « les Services TRENDY FOODS BELGIUM SA »), est soumise aux conditions générales d'utilisation conclues entre vous et TRENDY FOODS BELGIUM SA.</p>
+                            <p>Outre les conditions juridiques, la convention juridique inclut (i) la Politique de respect de la vie privée et (ii) les conditions générales de vente.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 2 : Droits d'auteur</h3>
+                            <p>Copyright © 2017 TRENDY FOODS BELGIUM SA. Tous droits réservés.</p>
+                            <p>Tous les droits d'auteur ou autres droits de propriété intellectuelle sur tout texte, image, son, logiciel et autre contenu de ce site sont la propriété de TRENDY FOODS BELGIUM SA et de ses entités affiliées, ou sont inclus avec l'autorisation du propriétaire correspondant. Les références aux entités du groupe ou aux entités affiliées comprennent toutes les entités du groupe TRENDY FOODS.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 3 : Contenu</h3>
+                            <p>Les informations contenues sur ce site sont fournies de bonne foi, mais elles sont données exclusivement à des fins informatives. Elles sont fournies en l'état et aucune garantie n'est donnée quant à leur précision ou exhaustivité.</p>
+                            <p>Ni TRENDY FOODS BELGIUM SA ni l'une de ses filiales, ni leurs dirigeants, employés ou agents, ne peuvent être tenus responsables d'une quelconque perte, dommage ou dépense découlant d'un quelconque accès à ce site ou d'une quelconque utilisation de celui-ci ou de tout site lié à celui-ci, y compris, et sans limitation, d'une quelconque perte de bénéfice, perte indirecte, fortuite ou consécutive.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 4 : Contactez-nous</h3>
+                            <p>Le présent site web est exploité par TRENDY FOODS BELGIUM SA, Avenue du Parc 37, à B-4800 Verviers, BCE 0407.095.835, RPR Verviers.<br>
+                            Si vous souhaitez obtenir de plus amples renseignements ou effectuer des commentaires au sujet de ce site web, veuillez nous contacter par (i) courriel à privacy@trendyfoods.com, (ii) téléphone au +32 (0)87 32 18 88 ou (iii) courrier postal à TRENDY FOODS BELGIUM SA, Avenue du Parc, 37 à B-4800 Verviers.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 5 : Vie Privée</h3>
+                            <p>Nous respectons votre vie privée. Nous ne collectons pas de données sans votre consentement. Nous vous invitons à consulter notre Politique « Vie Privée » pour de plus amples informations.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 6 : Modifications</h3>
+                            <p>TRENDY FOODS BELGIUM SA se réserve le droit d'apporter des modifications et des corrections sur ce site au fur et à mesure des besoins et sans préavis.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 7 : Droit applicable et juridictions compétentes</h3>
+                            <p>La présente Convention sera soumise à la législation belge.</p>
+                            <p>Tout litige découlant de ou en relation avec la présente Convention et/ou sa fin sera soumis exclusivement aux juridictions compétentes de l'arrondissement judiciaire de Liège, division Verviers.</p>
+                        <?php else: ?>
+                            <p>Deze internetsite (behalve de ermee verbonden sites) wordt beheerd door TRENDY FOODS BELGIUM NV.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 1 : Instemming met deze bindende voorwaarden</h3>
+                            <p>Uw gebruik van deze internetsite en van alle software, toepassingen, gegevens, producten, wedstrijden, tombola's en alle andere diensten die op deze site rechtstreeks of door bemiddeling worden aangeboden door TRENDY FOODS BELGIUM NV (en die samen "de Diensten van TRENDY FOODS BELGIUM NV" worden genoemd), is onderworpen aan de tussen u en TRENDY FOODS BELGIUM NV overeengekomen algemene gebruiksvoorwaarden.</p>
+                            <p>Naast de juridische voorwaarden omvat de juridische overeenkomst (i) het Beleid inzake bescherming van de persoonlijke levenssfeer en (ii) de algemene verkoopsvoorwaarden.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 2 : Auteursrechten</h3>
+                            <p>Copyright © 2017 TRENDY FOODS BELGIUM NV. Alle rechten voorbehouden</p>
+                            <p>Alle auteurs en andere intellectuele eigendomsrechten op alle teksten, afbeeldingen, geluiden, software en andere inhoud van deze site zijn eigendom van TRENDY FOODS BELGIUM NV en van haar aangesloten entiteiten, of werden erin opgenomen met toestemming van de desbetreffende eigenaar. De verwijzingen naar de entiteiten van de groep en naar de aangesloten entiteiten omvatten alle entiteiten van de groep TRENDY FOODS.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 3 : Inhoud</h3>
+                            <p>De op deze site aanwezige informatie wordt te goeder trouw geleverd, maar is uitsluitend van informatieve aard. Ze wordt geleverd zoals ze is, zonder enige garantie op de juistheid en de volledigheid ervan.</p>
+                            <p>TRENDY FOODS BELGIUM NV of een van de dochterondernemingen ervan kunnen, evenmin als de leidinggevenden, de bedienden en de agenten ervan, aansprakelijk worden gesteld voor verlies, schade of uitgaven die het gevolg zijn van de toegang tot of het gebruik van deze site of van eender welke ermee verbonden site, met inbegrip van en zonder beperking tot een of andere vorm van winstderving of indirect, toevallig of daaruit voortvloeiend verlies.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 4 : Neem contact met ons op</h3>
+                            <p>Onderhavige website wordt beheerd door TRENDY FOODS BELGIUM NV, Avenue du Parc 37 te B 4800 Verviers, KBO 0407.095.835, RPR Verviers. Voor meer informatie over of voor commentaar op deze website gelieve u contact met ons op te nemen per (i) e-mail op "privacy@trendyfoods.com", (ii) telefoon op +32 (0)87 32 18 88 of (iii) brief aan het adres van TRENDY FOODS BELGIUM NV, Avenue du Parc 37 te B 4800 Verviers.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 5 : Privacy</h3>
+                            <p>Wij beschermen uw persoonlijke levenssfeer. Wij zamelen geen gegevens zonder uw toestemming. Voor meer informatie: gelieve ons Privacybeleid te raadplegen.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 6 : Wijzigingen</h3>
+                            <p>TRENDY FOODS BELGIUM NV behoudt zich het recht voor deze site zonder voorafgaand bericht te wijzigen en te verbeteren naargelang de behoeften.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">Article 7 : Toepasselijk recht en rechtsbevoegdheid</h3>
+                            <p>Onderhavige Overeenkomst valt onder de Belgische wetgeving.</p>
+                            <p>Alle geschillen die voortvloeien uit of in verband staan met onderhavige Overeenkomst en/of het doel ervan, kunnen enkel worden voorgelegd aan de bevoegde rechtsmachten uit het gerechtelijk arrondissement van Luik, afdeling Verviers.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-6 py-4">
+                    <button @click="showCGU = false" 
+                            class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                        <?= $customer['language'] === 'fr' ? 'Fermer' : 'Sluiten' ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal RGPD (Politique Vie Privée) -->
+    <div x-show="showRGPD" 
+         x-cloak
+         @click.away="showRGPD = false"
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Overlay -->
+            <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" 
+                 @click="showRGPD = false"></div>
+
+            <!-- Modal Content -->
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <!-- Header -->
+                <div class="bg-green-600 px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-xl font-bold text-white">
+                        <?= $customer['language'] === 'fr' ? "Politique « Vie Privée » de TRENDY FOODS BELGIUM SA" : "Privacybeleid van TRENDY FOODS BELGIUM SA" ?>
+                    </h3>
+                    <button @click="showRGPD = false" 
+                            class="text-white hover:text-gray-200">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+
+                <!-- Body -->
+                <div class="bg-white px-6 py-6 max-h-96 overflow-y-auto">
+                    <div class="prose prose-sm max-w-none">
+                        <?php if ($customer['language'] === 'fr'): ?>
+                            <h3 class="text-lg font-bold mt-4 mb-2">1 : Objectif</h3>
+                            <p>Le présent document constitue la politique « Vie Privée » mise en œuvre par TRENDY FOODS BELGIUM SA dans le cadre de ses activités.</p>
+                            <p>La protection de votre vie privée et de vos données à caractère personnel est d'une importance capitale pour TRENDY FOODS BELGIUM SA.</p>
+                            <p>Cette politique « Vie Privée » est rédigée afin de garantir le respect du Règlement européen 2016/679 du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la Directive 95/46/EC (Règlement général sur la protection des données, ou RGPD).</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">2 : Quelle est la portée de cette politique ?</h3>
+                            <p>Nous recueillons et utilisons uniquement les données personnelles qui sont nécessaires dans le cadre de nos activités et qui nous permettent de vous proposer des produits et services de qualité.</p>
+                            <p>TRENDY FOODS BELGIUM SA, ayant son siège social Avenue du Parc, 37 à B-4800 Verviers, est Responsable du traitement des données à caractère personnel qu'elle est amenée à traiter.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">3 : Quelles données sont couvertes par notre politique ?</h3>
+                            <p>Les données couvertes par la présente politique sont les données à caractère personnel des personnes physiques, c'est-à-dire des données qui permettent directement ou indirectement d'identifier une personne.</p>
+                            <p>Dans le cadre de vos relations et interactions avec TRENDY FOODS BELGIUM SA, nous pouvons être amenés à collecter différentes données à caractère personnel, telles que :</p>
+                            <ul class="list-disc pl-6 space-y-1">
+                                <li><strong>Des données d'identification et de contact</strong> (exemples : vos titre, nom, adresse, date et lieu de naissance, numéro de compte, numéro de téléphone, adresse mail, adresse IP, profession)</li>
+                                <li><strong>Situation familiale</strong> (exemples : état civil, nombre d'enfants)</li>
+                                <li><strong>Données bancaires, financières et transactionnelles</strong></li>
+                                <li><strong>Données relatives à vos comportements et habitudes</strong></li>
+                                <li><strong>Données relatives à vos préférences et intérêts</strong></li>
+                            </ul>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">10 : Quels sont vos droits et comment les exercer ?</h3>
+                            <p>Conformément à la réglementation applicable, vous disposez de différents droits :</p>
+                            <ul class="list-disc pl-6 space-y-1">
+                                <li>Le droit de demander l'accès aux données à caractère personnel</li>
+                                <li>Le droit à la rectification</li>
+                                <li>Le droit à l'effacement des données</li>
+                                <li>Le droit de s'opposer au traitement</li>
+                                <li>Le droit de retirer son consentement</li>
+                                <li>Le droit de demander une limitation du traitement</li>
+                                <li>Le droit à la portabilité des données</li>
+                            </ul>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">14 : Comment nous contacter ?</h3>
+                            <p>Si vous avez des questions concernant l'utilisation de vos données personnelles visée par la présente politique, vous nous contacter par e-mail à l'adresse <strong>privacy@trendyfoods.com</strong></p>
+                            
+                            <hr class="my-4">
+                            <p class="text-sm text-gray-600">La présente Politique « Vie Privée » est applicable à dater du 25 mai 2018.</p>
+                        <?php else: ?>
+                            <h3 class="text-lg font-bold mt-4 mb-2">1 : Doel</h3>
+                            <p>Onderhavig document vormt het "Privacybeleid" dat door TRENDY FOODS BELGIUM NV wordt gevoerd in het kader van zijn activiteiten.</p>
+                            <p>De bescherming van uw persoonlijke levenssfeer en van uw persoonsgegevens is van kapitaal belang voor TRENDY FOODS BELGIUM NV.</p>
+                            <p>Dit "Privacybeleid" werd opgesteld om de naleving te garanderen van de Europese Verordening 2016/679 van 27 april 2016 betreffende de bescherming van natuurlijke personen in verband met de verwerking van persoonsgegevens en betreffende het vrije verkeer van de gegevens en tot intrekking van Richtlijn 95/46/EG (algemene verordening gegevensbescherming of AVG/GDPR).</p>
+                            <p>Dit "Privacybeleid" dient om u volledig te informeren over dat onderwerp en om uit te leggen hoe wij uw persoonsgegevens inzamelen, gebruiken en bewaren.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">2 : Wat is de draagwijdte van dit beleid?</h3>
+                            <p>Wij verzamelen en gebruiken enkel persoonsgegevens die nodig zijn in het kader van onze activiteiten en die ons in staat stellen u producten en diensten van goede kwaliteit aan te bieden.</p>
+                            <p>TRENDY FOODS BELGIUM NV, waarvan de maatschappelijke zetel gevestigd is aan de Avenue du Parc 37 te B-4800 Verviers, is verantwoordelijk voor de verwerking van de persoonsgegevens die het inzamelt.</p>
+                            <p>Wij zijn bijgevolg uw partner en ook die van de controleautoriteiten (zoals de "Gegevensbeschermingsautoriteit") voor alle aangelegenheden in verband met het gebruik van uw gegevens door onze firma.</p>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">3 : Welke gegevens vallen onder ons beleid?</h3>
+                            <p>De gegevens waarop onderhavig beleid betrekking heeft, zijn persoonsgegevens van natuurlijke personen, dat wil zeggen gegevens waardoor iemand direct of indirect kan worden geïdentificeerd.</p>
+                            <p>In het kader van uw betrekkingen en interacties met TRENDY FOODS BELGIUM NV kan het zijn dat wij verscheidene persoonsgegevens inzamelen, zoals:</p>
+                            <ul class="list-disc pl-6 space-y-1">
+                                <li><strong>Identificatie en contactgegevens</strong> (bijvoorbeeld: uw titel, naam, adres, geboorteplaats en datum, rijksregisternummer, rekeningnummer, telefoonnummer, e-mailadres, IP-adres, beroep)</li>
+                                <li><strong>Gezinstoestand</strong> (bijvoorbeeld: burgerlijke staat, aantal kinderen)</li>
+                                <li><strong>Bankgegevens en financiële en transactionele gegevens</strong></li>
+                                <li><strong>Gegevens betreffende uw gedrag en gewoonten</strong></li>
+                                <li><strong>Gegevens betreffende uw voorkeuren en interesses</strong></li>
+                            </ul>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">10 : Wat zijn uw rechten en hoe kunt u ze uitoefenen?</h3>
+                            <p>Conform de toepasselijke regelgeving beschikt u over verschillende rechten:</p>
+                            <ul class="list-disc pl-6 space-y-1">
+                                <li>Het recht om toegang te vragen tot de persoonsgegevens</li>
+                                <li>Het recht op verbetering</li>
+                                <li>Het recht op verwijdering van de gegevens</li>
+                                <li>Het recht om zich te verzetten tegen de verwerking</li>
+                                <li>Het recht om uw toestemming in te trekken</li>
+                                <li>Het recht om een beperking van de verwerking te vragen</li>
+                                <li>Het recht op overdraagbaarheid van de gegevens</li>
+                            </ul>
+                            
+                            <h3 class="text-lg font-bold mt-4 mb-2">14 : Hoe kunt u contact met ons opnemen?</h3>
+                            <p>Indien u vragen hebt omtrent het gebruik van uw persoonsgegevens zoals bedoeld in dit beleid, kunt u contact met ons opnemen per e-mail op het adres <strong>privacy@trendyfoods.com</strong></p>
+                            
+                            <hr class="my-4">
+                            <p class="text-sm text-gray-600">Dit "Privacybeleid" is van toepassing vanaf 25 mei 2018.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-6 py-4">
+                    <button @click="showRGPD = false" 
+                            class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                        <?= $customer['language'] === 'fr' ? 'Fermer' : 'Sluiten' ?>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
