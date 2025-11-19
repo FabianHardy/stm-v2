@@ -942,6 +942,15 @@ class PublicCampaignController
             exit;
         }
 
+
+        // PROTECTION : Empêcher double validation
+        if (isset($_SESSION['last_order_uuid']) && 
+            isset($_SESSION['order_validated_at']) && 
+            (time() - $_SESSION['order_validated_at']) < 60) {
+            // Commande déjà validée il y a moins de 60 secondes
+            header('Location: /stm/c/' . $uuid . '/order/confirmation');
+            exit;
+        }
         // Vérifier token CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== $_SESSION['csrf_token']) {
             $_SESSION['error'] = $customer['language'] === 'fr' 
@@ -1111,6 +1120,10 @@ class PublicCampaignController
                 'language' => $customer['language'] ?? 'fr',
                 'lines' => $cart['items']
             ];
+
+            // Horodatage de la validation (protection double soumission)
+            $_SESSION['order_validated_at'] = time();
+
 
             // 12. Redirection IMMÉDIATE (AVANT l'envoi email)
             header('Location: /stm/c/' . $uuid . '/order/confirmation');
@@ -1303,7 +1316,8 @@ class PublicCampaignController
         );
     }
 
-/**
+
+    /**
      * Afficher la page de confirmation de commande
      * 
      * @param string $uuid UUID de la campagne
@@ -1312,7 +1326,7 @@ class PublicCampaignController
      */
     public function orderConfirmation(string $uuid): void
     {
-        // Programmer l'envoi email APRÈS la réponse HTTP
+        // Programmer l'envoi email APRÈS la réponse HTTP (shutdown function)
         if (isset($_SESSION['pending_email'])) {
             $data = $_SESSION['pending_email'];
             unset($_SESSION['pending_email']);
@@ -1345,48 +1359,55 @@ class PublicCampaignController
                     }
                     
                     $mailchimpService = new \App\Services\MailchimpEmailService();
-                    @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
+                    $emailSent = @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
+                    
+                    if ($emailSent) {
+                        error_log("Email confirmation envoyé avec succès via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
+                    } else {
+                        error_log("Échec envoi email confirmation via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
+                    }
+                    
                 } catch (\Exception $e) {
-                    // Ignorer silencieusement
+                    error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
                 }
             });
         }
         
-        // Récupérer la langue
-        $language = $_SESSION['customer']['language'] ?? 'fr';
+        // Vérifier la session
+        if (!isset($_SESSION['last_order_uuid'])) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
         
-        // Afficher la page
-        echo '<!DOCTYPE html>
-<html lang="' . $language . '">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>' . ($language === 'nl' ? 'Bestelling bevestigd' : 'Commande confirmée') . '</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-50">
-    <div class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-            <div class="mb-6">
-                <svg class="mx-auto h-16 w-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            </div>
-            <h1 class="text-3xl font-bold text-gray-900 mb-4">
-                ' . ($language === 'nl' ? '✅ Bestelling bevestigd!' : '✅ Commande confirmée !') . '
-            </h1>
-            <p class="text-gray-600 mb-6">
-                ' . ($language === 'nl' 
-                    ? 'Uw bestelling is succesvol geregistreerd. U ontvangt spoedig een bevestigingsmail.' 
-                    : 'Votre commande a été enregistrée avec succès. Vous allez recevoir un email de confirmation.') . '
-            </p>
-            <a href="/stm/c/' . htmlspecialchars($uuid) . '" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
-                ' . ($language === 'nl' ? '← Terug naar campagne' : '← Retour à la campagne') . '
-            </a>
-        </div>
-    </div>
-</body>
-</html>';
+        // Récupérer les infos de la campagne
+        $campaign = $this->db->query(
+            "SELECT * FROM campaigns WHERE uuid = :uuid",
+            [':uuid' => $uuid]
+        );
+        
+        if (empty($campaign)) {
+            header('Location: /stm/');
+            exit;
+        }
+        
+        $campaign = $campaign[0];
+        
+        // Récupérer la commande
+        $orderUuid = $_SESSION['last_order_uuid'];
+        $order = $this->db->query(
+            "SELECT * FROM orders WHERE uuid = :uuid",
+            [':uuid' => $orderUuid]
+        );
+        
+        if (empty($order)) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
+        
+        $order = $order[0];
+        
+        // Charger la vraie vue de confirmation
+        require_once __DIR__ . '/../Views/public/campaign/confirmation.php';
     }
 
 }

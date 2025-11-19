@@ -261,7 +261,7 @@ $customer = $_SESSION['public_customer'];
                                         </svg>
                                         <div>
                                             <p class="text-sm font-semibold text-blue-900">
-                                                <?= $customer['language'] === 'fr' ? 'Date de livraison prévue' : 'Geplande leveringsdatum' ?>
+                                                <?= $customer['language'] === 'fr' ? 'Livraison à partir du' : 'Levering vanaf' ?>
                                             </p>
                                             <p class="text-sm text-blue-700 mt-1">
                                                 <?php
