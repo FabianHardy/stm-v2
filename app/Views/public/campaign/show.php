@@ -138,8 +138,8 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                     </h3>
                     <p class="text-gray-600">
                         <?= $lang === 'fr' 
-                            ? 'Identifiez-vous pour accéder à la campagne' 
-                            : 'Identificeer uzelf om toegang te krijgen tot de campagne' ?>
+                            ? 'Identifiez-vous pour accéder aux promotions' 
+                            : 'Log in om toegang te krijgen tot promoties' ?>
                     </p>
                 </div>
 
