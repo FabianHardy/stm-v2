@@ -235,7 +235,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                         <div class="mt-3 space-y-1 text-sm text-blue-900">
                             <p>
                                 <i class="fas fa-phone mr-2"></i>
-                                <?php if ($campaign['country'] === 'BOTH'): ?>
+                                <?php if ($campaign['country'] === 'BE'): ?>
                                     <strong>+32 (0)87 321 888</strong>
                                 <?php else: ?>
                                     <strong>+352 35 71 791</strong>
@@ -243,7 +243,7 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                             </p>
                             <p>
                                 <i class="fas fa-envelope mr-2"></i>
-                                <?php if ($campaign['country'] === 'BOTH'): ?>
+                                <?php if ($campaign['country'] === 'BE'): ?>
                                     <strong>info@trendyfoods.com</strong>
                                 <?php else: ?>
                                     <strong>info@lu.trendyfoods.com</strong>
