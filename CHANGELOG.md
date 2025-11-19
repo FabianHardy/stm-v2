@@ -1,6 +1,23 @@
 # 📝 CHANGELOG - STM v2
 
 Historique centralisé de toutes les modifications du projet.
+
+--
+## [19/11/2025] - Modification contrainte UNIQUE products
+
+### 🔧 Modifié
+- **Base de données** : Contrainte `UNIQUE KEY product_code` → `UNIQUE KEY unique_product_code_campaign (product_code, campaign_id)`
+- **Product.php** : Méthode `validate()` - Vérification unicité composite (product_code + campaign_id)
+
+### ✅ Résultat
+- ✅ Même code produit possible dans plusieurs campagnes (ex: COCA001 en BE + COCA001 en LU)
+- ✅ Interdiction des doublons dans la même campagne
+- ✅ Validation correcte lors de l'édition (pas d'erreur sur soi-même)
+
+### 🐛 Problème résolu
+- Fix : Impossible de créer deux produits avec le même code dans des campagnes différentes
+--
+
 ## [19/11/2025] - Sprint 7 : Finalisation envoi emails
 
 ### ✅ Corrigé
