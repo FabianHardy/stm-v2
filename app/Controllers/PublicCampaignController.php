@@ -1082,70 +1082,13 @@ class PublicCampaignController
                 [':file_path' => $filePath, ':id' => $orderId]
             );
 
-            // 7bis. Envoyer email de confirmation via Mailchimp Transactional
-            $emailSent = false;
-            
-            // Capturer TOUTE la sortie (warnings, erreurs, etc.)
-            ob_start();
-            
-            try {
-                // Supprimer tous les affichages
-                @ini_set('display_errors', '0');
-                error_reporting(0);
-                
-                // Générer un numéro de commande lisible
-                $orderNumber = 'ORD-' . date('Y') . '-' . str_pad($orderId, 6, '0', STR_PAD_LEFT);
-                
-                // Déterminer la langue
-                $language = $customer['language'] ?? 'fr';
-                
-                // Préparer les données pour le template email
-                $orderData = [
-                    'order_number' => $orderNumber,
-                    'campaign_title_fr' => $campaign['title_fr'],
-                    'campaign_title_nl' => $campaign['title_nl'],
-                    'customer_number' => $customer['customer_number'],
-                    'company_name' => $customer['company_name'] ?? ('Client ' . $customer['customer_number']),
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'country' => $campaign['country'],
-                    'deferred_delivery' => $campaign['deferred_delivery'] ?? 0,
-                    'delivery_date' => $campaign['delivery_date'] ?? null,
-                    'lines' => []
-                ];
-                
-                // Ajouter les lignes de commande avec noms multilingues
-                foreach ($cart['items'] as $item) {
-                    $orderData['lines'][] = [
-                        'name_fr' => $item['name_fr'],
-                        'name_nl' => $item['name_nl'],
-                        'quantity' => $item['quantity'],
-                        'product_code' => $item['code']
-                    ];
-                }
-                
-                // Envoyer via Mailchimp Transactional
-                $mailchimpService = new MailchimpEmailService();
-                $emailSent = @$mailchimpService->sendOrderConfirmation($customerEmail, $orderData, $language);
-                
-                if ($emailSent) {
-                    @error_log("Email confirmation envoyé avec succès via Mailchimp à: {$customerEmail} (Commande: {$orderNumber})");
-                }
-                
-            } catch (\Exception $e) {
-                @error_log("Erreur envoi email Mailchimp: " . $e->getMessage());
-                $emailSent = false;
-            }
-            
-            // Jeter TOUTE la sortie capturée (warnings, erreurs, etc.)
-            @ob_end_clean();
-            
-            // Réactiver les erreurs normales
-            error_reporting(E_ALL);
+            // 7. Valider la transaction
+            $this->db->commit();
 
             // 8. Vider le panier
             $_SESSION['cart'] = ['campaign_uuid' => $uuid, 'items' => []];
 
-            // 9. Stocker l'UUID de la commande en session pour la page de confirmation
+            // 9. Stocker l'UUID de la commande en session
             $_SESSION['last_order_uuid'] = $orderUuid;
 
             // 10. Message de succès
@@ -1153,10 +1096,25 @@ class PublicCampaignController
                 ? 'Votre commande a été validée avec succès !' 
                 : 'Uw bestelling is succesvol gevalideerd!';
 
-            // 11. Redirection vers page confirmation
+            // 11. Préparer les données email pour envoi asynchrone
+            $_SESSION['pending_email'] = [
+                'customer_email' => $customerEmail,
+                'order_id' => $orderId,
+                'order_number' => 'ORD-' . date('Y') . '-' . str_pad($orderId, 6, '0', STR_PAD_LEFT),
+                'campaign_title_fr' => $campaign['title_fr'],
+                'campaign_title_nl' => $campaign['title_nl'],
+                'customer_number' => $customer['customer_number'],
+                'company_name' => $customer['company_name'] ?? ('Client ' . $customer['customer_number']),
+                'country' => $campaign['country'],
+                'deferred_delivery' => $campaign['deferred_delivery'] ?? 0,
+                'delivery_date' => $campaign['delivery_date'] ?? null,
+                'language' => $customer['language'] ?? 'fr',
+                'lines' => $cart['items']
+            ];
+
+            // 12. Redirection IMMÉDIATE (AVANT l'envoi email)
             header('Location: /stm/c/' . $uuid . '/order/confirmation');
             exit;
-
         } catch (\Exception $e) {
             // Rollback en cas d'erreur
             $this->db->rollBack();
@@ -1343,5 +1301,109 @@ class PublicCampaignController
             mt_rand(0, 0x3fff) | 0x8000,
             mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
         );
+    }
+
+    /**
+     * Afficher la page de confirmation de commande
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 19/11/2025
+     */
+    public function orderConfirmation(string $uuid): void
+    {
+        // Envoyer l'email en arrière-plan (si pending)
+        $this->sendPendingEmail();
+        
+        // Vérifier la session
+        if (!isset($_SESSION['last_order_uuid'])) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
+        
+        // Récupérer les infos de la campagne
+        $campaign = $this->campaignModel->findByUuid($uuid);
+        
+        if (!$campaign) {
+            header('Location: /stm/');
+            exit;
+        }
+        
+        // Récupérer la commande
+        $orderUuid = $_SESSION['last_order_uuid'];
+        $order = $this->db->query(
+            "SELECT * FROM orders WHERE uuid = :uuid",
+            [':uuid' => $orderUuid]
+        );
+        
+        if (empty($order)) {
+            header('Location: /stm/c/' . $uuid);
+            exit;
+        }
+        
+        $order = $order[0];
+        
+        // Charger la vue
+        require_once __DIR__ . '/../Views/public/campaigns/order_confirmation.php';
+    }
+    /**
+     * Envoyer l'email de confirmation de manière asynchrone
+     * Appelé depuis la page de confirmation
+     * 
+     * @return void
+     * @created 19/11/2025
+     */
+    public function sendPendingEmail(): void
+    {
+        // Vérifier s'il y a un email en attente
+        if (!isset($_SESSION['pending_email'])) {
+            return;
+        }
+        
+        $data = $_SESSION['pending_email'];
+        unset($_SESSION['pending_email']);
+        
+        // Envoyer en arrière-plan (ignorer tous les warnings)
+        @ini_set('display_errors', '0');
+        error_reporting(0);
+        
+        try {
+            $orderData = [
+                'order_number' => $data['order_number'],
+                'campaign_title_fr' => $data['campaign_title_fr'],
+                'campaign_title_nl' => $data['campaign_title_nl'],
+                'customer_number' => $data['customer_number'],
+                'company_name' => $data['company_name'],
+                'created_at' => date('Y-m-d H:i:s'),
+                'country' => $data['country'],
+                'deferred_delivery' => $data['deferred_delivery'],
+                'delivery_date' => $data['delivery_date'],
+                'lines' => []
+            ];
+            
+            foreach ($data['lines'] as $item) {
+                $orderData['lines'][] = [
+                    'name_fr' => $item['name_fr'],
+                    'name_nl' => $item['name_nl'],
+                    'quantity' => $item['quantity'],
+                    'product_code' => $item['code']
+                ];
+            }
+            
+            $mailchimpService = new \App\Services\MailchimpEmailService();
+            $emailSent = @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
+            
+            if ($emailSent) {
+                error_log("Email confirmation envoyé avec succès via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
+            } else {
+                error_log("Échec envoi email confirmation via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
+            }
+            
+        } catch (\Exception $e) {
+            error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
+        }
+        
+        // Rétablir les erreurs
+        error_reporting(E_ALL);
     }
 }

@@ -470,5 +470,6 @@ $router->post('/c/{uuid}/order/submit', function($uuid) {
 
 // Page de confirmation après validation
 $router->get('/c/{uuid}/order/confirmation', function($uuid) {
-    require __DIR__ . '/../app/Views/public/campaign/confirmation.php';
+    $controller = new PublicCampaignController();
+    $controller->orderConfirmation($uuid);
 });

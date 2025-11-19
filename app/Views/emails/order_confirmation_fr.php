@@ -179,7 +179,7 @@
             <!-- Date de livraison si applicable -->
             <?php if ($order['deferred_delivery'] == 1 && !empty($order['delivery_date'])): ?>
             <div class="delivery-box">
-                <strong>📦 Date de livraison prévue à partir de :</strong>
+                <strong>📦 Date de livraison prévue à partir du :</strong>
                 <?php
                 $deliveryDate = new DateTime($order['delivery_date']);
                 $formatter = new IntlDateFormatter('fr_FR', IntlDateFormatter::LONG, IntlDateFormatter::NONE);
