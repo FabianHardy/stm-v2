@@ -7,7 +7,7 @@
  * 
  * @package STM
  * @created 17/11/2025
- * @modified 18/11/2025 - Redesign complet avec code couleur orange
+ * @modified 19/11/2025 - Harmonisation header avec catalog.php + Bande orange titre agrandi
  */
 
 // Vérifier que l'utilisateur a bien une session client
@@ -61,52 +61,75 @@ $customer = $_SESSION['public_customer'];
 <body class="bg-gray-50">
 
     <div class="content-wrapper">
-        <!-- Header blanc avec logo -->
-        <header class="bg-white shadow-sm sticky top-0 z-50">
+        <!-- Header blanc avec logo + infos (identique catalog.php) -->
+        <header class="bg-white shadow-md sticky top-0 z-40">
             <div class="container mx-auto px-4 py-4">
-                <div class="flex items-center justify-between">
-                    <!-- Logo Trendy Foods -->
-                    <div>
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <!-- Logo Trendy Foods -->
                         <img src="/stm/assets/images/logo.png" 
                              alt="Trendy Foods" 
                              class="h-12"
                              onerror="this.style.display='none'">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
+                            <p class="text-sm text-gray-600">
+                                <i class="fas fa-building mr-1"></i>
+                                <?= htmlspecialchars($customer['company_name']) ?>
+                                <span class="mx-2">•</span>
+                                <?= htmlspecialchars($customer['customer_number']) ?>
+                            </p>
+                        </div>
                     </div>
-
-                    <!-- Switch langue FR/NL (visible uniquement pour BE) -->
-                    <?php if ($customer['country'] === 'BE'): ?>
-                    <div class="flex bg-gray-100 rounded-lg p-1">
-                        <button onclick="window.location.href='?lang=fr'" 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-orange-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
-                            FR
-                        </button>
-                        <button onclick="window.location.href='?lang=nl'" 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-orange-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
-                            NL
-                        </button>
+                    
+                    <div class="flex items-center gap-4">
+                        <!-- Switch langue FR/NL (visible uniquement pour BE) -->
+                        <?php if ($customer['country'] === 'BE'): ?>
+                        <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
+                            <button onclick="window.location.href='?lang=fr'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                FR
+                            </button>
+                            <button onclick="window.location.href='?lang=nl'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                NL
+                            </button>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Déconnexion -->
+                        <a href="/stm/c/<?= $uuid ?>" 
+                           class="hidden lg:block text-gray-600 hover:text-gray-800 transition">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            <?= $customer['language'] === 'fr' ? 'Déconnexion' : 'Afmelden' ?>
+                        </a>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
         </header>
 
-        <!-- Bande orange avec infos -->
-        <div class="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg relative z-10" 
+        <!-- Bande orange avec titre centré (remplace la barre catégories) -->
+        <div class="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg sticky top-[72px] z-30" 
              style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);">
             <div class="container mx-auto px-4 py-6">
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div>
-                        <h1 class="text-2xl font-bold"><?= htmlspecialchars($campaign['title_' . $customer['language']]) ?></h1>
-                        <p class="text-orange-100 text-sm mt-1">
+                <div class="flex items-center justify-between relative">
+                    <!-- Bouton retour à gauche -->
+                    <a href="/stm/c/<?= $uuid ?>/catalog" 
+                       class="flex items-center text-white hover:text-orange-100 transition font-semibold">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        <?= $customer['language'] === 'fr' ? 'Retour' : 'Terug' ?>
+                    </a>
+                    
+                    <!-- Titre centré (position absolue) -->
+                    <div class="absolute left-1/2 transform -translate-x-1/2">
+                        <h2 class="text-4xl font-bold flex items-center whitespace-nowrap">
+                            <i class="fas fa-check-circle mr-3"></i>
                             <?= $customer['language'] === 'fr' ? 'Validation de votre commande' : 'Validatie van uw bestelling' ?>
-                        </p>
+                        </h2>
                     </div>
-                    <div class="text-right">
-                        <p class="text-orange-100 text-sm">
-                            <?= $customer['language'] === 'fr' ? 'Client N°' : 'Klant Nr.' ?>
-                        </p>
-                        <p class="text-xl font-bold"><?= htmlspecialchars($customer['customer_number']) ?></p>
-                    </div>
+                    
+                    <!-- Espace vide à droite pour équilibre -->
+                    <div class="w-24"></div>
                 </div>
             </div>
         </div>
@@ -147,11 +170,10 @@ $customer = $_SESSION['public_customer'];
                             <svg class="w-6 h-6 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                             </svg>
-                            <?= $customer['language'] === 'fr' ? 'Récapitulatif de votre commande' : 'Overzicht van uw bestelling' ?>
+                            <?= $customer['language'] === 'fr' ? 'Votre commande' : 'Uw bestelling' ?>
                         </h2>
 
                         <?php if (empty($cart['items'])): ?>
-                            <!-- Panier vide -->
                             <div class="text-center py-12">
                                 <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -159,47 +181,48 @@ $customer = $_SESSION['public_customer'];
                                 <p class="text-gray-500 mb-4">
                                     <?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelwagen is leeg' ?>
                                 </p>
-                                <a href="/stm/c/<?= $campaign['uuid'] ?>/catalog" 
-                                   class="inline-block bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition">
+                                <a href="/stm/c/<?= $uuid ?>/catalog" 
+                                   class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                    </svg>
                                     <?= $customer['language'] === 'fr' ? 'Retour au catalogue' : 'Terug naar catalogus' ?>
                                 </a>
                             </div>
                         <?php else: ?>
                             <!-- Liste des produits -->
-                            <div class="space-y-4">
+                            <div class="space-y-4 mb-6">
                                 <?php foreach ($cart['items'] as $item): ?>
-                                    <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
                                         <!-- Image produit -->
-                                        <?php if (!empty($item['image_' . $customer['language']])): ?>
-                                            <img src="<?= htmlspecialchars($item['image_' . $customer['language']]) ?>" 
-                                                 alt="<?= htmlspecialchars($item['name_' . $customer['language']]) ?>"
-                                                 class="w-24 h-24 object-contain rounded">
-                                        <?php else: ?>
-                                            <div class="w-24 h-24 bg-gray-200 rounded flex items-center justify-center">
-                                                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                                </svg>
-                                            </div>
-                                        <?php endif; ?>
+                                        <div class="flex-shrink-0">
+                                            <?php if (!empty($item['image_fr'])): ?>
+                                                <img src="/stm/<?= htmlspecialchars($item['image_fr']) ?>" 
+                                                     alt="<?= htmlspecialchars($item['product_name']) ?>"
+                                                     class="w-20 h-20 object-cover rounded-lg">
+                                            <?php else: ?>
+                                                <div class="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
+                                                    <i class="fas fa-image text-gray-400 text-2xl"></i>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
 
-                                        <!-- Détails produit -->
+                                        <!-- Infos produit -->
                                         <div class="flex-1">
-                                            <h3 class="font-semibold text-gray-800">
-                                                <?= htmlspecialchars($item['name_' . $customer['language']]) ?>
-                                            </h3>
-                                            <p class="text-sm text-gray-500">
-                                                <?= $customer['language'] === 'fr' ? 'Code' : 'Code' ?>: 
-                                                <?= htmlspecialchars($item['code']) ?>
+                                            <h3 class="font-semibold text-gray-800 mb-1"><?= htmlspecialchars($item['product_name']) ?></h3>
+                                            <p class="text-sm text-gray-600">
+                                                <?= $customer['language'] === 'fr' ? 'Code' : 'Code' ?> : 
+                                                <?= htmlspecialchars($item['product_code']) ?>
                                             </p>
                                         </div>
 
                                         <!-- Quantité -->
                                         <div class="text-right">
-                                            <p class="text-sm text-gray-600">
-                                                <?= $customer['language'] === 'fr' ? 'Quantité' : 'Hoeveelheid' ?>
+                                            <p class="text-lg font-bold text-gray-800">
+                                                <?= $customer['language'] === 'fr' ? 'Quantité' : 'Hoeveelheid' ?> :
                                             </p>
                                             <p class="text-2xl font-bold text-orange-600">
-                                                <?= $item['quantity'] ?>
+                                                <?= number_format($item['quantity'], 0, ',', ' ') ?>
                                             </p>
                                         </div>
                                     </div>
@@ -207,12 +230,12 @@ $customer = $_SESSION['public_customer'];
                             </div>
 
                             <!-- Total articles -->
-                            <div class="mt-6 pt-6 border-t border-gray-200">
+                            <div class="border-t pt-4">
                                 <div class="flex justify-between items-center text-lg">
                                     <span class="font-semibold text-gray-700">
                                         <?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?> :
                                     </span>
-                                    <span class="text-2xl font-bold text-orange-600">
+                                    <span class="text-2xl font-bold text-gray-800">
                                         <?= array_sum(array_column($cart['items'], 'quantity')) ?>
                                     </span>
                                 </div>
@@ -225,30 +248,33 @@ $customer = $_SESSION['public_customer'];
                 <?php if (!empty($cart['items'])): ?>
                 <div class="lg:col-span-1">
                     <div class="bg-white rounded-lg shadow-md p-6 sticky top-24">
-                        <h2 class="text-xl font-bold text-gray-800 mb-6">
-                            <?= $customer['language'] === 'fr' ? 'Finaliser la commande' : 'Bestelling afronden' ?>
+                        <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                            <svg class="w-6 h-6 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <?= $customer['language'] === 'fr' ? 'Validation' : 'Bevestiging' ?>
                         </h2>
 
-                        <form method="POST" action="/stm/c/<?= $campaign['uuid'] ?>/order/submit" id="checkoutForm">
-                            <!-- Token CSRF -->
+                        <form method="POST" action="/stm/c/<?= $uuid ?>/checkout/submit" id="checkoutForm">
                             <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
-                            <!-- Email -->
+                            <!-- Email client -->
                             <div class="mb-6">
                                 <label for="customer_email" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <?= $customer['language'] === 'fr' ? 'Adresse email' : 'E-mailadres' ?>
+                                    <?= $customer['language'] === 'fr' ? 'Votre email' : 'Uw e-mail' ?>
                                     <span class="text-red-500">*</span>
                                 </label>
                                 <input type="email" 
                                        id="customer_email" 
                                        name="customer_email" 
                                        required
+                                       value="<?= htmlspecialchars($customer['email'] ?? '') ?>"
                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                                       placeholder="exemple@email.com">
-                                <p class="mt-1 text-xs text-gray-500">
+                                       placeholder="<?= $customer['language'] === 'fr' ? 'votre@email.com' : 'uw@email.com' ?>">
+                                <p class="text-xs text-gray-500 mt-1">
                                     <?= $customer['language'] === 'fr' 
-                                        ? 'Vous recevrez une confirmation à cette adresse' 
-                                        : 'U ontvangt een bevestiging op dit adres' ?>
+                                        ? "Vous recevrez la confirmation à cette adresse" 
+                                        : "U ontvangt de bevestiging op dit adres" ?>
                                 </p>
                             </div>
 
