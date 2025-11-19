@@ -37,25 +37,42 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Fond Trendy Foods en arrière-plan */
-        body {
-            position: relative;
+/* Structure flexbox pour footer en bas */
+        /* Smooth scroll */
+        html {
+            scroll-behavior: smooth;
+              height: 100%;
         }
         
-body::before {
-    content: '';
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 400px;
-    height: 400px;
-    background: url('/stm/assets/images/fond.png') no-repeat;
-    background-size: contain;
-    background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
-    opacity: 0.6;
-    pointer-events: none;
-    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+        /* Fond Trendy Foods en arrière-plan */
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: url('/stm/assets/images/fond.png') no-repeat;
+            background-size: contain;
+            background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: -1;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+        }
+          /* Contenu principal au-dessus du fond */
+.content-wrapper {
+    flex: 1;  /* Prend tout l'espace disponible */
 }
+footer {
+    margin-top: 0;  /* Enlever le mt-12 */
+}
+        
+
     </style>
 </head>
 <body class="bg-gray-50">

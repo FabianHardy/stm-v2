@@ -40,31 +40,37 @@ $customer = $_SESSION['public_customer'];
             display: none !important;
         }
 
-        body {
-            position: relative;
-        }
-
-        /* Fond Trendy Foods en bas à droite */
-body::before {
-    content: '';
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 400px;
-    height: 400px;
-    background: url('/stm/assets/images/fond.png') no-repeat;
-    background-size: contain;
-    background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
-    opacity: 0.6;
-    pointer-events: none;
-    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+        html, body {
+    height: 100%;
 }
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+        /* Fond Trendy Foods en bas à droite - AU-DESSUS du footer */
+        body::before {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: url('/stm/assets/images/fond.png') no-repeat;
+            background-size: contain;
+            background-position: bottom right;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: -1;
+        }
 
         /* Contenu principal au-dessus du fond */
-        .content-wrapper {
-            position: relative;
-            z-index: 1;
-        }
+.content-wrapper {
+    flex: 1;  /* Prend tout l'espace disponible */
+}
+footer {
+    margin-top: 0;  /* Enlever le mt-12 */
+}
     </style>
 </head>
 <body class="bg-gray-50" x-data="{ showCGU: false, showRGPD: false }">

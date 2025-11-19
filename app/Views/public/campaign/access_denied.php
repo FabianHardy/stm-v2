@@ -44,9 +44,24 @@ $customer = $_SESSION['public_customer'] ?? null;
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        body {
-            position: relative;
-        }
+/* Structure flexbox pour footer en bas */
+html, body {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.content-wrapper {
+    flex: 1;  /* Prend tout l'espace disponible */
+}
+
+footer {
+    margin-top: 0;  /* Enlever le mt-12 */
+}
 
         /* Fond Trendy Foods en bas à droite */
 body::before {
@@ -61,14 +76,9 @@ body::before {
     background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
     opacity: 0.6;
     pointer-events: none;
-    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+    z-index: -1;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
 }
 
-        /* Contenu principal au-dessus du fond */
-        .content-wrapper {
-            position: relative;
-            z-index: 1;
-        }
     </style>
 </head>
 <body class="bg-gray-50">

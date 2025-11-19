@@ -70,10 +70,14 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        body {
-            position: relative;
-        }
-
+        html, body {
+    height: 100%;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
         /* Fond Trendy Foods en bas à droite - AU-DESSUS du footer */
         body::before {
             content: '';
@@ -87,14 +91,16 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
             background-position: bottom right;
             opacity: 0.6;
             pointer-events: none;
-            z-index: 20;
+            z-index: -1;
         }
 
         /* Contenu principal au-dessus du fond */
-        .content-wrapper {
-            position: relative;
-            z-index: 1;
-        }
+.content-wrapper {
+    flex: 1;  /* Prend tout l'espace disponible */
+}
+footer {
+    margin-top: 0;  /* Enlever le mt-12 */
+}
     </style>
 </head>
 <body class="bg-gray-50">

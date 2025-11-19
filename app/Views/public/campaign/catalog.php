@@ -18,28 +18,36 @@
         /* Smooth scroll */
         html {
             scroll-behavior: smooth;
+              height: 100%;
         }
         
         /* Fond Trendy Foods en arrière-plan */
         body {
-            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
-        
-body::before {
-    content: '';
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 400px;
-    height: 400px;
-    background: url('/stm/assets/images/fond.png') no-repeat;
-    background-size: contain;
-    background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
-    opacity: 0.6;
-    pointer-events: none;
-    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+        body::before {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: url('/stm/assets/images/fond.png') no-repeat;
+            background-size: contain;
+            background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: -1;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+        }
+          /* Contenu principal au-dessus du fond */
+.content-wrapper {
+    flex: 1;  /* Prend tout l'espace disponible */
 }
-        
+footer {
+    margin-top: 0;  /* Enlever le mt-12 */
+}
         /* Lightbox overlay */
         .lightbox-overlay {
             background: rgba(0, 0, 0, 0.9);
