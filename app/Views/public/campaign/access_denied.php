@@ -52,7 +52,24 @@ if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
 
 // Récupérer la langue depuis la session ou par défaut FR
 $currentLanguage = $_SESSION['temp_language'] ?? $_SESSION['public_customer']['language'] ?? 'fr';
+// ========================================
+// DÉTERMINER SI ON AFFICHE LE SWITCH LANGUE
+// ========================================
+// Règles :
+// - Si campagne introuvable → BE par défaut (switch visible)
+// - Si campagne BE ou BOTH → Switch visible (sauf si client LU)
+// - Si campagne LU → Pas de switch (FR uniquement)
 
+$showLanguageSwitch = false;
+
+if (!$customer) {
+    // Pas de client connecté
+    // Si pas de campagne (introuvable) OU campagne BE/BOTH → Switch visible
+    $showLanguageSwitch = !$campaign || in_array($campaign['country'] ?? 'BE', ['BE', 'BOTH']);
+} else {
+    // Client connecté → Vérifier son pays
+    $showLanguageSwitch = $customer['country'] === 'BE';
+}
 // ========================================
 // DÉFINIR LE MESSAGE SELON LA RAISON
 // ========================================
@@ -372,7 +389,7 @@ switch($reason) {
                     
                     <div class="flex items-center gap-4">
                         <!-- Switch langue FR/NL (visible uniquement pour BE) -->
-                        <?php if (!$customer || $customer['country'] === 'BE'): ?>
+                        <?php if ($showLanguageSwitch): ?>
                         <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
                             <button onclick="window.location.href='?lang=fr'" 
                                     class="px-4 py-2 rounded-md <?= $currentLanguage === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
