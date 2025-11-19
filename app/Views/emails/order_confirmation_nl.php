@@ -180,7 +180,7 @@
             <!-- Leveringsdatum indien van toepassing -->
             <?php if ($order['deferred_delivery'] == 1 && !empty($order['delivery_date'])): ?>
             <div class="delivery-box">
-                <strong>📦 Verwachte leverdatum vanaf:</strong>
+                <strong>📦 Levering vanaf:</strong>
                 <?php
                 $deliveryDate = new DateTime($order['delivery_date']);
                 $formatter = new IntlDateFormatter('nl_BE', IntlDateFormatter::LONG, IntlDateFormatter::NONE);
