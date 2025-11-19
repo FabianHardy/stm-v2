@@ -1310,13 +1310,53 @@ class PublicCampaignController
      * @return void
      * @created 19/11/2025
      */
+/**
+     * Afficher la page de confirmation de commande
+     * 
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 19/11/2025
+     */
     public function orderConfirmation(string $uuid): void
     {
         // Envoyer l'email en arrière-plan (si pending)
         $this->sendPendingEmail();
         
-        // Charger la vue de confirmation
-        require __DIR__ . '/../Views/public/campaign/confirmation.php';
+        // Récupérer la langue depuis la session
+        $language = $_SESSION['customer']['language'] ?? 'fr';
+        
+        // Afficher une page de confirmation simple
+        echo '<!DOCTYPE html>
+<html lang="' . $language . '">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . ($language === 'nl' ? 'Bestelling bevestigd' : 'Commande confirmée') . '</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+            <div class="mb-6">
+                <svg class="mx-auto h-16 w-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-4">
+                ' . ($language === 'nl' ? '✅ Bestelling bevestigd!' : '✅ Commande confirmée !') . '
+            </h1>
+            <p class="text-gray-600 mb-6">
+                ' . ($language === 'nl' 
+                    ? 'Uw bestelling is succesvol geregistreerd. U ontvangt spoedig een bevestigingsmail.' 
+                    : 'Votre commande a été enregistrée avec succès. Vous allez recevoir un email de confirmation.') . '
+            </p>
+            <a href="/stm/c/' . htmlspecialchars($uuid) . '" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                ' . ($language === 'nl' ? '← Terug naar campagne' : '← Retour à la campagne') . '
+            </a>
+        </div>
+    </div>
+</body>
+</html>';
     }
     /**
      * Envoyer l'email de confirmation de manière asynchrone
