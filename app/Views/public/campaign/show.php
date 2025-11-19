@@ -5,6 +5,7 @@
  * 
  * @created  2025/11/14 16:45
  * @modified 2025/11/18 18:00 - Redesign avec logo, fond et code couleur vert
+ * @modified 2025/11/19 19:30 - Ajout gestion singulier/pluriel pour libellé promotions
  */
 
 // Déterminer la langue selon le paramètre ?lang ou FR par défaut
@@ -41,19 +42,20 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
             position: relative;
         }
         
-        body::before {
-            content: '';
-            position: fixed;
-            bottom: 0;
-            right: 0;
-            width: 400px;
-            height: 400px;
-            background: url('/stm/assets/images/fond.png') no-repeat;
-            background-size: contain;
-            opacity: 0.6;
-            pointer-events: none;
-            z-index: 0;
-        }
+body::before {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 400px;
+    height: 400px;
+    background: url('/stm/assets/images/fond.png') no-repeat;
+    background-size: contain;
+    background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -137,9 +139,15 @@ $description = $lang === 'fr' ? $campaign['description_fr'] : $campaign['descrip
                         <?= $lang === 'fr' ? 'Accès client' : 'Toegang klant' ?>
                     </h3>
                     <p class="text-gray-600">
-                        <?= $lang === 'fr' 
-                            ? 'Identifiez-vous pour accéder aux promotions' 
-                            : 'Log in om toegang te krijgen tot promoties' ?>
+                        <?php if ($promotionsCount === 1): ?>
+                            <?= $lang === 'fr' 
+                                ? 'Identifiez-vous pour accéder à la promotion' 
+                                : 'Log in om toegang te krijgen tot de promotie' ?>
+                        <?php else: ?>
+                            <?= $lang === 'fr' 
+                                ? 'Identifiez-vous pour accéder aux promotions' 
+                                : 'Log in om toegang te krijgen tot promoties' ?>
+                        <?php endif; ?>
                     </p>
                 </div>
 

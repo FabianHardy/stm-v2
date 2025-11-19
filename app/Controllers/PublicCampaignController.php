@@ -8,6 +8,7 @@
  * @created  2025/11/14 16:30
  * @modified 2025/11/14 18:00 - Ajout catalogue + panier (Sous-tâche 2)
  * @modified 2025/11/18 10:00 - Ajout envoi email confirmation (Sprint 7.3.2)
+ * @modified 2025/11/19 19:30 - Ajout gestion singulier/pluriel pour libellé promotions
  */
 
 namespace App\Controllers;
@@ -76,7 +77,14 @@ class PublicCampaignController
             }
             
             // Campagne active - afficher la page d'identification
-            $this->renderIdentificationPage($campaign);
+            // Compter les promotions actives de la campagne
+            $promotionsCountResult = $this->db->query(
+                "SELECT COUNT(*) as count FROM products WHERE campaign_id = :campaign_id AND is_active = 1",
+                [':campaign_id' => $campaign['id']]
+            );
+            $promotionsCount = (int) ($promotionsCountResult[0]['count'] ?? 0);
+            
+            $this->renderIdentificationPage($campaign, $promotionsCount);
             
         } catch (\PDOException $e) {
             error_log("Erreur show() : " . $e->getMessage());
@@ -814,9 +822,10 @@ class PublicCampaignController
      * Afficher la page d'identification client
      * 
      * @param array $campaign Données de la campagne
+     * @param int $promotionsCount Nombre de promotions actives
      * @return void
      */
-    private function renderIdentificationPage(array $campaign): void
+    private function renderIdentificationPage(array $campaign, int $promotionsCount): void
     {
         // Inclure la vue
         require __DIR__ . '/../Views/public/campaign/show.php';

@@ -45,19 +45,20 @@ $customer = $_SESSION['public_customer'];
         }
 
         /* Fond Trendy Foods en bas à droite */
-        body::before {
-            content: '';
-            position: fixed;
-            bottom: 0;
-            right: 0;
-            width: 400px;
-            height: 400px;
-            background: url('/stm/assets/images/fond.png') no-repeat;
-            background-size: contain;
-            opacity: 0.6;
-            pointer-events: none;
-            z-index: 0;
-        }
+body::before {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 400px;
+    height: 400px;
+    background: url('/stm/assets/images/fond.png') no-repeat;
+    background-size: contain;
+    background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 20;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+}
 
         /* Contenu principal au-dessus du fond */
         .content-wrapper {
@@ -661,6 +662,14 @@ $customer = $_SESSION['public_customer'];
         }
     });
     </script>
-
+      <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-6 mt-12 relative z-10">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-sm">
+                © <?= date('Y') ?> Trendy Foods - 
+                <?= $customer['language'] === 'fr' ? 'Tous droits réservés' : 'Alle rechten voorbehouden' ?>
+            </p>
+        </div>
+    </footer>
 </body>
 </html>

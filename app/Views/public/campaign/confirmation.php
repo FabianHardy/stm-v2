@@ -6,7 +6,7 @@
  * 
  * @package STM
  * @created 17/11/2025
- * @modified 19/11/2025 - Harmonisation header + Bande verte "Confirmation de commande" + Suppression UUID
+ * @modified 19/11/2025 - Harmonisation header + Fond.png au-dessus footer + Position coin bas-droit
  */
 
 // Vérifier que l'utilisateur a bien une session client
@@ -74,7 +74,7 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
             position: relative;
         }
 
-        /* Fond Trendy Foods en bas à droite */
+        /* Fond Trendy Foods en bas à droite - AU-DESSUS du footer */
         body::before {
             content: '';
             position: fixed;
@@ -84,9 +84,10 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
             height: 400px;
             background: url('/stm/assets/images/fond.png') no-repeat;
             background-size: contain;
+            background-position: bottom right;
             opacity: 0.6;
             pointer-events: none;
-            z-index: 0;
+            z-index: 20;
         }
 
         /* Contenu principal au-dessus du fond */
@@ -204,7 +205,7 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                     </svg>
                                     <span class="font-semibold text-blue-900">
-                                        <?= $customer['language'] === 'fr' ? 'Livraison à partir du' : 'Levering vanaf' ?>
+                                        <?= $customer['language'] === 'fr' ? 'Date de livraison prévue' : 'Geplande leveringsdatum' ?>
                                     </span>
                                 </div>
                                 <p class="text-2xl font-bold text-blue-700">
