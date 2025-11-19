@@ -167,9 +167,9 @@
                 $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
                 ?>
                 <a href="#category-<?= $category['id'] ?>" 
-                   class="category-btn flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium whitespace-nowrap"
-                   id="cat-btn-<?= $category['id'] ?>"
-                   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
+   class="category-btn flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium whitespace-nowrap max-w-xs truncate"
+   id="cat-btn-<?= $category['id'] ?>"
+   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
                     <?php if (!empty($category['icon_path'])): ?>
                         <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
                              alt="<?= htmlspecialchars($category['name_' . $customer['language']]) ?>" 
