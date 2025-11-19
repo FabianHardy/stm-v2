@@ -1,7 +1,17 @@
 # 📝 CHANGELOG - STM v2
 
 Historique centralisé de toutes les modifications du projet.
+## [19/11/2025] - Sprint 7 : Finalisation envoi emails
 
+### ✅ Corrigé
+- Envoi emails Mailchimp en arrière-plan (register_shutdown_function)
+- Route confirmation appelle maintenant le controller
+- Protection double validation (60 secondes)
+- Affichage vue de confirmation correcte
+
+### 🔧 Modifié
+- PublicCampaignController.php : Méthode orderConfirmation()
+- routes.php : Route /order/confirmation
 ## [18/11/2025 11:30] - Sprint 7 : Finalisation Template Email NL
 
 ### ✅ Ajouté
