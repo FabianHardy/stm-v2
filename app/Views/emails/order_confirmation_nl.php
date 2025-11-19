@@ -166,10 +166,7 @@
             <!-- Bestelinformatie -->
             <div class="info-box">
                 <h3>Details van uw bestelling</h3>
-                <div class="info-row">
-                    <span class="info-label">Bestelnummer:</span>
-                    <span class="info-value"><?= htmlspecialchars($order['order_number'] ?? 'Wordt aangemaakt') ?></span>
-                </div>
+
                 <div class="info-row">
                     <span class="info-label">Klantnummer:</span>
                     <span class="info-value"><?= htmlspecialchars($order['customer_number'] ?? '') ?></span>
@@ -183,7 +180,7 @@
             <!-- Leveringsdatum indien van toepassing -->
             <?php if ($order['deferred_delivery'] == 1 && !empty($order['delivery_date'])): ?>
             <div class="delivery-box">
-                <strong>📦 Geplande leveringsdatum:</strong>
+                <strong>📦 Verwachte leverdatum vanaf:</strong>
                 <?php
                 $deliveryDate = new DateTime($order['delivery_date']);
                 $formatter = new IntlDateFormatter('nl_BE', IntlDateFormatter::LONG, IntlDateFormatter::NONE);
@@ -223,7 +220,7 @@
             <div class="contact-box">
                 <h4>Een vraag? Neem contact met ons op</h4>
                 <?php if ($order['country'] === 'BE'): ?>
-                <p><strong>N.V. TRENDY FOODS BELGIUM S.A.</strong></p>
+                <p><strong>N.V. TRENDY FOODS BELGIUM</strong></p>
                 <p>Rue du Fond des Fourches, 23D</p>
                 <p>B-4041 Vottem (Z.I. de Milmort)</p>
                 <p>België</p>
