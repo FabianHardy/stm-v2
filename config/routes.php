@@ -38,8 +38,7 @@ use App\Controllers\PublicCampaignController;
 
 // Page d'accueil
 $router->get('/', function() {
-    header('Location: /stm/admin/login');
-    exit;
+     require __DIR__ . '/../app/Views/public/home.php';
 });
 
 // ============================================

@@ -90,11 +90,12 @@ if (str_starts_with($uri, $baseFolder)) {
 }
 
 // Si URI vide, rediriger vers /admin
+/*
 if (empty($uri) || $uri === '/') {
     header('Location: /stm/admin/login');
     exit;
 }
-
+*/
 // =============================================
 // 8. DISPATCHER LA ROUTE
 // =============================================

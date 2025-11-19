@@ -6,7 +6,7 @@
  * 
  * @package STM
  * @created 17/11/2025
- * @modified 18/11/2025 - Redesign complet avec code couleur vert succès
+ * @modified 19/11/2025 - Harmonisation header + Suppression UUID + Retrait bouton déconnexion
  */
 
 // Vérifier que l'utilisateur a bien une session client
@@ -99,31 +99,49 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
 <body class="bg-gray-50">
 
     <div class="content-wrapper">
-        <!-- Header blanc avec logo -->
-        <header class="bg-white shadow-sm sticky top-0 z-50">
+        <!-- Header blanc avec logo + infos campagne + client (identique catalog.php et checkout.php) -->
+        <header class="bg-white shadow-md sticky top-0 z-40">
             <div class="container mx-auto px-4 py-4">
-                <div class="flex items-center justify-between">
-                    <!-- Logo Trendy Foods -->
-                    <div>
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <!-- Logo Trendy Foods -->
                         <img src="/stm/assets/images/logo.png" 
                              alt="Trendy Foods" 
                              class="h-12"
                              onerror="this.style.display='none'">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
+                            <p class="text-sm text-gray-600">
+                                <i class="fas fa-building mr-1"></i>
+                                <?= htmlspecialchars($customer['company_name']) ?>
+                                <span class="mx-2">•</span>
+                                <?= htmlspecialchars($customer['customer_number']) ?>
+                            </p>
+                        </div>
                     </div>
-
-                    <!-- Switch langue FR/NL (visible uniquement pour BE) -->
-                    <?php if ($customer['country'] === 'BE'): ?>
-                    <div class="flex bg-gray-100 rounded-lg p-1">
-                        <button onclick="window.location.href='?lang=fr'" 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
-                            FR
-                        </button>
-                        <button onclick="window.location.href='?lang=nl'" 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
-                            NL
-                        </button>
+                    
+                    <div class="flex items-center gap-4">
+                        <!-- Switch langue FR/NL (visible uniquement pour BE) -->
+                        <?php if ($customer['country'] === 'BE'): ?>
+                        <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
+                            <button onclick="window.location.href='?lang=fr'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                FR
+                            </button>
+                            <button onclick="window.location.href='?lang=nl'" 
+                                    class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-green-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                NL
+                            </button>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Déconnexion -->
+                        <a href="/stm/c/<?= htmlspecialchars($uuid) ?>" 
+                           class="hidden lg:block text-gray-600 hover:text-gray-800 transition">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            <?= $customer['language'] === 'fr' ? 'Déconnexion' : 'Afmelden' ?>
+                        </a>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
         </header>
@@ -146,39 +164,25 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
                             </p>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-green-100 text-sm">
-                            <?= $customer['language'] === 'fr' ? 'Client N°' : 'Klant Nr.' ?>
-                        </p>
-                        <p class="text-xl font-bold"><?= htmlspecialchars($customer['customer_number']) ?></p>
+                    
+                    <div class="flex items-center gap-2 text-green-100 text-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span>
+                            <?php
+                            $startDate = new DateTime($campaign['start_date']);
+                            $endDate = new DateTime($campaign['end_date']);
+                            echo $startDate->format('d/m/Y') . ' - ' . $endDate->format('d/m/Y');
+                            ?>
+                        </span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Message de succès (flash) -->
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="container mx-auto px-4 mt-6">
-                <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-6 py-4 rounded-lg shadow-md flex items-start">
-                    <svg class="w-6 h-6 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <div>
-                        <p class="font-semibold text-lg"><?= htmlspecialchars($_SESSION['success']) ?></p>
-                        <?php if ($orderUuid): ?>
-                            <p class="text-sm mt-1">
-                                <?= $customer['language'] === 'fr' ? 'Numéro de commande' : 'Bestelnummer' ?> : 
-                                <span class="font-mono font-bold"><?= htmlspecialchars($orderUuid) ?></span>
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            <?php unset($_SESSION['success']); ?>
-        <?php endif; ?>
-
         <!-- Contenu principal -->
-        <div class="container mx-auto px-4 py-8">
+        <div class="container mx-auto px-4 py-12">
             <div class="max-w-3xl mx-auto">
                 
                 <!-- Carte de confirmation -->
@@ -237,56 +241,15 @@ $orderUuid = $_SESSION['last_order_uuid'] ?? null;
                         <?php endif; ?>
                     </div>
 
-                    <!-- Informations commande -->
-                    <?php if ($orderUuid): ?>
-                        <div class="bg-gray-50 rounded-lg p-6 mb-8">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center justify-center">
-                                <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                <?= $customer['language'] === 'fr' ? 'Informations de commande' : 'Bestelgegevens' ?>
-                            </h3>
-                            <div class="space-y-3 text-left">
-                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                                    <span class="text-gray-600">
-                                        <?= $customer['language'] === 'fr' ? 'Numéro de commande' : 'Bestelnummer' ?> :
-                                    </span>
-                                    <span class="font-mono font-semibold text-green-700"><?= htmlspecialchars($orderUuid) ?></span>
-                                </div>
-                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                                    <span class="text-gray-600">
-                                        <?= $customer['language'] === 'fr' ? 'Client' : 'Klant' ?> :
-                                    </span>
-                                    <span class="font-semibold"><?= htmlspecialchars($customer['customer_number']) ?></span>
-                                </div>
-                                <div class="flex justify-between items-center py-2">
-                                    <span class="text-gray-600">
-                                        <?= $customer['language'] === 'fr' ? 'Date' : 'Datum' ?> :
-                                    </span>
-                                    <span class="font-semibold"><?= date('d/m/Y H:i') ?></span>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-
                     <!-- Actions -->
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                        <!-- Bouton retour catalogue (BLEU) -->
+                    <div class="flex justify-center">
+                        <!-- Bouton retour catalogue (BLEU) - Seul bouton visible -->
                         <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/catalog" 
                            class="inline-flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                             </svg>
                             <?= $customer['language'] === 'fr' ? 'Retour au catalogue' : 'Terug naar catalogus' ?>
-                        </a>
-                        
-                        <!-- Bouton déconnexion (GRIS) -->
-                        <a href="/stm/c/<?= htmlspecialchars($uuid) ?>" 
-                           class="inline-flex items-center justify-center bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                            </svg>
-                            <?= $customer['language'] === 'fr' ? 'Se déconnecter' : 'Afmelden' ?>
                         </a>
                     </div>
                 </div>
