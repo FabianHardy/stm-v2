@@ -7,7 +7,7 @@
  * 
  * @package STM
  * @created 17/11/2025
- * @modified 19/11/2025 - Harmonisation header avec catalog.php + Bande orange titre agrandi
+ * @modified 21/11/2025 - Fix responsive barre orange (titre + bouton retour)
  */
 
 // Vérifier que l'utilisateur a bien une session client
@@ -126,25 +126,23 @@ footer {
         <!-- Bande orange avec titre centré (remplace la barre catégories) -->
         <div class="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg sticky top-[72px] z-30" 
              style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);">
-            <div class="container mx-auto px-4 py-6">
-                <div class="flex items-center justify-between relative">
-                    <!-- Bouton retour à gauche -->
+            <div class="container mx-auto px-4 py-4 sm:py-6">
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <!-- Bouton retour à gauche (icône seule sur mobile, texte sur desktop) -->
                     <a href="/stm/c/<?= $campaign['uuid'] ?>/catalog" 
-                       class="flex items-center text-white hover:text-orange-100 transition font-semibold">
-                        <i class="fas fa-arrow-left mr-2"></i>
-                        <?= $customer['language'] === 'fr' ? 'Retour' : 'Terug' ?>
+                       class="flex-shrink-0 flex items-center text-white hover:text-orange-100 transition font-semibold">
+                        <i class="fas fa-arrow-left sm:mr-2"></i>
+                        <span class="hidden sm:inline"><?= $customer['language'] === 'fr' ? 'Retour' : 'Terug' ?></span>
                     </a>
                     
-                    <!-- Titre centré (position absolue) -->
-                    <div class="absolute left-1/2 transform -translate-x-1/2">
-                        <h2 class="text-4xl font-bold flex items-center whitespace-nowrap">
-                            <i class="fas fa-check-circle mr-3"></i>
-                            <?= $customer['language'] === 'fr' ? 'Validation de votre commande' : 'Validatie van uw bestelling' ?>
-                        </h2>
-                    </div>
+                    <!-- Titre centré (responsive) -->
+                    <h2 class="flex-1 text-base sm:text-xl md:text-2xl lg:text-4xl font-bold flex items-center justify-center text-center">
+                        <i class="fas fa-check-circle mr-2 sm:mr-3 hidden sm:inline"></i>
+                        <?= $customer['language'] === 'fr' ? 'Validation de votre commande' : 'Validatie van uw bestelling' ?>
+                    </h2>
                     
                     <!-- Espace vide à droite pour équilibre -->
-                    <div class="w-24"></div>
+                    <div class="flex-shrink-0 w-6 sm:w-24"></div>
                 </div>
             </div>
         </div>
@@ -428,20 +426,20 @@ footer {
                  @click="showCGU = false"></div>
 
             <!-- Modal Content -->
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full max-w-[calc(100%-2rem)] sm:my-8 sm:align-middle sm:max-w-4xl mx-4 sm:mx-auto">
                 <!-- Header -->
-                <div class="bg-blue-600 px-6 py-4 flex items-center justify-between">
-                    <h3 class="text-xl font-bold text-white">
+                <div class="bg-blue-600 px-4 sm:px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-base sm:text-xl font-bold text-white">
                         <?= $customer['language'] === 'fr' ? "Conditions générales d'utilisation du Site internet" : "Algemene gebruiksvoorwaarden van de website" ?>
                     </h3>
                     <button @click="showCGU = false" 
-                            class="text-white hover:text-gray-200">
-                        <i class="fas fa-times text-2xl"></i>
+                            class="text-white hover:text-gray-200 flex-shrink-0 ml-2">
+                        <i class="fas fa-times text-xl sm:text-2xl"></i>
                     </button>
                 </div>
 
                 <!-- Body -->
-                <div class="bg-white px-6 py-6 max-h-96 overflow-y-auto">
+                <div class="bg-white px-4 sm:px-6 py-4 sm:py-6 max-h-96 overflow-y-auto">
                     <div class="prose prose-sm max-w-none">
                         <?php if ($customer['language'] === 'fr'): ?>
                             <p>Ce site Internet (à l'exclusion des sites liés) est géré par TRENDY FOODS BELGIUM SA.</p>
@@ -503,7 +501,7 @@ footer {
                 </div>
 
                 <!-- Footer -->
-                <div class="bg-gray-50 px-6 py-4">
+                <div class="bg-gray-50 px-4 sm:px-6 py-4">
                     <button @click="showCGU = false" 
                             class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
                         <?= $customer['language'] === 'fr' ? 'Fermer' : 'Sluiten' ?>
@@ -525,20 +523,20 @@ footer {
                  @click="showRGPD = false"></div>
 
             <!-- Modal Content -->
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full max-w-[calc(100%-2rem)] sm:my-8 sm:align-middle sm:max-w-4xl mx-4 sm:mx-auto">
                 <!-- Header -->
-                <div class="bg-green-600 px-6 py-4 flex items-center justify-between">
-                    <h3 class="text-xl font-bold text-white">
+                <div class="bg-green-600 px-4 sm:px-6 py-4 flex items-center justify-between">
+                    <h3 class="text-base sm:text-xl font-bold text-white">
                         <?= $customer['language'] === 'fr' ? "Politique « Vie Privée » de TRENDY FOODS BELGIUM SA" : "Privacybeleid van TRENDY FOODS BELGIUM SA" ?>
                     </h3>
                     <button @click="showRGPD = false" 
-                            class="text-white hover:text-gray-200">
-                        <i class="fas fa-times text-2xl"></i>
+                            class="text-white hover:text-gray-200 flex-shrink-0 ml-2">
+                        <i class="fas fa-times text-xl sm:text-2xl"></i>
                     </button>
                 </div>
 
                 <!-- Body -->
-                <div class="bg-white px-6 py-6 max-h-96 overflow-y-auto">
+                <div class="bg-white px-4 sm:px-6 py-4 sm:py-6 max-h-96 overflow-y-auto">
                     <div class="prose prose-sm max-w-none">
                         <?php if ($customer['language'] === 'fr'): ?>
                             <h3 class="text-lg font-bold mt-4 mb-2">1 : Objectif</h3>
@@ -623,7 +621,7 @@ footer {
                 </div>
 
                 <!-- Footer -->
-                <div class="bg-gray-50 px-6 py-4">
+                <div class="bg-gray-50 px-4 sm:px-6 py-4">
                     <button @click="showRGPD = false" 
                             class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
                         <?= $customer['language'] === 'fr' ? 'Fermer' : 'Sluiten' ?>
