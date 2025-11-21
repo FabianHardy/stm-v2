@@ -152,18 +152,64 @@ try {
 </head>
 <body class="h-full" x-data="{ sidebarOpen: false }">
 <?php
-// Bandeau environnement DEV
-$appEnv = $_ENV['APP_ENV'] ?? 'production';
-if ($appEnv === 'development'): 
+/**
+ * BANDEAU ENVIRONNEMENT DEV
+ * 
+ * À ajouter dans /app/Views/layouts/admin.php
+ * Juste APRÈS la balise <body>
+ * 
+ * Ce code affiche un bandeau rouge fixe en haut de l'écran
+ * UNIQUEMENT en environnement de développement (APP_ENV=development)
+ */
 ?>
-<div style="background: #ef4444; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;">
-    ⚠️ ENVIRONNEMENT DE DÉVELOPPEMENT - Les modifications n'affectent pas la production
+
+<?php
+// ========================================
+// BANDEAU ENVIRONNEMENT DEV - À COLLER APRÈS <body>
+// ========================================
+$appEnv = $_ENV['APP_ENV'] ?? 'production';
+$isDev = ($appEnv === 'development');
+if ($isDev): 
+?>
+<div id="dev-banner" style="
+    background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
+    color: white;
+    text-align: center;
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    font-family: system-ui, -apple-system, sans-serif;
+">
+    ⚠️ ENVIRONNEMENT DE DÉVELOPPEMENT — Les modifications n'affectent pas la production
+    <button onclick="this.parentElement.style.display='none'" style="
+        margin-left: 20px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.4);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    ">✕ Masquer</button>
 </div>
 <style>
-    /* Décaler tout le contenu pour laisser place au bandeau */
-    body { padding-top: 40px !important; }
+    /* Décaler le contenu pour le bandeau DEV */
+    body { padding-top: 50px !important; }
+    /* Ajuster la sidebar si elle est fixed */
+    .sidebar, aside { top: 50px !important; }
 </style>
 <?php endif; ?>
+<?php
+// ========================================
+// FIN DU BANDEAU
+// ========================================
+?>
     <!-- Overlay mobile pour sidebar -->
     <div x-show="sidebarOpen" 
          x-transition:enter="transition-opacity ease-linear duration-300"
