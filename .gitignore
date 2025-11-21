@@ -16,6 +16,8 @@
 # Uploads & Orders
 /storage/orders/*
 !/storage/orders/.gitkeep
+/public/uploads/*
+!/public/uploads/.gitkeep
 
 # IDE
 .vscode/
