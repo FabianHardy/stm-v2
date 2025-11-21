@@ -151,7 +151,19 @@ try {
     </style>
 </head>
 <body class="h-full" x-data="{ sidebarOpen: false }">
-    
+<?php
+// Bandeau environnement DEV
+$appEnv = $_ENV['APP_ENV'] ?? 'production';
+if ($appEnv === 'development'): 
+?>
+<div style="background: #ef4444; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;">
+    ⚠️ ENVIRONNEMENT DE DÉVELOPPEMENT - Les modifications n'affectent pas la production
+</div>
+<style>
+    /* Décaler tout le contenu pour laisser place au bandeau */
+    body { padding-top: 40px !important; }
+</style>
+<?php endif; ?>
     <!-- Overlay mobile pour sidebar -->
     <div x-show="sidebarOpen" 
          x-transition:enter="transition-opacity ease-linear duration-300"
