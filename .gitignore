@@ -1,6 +1,8 @@
 # Environnement
 .env
 .env.local
+.env.prod
+.env.dev
 
 # Vendor
 /vendor/
