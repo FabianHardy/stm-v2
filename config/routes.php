@@ -472,3 +472,42 @@ $router->get('/c/{uuid}/order/confirmation', function($uuid) {
     $controller = new PublicCampaignController();
     $controller->orderConfirmation($uuid);
 });
+
+/**
+ * Routes pour les outils de développement
+ * 
+ * À AJOUTER dans config/routes.php
+ * 
+ * Note: Ces routes ne fonctionnent qu'en mode développement
+ * (APP_ENV=development dans .env)
+ */
+
+// =============================================
+// OUTILS DE DÉVELOPPEMENT (Mode DEV uniquement)
+// =============================================
+
+// Synchronisation Base de données
+$router->get('/admin/dev-tools/sync-db', function() {
+    \Middleware\AuthMiddleware::handle();
+    $controller = new \App\Controllers\Admin\DevToolsController();
+    $controller->syncDatabase();
+});
+
+$router->post('/admin/dev-tools/sync-db', function() {
+    \Middleware\AuthMiddleware::handle();
+    $controller = new \App\Controllers\Admin\DevToolsController();
+    $controller->executeSyncDatabase();
+});
+
+// Synchronisation Fichiers
+$router->get('/admin/dev-tools/sync-files', function() {
+    \Middleware\AuthMiddleware::handle();
+    $controller = new \App\Controllers\Admin\DevToolsController();
+    $controller->syncFiles();
+});
+
+$router->post('/admin/dev-tools/sync-files', function() {
+    \Middleware\AuthMiddleware::handle();
+    $controller = new \App\Controllers\Admin\DevToolsController();
+    $controller->executeSyncFiles();
+});
