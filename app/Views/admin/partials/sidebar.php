@@ -1,14 +1,14 @@
 <?php
 /**
  * Sidebar Admin / Menu de Navigation
- * 
+ *
  * Navigation principale avec :
  * - Logo
  * - Menu hiérarchique
  * - Sous-menus déroulants
  * - Indicateurs actifs
  * - Responsive (collapse mobile)
- * 
+ *
  * @package STM
  * @version 2.0
  * @modified 10/11/2025 - Utilisation de $activeCampaignsCount au lieu de hardcodé
@@ -28,11 +28,11 @@ function isActive(string $route, string $currentRoute): bool {
  */
 function getNavLinkClass(string $route, string $currentRoute): string {
     $baseClass = "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200";
-    
+
     if (isActive($route, $currentRoute)) {
         return $baseClass . " bg-primary-50 text-primary-700 border-l-4 border-primary-600";
     }
-    
+
     return $baseClass . " text-gray-600 hover:bg-gray-50 hover:text-primary-600 border-l-4 border-transparent";
 }
 
@@ -130,7 +130,7 @@ $settingsItems = [
 <!-- Sidebar Desktop -->
 <aside class="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-white border-r border-gray-200">
     <div class="flex flex-col flex-1 min-h-0">
-        
+
         <!-- Logo / Header -->
         <div class="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <a href="/stm/admin/dashboard" class="flex items-center gap-3">
@@ -143,16 +143,16 @@ $settingsItems = [
                 </div>
             </a>
         </div>
-        
+
         <!-- Navigation principale -->
         <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            
+
             <?php foreach ($menuItems as $item): ?>
-                
+
                 <?php if (isset($item['submenu'])): ?>
                     <!-- Menu avec sous-menu -->
                     <div x-data="{ open: <?= isActive($item['route'], $currentRoute) ? 'true' : 'false' ?> }">
-                        
+
                         <!-- Menu parent -->
                         <button @click="open = !open"
                                 class="<?= getNavLinkClass($item['route'], $currentRoute) ?> w-full justify-between">
@@ -170,9 +170,9 @@ $settingsItems = [
                                    :class="open ? 'rotate-180' : ''"></i>
                             </div>
                         </button>
-                        
+
                         <!-- Sous-menu -->
-                        <div x-show="open" 
+                        <div x-show="open"
                              x-transition
                              class="ml-8 mt-1 space-y-1"
                              style="display: none;">
@@ -184,10 +184,10 @@ $settingsItems = [
                             <?php endforeach; ?>
                         </div>
                     </div>
-                    
+
                 <?php else: ?>
                     <!-- Menu simple -->
-                    <a href="<?= $item['route'] ?>" 
+                    <a href="<?= $item['route'] ?>"
                        class="<?= getNavLinkClass($item['route'], $currentRoute) ?>">
                         <i class="fas <?= $item['icon'] ?> w-5 text-center"></i>
                         <span><?= $item['label'] ?></span>
@@ -198,31 +198,31 @@ $settingsItems = [
                         <?php endif; ?>
                     </a>
                 <?php endif; ?>
-                
+
             <?php endforeach; ?>
-            
+
             <!-- Séparateur -->
             <div class="py-3">
                 <div class="border-t border-gray-200"></div>
             </div>
-            
+
             <!-- Section Paramètres -->
             <div class="space-y-1">
                 <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Paramètres
                 </p>
-                
+
                 <?php foreach ($settingsItems as $item): ?>
-                <a href="<?= $item['route'] ?>" 
+                <a href="<?= $item['route'] ?>"
                    class="<?= getNavLinkClass($item['route'], $currentRoute) ?>">
                     <i class="fas <?= $item['icon'] ?> w-5 text-center"></i>
                     <span><?= $item['label'] ?></span>
                 </a>
                 <?php endforeach; ?>
             </div>
-            
+
         </nav>
-        
+
         <!-- Footer sidebar -->
         <div class="flex-shrink-0 border-t border-gray-200 p-4">
             <div class="flex items-center gap-3 px-4 py-3 bg-primary-50 rounded-lg">
@@ -237,7 +237,7 @@ $settingsItems = [
                 </div>
             </div>
         </div>
-        
+
     </div>
 </aside>
 
@@ -251,9 +251,9 @@ $settingsItems = [
      x-transition:leave-end="-translate-x-full"
      class="lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 animate-slide-in"
      style="display: none;">
-    
+
     <div class="flex flex-col h-full">
-        
+
         <!-- Logo / Header -->
         <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200">
             <a href="/stm/admin/dashboard" class="flex items-center gap-3">
@@ -265,19 +265,19 @@ $settingsItems = [
                     <p class="text-xs text-gray-500">v2.0</p>
                 </div>
             </a>
-            
+
             <!-- Bouton fermeture -->
             <button @click="sidebarOpen = false"
                     class="p-2 text-gray-400 hover:text-gray-600 transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
         </div>
-        
+
         <!-- Navigation (même structure que desktop) -->
         <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            
+
             <?php foreach ($menuItems as $item): ?>
-                
+
                 <?php if (isset($item['submenu'])): ?>
                     <div x-data="{ open: <?= isActive($item['route'], $currentRoute) ? 'true' : 'false' ?> }">
                         <button @click="open = !open"
@@ -306,7 +306,7 @@ $settingsItems = [
                         </div>
                     </div>
                 <?php else: ?>
-                    <a href="<?= $item['route'] ?>" 
+                    <a href="<?= $item['route'] ?>"
                        class="<?= getNavLinkClass($item['route'], $currentRoute) ?>">
                         <i class="fas <?= $item['icon'] ?> w-5 text-center"></i>
                         <span><?= $item['label'] ?></span>
@@ -317,27 +317,27 @@ $settingsItems = [
                         <?php endif; ?>
                     </a>
                 <?php endif; ?>
-                
+
             <?php endforeach; ?>
-            
+
             <div class="py-3">
                 <div class="border-t border-gray-200"></div>
             </div>
-            
+
             <div class="space-y-1">
                 <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Paramètres
                 </p>
                 <?php foreach ($settingsItems as $item): ?>
-                <a href="<?= $item['route'] ?>" 
+                <a href="<?= $item['route'] ?>"
                    class="<?= getNavLinkClass($item['route'], $currentRoute) ?>">
                     <i class="fas <?= $item['icon'] ?> w-5 text-center"></i>
                     <span><?= $item['label'] ?></span>
                 </a>
                 <?php endforeach; ?>
             </div>
-            
+
         </nav>
-        
+
     </div>
 </div>

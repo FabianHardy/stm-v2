@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $pageTitle ?? 'Administration'; ?> - STM v2</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
+
     <!-- Font Awesome pour les icônes -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
         /* Personnalisation du scrollbar */
         ::-webkit-scrollbar {
@@ -37,10 +37,10 @@
 <body class="bg-gray-50 font-sans antialiased">
 
     <div class="flex h-screen overflow-hidden">
-        
+
         <!-- Sidebar -->
         <aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
-            
+
             <!-- Logo -->
             <div class="h-16 flex items-center px-6 border-b border-gray-200">
                 <div class="flex items-center">
@@ -56,21 +56,20 @@
 
             <!-- Navigation -->
             <nav class="flex-1 overflow-y-auto px-3 py-4">
-                
                 <!-- Dashboard -->
-                <a href="/stm/admin/dashboard" 
+                <a href="/stm/admin/dashboard"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg <?php echo (strpos($_SERVER['REQUEST_URI'], '/dashboard') !== false) ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-100'; ?>">
                     <i class="fas fa-chart-line w-5"></i>
                     <span class="ml-3">Dashboard</span>
                 </a>
 
                 <!-- Campagnes -->
-                <a href="/stm/admin/campaigns" 
+                <a href="/stm/admin/campaigns"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg <?php echo (strpos($_SERVER['REQUEST_URI'], '/campaigns') !== false) ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-100'; ?>">
                     <i class="fas fa-bullhorn w-5"></i>
                     <span class="ml-3 flex-1">Campagnes</span>
                     <span class="bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        <?php 
+                        <?php
                         // Compter les campagnes (à implémenter)
                         echo '0';
                         ?>
@@ -78,21 +77,21 @@
                 </a>
 
                 <!-- Promotions -->
-                <a href="/stm/admin/products" 
+                <a href="/stm/admin/products"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-box w-5"></i>
                     <span class="ml-3">Promotions</span>
                 </a>
 
                 <!-- Clients -->
-                <a href="/stm/admin/customers" 
+                <a href="/stm/admin/customers"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-users w-5"></i>
                     <span class="ml-3">Clients</span>
                 </a>
 
                 <!-- Commandes -->
-                <a href="/stm/admin/orders" 
+                <a href="/stm/admin/orders"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-shopping-cart w-5"></i>
                     <span class="ml-3 flex-1">Commandes</span>
@@ -100,7 +99,7 @@
                 </a>
 
                 <!-- Statistiques -->
-                <a href="/stm/admin/statistics" 
+                <a href="/stm/admin/statistics"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-chart-bar w-5"></i>
                     <span class="ml-3">Statistiques</span>
@@ -113,53 +112,25 @@
                 </div>
 
                 <!-- Mon profil -->
-                <a href="/stm/admin/profile" 
+                <a href="/stm/admin/profile"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-user w-5"></i>
                     <span class="ml-3">Mon profil</span>
                 </a>
 
                 <!-- Utilisateurs -->
-                <a href="/stm/admin/users" 
+                <a href="/stm/admin/users"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-users-cog w-5"></i>
                     <span class="ml-3">Utilisateurs</span>
                 </a>
 
                 <!-- Configuration -->
-                <a href="/stm/admin/settings" 
+                <a href="/stm/admin/settings"
                    class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-cog w-5"></i>
                     <span class="ml-3">Configuration</span>
                 </a>
-
-                <!-- =============================================
-                     OUTILS DEV (visible uniquement en mode dev)
-                     ============================================= -->
-                <?php 
-                $appEnv = $_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: 'production';
-                if ($appEnv === 'development'): 
-                ?>
-                <div class="my-4 border-t border-gray-200"></div>
-                <div class="px-3 mb-2 text-xs font-semibold text-orange-500 uppercase tracking-wider">
-                    🔧 Outils Dev
-                </div>
-
-                <!-- Sync Base de données -->
-                <a href="/stm/admin/dev-tools/sync-db" 
-                   class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg <?php echo (strpos($_SERVER['REQUEST_URI'], '/dev-tools/sync-db') !== false) ? 'bg-orange-50 text-orange-700' : 'text-gray-700 hover:bg-gray-100'; ?>">
-                    <i class="fas fa-database w-5 text-orange-500"></i>
-                    <span class="ml-3">Sync Base de données</span>
-                </a>
-
-                <!-- Sync Fichiers -->
-                <a href="/stm/admin/dev-tools/sync-files" 
-                   class="flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg <?php echo (strpos($_SERVER['REQUEST_URI'], '/dev-tools/sync-files') !== false) ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-100'; ?>">
-                    <i class="fas fa-folder-open w-5 text-purple-500"></i>
-                    <span class="ml-3">Sync Fichiers</span>
-                </a>
-                <?php endif; ?>
-
             </nav>
 
             <!-- Footer Sidebar -->
@@ -177,10 +148,10 @@
 
         <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            
+
             <!-- Header -->
             <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-                
+
                 <!-- Breadcrumb -->
                 <div class="flex items-center text-sm">
                     <i class="fas fa-home text-gray-400"></i>
@@ -190,11 +161,11 @@
 
                 <!-- Actions Header -->
                 <div class="flex items-center space-x-4">
-                    
+
                     <!-- Search -->
                     <div class="relative">
-                        <input type="text" 
-                               placeholder="Rechercher..." 
+                        <input type="text"
+                               placeholder="Rechercher..."
                                class="pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                         <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
                     </div>
@@ -223,7 +194,7 @@
                     </div>
 
                     <!-- Déconnexion -->
-                    <a href="/stm/admin/logout" 
+                    <a href="/stm/admin/logout"
                        class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-500 rounded-lg hover:from-purple-700 hover:to-blue-600 transition-all duration-200">
                         Déconnexion
                     </a>
