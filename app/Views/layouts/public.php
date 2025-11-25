@@ -78,7 +78,6 @@ $pageScripts = $pageScripts ?? '';
     </style>
 </head>
 <body class="bg-gray-50 <?= htmlspecialchars($bodyClass) ?>" <?= $bodyAttrs ?>>
-
 <?php
 // Bandeau DEV
 $appEnv = $_ENV['APP_ENV'] ?? 'production';

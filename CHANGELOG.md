@@ -3,6 +3,104 @@
 Historique centralisé de toutes les modifications du projet.
 
 --
+
+## [25/11/2025] - Centralisation Layout Public + Migration complète des vues
+
+### 🎯 Objectif de la session
+Créer un layout public centralisé pour éliminer la duplication de code (HEAD, bandeau DEV, footer) sur toutes les pages publiques (côté client).
+
+### ✅ Ajouté
+
+**Layout et composants réutilisables** :
+- `/app/Views/layouts/public.php` : Layout centralisé pour toutes les pages publiques
+  - Gestion automatique HEAD (Tailwind, Alpine.js, Font Awesome)
+  - Bandeau DEV orange automatique (visible uniquement en dev via $_ENV['APP_ENV'])
+  - Footer standardisé Trendy Foods
+  - Support variables : $title, $lang, $content, $pageStyles, $pageScripts, $useAlpine, $bodyAttrs
+  - Styles communs : body flexbox, fond Trendy Foods (coin bas-droit)
+
+- `/app/Views/components/public/header.php` : Composant header réutilisable
+  - Logo Trendy Foods + nom campagne
+  - Infos client (company_name, customer_number)
+  - Switch langue FR/NL (visible BE/BOTH, caché LU)
+  - Bouton déconnexion
+
+- `/app/Views/components/public/campaign_bar.php` : Bande colorée sous header
+  - 4 couleurs selon contexte : blue (défaut), green (succès), red (erreur), orange (warning)
+  - Support icônes SVG, dates campagne, bouton retour
+
+- `/app/Views/components/public/help_box.php` : Section aide/contact
+  - Numéros téléphone selon pays (BE/LU)
+  - Emails contact
+
+### 🔧 Modifié
+
+**Migration complète des 5 vues publiques** :
+
+- `/app/Views/public/campaign/show.php` : Page d'identification client
+  - Supprimé HEAD complet, bandeau DEV, footer
+  - Utilise composants header + campaign_bar + help_box
+  - Gain : **-80 lignes**
+
+- `/app/Views/public/campaign/access_denied.php` : Page d'accès refusé
+  - Supprimé HEAD complet, bandeau DEV, footer
+  - Messages personnalisés selon raison du refus
+  - Gain : **-80 lignes**
+
+- `/app/Views/public/campaign/confirmation.php` : Page confirmation commande
+  - Supprimé HEAD complet, bandeau DEV, footer
+  - Bande verte de succès
+  - Gain : **-70 lignes**
+
+- `/app/Views/public/campaign/catalog.php` : Catalogue produits + panier
+  - Supprimé HEAD (lignes 1-276), footer + scripts (lignes 1611-1632)
+  - Header customisé et navigation catégories conservés
+  - Alpine.js cartManager() déplacé dans $pageScripts
+  - Gain : **-63 lignes** (1631 → 1568)
+
+- `/app/Views/public/campaign/checkout.php` : Validation commande
+  - Supprimé HEAD (lignes 1-209), footer + scripts (lignes 1394-1413)
+  - Formulaire + modales CGU/RGPD conservés
+  - Gain : **-175 lignes** (1413 → 1238)
+
+### 📊 Métriques
+
+**Réduction duplication** :
+- Lignes de code dupliqué supprimées : **~468 lignes**
+- Fichiers HEAD en dur : 5 → 1 (-80%)
+- Fichiers bandeau DEV en dur : 5 → 1 (-80%)
+- Fichiers footer en dur : 5 → 1 (-80%)
+
+**Gains maintenance** :
+- Modifier bandeau DEV : 1 fichier au lieu de 5
+- Modifier footer : 1 fichier au lieu de 5
+- Cohérence design : garantie à 100%
+
+### 🎯 Architecture Layout Public
+
+Structure ob_start/ob_get_clean :
+```php
+<?php
+$lang = $customer['language'];
+$title = 'Mon titre';
+ob_start();
+?>
+<!-- Contenu HTML -->
+<?php
+$content = ob_get_clean();
+require __DIR__ . '/../../layouts/public.php';
+?>
+```
+
+### 🚀 Prochaines étapes suggérées
+
+Sprint futur : Module de traductions admin
+- Table `translations` pour gérer les textes FR/NL
+- Helper trans('key') pour remplacer les textes en dur
+- Interface admin CRUD traductions
+
+---
+
 ## [19/11/2025] - Modification contrainte UNIQUE products
 
 ### 🔧 Modifié
