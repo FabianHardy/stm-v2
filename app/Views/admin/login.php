@@ -10,32 +10,23 @@
 
  */
 
-
-
 use Core\Session;
-
-
 
 Session::start();
 
-
-
 // Récupérer les erreurs et anciennes valeurs
 
-$errors = Session::get('errors', []);
+$errors = Session::get("errors", []);
 
-$old = Session::get('old', []);
+$old = Session::get("old", []);
 
-Session::remove('errors');
+Session::remove("errors");
 
-Session::remove('old');
-
-
+Session::remove("old");
 
 // ⚠️ ON NE RÉCUPÈRE PLUS LES MESSAGES FLASH ICI
 
 // Le partial flash.php s'en occupe automatiquement
-
 ?>
 
 <!DOCTYPE html>
@@ -110,7 +101,7 @@ Session::remove('old');
 
             <!-- ✅ NOUVEAU : Messages flash avec le partial -->
 
-            <?php include __DIR__ . '/partials/flash.php'; ?>
+            <?php include __DIR__ . "/partials/flash.php"; ?>
 
 
 
@@ -154,9 +145,13 @@ Session::remove('old');
 
                             name="username"
 
-                            value="<?= htmlspecialchars($old['username'] ?? '') ?>"
+                            value="<?= htmlspecialchars($old["username"] ?? "") ?>"
 
-                            class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent <?= isset($errors['username']) ? 'border-red-500' : '' ?>"
+                            class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent <?= isset(
+                                $errors["username"],
+                            )
+                                ? "border-red-500"
+                                : "" ?>"
 
                             placeholder="Entrez votre nom d'utilisateur"
 
@@ -166,9 +161,9 @@ Session::remove('old');
 
                     </div>
 
-                    <?php if (isset($errors['username'])): ?>
+                    <?php if (isset($errors["username"])): ?>
 
-                        <p class="mt-1 text-sm text-red-600"><?= htmlspecialchars($errors['username'][0]) ?></p>
+                        <p class="mt-1 text-sm text-red-600"><?= htmlspecialchars($errors["username"][0]) ?></p>
 
                     <?php endif; ?>
 
@@ -206,7 +201,11 @@ Session::remove('old');
 
                             name="password"
 
-                            class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent <?= isset($errors['password']) ? 'border-red-500' : '' ?>"
+                            class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent <?= isset(
+                                $errors["password"],
+                            )
+                                ? "border-red-500"
+                                : "" ?>"
 
                             placeholder="Entrez votre mot de passe"
 
@@ -214,9 +213,9 @@ Session::remove('old');
 
                     </div>
 
-                    <?php if (isset($errors['password'])): ?>
+                    <?php if (isset($errors["password"])): ?>
 
-                        <p class="mt-1 text-sm text-red-600"><?= htmlspecialchars($errors['password'][0]) ?></p>
+                        <p class="mt-1 text-sm text-red-600"><?= htmlspecialchars($errors["password"][0]) ?></p>
 
                     <?php endif; ?>
 
@@ -280,7 +279,7 @@ Session::remove('old');
 
         <div class="text-center mt-6 text-white text-sm">
 
-            <p>&copy; <?= date('Y') ?> STM v2 - Trendy Foods</p>
+            <p>&copy; <?= date("Y") ?> STM v2 - Trendy Foods</p>
 
             <p class="mt-1 text-purple-100">Version 2.0.0</p>
 
