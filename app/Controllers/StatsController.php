@@ -42,7 +42,7 @@ class StatsController
     public function index(): void
     {
         // Récupérer les filtres
-        $period = $_GET["period"] ?? "14"; // 7, 14, 30, month
+        $period = $_GET["period"] ?? "7"; // 7 jours par défaut
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
         $country = !empty($_GET["country"]) ? $_GET["country"] : null;
 
@@ -51,8 +51,13 @@ class StatsController
 
         switch ($period) {
             case "7":
+            default:
                 $dateFrom = date("Y-m-d", strtotime("-7 days"));
                 $periodLabel = "7 derniers jours";
+                break;
+            case "14":
+                $dateFrom = date("Y-m-d", strtotime("-14 days"));
+                $periodLabel = "14 derniers jours";
                 break;
             case "30":
                 $dateFrom = date("Y-m-d", strtotime("-30 days"));
@@ -62,18 +67,13 @@ class StatsController
                 $dateFrom = date("Y-m-01"); // Premier jour du mois
                 $periodLabel = "Ce mois (" . date("F Y") . ")";
                 break;
-            case "14":
-            default:
-                $dateFrom = date("Y-m-d", strtotime("-14 days"));
-                $periodLabel = "14 derniers jours";
-                break;
         }
 
         // Récupérer les données
         $kpis = $this->statsModel->getGlobalKPIs($dateFrom, $dateTo, $campaignId, $country);
         $dailyEvolution = $this->statsModel->getDailyEvolution($dateFrom, $dateTo, $campaignId);
-        $topProducts = $this->statsModel->getTopProducts($dateFrom, $dateTo, $campaignId, 10);
-        $clusterStats = $this->statsModel->getStatsByCluster($dateFrom, $dateTo, $campaignId);
+        $topProducts = $this->statsModel->getTopProducts($dateFrom, $dateTo, $campaignId, $country, 10);
+        $clusterStats = $this->statsModel->getStatsByCluster($dateFrom, $dateTo, $campaignId, $country);
 
         // Liste des campagnes pour le filtre
         $campaigns = $this->statsModel->getCampaignsList();

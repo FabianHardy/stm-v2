@@ -188,30 +188,45 @@ class Stats
      * @param int $limit
      * @return array
      */
-    public function getTopProducts(string $dateFrom, string $dateTo, ?int $campaignId = null, int $limit = 10): array
-    {
+    public function getTopProducts(
+        string $dateFrom,
+        string $dateTo,
+        ?int $campaignId = null,
+        ?string $country = null,
+        int $limit = 10,
+    ): array {
         $params = [
             ":date_from" => $dateFrom . " 00:00:00",
             ":date_to" => $dateTo . " 23:59:59",
         ];
 
         $campaignFilter = "";
+        $countryFilter = "";
+
         if ($campaignId) {
             $campaignFilter = " AND o.campaign_id = :campaign_id";
             $params[":campaign_id"] = $campaignId;
         }
 
+        if ($country) {
+            $countryFilter = " AND camp.country = :country";
+            $params[":country"] = $country;
+        }
+
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
+                   camp.name as campaign_name, camp.country as campaign_country,
                    SUM(ol.quantity) as total_quantity,
                    COUNT(DISTINCT o.id) as orders_count
             FROM order_lines ol
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN products p ON ol.product_id = p.id
+            INNER JOIN campaigns camp ON o.campaign_id = camp.id
             WHERE o.status = 'validated'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
-            GROUP BY p.id
+            {$countryFilter}
+            GROUP BY p.id, camp.id
             ORDER BY total_quantity DESC
             LIMIT {$limit}
         ";
@@ -225,15 +240,20 @@ class Stats
      * Logique :
      * 1. DB locale : orders → customers → customer_number + country + quantités
      * 2. DB externe : CLL (via CLL_NCLIXX) → IDE_REP
-     * 3. DB externe : REP (via IDE_REP) → REP_CLU
+     * 3. DB externe : REPCLU → CLU
      *
      * @param string $dateFrom
      * @param string $dateTo
      * @param int|null $campaignId
+     * @param string|null $country Filtre par pays (BE, LU)
      * @return array ['cluster_name' => ['quantity' => X, 'customers' => Y], ...]
      */
-    public function getStatsByCluster(string $dateFrom, string $dateTo, ?int $campaignId = null): array
-    {
+    public function getStatsByCluster(
+        string $dateFrom,
+        string $dateTo,
+        ?int $campaignId = null,
+        ?string $country = null,
+    ): array {
         // Si pas de connexion externe, retourner vide
         if (!$this->extDb) {
             return [];
@@ -245,9 +265,16 @@ class Stats
         ];
 
         $campaignFilter = "";
+        $countryFilter = "";
+
         if ($campaignId) {
             $campaignFilter = " AND o.campaign_id = :campaign_id";
             $params[":campaign_id"] = $campaignId;
+        }
+
+        if ($country) {
+            $countryFilter = " AND cu.country = :country";
+            $params[":country"] = $country;
         }
 
         // Étape 1 : Récupérer les stats par customer_number et country depuis la DB locale
@@ -261,6 +288,7 @@ class Stats
             WHERE o.status = 'validated'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
+            {$countryFilter}
             GROUP BY cu.customer_number, cu.country
         ";
 

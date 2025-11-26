@@ -42,10 +42,10 @@ $campaignsJson = json_encode($campaignsByCountry);
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Période</label>
             <select name="period" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                <option value="7" <?= ($period ?? "14") === "7" ? "selected" : "" ?>>7 derniers jours</option>
-                <option value="14" <?= ($period ?? "14") === "14" ? "selected" : "" ?>>14 derniers jours</option>
-                <option value="30" <?= ($period ?? "14") === "30" ? "selected" : "" ?>>30 derniers jours</option>
-                <option value="month" <?= ($period ?? "14") === "month" ? "selected" : "" ?>>Ce mois</option>
+                <option value="7" <?= ($period ?? "7") === "7" ? "selected" : "" ?>>7 derniers jours</option>
+                <option value="14" <?= ($period ?? "7") === "14" ? "selected" : "" ?>>14 derniers jours</option>
+                <option value="30" <?= ($period ?? "7") === "30" ? "selected" : "" ?>>30 derniers jours</option>
+                <option value="month" <?= ($period ?? "7") === "month" ? "selected" : "" ?>>Ce mois</option>
             </select>
         </div>
 
@@ -216,22 +216,42 @@ $campaignsJson = json_encode($campaignsByCountry);
 
         <?php if (empty($topProducts)): ?>
         <p class="text-gray-500 text-center py-8">Aucune donnée pour cette période</p>
-        <?php else: ?>
+        <?php // Pas de filtre campagne → afficher campagne
+            // Pas de filtre pays → afficher pays
+            // Pas de filtre campagne → afficher campagne
+            // Pas de filtre pays → afficher pays
+            else: ?>
         <div class="space-y-3">
             <?php foreach ($topProducts as $i => $product): ?>
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <span class="w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full flex items-center justify-center text-sm font-medium">
+            <div class="flex items-center justify-between py-2 <?= $i > 0 ? "border-t border-gray-100" : "" ?>">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <span class="w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
                         <?= $i + 1 ?>
                     </span>
-                    <div>
-                        <p class="font-medium text-gray-900 text-sm"><?= htmlspecialchars(
+                    <div class="min-w-0">
+                        <p class="font-medium text-gray-900 text-sm truncate"><?= htmlspecialchars(
                             $product["product_name"] ?? "",
                         ) ?></p>
-                        <p class="text-xs text-gray-500"><?= htmlspecialchars($product["product_code"] ?? "") ?></p>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs text-gray-500"><?= htmlspecialchars(
+                                $product["product_code"] ?? "",
+                            ) ?></span>
+                            <?php if (!$campaignId): ?>
+                            <span class="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                <?= htmlspecialchars($product["campaign_name"] ?? "") ?>
+                            </span>
+                            <?php endif; ?>
+                            <?php if (!$country): ?>
+                            <span class="text-xs px-1.5 py-0.5 <?= ($product["campaign_country"] ?? "") === "BE"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-yellow-100 text-yellow-700" ?> rounded">
+                                <?= ($product["campaign_country"] ?? "") === "BE" ? "🇧🇪" : "🇱🇺" ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right flex-shrink-0 ml-2">
                     <p class="font-bold text-gray-900"><?= number_format(
                         $product["total_quantity"] ?? 0,
                         0,
