@@ -717,10 +717,15 @@ class Stats
         $reps = [];
 
         try {
-            // Récupérer les reps BE
+            // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
             if (!$country || $country === "BE") {
                 $beReps = $this->extDb->query(
-                    "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL, REP_CLU FROM BE_REP ORDER BY REP_NOM",
+                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM BE_REP r
+                     LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                     LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                     ORDER BY c.CLU_LIB1, r.REP_NOM",
                 );
 
                 foreach ($beReps as $rep) {
@@ -728,16 +733,21 @@ class Stats
                         "id" => $rep["IDE_REP"],
                         "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
                         "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["REP_CLU"] ?: "Non défini",
+                        "cluster" => $rep["cluster_name"] ?: "Non défini",
                         "country" => "BE",
                     ];
                 }
             }
 
-            // Récupérer les reps LU
+            // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
             if (!$country || $country === "LU") {
                 $luReps = $this->extDb->query(
-                    "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL, REP_CLU FROM LU_REP ORDER BY REP_NOM",
+                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM LU_REP r
+                     LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                     LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                     ORDER BY c.CLU_LIB1, r.REP_NOM",
                 );
 
                 foreach ($luReps as $rep) {
@@ -745,7 +755,7 @@ class Stats
                         "id" => $rep["IDE_REP"],
                         "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
                         "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["REP_CLU"] ?: "Non défini",
+                        "cluster" => $rep["cluster_name"] ?: "Non défini",
                         "country" => "LU",
                     ];
                 }
@@ -778,37 +788,64 @@ class Stats
      */
     private function getRepOrderStats(string $repId, string $country, ?int $campaignId = null): array
     {
-        $params = [
-            ":rep_id" => $repId,
-            ":country" => $country,
-        ];
-
-        $campaignFilter = "";
-        if ($campaignId) {
-            $campaignFilter = " AND o.campaign_id = :campaign_id";
-            $params[":campaign_id"] = $campaignId;
+        // D'abord, récupérer les numéros clients du représentant depuis la DB externe
+        if (!$this->extDb) {
+            return ["orders_count" => 0, "customers_ordered" => 0, "total_quantity" => 0];
         }
 
-        $query = "
-            SELECT COUNT(DISTINCT o.id) as orders_count,
-                   COUNT(DISTINCT o.customer_id) as customers_ordered,
-                   COALESCE(SUM(ol.quantity), 0) as total_quantity
-            FROM orders o
-            INNER JOIN customers cu ON o.customer_id = cu.id
-            LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE cu.rep_id = :rep_id
-            AND cu.country = :country
-            AND o.status = 'validated'
-            {$campaignFilter}
-        ";
+        try {
+            $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
+            $clientsResult = $this->extDb->query(
+                "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+                [":rep_id" => $repId],
+            );
 
-        $result = $this->db->query($query, $params);
+            if (empty($clientsResult)) {
+                return ["orders_count" => 0, "customers_ordered" => 0, "total_quantity" => 0];
+            }
 
-        return [
-            "orders_count" => (int) ($result[0]["orders_count"] ?? 0),
-            "customers_ordered" => (int) ($result[0]["customers_ordered"] ?? 0),
-            "total_quantity" => (int) ($result[0]["total_quantity"] ?? 0),
-        ];
+            // Construire la liste des numéros clients
+            $customerNumbers = array_column($clientsResult, "customer_number");
+
+            // Échapper les numéros pour la requête IN
+            $escapedNumbers = array_map(function ($num) {
+                return "'" . addslashes($num) . "'";
+            }, $customerNumbers);
+            $inClause = implode(",", $escapedNumbers);
+
+            // Requête sur la DB locale pour les commandes
+            $params = [":country" => $country];
+
+            $campaignFilter = "";
+            if ($campaignId) {
+                $campaignFilter = " AND o.campaign_id = :campaign_id";
+                $params[":campaign_id"] = $campaignId;
+            }
+
+            $query = "
+                SELECT COUNT(DISTINCT o.id) as orders_count,
+                       COUNT(DISTINCT o.customer_id) as customers_ordered,
+                       COALESCE(SUM(ol.quantity), 0) as total_quantity
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                LEFT JOIN order_lines ol ON o.id = ol.order_id
+                WHERE cu.customer_number IN ({$inClause})
+                AND cu.country = :country
+                AND o.status = 'validated'
+                {$campaignFilter}
+            ";
+
+            $result = $this->db->query($query, $params);
+
+            return [
+                "orders_count" => (int) ($result[0]["orders_count"] ?? 0),
+                "customers_ordered" => (int) ($result[0]["customers_ordered"] ?? 0),
+                "total_quantity" => (int) ($result[0]["total_quantity"] ?? 0),
+            ];
+        } catch (\Exception $e) {
+            error_log("Stats::getRepOrderStats error: " . $e->getMessage());
+            return ["orders_count" => 0, "customers_ordered" => 0, "total_quantity" => 0];
+        }
     }
 
     /**
@@ -837,7 +874,7 @@ class Stats
     }
 
     /**
-     * Récupère le cluster d'un représentant
+     * Récupère le cluster d'un représentant via REPCLU → CLU
      *
      * @param string $repId
      * @param string $country
@@ -850,12 +887,18 @@ class Stats
         }
 
         try {
-            $table = $country === "BE" ? "BE_REP" : "LU_REP";
-            $result = $this->extDb->query("SELECT REP_CLU FROM {$table} WHERE IDE_REP = :rep_id", [
-                ":rep_id" => $repId,
-            ]);
+            $tableRepClu = $country === "BE" ? "BE_REPCLU" : "LU_REPCLU";
+            $tableClu = $country === "BE" ? "BE_CLU" : "LU_CLU";
 
-            return $result[0]["REP_CLU"] ?? null;
+            $result = $this->extDb->query(
+                "SELECT c.CLU_LIB1 as cluster_name
+                 FROM {$tableRepClu} rc
+                 LEFT JOIN {$tableClu} c ON rc.IDE_CLU = c.IDE_CLU
+                 WHERE rc.IDE_REP = :rep_id",
+                [":rep_id" => $repId],
+            );
+
+            return $result[0]["cluster_name"] ?? null;
         } catch (\Exception $e) {
             return null;
         }

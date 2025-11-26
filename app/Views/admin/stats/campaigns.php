@@ -226,14 +226,22 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
     </div>
     <?php
         // Grouper les représentants par cluster
+        // Ignorer les représentants sans clients
+        // Supprimer les clusters vides (au cas où)
         // Trier par quantité
         // Grouper les représentants par cluster
+        // Ignorer les représentants sans clients
+        // Supprimer les clusters vides (au cas où)
         // Trier par quantité
         else: ?>
 
     <?php
     $repsByCluster = [];
     foreach ($reps as $rep) {
+        if ($rep["total_clients"] == 0) {
+            continue;
+        }
+
         $cluster = $rep["cluster"] ?: "Non défini";
         if (!isset($repsByCluster[$cluster])) {
             $repsByCluster[$cluster] = [
@@ -246,6 +254,7 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
         $repsByCluster[$cluster]["totals"]["ordered"] += $rep["stats"]["customers_ordered"];
         $repsByCluster[$cluster]["totals"]["quantity"] += $rep["stats"]["total_quantity"];
     }
+    $repsByCluster = array_filter($repsByCluster, fn($c) => $c["totals"]["clients"] > 0);
     uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["quantity"]);
     ?>
 
