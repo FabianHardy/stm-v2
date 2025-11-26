@@ -120,6 +120,8 @@ class StatsController
         // Récupérer les filtres
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
         $country = !empty($_GET["country"]) ? $_GET["country"] : null;
+        $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
+        $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
 
         // Liste des campagnes
         $campaigns = $this->statsModel->getCampaignsList();
@@ -128,6 +130,8 @@ class StatsController
         $campaignStats = null;
         $campaignProducts = [];
         $reps = [];
+        $repDetail = null;
+        $repClients = [];
 
         if ($campaignId) {
             $campaignStats = $this->statsModel->getCampaignStats($campaignId);
@@ -137,6 +141,19 @@ class StatsController
             // Le pays est déterminé par la campagne
             $campaignCountry = $campaignStats["campaign"]["country"] ?? null;
             $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+            // Détail d'un représentant si sélectionné
+            if ($repId && $repCountry) {
+                $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
+
+                // Trouver les infos du rep
+                foreach ($reps as $rep) {
+                    if ($rep["id"] === $repId && $rep["country"] === $repCountry) {
+                        $repDetail = $rep;
+                        break;
+                    }
+                }
+            }
         }
 
         $title = "Statistiques - Par campagne";
