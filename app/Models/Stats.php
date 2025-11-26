@@ -868,7 +868,7 @@ class Stats
      * @param string $country
      * @return string|null
      */
-    private function getRepName(string $repId, string $country): ?string
+    private function getRepName(?string $repId, string $country): ?string
     {
         if (!$this->extDb || empty($repId)) {
             return null;

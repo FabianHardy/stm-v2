@@ -36,7 +36,7 @@ if (!$selectedCountry && $campaignStats) {
 </div>
 
 <!-- Sélecteur de campagne avec filtre pays -->
-<div class="bg-white rounded-lg shadow-sm p-4 mb-6" x-data="campaignFilter()">
+<div class="bg-white rounded-lg shadow-sm p-4 mb-6" x-data="campaignFilter()" x-init="init()">
     <form method="GET" action="/stm/admin/stats/campaigns" class="flex flex-wrap gap-4 items-end">
 
         <!-- Pays -->
@@ -53,11 +53,13 @@ if (!$selectedCountry && $campaignStats) {
         <!-- Campagne -->
         <div class="flex-1 min-w-[300px]">
             <label class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
-            <select name="campaign_id" x-model="selectedCampaign"
+            <select name="campaign_id" x-ref="campaignSelect"
                     class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 <option value="">-- Choisir une campagne --</option>
                 <template x-for="c in filteredCampaigns" :key="c.id">
-                    <option :value="c.id" x-text="c.name + ' (' + c.country + ' - ' + getStatusLabel(c.status) + ')'"></option>
+                    <option :value="c.id"
+                            :selected="c.id == selectedCampaign"
+                            x-text="c.name + ' (' + c.country + ' - ' + getStatusLabel(c.status) + ')'"></option>
                 </template>
             </select>
         </div>
@@ -158,70 +160,6 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
             ",",
             " ",
         ) ?></p>
-    </div>
-</div>
-
-<!-- Stats par pays -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-
-    <!-- Belgique -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <span class="text-lg">🇧🇪</span>
-            </div>
-            <h3 class="text-lg font-semibold">Belgique</h3>
-        </div>
-
-        <div class="grid grid-cols-3 gap-4 text-center">
-            <div>
-                <p class="text-2xl font-bold text-gray-900"><?= $campaignStats["by_country"]["BE"]["orders"] ?></p>
-                <p class="text-xs text-gray-500">Commandes</p>
-            </div>
-            <div>
-                <p class="text-2xl font-bold text-gray-900"><?= $campaignStats["by_country"]["BE"]["customers"] ?></p>
-                <p class="text-xs text-gray-500">Clients</p>
-            </div>
-            <div>
-                <p class="text-2xl font-bold text-blue-600"><?= number_format(
-                    $campaignStats["by_country"]["BE"]["quantity"],
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-                <p class="text-xs text-gray-500">Quantités</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Luxembourg -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                <span class="text-lg">🇱🇺</span>
-            </div>
-            <h3 class="text-lg font-semibold">Luxembourg</h3>
-        </div>
-
-        <div class="grid grid-cols-3 gap-4 text-center">
-            <div>
-                <p class="text-2xl font-bold text-gray-900"><?= $campaignStats["by_country"]["LU"]["orders"] ?></p>
-                <p class="text-xs text-gray-500">Commandes</p>
-            </div>
-            <div>
-                <p class="text-2xl font-bold text-gray-900"><?= $campaignStats["by_country"]["LU"]["customers"] ?></p>
-                <p class="text-xs text-gray-500">Clients</p>
-            </div>
-            <div>
-                <p class="text-2xl font-bold text-yellow-600"><?= number_format(
-                    $campaignStats["by_country"]["LU"]["quantity"],
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-                <p class="text-xs text-gray-500">Quantités</p>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -359,10 +297,10 @@ function campaignFilter() {
 
         init() {
             this.filterCampaigns();
-            // Restaurer la sélection après le filtrage
+            // Forcer la sélection après que le DOM soit mis à jour
             this.\$nextTick(() => {
-                if (currentCampaignId) {
-                    this.selectedCampaign = currentCampaignId;
+                if (currentCampaignId && this.\$refs.campaignSelect) {
+                    this.\$refs.campaignSelect.value = currentCampaignId;
                 }
             });
         },
