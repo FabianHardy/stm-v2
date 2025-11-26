@@ -104,6 +104,7 @@ class Stats
         $queryCountry = "
             SELECT cu.country,
                    COUNT(DISTINCT o.id) as orders_count,
+                   COUNT(DISTINCT o.customer_id) as customers_count,
                    COALESCE(SUM(ol.quantity), 0) as quantity
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -127,9 +128,11 @@ class Stats
 
         $countryStats = ["BE" => 0, "LU" => 0];
         $countryQuantity = ["BE" => 0, "LU" => 0];
+        $countryCustomers = ["BE" => 0, "LU" => 0];
         foreach ($resultCountry as $row) {
             $countryStats[$row["country"]] = (int) $row["orders_count"];
             $countryQuantity[$row["country"]] = (int) $row["quantity"];
+            $countryCustomers[$row["country"]] = (int) $row["customers_count"];
         }
 
         return [
@@ -139,6 +142,7 @@ class Stats
             "total_quantity" => (int) ($resultQuantity[0]["total_quantity"] ?? 0),
             "orders_by_country" => $countryStats,
             "quantity_by_country" => $countryQuantity,
+            "customers_by_country" => $countryCustomers,
         ];
     }
 
@@ -427,6 +431,21 @@ class Stats
         }
 
         $campaign = $campaign[0];
+
+        // Calculer le statut dynamiquement selon les dates
+        $today = date("Y-m-d");
+        $startDate = $campaign["start_date"] ?? null;
+        $endDate = $campaign["end_date"] ?? null;
+
+        if ($startDate && $endDate) {
+            if ($today < $startDate) {
+                $campaign["status"] = "scheduled";
+            } elseif ($today > $endDate) {
+                $campaign["status"] = "ended";
+            } else {
+                $campaign["status"] = "active";
+            }
+        }
 
         // Stats commandes
         $queryOrders = "
@@ -956,16 +975,37 @@ class Stats
 
     /**
      * Liste des campagnes pour les filtres
+     * Calcule le statut automatiquement basé sur les dates
      *
      * @return array
      */
     public function getCampaignsList(): array
     {
-        return $this->db->query(
+        $campaigns = $this->db->query(
             "SELECT id, name, title_fr, country, status, start_date, end_date
              FROM campaigns
              ORDER BY start_date DESC",
         );
+
+        // Calculer le statut dynamiquement selon les dates
+        $today = date("Y-m-d");
+
+        foreach ($campaigns as &$campaign) {
+            $startDate = $campaign["start_date"] ?? null;
+            $endDate = $campaign["end_date"] ?? null;
+
+            if ($startDate && $endDate) {
+                if ($today < $startDate) {
+                    $campaign["status"] = "scheduled"; // Programmée
+                } elseif ($today > $endDate) {
+                    $campaign["status"] = "ended"; // Terminée
+                } else {
+                    $campaign["status"] = "active"; // En cours
+                }
+            }
+        }
+
+        return $campaigns;
     }
 
     /**

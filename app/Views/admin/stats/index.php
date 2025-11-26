@@ -79,88 +79,80 @@ $campaignsJson = json_encode($campaignsByCountry);
 </div>
 
 <!-- KPIs -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
     <!-- Total commandes -->
     <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm text-gray-500">Commandes</p>
-                <p class="text-3xl font-bold text-gray-900"><?= number_format(
-                    $kpis["total_orders"] ?? 0,
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-            </div>
-            <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-shopping-cart text-indigo-600 text-xl"></i>
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-sm text-gray-500">Commandes</p>
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-shopping-cart text-indigo-600 text-lg"></i>
             </div>
         </div>
-        <p class="text-xs text-gray-400 mt-2"><?= $periodLabel ?? "14 derniers jours" ?></p>
+        <p class="text-3xl font-bold text-gray-900 mb-2"><?= number_format(
+            $kpis["total_orders"] ?? 0,
+            0,
+            ",",
+            " ",
+        ) ?></p>
+        <?php if (empty($country)): ?>
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                🇧🇪 <?= number_format($kpis["orders_by_country"]["BE"] ?? 0, 0, ",", " ") ?>
+            </span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                🇱🇺 <?= number_format($kpis["orders_by_country"]["LU"] ?? 0, 0, ",", " ") ?>
+            </span>
+        </div>
+        <?php else: ?>
+        <p class="text-xs text-gray-400"><?= $country === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?></p>
+        <?php endif; ?>
     </div>
 
     <!-- Clients uniques -->
     <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm text-gray-500">Clients</p>
-                <p class="text-3xl font-bold text-gray-900"><?= number_format(
-                    $kpis["unique_customers"] ?? 0,
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-            </div>
-            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-users text-green-600 text-xl"></i>
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-sm text-gray-500">Clients</p>
+            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-users text-green-600 text-lg"></i>
             </div>
         </div>
-        <p class="text-xs text-gray-400 mt-2">Clients distincts</p>
+        <p class="text-3xl font-bold text-gray-900 mb-2"><?= number_format(
+            $kpis["unique_customers"] ?? 0,
+            0,
+            ",",
+            " ",
+        ) ?></p>
+        <?php if (empty($country)): ?>
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                🇧🇪 <?= number_format($kpis["customers_by_country"]["BE"] ?? 0, 0, ",", " ") ?>
+            </span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                🇱🇺 <?= number_format($kpis["customers_by_country"]["LU"] ?? 0, 0, ",", " ") ?>
+            </span>
+        </div>
+        <?php else: ?>
+        <p class="text-xs text-gray-400"><?= $country === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?></p>
+        <?php endif; ?>
     </div>
 
     <!-- Total quantités -->
     <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm text-gray-500">Promos vendues</p>
-                <p class="text-3xl font-bold text-gray-900"><?= number_format(
-                    $kpis["total_quantity"] ?? 0,
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-            </div>
-            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-box text-orange-600 text-xl"></i>
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-sm text-gray-500">Promos vendues</p>
+            <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-box text-orange-600 text-lg"></i>
             </div>
         </div>
-        <p class="text-xs text-gray-400 mt-2">Quantité totale</p>
-    </div>
-
-    <!-- Répartition BE/LU -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between mb-3">
-            <p class="text-sm text-gray-500">Répartition par pays</p>
-            <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-globe-europe text-purple-600 text-lg"></i>
-            </div>
-        </div>
-
-        <!-- Commandes -->
-        <div class="flex items-center gap-3 mb-2">
-            <span class="text-xs text-gray-500 w-12">Cmd</span>
-            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                🇧🇪 <?= $kpis["orders_by_country"]["BE"] ?? 0 ?>
-            </span>
-            <span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
-                🇱🇺 <?= $kpis["orders_by_country"]["LU"] ?? 0 ?>
-            </span>
-        </div>
-
-        <!-- Promos -->
-        <div class="flex items-center gap-3">
-            <span class="text-xs text-gray-500 w-12">Promos</span>
+        <p class="text-3xl font-bold text-gray-900 mb-2"><?= number_format(
+            $kpis["total_quantity"] ?? 0,
+            0,
+            ",",
+            " ",
+        ) ?></p>
+        <?php if (empty($country)): ?>
+        <div class="flex items-center gap-2">
             <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
                 🇧🇪 <?= number_format($kpis["quantity_by_country"]["BE"] ?? 0, 0, ",", " ") ?>
             </span>
@@ -168,6 +160,9 @@ $campaignsJson = json_encode($campaignsByCountry);
                 🇱🇺 <?= number_format($kpis["quantity_by_country"]["LU"] ?? 0, 0, ",", " ") ?>
             </span>
         </div>
+        <?php else: ?>
+        <p class="text-xs text-gray-400"><?= $country === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?></p>
+        <?php endif; ?>
     </div>
 </div>
 
