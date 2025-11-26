@@ -164,97 +164,184 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
 </div>
 
 <!-- Produits et Clients sans commande -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Produits de la campagne -->
+<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">Produits de la campagne</h3>
 
-    <!-- Produits de la campagne -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Produits de la campagne</h3>
+    <?php if (empty($campaignProducts)): ?>
+    <p class="text-gray-500 text-center py-4">Aucun produit</p>
+    <?php else: ?>
 
-        <?php if (empty($campaignProducts)): ?>
-        <p class="text-gray-500 text-center py-4">Aucun produit</p>
-        <?php else: ?>
-        <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead>
-                    <tr class="text-left text-xs text-gray-500 uppercase">
-                        <th class="pb-2">Produit</th>
-                        <th class="pb-2 text-right">Qté vendue</th>
-                        <th class="pb-2 text-right">Commandes</th>
-                    </tr>
-                </thead>
-                <tbody class="text-sm">
-                    <?php foreach ($campaignProducts as $product): ?>
-                    <tr class="border-t border-gray-100">
-                        <td class="py-2">
-                            <p class="font-medium"><?= htmlspecialchars($product["product_name"]) ?></p>
-                            <p class="text-xs text-gray-500"><?= htmlspecialchars($product["product_code"]) ?></p>
-                        </td>
-                        <td class="py-2 text-right font-bold"><?= number_format(
-                            $product["quantity_sold"],
+    <!-- En-tête tableau -->
+    <div class="flex items-center justify-between text-xs text-gray-500 uppercase tracking-wider pb-2 border-b border-gray-200 mb-2">
+        <span>Produit</span>
+        <div class="flex gap-6">
+            <span class="w-16 text-center">Cmd</span>
+            <span class="w-20 text-center">Promos</span>
+        </div>
+    </div>
+
+    <div class="space-y-2 max-h-80 overflow-y-auto">
+        <?php foreach ($campaignProducts as $i => $product): ?>
+        <div class="flex items-center justify-between py-2 <?= $i > 0 ? "border-t border-gray-50" : "" ?>">
+            <div class="flex items-center gap-3">
+                <span class="w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full flex items-center justify-center text-sm font-medium">
+                    <?= $i + 1 ?>
+                </span>
+                <div>
+                    <p class="font-medium text-gray-900 text-sm"><?= htmlspecialchars($product["product_name"]) ?></p>
+                    <p class="text-xs text-gray-500"><?= htmlspecialchars($product["product_code"]) ?></p>
+                </div>
+            </div>
+            <div class="flex gap-6">
+                <div class="w-16 text-center">
+                    <p class="font-semibold text-indigo-600"><?= $product["orders_count"] ?></p>
+                </div>
+                <div class="w-20 text-center">
+                    <p class="font-bold text-orange-600"><?= number_format(
+                        $product["quantity_sold"],
+                        0,
+                        ",",
+                        " ",
+                    ) ?></p>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+
+<!-- Performance par représentant -->
+<div class="bg-white rounded-lg shadow-sm p-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance par représentant</h3>
+
+    <?php if (empty($reps)): ?>
+    <div class="text-center py-8">
+        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="fas fa-users text-gray-400"></i>
+        </div>
+        <p class="text-gray-500">Aucune donnée représentant</p>
+        <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
+    </div>
+    <?php
+        // Grouper les représentants par cluster
+        // Trier par quantité
+        // Grouper les représentants par cluster
+        // Trier par quantité
+        else: ?>
+
+    <?php
+    $repsByCluster = [];
+    foreach ($reps as $rep) {
+        $cluster = $rep["cluster"] ?: "Non défini";
+        if (!isset($repsByCluster[$cluster])) {
+            $repsByCluster[$cluster] = [
+                "reps" => [],
+                "totals" => ["clients" => 0, "ordered" => 0, "quantity" => 0],
+            ];
+        }
+        $repsByCluster[$cluster]["reps"][] = $rep;
+        $repsByCluster[$cluster]["totals"]["clients"] += $rep["total_clients"];
+        $repsByCluster[$cluster]["totals"]["ordered"] += $rep["stats"]["customers_ordered"];
+        $repsByCluster[$cluster]["totals"]["quantity"] += $rep["stats"]["total_quantity"];
+    }
+    uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["quantity"]);
+    ?>
+
+    <div class="space-y-3" x-data="{ openClusters: {} }">
+        <?php foreach ($repsByCluster as $clusterName => $clusterData): ?>
+        <?php
+        $clusterRate =
+            $clusterData["totals"]["clients"] > 0
+                ? round(($clusterData["totals"]["ordered"] / $clusterData["totals"]["clients"]) * 100, 1)
+                : 0;
+        $clusterId = md5($clusterName);
+        ?>
+
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <!-- En-tête cluster -->
+            <div class="bg-gray-50 px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
+                 @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
+                       :class="{ 'rotate-90': openClusters['<?= $clusterId ?>'] }"></i>
+                    <div>
+                        <span class="font-medium text-gray-900"><?= htmlspecialchars($clusterName) ?></span>
+                        <span class="text-xs text-gray-500 ml-2"><?= count($clusterData["reps"]) ?> rep.</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4 text-sm">
+                    <div class="text-center">
+                        <span class="font-bold text-gray-900"><?= $clusterData["totals"]["clients"] ?></span>
+                        <span class="text-gray-400">/</span>
+                        <span class="font-bold text-green-600"><?= $clusterData["totals"]["ordered"] ?></span>
+                    </div>
+                    <div class="w-16 text-right">
+                        <span class="font-bold text-orange-600"><?= number_format(
+                            $clusterData["totals"]["quantity"],
                             0,
                             ",",
                             " ",
-                        ) ?></td>
-                        <td class="py-2 text-right text-gray-600"><?= $product["orders_count"] ?></td>
-                    </tr>
+                        ) ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des représentants -->
+            <div x-show="openClusters['<?= $clusterId ?>']"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100">
+                <div class="divide-y divide-gray-100">
+                    <?php usort(
+                        $clusterData["reps"],
+                        fn($a, $b) => $b["stats"]["total_quantity"] - $a["stats"]["total_quantity"],
+                    ); ?>
+                    <?php foreach ($clusterData["reps"] as $rep): ?>
+                    <?php $repRate =
+                        $rep["total_clients"] > 0
+                            ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1)
+                            : 0; ?>
+                    <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-50">
+                        <div class="flex items-center gap-2 pl-6">
+                            <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-indigo-600"><?= strtoupper(
+                                    substr($rep["name"], 0, 2),
+                                ) ?></span>
+                            </div>
+                            <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"]) ?></span>
+                        </div>
+
+                        <div class="flex items-center gap-4 text-sm">
+                            <div class="text-center">
+                                <span class="text-gray-700"><?= $rep["total_clients"] ?></span>
+                                <span class="text-gray-400">/</span>
+                                <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?></span>
+                            </div>
+                            <div class="w-16 text-right">
+                                <span class="font-bold text-orange-600"><?= number_format(
+                                    $rep["stats"]["total_quantity"],
+                                    0,
+                                    ",",
+                                    " ",
+                                ) ?></span>
+                            </div>
+                        </div>
+                    </div>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
+                </div>
+            </div>
         </div>
-        <?php endif; ?>
+        <?php endforeach; ?>
     </div>
 
-    <!-- Clients n'ayant pas commandé -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">Clients sans commande</h3>
-            <?php if (!empty($customersNotOrdered)): ?>
-            <form method="POST" action="/stm/admin/stats/export" class="inline">
-                <input type="hidden" name="type" value="not_ordered">
-                <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
-                <input type="hidden" name="format" value="csv">
-                <button type="submit" class="text-sm text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-download mr-1"></i>Exporter
-                </button>
-            </form>
-            <?php endif; ?>
-        </div>
+    <p class="text-xs text-gray-400 mt-3 text-center">
+        Format: Total clients / Clients ayant commandé | Promos vendues
+    </p>
 
-        <?php if (empty($customersNotOrdered)): ?>
-        <p class="text-gray-500 text-center py-4">Tous les clients ont commandé ! 🎉</p>
-        <?php else: ?>
-        <div class="overflow-x-auto max-h-96">
-            <table class="min-w-full">
-                <thead class="sticky top-0 bg-white">
-                    <tr class="text-left text-xs text-gray-500 uppercase">
-                        <th class="pb-2">Client</th>
-                        <th class="pb-2">Pays</th>
-                        <th class="pb-2">Représentant</th>
-                    </tr>
-                </thead>
-                <tbody class="text-sm">
-                    <?php foreach ($customersNotOrdered as $customer): ?>
-                    <tr class="border-t border-gray-100">
-                        <td class="py-2">
-                            <p class="font-medium"><?= htmlspecialchars($customer["company_name"] ?? "-") ?></p>
-                            <p class="text-xs text-gray-500"><?= htmlspecialchars($customer["customer_number"]) ?></p>
-                        </td>
-                        <td class="py-2">
-                            <span class="px-2 py-1 rounded text-xs <?= $customer["country"] === "BE"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-yellow-100 text-yellow-800" ?>">
-                                <?= $customer["country"] ?>
-                            </span>
-                        </td>
-                        <td class="py-2 text-gray-600"><?= htmlspecialchars($customer["rep_name"] ?? "-") ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <p class="text-xs text-gray-400 mt-2">Affichage limité à 50 clients. Exportez pour la liste complète.</p>
-        <?php endif; ?>
-    </div>
+    <?php endif; ?>
 </div>
 
 <?php else: ?>

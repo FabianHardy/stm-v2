@@ -117,8 +117,9 @@ class StatsController
      */
     public function campaigns(): void
     {
-        // Récupérer le filtre campagne
+        // Récupérer les filtres
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+        $country = !empty($_GET["country"]) ? $_GET["country"] : null;
 
         // Liste des campagnes
         $campaigns = $this->statsModel->getCampaignsList();
@@ -126,12 +127,16 @@ class StatsController
         // Stats de la campagne sélectionnée
         $campaignStats = null;
         $campaignProducts = [];
-        $customersNotOrdered = [];
+        $reps = [];
 
         if ($campaignId) {
             $campaignStats = $this->statsModel->getCampaignStats($campaignId);
             $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
-            $customersNotOrdered = $this->statsModel->getCustomersNotOrdered($campaignId, 50);
+
+            // Récupérer les représentants filtrés sur cette campagne
+            // Le pays est déterminé par la campagne
+            $campaignCountry = $campaignStats["campaign"]["country"] ?? null;
+            $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
         }
 
         $title = "Statistiques - Par campagne";
@@ -177,7 +182,7 @@ class StatsController
             }
         }
 
-        $title = "Statistiques - Par commercial";
+        $title = "Statistiques - Par représentant";
 
         require __DIR__ . "/../Views/admin/stats/sales.php";
     }
