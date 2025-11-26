@@ -221,13 +221,14 @@ class DevToolsController
         try {
             // Chemins des dossiers uploads
             // Chemin absolu vers le dossier public de PROD
-            $prodUploadsPath = "/home/trendyblog/public_html/actions.trendyfoods.com/stm/public";
+            $prodUploadsPath = "/home/trendyblog/actions.trendyfoods.com/stm/public";
 
             // Chemin local (dev) - utiliser BASE_PATH si défini
             if (defined("BASE_PATH")) {
                 $devUploadsPath = BASE_PATH . "/public";
             } else {
-                $devUploadsPath = dirname(dirname(dirname(dirname(__DIR__)))) . "/public";
+                // Depuis /app/Controllers/Admin/ → racine du projet /stm/
+                $devUploadsPath = dirname(dirname(dirname(__DIR__))) . "/public";
             }
 
             // Vérifier que les chemins existent
@@ -260,12 +261,13 @@ class DevToolsController
 
         try {
             // Chemins des dossiers uploads
-            $prodUploadsPath = "/home/trendyblog/public_html/actions.trendyfoods.com/stm/public";
+            $prodUploadsPath = "/home/trendyblog/actions.trendyfoods.com/stm/public";
 
             if (defined("BASE_PATH")) {
                 $devUploadsPath = BASE_PATH . "/public";
             } else {
-                $devUploadsPath = dirname(dirname(dirname(dirname(__DIR__)))) . "/public";
+                // Depuis /app/Controllers/Admin/ → racine du projet /stm/
+                $devUploadsPath = dirname(dirname(dirname(__DIR__))) . "/public";
             }
 
             $fileSync = new FileSync($prodUploadsPath, $devUploadsPath);
@@ -306,7 +308,8 @@ class DevToolsController
         ob_start();
 
         // Chemin vers la vue
-        $viewPath = dirname(dirname(dirname(__DIR__))) . "/Views/admin/" . $view . ".php";
+        // Depuis /app/Controllers/Admin/ → /app/Views/admin/
+        $viewPath = dirname(dirname(__DIR__)) . "/Views/admin/" . $view . ".php";
 
         if (file_exists($viewPath)) {
             require $viewPath;
@@ -321,6 +324,7 @@ class DevToolsController
         $pageScripts = "";
 
         // Charger le layout admin
-        require dirname(dirname(dirname(__DIR__))) . "/Views/layouts/admin.php";
+        // Depuis /app/Controllers/Admin/ → /app/Views/layouts/admin.php
+        require dirname(dirname(__DIR__)) . "/Views/layouts/admin.php";
     }
 }
