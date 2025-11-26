@@ -140,27 +140,34 @@ $campaignsJson = json_encode($campaignsByCountry);
 
     <!-- Répartition BE/LU -->
     <div class="bg-white rounded-lg shadow-sm p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm text-gray-500">Répartition</p>
-                <div class="flex items-center gap-4 mt-1">
-                    <div>
-                        <span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                            🇧🇪 <?= $kpis["orders_by_country"]["BE"] ?? 0 ?>
-                        </span>
-                    </div>
-                    <div>
-                        <span class="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
-                            🇱🇺 <?= $kpis["orders_by_country"]["LU"] ?? 0 ?>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-globe-europe text-purple-600 text-xl"></i>
+        <div class="flex items-center justify-between mb-3">
+            <p class="text-sm text-gray-500">Répartition par pays</p>
+            <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-globe-europe text-purple-600 text-lg"></i>
             </div>
         </div>
-        <p class="text-xs text-gray-400 mt-2">Commandes par pays</p>
+
+        <!-- Commandes -->
+        <div class="flex items-center gap-3 mb-2">
+            <span class="text-xs text-gray-500 w-12">Cmd</span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                🇧🇪 <?= $kpis["orders_by_country"]["BE"] ?? 0 ?>
+            </span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                🇱🇺 <?= $kpis["orders_by_country"]["LU"] ?? 0 ?>
+            </span>
+        </div>
+
+        <!-- Promos -->
+        <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500 w-12">Promos</span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                🇧🇪 <?= number_format($kpis["quantity_by_country"]["BE"] ?? 0, 0, ",", " ") ?>
+            </span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                🇱🇺 <?= number_format($kpis["quantity_by_country"]["LU"] ?? 0, 0, ",", " ") ?>
+            </span>
+        </div>
     </div>
 </div>
 
@@ -282,9 +289,19 @@ $campaignsJson = json_encode($campaignsByCountry);
             // Pas de filtre campagne → afficher campagne
             // Pas de filtre pays → afficher pays
             else: ?>
-        <div class="space-y-3">
+
+        <!-- En-tête -->
+        <div class="flex items-center justify-between text-xs text-gray-500 uppercase tracking-wider pb-2 border-b border-gray-200 mb-2">
+            <span>Produit</span>
+            <div class="flex gap-4">
+                <span class="w-16 text-center">Cmd</span>
+                <span class="w-16 text-center">Promos</span>
+            </div>
+        </div>
+
+        <div class="space-y-2">
             <?php foreach ($topProducts as $i => $product): ?>
-            <div class="flex items-center justify-between py-2 <?= $i > 0 ? "border-t border-gray-100" : "" ?>">
+            <div class="flex items-center justify-between py-2 <?= $i > 0 ? "border-t border-gray-50" : "" ?>">
                 <div class="flex items-center gap-3 flex-1 min-w-0">
                     <span class="w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
                         <?= $i + 1 ?>
@@ -312,14 +329,18 @@ $campaignsJson = json_encode($campaignsByCountry);
                         </div>
                     </div>
                 </div>
-                <div class="text-right flex-shrink-0 ml-2">
-                    <p class="font-bold text-gray-900"><?= number_format(
-                        $product["total_quantity"] ?? 0,
-                        0,
-                        ",",
-                        " ",
-                    ) ?></p>
-                    <p class="text-xs text-gray-500"><?= $product["orders_count"] ?? 0 ?> cmd</p>
+                <div class="flex gap-4 flex-shrink-0 ml-2">
+                    <div class="w-16 text-center">
+                        <p class="font-semibold text-indigo-600"><?= $product["orders_count"] ?? 0 ?></p>
+                    </div>
+                    <div class="w-16 text-center">
+                        <p class="font-bold text-orange-600"><?= number_format(
+                            $product["total_quantity"] ?? 0,
+                            0,
+                            ",",
+                            " ",
+                        ) ?></p>
+                    </div>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -343,21 +364,45 @@ $campaignsJson = json_encode($campaignsByCountry);
             // Trier par quantité décroissante
             // Trier par quantité décroissante
             else: ?>
-        <div class="space-y-3">
+
+        <!-- En-tête -->
+        <div class="flex items-center justify-between text-xs text-gray-500 uppercase tracking-wider pb-2 border-b border-gray-200 mb-2">
+            <span>Cluster</span>
+            <div class="flex gap-4">
+                <span class="w-16 text-center">Cmd</span>
+                <span class="w-16 text-center">Promos</span>
+            </div>
+        </div>
+
+        <div class="space-y-2">
             <?php
-            arsort($clusterGroups);
+            uasort($clusterGroups, function ($a, $b) {
+                return ($b["quantity"] ?? 0) - ($a["quantity"] ?? 0);
+            });
             $rank = 1;
             foreach ($clusterGroups as $cluster => $stats): ?>
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between py-2 <?= $rank > 1 ? "border-t border-gray-50" : "" ?>">
                 <div class="flex items-center gap-3">
                     <span class="w-6 h-6 bg-green-100 text-green-800 rounded-full flex items-center justify-center text-sm font-medium">
                         <?= $rank++ ?>
                     </span>
-                    <p class="font-medium text-gray-900"><?= htmlspecialchars($cluster ?: "Non défini") ?></p>
+                    <div>
+                        <p class="font-medium text-gray-900"><?= htmlspecialchars($cluster ?: "Non défini") ?></p>
+                        <p class="text-xs text-gray-500"><?= $stats["customers"] ?? 0 ?> clients</p>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <p class="font-bold text-gray-900"><?= number_format($stats["quantity"] ?? 0, 0, ",", " ") ?></p>
-                    <p class="text-xs text-gray-500"><?= $stats["customers"] ?? 0 ?> clients</p>
+                <div class="flex gap-4">
+                    <div class="w-16 text-center">
+                        <p class="font-semibold text-indigo-600"><?= $stats["orders"] ?? 0 ?></p>
+                    </div>
+                    <div class="w-16 text-center">
+                        <p class="font-bold text-orange-600"><?= number_format(
+                            $stats["quantity"] ?? 0,
+                            0,
+                            ",",
+                            " ",
+                        ) ?></p>
+                    </div>
                 </div>
             </div>
             <?php endforeach;

@@ -281,6 +281,7 @@ class Stats
         $query = "
             SELECT cu.customer_number, cu.country,
                    COUNT(DISTINCT o.customer_id) as customer_count,
+                   COUNT(DISTINCT o.id) as orders_count,
                    COALESCE(SUM(ol.quantity), 0) as total_quantity
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -307,6 +308,7 @@ class Stats
             $key = $row["customer_number"] . "_" . $row["country"];
             $statsByCustomer[$key] = [
                 "quantity" => (int) $row["total_quantity"],
+                "orders" => (int) $row["orders_count"],
                 "count" => 1,
             ];
 
@@ -339,11 +341,13 @@ class Stats
             if (!isset($clusterStats[$cluster])) {
                 $clusterStats[$cluster] = [
                     "quantity" => 0,
+                    "orders" => 0,
                     "customers" => 0,
                 ];
             }
 
             $clusterStats[$cluster]["quantity"] += $stats["quantity"];
+            $clusterStats[$cluster]["orders"] += $stats["orders"];
             $clusterStats[$cluster]["customers"] += $stats["count"];
         }
 
