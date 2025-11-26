@@ -30,8 +30,8 @@ ob_start();
             <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
             <select name="country" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 <option value="">Tous</option>
-                <option value="BE" <?= ($country ?? "") === "BE" ? "selected" : "" ?>>🇧🇪 Belgique</option>
-                <option value="LU" <?= ($country ?? "") === "LU" ? "selected" : "" ?>>🇱🇺 Luxembourg</option>
+                <option value="BE" <?php echo ($country ?? "") === "BE" ? "selected" : ""; ?>>🇧🇪 Belgique</option>
+                <option value="LU" <?php echo ($country ?? "") === "LU" ? "selected" : ""; ?>>🇱🇺 Luxembourg</option>
             </select>
         </div>
 
@@ -41,8 +41,10 @@ ob_start();
             <select name="campaign_id" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 <option value="">Toutes</option>
                 <?php foreach ($campaigns as $c): ?>
-                <option value="<?= $c["id"] ?>" <?= ($campaignId ?? null) == $c["id"] ? "selected" : "" ?>>
-                    <?= htmlspecialchars($c["name"]) ?> (<?= $c["country"] ?>)
+                <option value="<?php echo $c["id"]; ?>" <?php echo ($campaignId ?? null) == $c["id"]
+    ? "selected"
+    : ""; ?>>
+                    <?php echo htmlspecialchars($c["name"]); ?> (<?php echo $c["country"]; ?>)
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -64,15 +66,15 @@ ob_start();
                 <i class="fas fa-user text-indigo-600 text-xl"></i>
             </div>
             <div>
-                <h2 class="text-xl font-bold text-gray-900"><?= htmlspecialchars($repDetail["name"]) ?></h2>
+                <h2 class="text-xl font-bold text-gray-900"><?php echo htmlspecialchars($repDetail["name"]); ?></h2>
                 <p class="text-sm text-gray-500">
                     <span class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs mr-2">
-                        <?= htmlspecialchars($repDetail["cluster"]) ?>
+                        <?php echo htmlspecialchars($repDetail["cluster"]); ?>
                     </span>
-                    <span class="inline-flex items-center px-2 py-0.5 <?= $repDetail["country"] === "BE"
+                    <span class="inline-flex items-center px-2 py-0.5 <?php echo $repDetail["country"] === "BE"
                         ? "bg-blue-100 text-blue-700"
-                        : "bg-yellow-100 text-yellow-700" ?> rounded text-xs">
-                        <?= $repDetail["country"] === "BE" ? "🇧🇪" : "🇱🇺" ?> <?= $repDetail["country"] ?>
+                        : "bg-yellow-100 text-yellow-700"; ?> rounded text-xs">
+                        <?php echo $repDetail["country"] === "BE" ? "🇧🇪" : "🇱🇺"; ?> <?php echo $repDetail["country"]; ?>
                     </span>
                 </p>
             </div>
@@ -80,18 +82,18 @@ ob_start();
 
         <?php
         $backUrl = "/stm/admin/stats/sales";
-        $params = [];
+        $backParams = [];
         if (!empty($country)) {
-            $params[] = "country=" . $country;
+            $backParams[] = "country=" . $country;
         }
         if (!empty($campaignId)) {
-            $params[] = "campaign_id=" . $campaignId;
+            $backParams[] = "campaign_id=" . $campaignId;
         }
-        if (!empty($params)) {
-            $backUrl .= "?" . implode("&", $params);
+        if (!empty($backParams)) {
+            $backUrl .= "?" . implode("&", $backParams);
         }
         ?>
-        <a href="<?= $backUrl ?>" class="text-gray-500 hover:text-gray-700 p-2">
+        <a href="<?php echo $backUrl; ?>" class="text-gray-500 hover:text-gray-700 p-2">
             <i class="fas fa-arrow-left mr-1"></i> Retour
         </a>
     </div>
@@ -99,11 +101,11 @@ ob_start();
     <!-- Stats du rep -->
     <div class="grid grid-cols-4 gap-4 mb-6">
         <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-gray-900"><?= $repDetail["total_clients"] ?></p>
+            <p class="text-2xl font-bold text-gray-900"><?php echo $repDetail["total_clients"]; ?></p>
             <p class="text-xs text-gray-500">Total clients</p>
         </div>
         <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-green-600"><?= $repDetail["stats"]["customers_ordered"] ?></p>
+            <p class="text-2xl font-bold text-green-600"><?php echo $repDetail["stats"]["customers_ordered"]; ?></p>
             <p class="text-xs text-gray-500">Ont commandé</p>
         </div>
         <div class="bg-gray-50 rounded-lg p-4 text-center">
@@ -111,23 +113,23 @@ ob_start();
                 $repDetail["total_clients"] > 0
                     ? round(($repDetail["stats"]["customers_ordered"] / $repDetail["total_clients"]) * 100, 1)
                     : 0; ?>
-            <p class="text-2xl font-bold text-indigo-600"><?= $convRate ?>%</p>
+            <p class="text-2xl font-bold text-indigo-600"><?php echo $convRate; ?>%</p>
             <p class="text-xs text-gray-500">Taux participation</p>
         </div>
         <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-orange-600"><?= number_format(
+            <p class="text-2xl font-bold text-orange-600"><?php echo number_format(
                 $repDetail["stats"]["total_quantity"],
                 0,
                 ",",
                 " ",
-            ) ?></p>
+            ); ?></p>
             <p class="text-xs text-gray-500">Promos vendues</p>
         </div>
     </div>
 
     <!-- Liste des clients du rep -->
     <h3 class="font-semibold text-gray-900 mb-3">
-        Clients (<?= count($repClients) ?>)
+        Clients (<?php echo count($repClients); ?>)
         <span class="text-sm font-normal text-gray-500">- Triés par quantité commandée</span>
     </h3>
 
@@ -146,10 +148,12 @@ ob_start();
                 <?php foreach ($repClients as $client): ?>
                 <tr class="hover:bg-gray-50">
                     <td class="py-3 px-4">
-                        <p class="font-medium text-gray-900"><?= htmlspecialchars($client["company_name"] ?? "-") ?></p>
-                        <p class="text-xs text-gray-500"><?= htmlspecialchars($client["customer_number"]) ?></p>
+                        <p class="font-medium text-gray-900"><?php echo htmlspecialchars(
+                            $client["company_name"] ?? "-",
+                        ); ?></p>
+                        <p class="text-xs text-gray-500"><?php echo htmlspecialchars($client["customer_number"]); ?></p>
                     </td>
-                    <td class="py-3 px-4 text-gray-600"><?= htmlspecialchars($client["city"] ?? "-") ?></td>
+                    <td class="py-3 px-4 text-gray-600"><?php echo htmlspecialchars($client["city"] ?? "-"); ?></td>
                     <td class="py-3 px-4 text-center">
                         <?php if ($client["has_ordered"]): ?>
                         <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
@@ -161,13 +165,13 @@ ob_start();
                         </span>
                         <?php endif; ?>
                     </td>
-                    <td class="py-3 px-4 text-right font-medium"><?= $client["orders_count"] ?></td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format(
+                    <td class="py-3 px-4 text-right font-medium"><?php echo $client["orders_count"]; ?></td>
+                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?php echo number_format(
                         $client["total_quantity"],
                         0,
                         ",",
                         " ",
-                    ) ?></td>
+                    ); ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -179,7 +183,7 @@ ob_start();
     // Grouper les représentants par cluster
     // Ignorer les représentants sans clients
 
-    // Supprimer les clusters vides (au cas où)
+    // Supprimer les clusters vides
 
     // Trier les clusters par quantité décroissante
     // Trier les reps par quantité décroissante
@@ -213,9 +217,13 @@ foreach ($reps as $rep) {
     $totals["quantity"] += $rep["stats"]["total_quantity"];
 }
 
-$repsByCluster = array_filter($repsByCluster, fn($c) => $c["totals"]["clients"] > 0);
+$repsByCluster = array_filter($repsByCluster, function ($c) {
+    return $c["totals"]["clients"] > 0;
+});
 
-uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["quantity"]);
+uasort($repsByCluster, function ($a, $b) {
+    return $b["totals"]["quantity"] - $a["totals"]["quantity"];
+});
 ?>
 
 <?php if (empty($reps)): ?>
@@ -234,25 +242,42 @@ uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["qu
         <div class="flex items-center gap-8">
             <div>
                 <span class="text-sm text-gray-500">Total clients</span>
-                <p class="text-xl font-bold text-gray-900"><?= number_format($totals["clients"], 0, ",", " ") ?></p>
+                <p class="text-xl font-bold text-gray-900"><?php echo number_format(
+                    $totals["clients"],
+                    0,
+                    ",",
+                    " ",
+                ); ?></p>
             </div>
             <div>
                 <span class="text-sm text-gray-500">Ont commandé</span>
-                <p class="text-xl font-bold text-green-600"><?= number_format($totals["ordered"], 0, ",", " ") ?></p>
+                <p class="text-xl font-bold text-green-600"><?php echo number_format(
+                    $totals["ordered"],
+                    0,
+                    ",",
+                    " ",
+                ); ?></p>
             </div>
             <div>
                 <span class="text-sm text-gray-500">Taux participation</span>
                 <p class="text-xl font-bold text-indigo-600">
-                    <?= $totals["clients"] > 0 ? round(($totals["ordered"] / $totals["clients"]) * 100, 1) : 0 ?>%
+                    <?php echo $totals["clients"] > 0
+                        ? round(($totals["ordered"] / $totals["clients"]) * 100, 1)
+                        : 0; ?>%
                 </p>
             </div>
             <div>
                 <span class="text-sm text-gray-500">Promos vendues</span>
-                <p class="text-xl font-bold text-orange-600"><?= number_format($totals["quantity"], 0, ",", " ") ?></p>
+                <p class="text-xl font-bold text-orange-600"><?php echo number_format(
+                    $totals["quantity"],
+                    0,
+                    ",",
+                    " ",
+                ); ?></p>
             </div>
         </div>
         <div class="text-sm text-gray-500">
-            <?= count($repsByCluster) ?> clusters • <?= count($reps) ?> représentants
+            <?php echo count($repsByCluster); ?> clusters • <?php echo count($reps); ?> représentants
         </div>
     </div>
 </div>
@@ -271,67 +296,66 @@ uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["qu
     <div class="bg-white rounded-lg shadow-sm overflow-hidden">
         <!-- En-tête cluster (cliquable) -->
         <div class="bg-gray-50 px-6 py-4 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
-             @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
+             @click="openClusters['<?php echo $clusterId; ?>'] = !openClusters['<?php echo $clusterId; ?>']">
             <div class="flex items-center gap-4">
                 <i class="fas fa-chevron-right text-gray-400 transition-transform duration-200"
-                   :class="{ 'rotate-90': openClusters['<?= $clusterId ?>'] }"></i>
+                   :class="{ 'rotate-90': openClusters['<?php echo $clusterId; ?>'] }"></i>
                 <div>
-                    <h3 class="font-semibold text-gray-900"><?= htmlspecialchars($clusterName) ?></h3>
-                    <p class="text-sm text-gray-500"><?= count($clusterData["reps"]) ?> représentant<?= count(
-     $clusterData["reps"],
- ) > 1
-     ? "s"
-     : "" ?></p>
+                    <h3 class="font-semibold text-gray-900"><?php echo htmlspecialchars($clusterName); ?></h3>
+                    <p class="text-sm text-gray-500"><?php echo count(
+                        $clusterData["reps"],
+                    ); ?> représentant<?php echo count($clusterData["reps"]) > 1 ? "s" : ""; ?></p>
                 </div>
             </div>
 
             <div class="flex items-center gap-6 text-sm">
                 <div class="text-center">
-                    <p class="font-bold text-gray-900"><?= number_format(
+                    <p class="font-bold text-gray-900"><?php echo number_format(
                         $clusterData["totals"]["clients"],
                         0,
                         ",",
                         " ",
-                    ) ?></p>
+                    ); ?></p>
                     <p class="text-xs text-gray-500">Clients</p>
                 </div>
                 <div class="text-center">
-                    <p class="font-bold text-green-600"><?= number_format(
+                    <p class="font-bold text-green-600"><?php echo number_format(
                         $clusterData["totals"]["ordered"],
                         0,
                         ",",
                         " ",
-                    ) ?></p>
+                    ); ?></p>
                     <p class="text-xs text-gray-500">Commandé</p>
                 </div>
                 <div class="text-center">
-                    <p class="font-bold <?= $clusterRate >= 50
-                        ? "text-green-600"
-                        : ($clusterRate >= 25
-                            ? "text-orange-500"
-                            : "text-red-500") ?>"><?= $clusterRate ?>%</p>
+                    <?php
+                    $rateClass = "text-red-500";
+                    if ($clusterRate >= 50) {
+                        $rateClass = "text-green-600";
+                    } elseif ($clusterRate >= 25) {
+                        $rateClass = "text-orange-500";
+                    }
+                    ?>
+                    <p class="font-bold <?php echo $rateClass; ?>"><?php echo $clusterRate; ?>%</p>
                     <p class="text-xs text-gray-500">Taux</p>
                 </div>
                 <div class="text-center min-w-[80px]">
-                    <p class="font-bold text-orange-600"><?= number_format(
+                    <p class="font-bold text-orange-600"><?php echo number_format(
                         $clusterData["totals"]["quantity"],
                         0,
                         ",",
                         " ",
-                    ) ?></p>
+                    ); ?></p>
                     <p class="text-xs text-gray-500">Promos</p>
                 </div>
             </div>
         </div>
 
         <!-- Liste des représentants du cluster -->
-        <div x-show="openClusters['<?= $clusterId ?>']"
+        <div x-show="openClusters['<?php echo $clusterId; ?>']"
              x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 transform -translate-y-2"
-             x-transition:enter-end="opacity-100 transform translate-y-0"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0">
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100">
             <table class="min-w-full">
                 <thead class="bg-gray-50 border-t border-b border-gray-200">
                     <tr class="text-left text-xs text-gray-500 uppercase">
@@ -344,60 +368,74 @@ uasort($repsByCluster, fn($a, $b) => $b["totals"]["quantity"] - $a["totals"]["qu
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    <?php usort(
-                        $clusterData["reps"],
-                        fn($a, $b) => $b["stats"]["total_quantity"] - $a["stats"]["total_quantity"],
-                    ); ?>
+                    <?php usort($clusterData["reps"], function ($a, $b) {
+                        return $b["stats"]["total_quantity"] - $a["stats"]["total_quantity"];
+                    }); ?>
                     <?php foreach ($clusterData["reps"] as $rep): ?>
-                    <?php $repRate =
+                    <?php
+                    $repRate =
                         $rep["total_clients"] > 0
                             ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1)
-                            : 0; ?>
+                            : 0;
+                    $repRateClass = "text-red-500";
+                    if ($repRate >= 50) {
+                        $repRateClass = "text-green-600";
+                    } elseif ($repRate >= 25) {
+                        $repRateClass = "text-orange-500";
+                    }
+                    ?>
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-3 pl-14">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
                                     <span class="text-xs font-medium text-indigo-600">
-                                        <?= strtoupper(substr($rep["name"], 0, 2)) ?>
+                                        <?php echo strtoupper(substr($rep["name"], 0, 2)); ?>
                                     </span>
                                 </div>
                                 <div>
-                                    <p class="font-medium text-gray-900"><?= htmlspecialchars($rep["name"]) ?></p>
+                                    <p class="font-medium text-gray-900"><?php echo htmlspecialchars(
+                                        $rep["name"],
+                                    ); ?></p>
                                     <p class="text-xs text-gray-500">
-                                        <?= $rep["country"] === "BE" ? "🇧🇪" : "🇱🇺" ?>
-                                        <?= $rep["country"] ?>
+                                        <?php echo $rep["country"] === "BE" ? "🇧🇪" : "🇱🇺"; ?>
+                                        <?php echo $rep["country"]; ?>
                                     </p>
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-3 text-right font-medium"><?= number_format(
+                        <td class="px-6 py-3 text-right font-medium"><?php echo number_format(
                             $rep["total_clients"],
                             0,
                             ",",
                             " ",
-                        ) ?></td>
-                        <td class="px-6 py-3 text-right font-medium text-green-600"><?= $rep["stats"][
+                        ); ?></td>
+                        <td class="px-6 py-3 text-right font-medium text-green-600"><?php echo $rep["stats"][
                             "customers_ordered"
-                        ] ?></td>
-                        <td class="px-6 py-3 text-right font-bold <?= $repRate >= 50
-                            ? "text-green-600"
-                            : ($repRate >= 25
-                                ? "text-orange-500"
-                                : "text-red-500") ?>">
-                            <?= $repRate ?>%
+                        ]; ?></td>
+                        <td class="px-6 py-3 text-right font-bold <?php echo $repRateClass; ?>">
+                            <?php echo $repRate; ?>%
                         </td>
-                        <td class="px-6 py-3 text-right font-bold text-orange-600"><?= number_format(
+                        <td class="px-6 py-3 text-right font-bold text-orange-600"><?php echo number_format(
                             $rep["stats"]["total_quantity"],
                             0,
                             ",",
                             " ",
-                        ) ?></td>
+                        ); ?></td>
                         <td class="px-6 py-3 text-center">
-                            <a href="/stm/admin/stats/sales?rep_id=<?= urlencode($rep["id"]) ?>&rep_country=<?=
-$rep["country"]
-$campaignId ? "&campaign_id=" . $campaignId : ""
-$country ? "&country=" . $country : ""
-?>"
+                            <?php
+                            $detailUrl =
+                                "/stm/admin/stats/sales?rep_id=" .
+                                urlencode($rep["id"]) .
+                                "&rep_country=" .
+                                $rep["country"];
+                            if (!empty($campaignId)) {
+                                $detailUrl .= "&campaign_id=" . $campaignId;
+                            }
+                            if (!empty($country)) {
+                                $detailUrl .= "&country=" . $country;
+                            }
+                            ?>
+                            <a href="<?php echo $detailUrl; ?>"
                                class="inline-flex items-center px-3 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-sm">
                                 <i class="fas fa-eye mr-1"></i> Voir
                             </a>
