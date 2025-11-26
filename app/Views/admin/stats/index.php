@@ -175,11 +175,59 @@ $campaignsJson = json_encode($campaignsByCountry);
         </div>
     </div>
 
-    <!-- Répartition par pays (pie) - seulement si pas de filtre pays -->
+    <!-- Répartition par pays - seulement si pas de filtre pays -->
     <?php if (empty($country)): ?>
     <div class="bg-white rounded-lg shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Quantités par pays</h3>
-        <div class="h-64 flex items-center justify-center">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Répartition par pays</h3>
+
+        <!-- Stats textuelles -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <!-- Belgique -->
+            <div class="bg-blue-50 rounded-lg p-4 text-center">
+                <span class="text-2xl">🇧🇪</span>
+                <p class="font-semibold text-blue-900 mt-1">Belgique</p>
+                <div class="mt-2 space-y-1">
+                    <p class="text-xl font-bold text-blue-700"><?= number_format(
+                        $kpis["orders_by_country"]["BE"] ?? 0,
+                        0,
+                        ",",
+                        " ",
+                    ) ?></p>
+                    <p class="text-xs text-blue-600">commandes</p>
+                    <p class="text-lg font-bold text-blue-700"><?= number_format(
+                        $kpis["quantity_by_country"]["BE"] ?? 0,
+                        0,
+                        ",",
+                        " ",
+                    ) ?></p>
+                    <p class="text-xs text-blue-600">promos vendues</p>
+                </div>
+            </div>
+            <!-- Luxembourg -->
+            <div class="bg-yellow-50 rounded-lg p-4 text-center">
+                <span class="text-2xl">🇱🇺</span>
+                <p class="font-semibold text-yellow-900 mt-1">Luxembourg</p>
+                <div class="mt-2 space-y-1">
+                    <p class="text-xl font-bold text-yellow-700"><?= number_format(
+                        $kpis["orders_by_country"]["LU"] ?? 0,
+                        0,
+                        ",",
+                        " ",
+                    ) ?></p>
+                    <p class="text-xs text-yellow-600">commandes</p>
+                    <p class="text-lg font-bold text-yellow-700"><?= number_format(
+                        $kpis["quantity_by_country"]["LU"] ?? 0,
+                        0,
+                        ",",
+                        " ",
+                    ) ?></p>
+                    <p class="text-xs text-yellow-600">promos vendues</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphique donut -->
+        <div class="h-32">
             <canvas id="countryChart"></canvas>
         </div>
     </div>
@@ -194,13 +242,26 @@ $campaignsJson = json_encode($campaignsByCountry);
                     <span class="text-4xl"><?= $country === "BE" ? "🇧🇪" : "🇱🇺" ?></span>
                 </div>
                 <p class="text-xl font-bold text-gray-900"><?= $country === "BE" ? "Belgique" : "Luxembourg" ?></p>
-                <p class="text-3xl font-bold text-indigo-600 mt-2"><?= number_format(
-                    $kpis["total_quantity"] ?? 0,
-                    0,
-                    ",",
-                    " ",
-                ) ?></p>
-                <p class="text-gray-500">unités commandées</p>
+                <div class="grid grid-cols-2 gap-6 mt-4">
+                    <div>
+                        <p class="text-3xl font-bold text-indigo-600"><?= number_format(
+                            $kpis["total_orders"] ?? 0,
+                            0,
+                            ",",
+                            " ",
+                        ) ?></p>
+                        <p class="text-gray-500 text-sm">commandes</p>
+                    </div>
+                    <div>
+                        <p class="text-3xl font-bold text-orange-600"><?= number_format(
+                            $kpis["total_quantity"] ?? 0,
+                            0,
+                            ",",
+                            " ",
+                        ) ?></p>
+                        <p class="text-gray-500 text-sm">promos vendues</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
