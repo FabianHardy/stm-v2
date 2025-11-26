@@ -804,12 +804,19 @@ class Stats
                 return ["orders_count" => 0, "customers_ordered" => 0, "total_quantity" => 0];
             }
 
-            // Construire la liste des numéros clients
-            $customerNumbers = array_column($clientsResult, "customer_number");
+            // Construire la liste des numéros clients (filtrer les nulls)
+            $customerNumbers = array_filter(
+                array_column($clientsResult, "customer_number"),
+                fn($n) => $n !== null && $n !== "",
+            );
+
+            if (empty($customerNumbers)) {
+                return ["orders_count" => 0, "customers_ordered" => 0, "total_quantity" => 0];
+            }
 
             // Échapper les numéros pour la requête IN
             $escapedNumbers = array_map(function ($num) {
-                return "'" . addslashes($num) . "'";
+                return "'" . addslashes((string) $num) . "'";
             }, $customerNumbers);
             $inClause = implode(",", $escapedNumbers);
 

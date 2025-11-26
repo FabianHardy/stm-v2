@@ -78,11 +78,20 @@ ob_start();
             </div>
         </div>
 
-        <a href="/stm/admin/stats/sales<?=
-        $country ? "?country=" . $country : ""
-        $campaignId ? ($country ? "&" : "?") . "campaign_id=" . $campaignId : ""
-        ?>"
-           class="text-gray-500 hover:text-gray-700 p-2">
+        <?php
+        $backUrl = "/stm/admin/stats/sales";
+        $params = [];
+        if (!empty($country)) {
+            $params[] = "country=" . $country;
+        }
+        if (!empty($campaignId)) {
+            $params[] = "campaign_id=" . $campaignId;
+        }
+        if (!empty($params)) {
+            $backUrl .= "?" . implode("&", $params);
+        }
+        ?>
+        <a href="<?= $backUrl ?>" class="text-gray-500 hover:text-gray-700 p-2">
             <i class="fas fa-arrow-left mr-1"></i> Retour
         </a>
     </div>
