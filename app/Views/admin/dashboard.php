@@ -3,6 +3,8 @@
  * Vue : Dashboard Admin
  * Description : Page principale du dashboard avec KPI et statistiques
  * Layout : layouts/admin.php
+ *
+ * @modified 2025/11/26 - Correction requêtes et ajout stats promos
  */
 
 use Core\Database;
@@ -15,11 +17,12 @@ $db = Database::getInstance();
 
 // Initialisation des variables par défaut
 $stats = [
-    'total_campaigns' => 0,
-    'active_campaigns' => 0,
-    'total_customers' => 0,
-    'total_orders' => 0,
-    'total_products' => 0
+    "total_campaigns" => 0,
+    "active_campaigns" => 0,
+    "total_customers" => 0,
+    "total_orders" => 0,
+    "total_promos" => 0,
+    "total_quantity" => 0,
 ];
 
 $recent_orders = [];
@@ -27,73 +30,82 @@ $campaign_stats = [];
 $product_categories = [];
 $monthly_orders = [];
 
-// KPI 1: Campagnes totales et actives
+// KPI 1: Campagnes totales et actives (calcul dynamique basé sur les dates)
 try {
     $results = $db->query("
-        SELECT 
+        SELECT
             COUNT(*) as total,
-            SUM(CASE WHEN status = 'active' AND NOW() BETWEEN start_date AND end_date THEN 1 ELSE 0 END) as active
+            SUM(CASE WHEN CURDATE() BETWEEN start_date AND end_date THEN 1 ELSE 0 END) as active
         FROM campaigns
     ");
-    
+
     if (!empty($results)) {
-        $stats['total_campaigns'] = $results[0]['total'] ?? 0;
-        $stats['active_campaigns'] = $results[0]['active'] ?? 0;
+        $stats["total_campaigns"] = (int) ($results[0]["total"] ?? 0);
+        $stats["active_campaigns"] = (int) ($results[0]["active"] ?? 0);
     }
 } catch (\PDOException $e) {
     error_log("Erreur récupération stats campagnes: " . $e->getMessage());
 }
 
-// KPI 2: Clients totaux
+// KPI 2: Clients totaux (depuis orders validées uniquement - clients ayant commandé)
 try {
-    $results = $db->query("SELECT COUNT(*) as total FROM customers");
+    $results = $db->query("SELECT COUNT(DISTINCT customer_id) as total FROM orders WHERE status = 'validated'");
     if (!empty($results)) {
-        $stats['total_customers'] = $results[0]['total'] ?? 0;
+        $stats["total_customers"] = (int) ($results[0]["total"] ?? 0);
     }
 } catch (\PDOException $e) {
     error_log("Erreur récupération stats clients: " . $e->getMessage());
 }
 
-// KPI 3: Commandes totales
+// KPI 3: Commandes validées et quantités totales
 try {
-    $results = $db->query("SELECT COUNT(*) as total FROM orders");
+    $results = $db->query("
+        SELECT
+            COUNT(DISTINCT o.id) as total_orders,
+            COALESCE(SUM(ol.quantity), 0) as total_quantity
+        FROM orders o
+        LEFT JOIN order_lines ol ON o.id = ol.order_id
+        WHERE o.status = 'validated'
+    ");
     if (!empty($results)) {
-        $stats['total_orders'] = $results[0]['total'] ?? 0;
+        $stats["total_orders"] = (int) ($results[0]["total_orders"] ?? 0);
+        $stats["total_quantity"] = (int) ($results[0]["total_quantity"] ?? 0);
     }
 } catch (\PDOException $e) {
     error_log("Erreur récupération stats commandes: " . $e->getMessage());
 }
 
-// KPI 4: Promotions totaux
+// KPI 4: Promotions actives
 try {
     $results = $db->query("
-        SELECT COUNT(*) as total 
-        FROM products 
+        SELECT COUNT(*) as total
+        FROM products
         WHERE is_active = 1
     ");
     if (!empty($results)) {
-        $stats['total_products'] = $results[0]['total'] ?? 0;
+        $stats["total_promos"] = (int) ($results[0]["total"] ?? 0);
     }
 } catch (\PDOException $e) {
     error_log("Erreur récupération stats Promotions: " . $e->getMessage());
 }
 
-// Dernières commandes
+// Dernières commandes (corrigé: utiliser c.name au lieu de c.title)
 try {
     $recent_orders = $db->query("
-        SELECT 
+        SELECT
             o.id,
             o.order_number,
-            c.title as campaign_name,
+            c.name as campaign_name,
             cu.company_name,
             cu.country,
+            o.status,
             o.created_at,
-            COUNT(ol.id) as items_count
+            COALESCE(SUM(ol.quantity), 0) as items_count
         FROM orders o
         LEFT JOIN campaigns c ON o.campaign_id = c.id
         LEFT JOIN customers cu ON o.customer_id = cu.id
         LEFT JOIN order_lines ol ON o.id = ol.order_id
-        GROUP BY o.id
+        GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at
         ORDER BY o.created_at DESC
         LIMIT 10
     ");
@@ -102,19 +114,20 @@ try {
     $recent_orders = [];
 }
 
-// Stats par campagne pour le graphique
+// Stats par campagne pour le graphique (campagnes actives)
 try {
     $campaign_stats = $db->query("
-        SELECT 
-            c.title as campaign_name,
+        SELECT
+            c.name as campaign_name,
+            c.country,
             COUNT(DISTINCT o.id) as orders_count,
-            COUNT(DISTINCT ol.id) as items_count
+            COALESCE(SUM(ol.quantity), 0) as quantity_count
         FROM campaigns c
-        LEFT JOIN orders o ON c.id = o.campaign_id
+        LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated'
         LEFT JOIN order_lines ol ON o.id = ol.order_id
-        WHERE c.status = 'active'
-        GROUP BY c.id
-        ORDER BY orders_count DESC
+        WHERE CURDATE() BETWEEN c.start_date AND c.end_date
+        GROUP BY c.id, c.name, c.country
+        ORDER BY quantity_count DESC
         LIMIT 5
     ");
 } catch (\PDOException $e) {
@@ -125,32 +138,36 @@ try {
 // Répartition par catégorie de Promotions
 try {
     $product_categories = $db->query("
-        SELECT 
+        SELECT
             cat.name_fr as category_name,
             cat.color,
             COUNT(DISTINCT p.id) as products_count,
-            COUNT(DISTINCT ol.id) as orders_count
+            COALESCE(SUM(ol.quantity), 0) as quantity_sold
         FROM categories cat
         LEFT JOIN products p ON cat.id = p.category_id AND p.is_active = 1
         LEFT JOIN order_lines ol ON p.id = ol.product_id
-        GROUP BY cat.id
-        ORDER BY products_count DESC
+        LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+        GROUP BY cat.id, cat.name_fr, cat.color
+        ORDER BY quantity_sold DESC
     ");
 } catch (\PDOException $e) {
     error_log("Erreur récupération catégories: " . $e->getMessage());
     $product_categories = [];
 }
 
-// Commandes des 6 derniers mois
+// Commandes des 6 derniers mois (uniquement validées)
 try {
     $monthly_orders = $db->query("
-        SELECT 
-            DATE_FORMAT(created_at, '%Y-%m') as month,
-            DATE_FORMAT(created_at, '%M %Y') as month_label,
-            COUNT(*) as orders_count
-        FROM orders
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        SELECT
+            DATE_FORMAT(o.created_at, '%Y-%m') as month,
+            DATE_FORMAT(o.created_at, '%M %Y') as month_label,
+            COUNT(DISTINCT o.id) as orders_count,
+            COALESCE(SUM(ol.quantity), 0) as quantity_count
+        FROM orders o
+        LEFT JOIN order_lines ol ON o.id = ol.order_id
+        WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        AND o.status = 'validated'
+        GROUP BY DATE_FORMAT(o.created_at, '%Y-%m'), DATE_FORMAT(o.created_at, '%M %Y')
         ORDER BY month ASC
     ");
 } catch (\PDOException $e) {
@@ -159,18 +176,25 @@ try {
 }
 
 // Préparation des données pour Chart.js
-$chart_campaign_labels = json_encode(array_column($campaign_stats, 'campaign_name'));
-$chart_campaign_orders = json_encode(array_column($campaign_stats, 'orders_count'));
-$chart_campaign_items = json_encode(array_column($campaign_stats, 'items_count'));
+$chart_campaign_labels = json_encode(
+    array_map(function ($c) {
+        return $c["campaign_name"] . " (" . $c["country"] . ")";
+    }, $campaign_stats),
+);
+$chart_campaign_orders = json_encode(array_column($campaign_stats, "orders_count"));
+$chart_campaign_quantity = json_encode(array_column($campaign_stats, "quantity_count"));
 
-$chart_category_labels = json_encode(array_column($product_categories, 'category_name'));
-$chart_category_counts = json_encode(array_column($product_categories, 'products_count'));
-$chart_category_colors = json_encode(array_map(function($cat) {
-    return $cat['color'] ?? '#6366F1';
-}, $product_categories));
+$chart_category_labels = json_encode(array_column($product_categories, "category_name"));
+$chart_category_counts = json_encode(array_column($product_categories, "quantity_sold"));
+$chart_category_colors = json_encode(
+    array_map(function ($cat) {
+        return $cat["color"] ?? "#6366F1";
+    }, $product_categories),
+);
 
-$chart_month_labels = json_encode(array_column($monthly_orders, 'month_label'));
-$chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'));
+$chart_month_labels = json_encode(array_column($monthly_orders, "month_label"));
+$chart_month_counts = json_encode(array_column($monthly_orders, "orders_count"));
+$chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_count"));
 ?>
 
 <!-- En-tête de page -->
@@ -185,10 +209,12 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
             </p>
         </div>
         <div class="mt-4 flex md:ml-4 md:mt-0">
-            <a href="/stm/admin/campaigns/create" class="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-                <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                </svg>
+            <a href="/stm/admin/stats" class="inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 mr-3">
+                <i class="fas fa-chart-bar mr-2"></i>
+                Statistiques
+            </a>
+            <a href="/stm/admin/campaigns/create" class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                <i class="fas fa-plus mr-2"></i>
                 Nouvelle campagne
             </a>
         </div>
@@ -196,29 +222,21 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
 </div>
 
 <!-- KPI Cards -->
-<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
     <!-- Campagnes actives -->
     <div class="overflow-hidden rounded-lg bg-white shadow">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <div class="rounded-md bg-indigo-500 p-3">
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
+                    <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-bullhorn text-indigo-600"></i>
                     </div>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Campagnes actives</dt>
-                        <dd class="flex items-baseline">
-                            <div class="text-2xl font-semibold text-gray-900">
-                                <?= $stats['active_campaigns'] ?>
-                            </div>
-                            <div class="ml-2 text-sm text-gray-500">
-                                / <?= $stats['total_campaigns'] ?> total
-                            </div>
-                        </dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Campagnes actives</dt>
+                        <dd class="text-2xl font-bold text-gray-900"><?php echo $stats["active_campaigns"]; ?></dd>
+                        <dd class="text-xs text-gray-400"><?php echo $stats["total_campaigns"]; ?> au total</dd>
                     </dl>
                 </div>
             </div>
@@ -230,20 +248,19 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <div class="rounded-md bg-green-500 p-3">
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-users text-green-600"></i>
                     </div>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Clients</dt>
-                        <dd class="flex items-baseline">
-                            <div class="text-2xl font-semibold text-gray-900">
-                                <?= number_format($stats['total_customers'], 0, ',', ' ') ?>
-                            </div>
-                        </dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Clients ayant commandé</dt>
+                        <dd class="text-2xl font-bold text-green-600"><?php echo number_format(
+                            $stats["total_customers"],
+                            0,
+                            ",",
+                            " ",
+                        ); ?></dd>
                     </dl>
                 </div>
             </div>
@@ -255,45 +272,67 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <div class="rounded-md bg-yellow-500 p-3">
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                        </svg>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-shopping-cart text-blue-600"></i>
                     </div>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Commandes</dt>
-                        <dd class="flex items-baseline">
-                            <div class="text-2xl font-semibold text-gray-900">
-                                <?= number_format($stats['total_orders'], 0, ',', ' ') ?>
-                            </div>
-                        </dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Commandes validées</dt>
+                        <dd class="text-2xl font-bold text-blue-600"><?php echo number_format(
+                            $stats["total_orders"],
+                            0,
+                            ",",
+                            " ",
+                        ); ?></dd>
                     </dl>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Promotions -->
+    <!-- Promos vendues -->
     <div class="overflow-hidden rounded-lg bg-white shadow">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <div class="rounded-md bg-purple-500 p-3">
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
+                    <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-box text-orange-600"></i>
                     </div>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="truncate text-sm font-medium text-gray-500">Promotions actives</dt>
-                        <dd class="flex items-baseline">
-                            <div class="text-2xl font-semibold text-gray-900">
-                                <?= number_format($stats['total_products'], 0, ',', ' ') ?>
-                            </div>
-                        </dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promos vendues</dt>
+                        <dd class="text-2xl font-bold text-orange-600"><?php echo number_format(
+                            $stats["total_quantity"],
+                            0,
+                            ",",
+                            " ",
+                        ); ?></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promos actives -->
+    <div class="overflow-hidden rounded-lg bg-white shadow">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-tags text-purple-600"></i>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promos actives</dt>
+                        <dd class="text-2xl font-bold text-purple-600"><?php echo number_format(
+                            $stats["total_promos"],
+                            0,
+                            ",",
+                            " ",
+                        ); ?></dd>
                     </dl>
                 </div>
             </div>
@@ -302,30 +341,54 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
 </div>
 
 <!-- Graphiques -->
-<div class="grid grid-cols-1 gap-5 lg:grid-cols-2 mb-8">
-    <!-- Commandes par campagne -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Graphique par campagne -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Commandes par campagne</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Promos vendues par campagne active</h3>
+        <?php if (empty($campaign_stats)): ?>
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-chart-bar text-4xl text-gray-300 mb-3"></i>
+            <p>Aucune campagne active</p>
+        </div>
+        <?php else: ?>
         <canvas id="campaignChart" height="200"></canvas>
+        <?php endif; ?>
     </div>
 
-    <!-- Répartition par catégorie -->
+    <!-- Graphique par catégorie -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Promotions par catégorie</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par catégorie</h3>
+        <?php if (empty($product_categories) || array_sum(array_column($product_categories, "quantity_sold")) == 0): ?>
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-chart-pie text-4xl text-gray-300 mb-3"></i>
+            <p>Aucune donnée de vente</p>
+        </div>
+        <?php else: ?>
         <canvas id="categoryChart" height="200"></canvas>
+        <?php endif; ?>
     </div>
 </div>
 
 <!-- Évolution mensuelle -->
 <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des commandes (6 derniers mois)</h3>
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes (6 derniers mois)</h3>
+    <?php if (empty($monthly_orders)): ?>
+    <div class="text-center py-8 text-gray-500">
+        <i class="fas fa-chart-line text-4xl text-gray-300 mb-3"></i>
+        <p>Aucune donnée sur les 6 derniers mois</p>
+    </div>
+    <?php else: ?>
     <canvas id="monthlyChart" height="80"></canvas>
+    <?php endif; ?>
 </div>
 
 <!-- Dernières commandes -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 class="text-lg font-medium text-gray-900">Dernières commandes</h3>
+        <a href="/stm/admin/orders" class="text-sm text-indigo-600 hover:text-indigo-800">
+            Voir tout <i class="fas fa-arrow-right ml-1"></i>
+        </a>
     </div>
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
@@ -335,45 +398,69 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campagne</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pays</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Articles</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantité</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($recent_orders)): ?>
                     <tr>
                         <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
-                            Aucune commande pour le moment
+                            <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
+                            <p>Aucune commande pour le moment</p>
                         </td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($recent_orders as $order): ?>
+                        <?php
+                        $statusLabels = [
+                            "pending" => ["label" => "En attente", "class" => "bg-yellow-100 text-yellow-800"],
+                            "validated" => ["label" => "Validée", "class" => "bg-green-100 text-green-800"],
+                            "cancelled" => ["label" => "Annulée", "class" => "bg-red-100 text-red-800"],
+                        ];
+                        $status = $statusLabels[$order["status"]] ?? [
+                            "label" => $order["status"],
+                            "class" => "bg-gray-100 text-gray-800",
+                        ];
+                        ?>
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                <?= htmlspecialchars($order['order_number']) ?>
+                                <?php echo htmlspecialchars($order["order_number"]); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?= htmlspecialchars($order['campaign_name'] ?? 'N/A') ?>
+                                <?php echo htmlspecialchars($order["campaign_name"] ?? "N/A"); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <?= htmlspecialchars($order['company_name'] ?? 'N/A') ?>
+                                <?php echo htmlspecialchars($order["company_name"] ?? "N/A"); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    <?= strtoupper($order['country']) ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $order[
+                                    "country"
+                                ] === "BE"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-yellow-100 text-yellow-800"; ?>">
+                                    <?php echo $order["country"] === "BE" ? "🇧🇪" : "🇱🇺"; ?> <?php echo strtoupper(
+     $order["country"],
+ ); ?>
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?= $order['items_count'] ?> article<?= $order['items_count'] > 1 ? 's' : '' ?>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $status[
+                                    "class"
+                                ]; ?>">
+                                    <?php echo $status["label"]; ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
+                                <?php echo number_format($order["items_count"], 0, ",", " "); ?> promo<?php echo $order[
+     "items_count"
+ ] > 1
+     ? "s"
+     : ""; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?= date('d/m/Y H:i', strtotime($order['created_at'])) ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <a href="/admin/orders/<?= $order['id'] ?>" class="text-indigo-600 hover:text-indigo-900">
-                                    Voir
-                                </a>
+                                <?php echo date("d/m/Y H:i", strtotime($order["created_at"])); ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -384,26 +471,25 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
 </div>
 
 <!-- Actions rapides -->
-<div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-    <a href="/stm/admin/campaigns/create" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
+<div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    <a href="/stm/admin/campaigns/create" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-indigo-500 focus:outline-none transition-colors">
+        <i class="fas fa-bullhorn text-4xl text-gray-400 mb-2"></i>
         <span class="mt-2 block text-sm font-medium text-gray-900">Créer une campagne</span>
     </a>
 
-    <a href="/stm/admin/products" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
+    <a href="/stm/admin/products" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-green-500 focus:outline-none transition-colors">
+        <i class="fas fa-box text-4xl text-gray-400 mb-2"></i>
         <span class="mt-2 block text-sm font-medium text-gray-900">Gérer les Promotions</span>
     </a>
 
-    <a href="/stm/admin/customers" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
+    <a href="/stm/admin/customers" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-yellow-500 focus:outline-none transition-colors">
+        <i class="fas fa-users text-4xl text-gray-400 mb-2"></i>
         <span class="mt-2 block text-sm font-medium text-gray-900">Gérer les clients</span>
+    </a>
+
+    <a href="/stm/admin/stats" class="relative block rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-blue-500 focus:outline-none transition-colors">
+        <i class="fas fa-chart-bar text-4xl text-gray-400 mb-2"></i>
+        <span class="mt-2 block text-sm font-medium text-gray-900">Voir les statistiques</span>
     </a>
 </div>
 
@@ -412,7 +498,7 @@ $chart_month_counts = json_encode(array_column($monthly_orders, 'orders_count'))
 $content = ob_get_clean();
 
 // Définir le titre de la page
-$title = 'Dashboard';
+$title = "Dashboard";
 
 // Scripts spécifiques à cette page
 $pageScripts = "
@@ -420,102 +506,165 @@ $pageScripts = "
 // Configuration Chart.js globale
 Chart.defaults.font.family = \"'Inter', sans-serif\";
 Chart.defaults.color = '#6B7280';
-
-// Graphique des commandes par campagne (Barres)
-const ctxCampaign = document.getElementById('campaignChart').getContext('2d');
-new Chart(ctxCampaign, {
-    type: 'bar',
-    data: {
-        labels: {$chart_campaign_labels},
-        datasets: [{
-            label: 'Commandes',
-            data: {$chart_campaign_orders},
-            backgroundColor: 'rgba(99, 102, 241, 0.8)',
-            borderColor: 'rgba(99, 102, 241, 1)',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                display: false
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    precision: 0
-                }
-            }
-        }
-    }
-});
-
-// Graphique des catégories (Donut)
-const ctxCategory = document.getElementById('categoryChart').getContext('2d');
-new Chart(ctxCategory, {
-    type: 'doughnut',
-    data: {
-        labels: {$chart_category_labels},
-        datasets: [{
-            data: {$chart_category_counts},
-            backgroundColor: {$chart_category_colors},
-            borderWidth: 2,
-            borderColor: '#ffffff'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            }
-        }
-    }
-});
-
-// Graphique mensuel (Ligne)
-const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
-new Chart(ctxMonthly, {
-    type: 'line',
-    data: {
-        labels: {$chart_month_labels},
-        datasets: [{
-            label: 'Commandes',
-            data: {$chart_month_counts},
-            borderColor: 'rgba(59, 130, 246, 1)',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointRadius: 4,
-            pointHoverRadius: 6
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                display: false
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    precision: 0
-                }
-            }
-        }
-    }
-});
-</script>
 ";
 
+// Graphique campagnes (seulement si données)
+if (!empty($campaign_stats)) {
+    $pageScripts .= "
+// Graphique des promos par campagne (Barres)
+const ctxCampaign = document.getElementById('campaignChart');
+if (ctxCampaign) {
+    new Chart(ctxCampaign.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: {$chart_campaign_labels},
+            datasets: [
+                {
+                    label: 'Commandes',
+                    data: {$chart_campaign_orders},
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Promos vendues',
+                    data: {$chart_campaign_quantity},
+                    backgroundColor: 'rgba(249, 115, 22, 0.8)',
+                    borderColor: 'rgba(249, 115, 22, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+";
+}
+
+// Graphique catégories (seulement si données)
+if (!empty($product_categories) && array_sum(array_column($product_categories, "quantity_sold")) > 0) {
+    $pageScripts .= "
+// Graphique des catégories (Donut)
+const ctxCategory = document.getElementById('categoryChart');
+if (ctxCategory) {
+    new Chart(ctxCategory.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: {$chart_category_labels},
+            datasets: [{
+                data: {$chart_category_counts},
+                backgroundColor: {$chart_category_colors},
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+";
+}
+
+// Graphique mensuel (seulement si données)
+if (!empty($monthly_orders)) {
+    $pageScripts .= "
+// Graphique mensuel (Ligne)
+const ctxMonthly = document.getElementById('monthlyChart');
+if (ctxMonthly) {
+    new Chart(ctxMonthly.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: {$chart_month_labels},
+            datasets: [
+                {
+                    label: 'Commandes',
+                    data: {$chart_month_counts},
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Promos vendues',
+                    data: {$chart_month_quantity},
+                    borderColor: 'rgba(249, 115, 22, 1)',
+                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    title: { display: true, text: 'Commandes' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    title: { display: true, text: 'Promos' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+";
+}
+
+$pageScripts .= "</script>";
+
 // Inclure le layout admin
-require __DIR__ . '/../layouts/admin.php';
+require __DIR__ . "/../layouts/admin.php";
+
 ?>
