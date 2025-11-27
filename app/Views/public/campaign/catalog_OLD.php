@@ -1,38 +1,280 @@
+<!DOCTYPE html>
+
+<html lang="<?= $customer['language'] ?>">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title><?= htmlspecialchars($campaign['name']) ?> - <?= $customer['language'] === 'fr' ? 'Catalogue' : 'Catalogus' ?></title>
+
+    
+
+    <!-- Tailwind CSS -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    
+
+    <!-- Alpine.js -->
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    
+
+    <!-- Font Awesome -->
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    
+
+    <style>
+
+        /* Smooth scroll */
+
+        html {
+
+            scroll-behavior: smooth;
+
+              height: 100%;
+
+        }
+
+        
+
+        /* Fond Trendy Foods en arrière-plan */
+
+        body {
+
+            display: flex;
+
+            flex-direction: column;
+
+            min-height: 100vh;
+
+        }
+
+        body::before {
+
+            content: '';
+
+            position: fixed;
+
+            bottom: 0;
+
+            right: 0;
+
+            width: 400px;
+
+            height: 400px;
+
+            background: url('/stm/assets/images/fond.png') no-repeat;
+
+            background-size: contain;
+
+            background-position: bottom right;  /* ✅ AJOUTÉ - Collé au coin */
+
+            opacity: 0.6;
+
+            pointer-events: none;
+
+            z-index: -1;  /* ✅ MODIFIÉ - Au-dessus du footer (z-10) */
+
+        }
+
+          /* Contenu principal au-dessus du fond */
+
+.content-wrapper {
+
+    flex: 1;  /* Prend tout l'espace disponible */
+
+}
+
+footer {
+
+    margin-top: 0;  /* Enlever le mt-12 */
+
+}
+
+        /* Lightbox overlay */
+
+        .lightbox-overlay {
+
+            background: rgba(0, 0, 0, 0.9);
+
+        }
+
+        
+
+        /* Sticky nav offset */
+
+        .scroll-mt {
+
+            scroll-margin-top: 10rem;
+
+        }
+
+
+
+        /* Barre catégories horizontale avec scroll */
+
+        .category-nav {
+
+            overflow-x: auto;
+
+            scrollbar-width: thin;
+
+            scroll-behavior: smooth;
+
+        }
+
+        
+
+        .category-nav::-webkit-scrollbar {
+
+            height: 8px;
+
+        }
+
+        
+
+        .category-nav::-webkit-scrollbar-thumb {
+
+            background: #006eb8;
+
+            border-radius: 4px;
+
+        }
+
+
+
+        .category-nav::-webkit-scrollbar-track {
+
+            background: #f1f1f1;
+
+            border-radius: 4px;
+
+        }
+
+
+
+        /* Style des boutons catégories */
+
+        .category-btn {
+
+            transition: all 0.2s;
+
+            border: 2px solid transparent;
+
+        }
+
+
+
+        .category-btn:hover {
+
+            border-color: #006eb8;
+
+            transform: translateY(-2px);
+
+        }
+
+
+
+        .category-btn.active {
+
+            border-color: #e73029;
+
+            box-shadow: 0 4px 6px rgba(231, 48, 41, 0.3);
+
+        }
+
+
+
+        /* Hover effect produits */
+
+        .product-card {
+
+            transition: transform 0.2s, box-shadow 0.2s;
+
+        }
+
+        
+
+        .product-card:hover {
+
+            transform: translateY(-5px);
+
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+
+        }
+
+    </style>
+
+</head>
+
+<body class="bg-gray-50" x-data="cartManager()" x-init="init()">
 <?php
 /**
- * Vue : Catalogue produits - Page principale client
+ * BANDEAU ENVIRONNEMENT DEV - PARTIE PUBLIQUE
  * 
- * @package STM
- * @created 2025/11/14
- * @modified 2025/11/21 - Adaptation au layout public centralisé
+ * À ajouter dans /app/Views/layouts/public.php
+ * OU dans chaque vue publique (show.php, catalog.php, checkout.php)
+ * Juste APRÈS la balise <body>
+ * 
+ * Style plus discret que l'admin (bandeau fin orange)
+ * pour ne pas trop perturber l'expérience client en test
  */
-
-// ========================================
-// VARIABLES POUR LE LAYOUT
-// ========================================
-
-$lang = $customer['language'];
-$title = htmlspecialchars($campaign['name']) . ' - ' . ($lang === 'fr' ? 'Catalogue' : 'Catalogus');
-$useAlpine = true;
-$bodyAttrs = 'x-data="cartManager()" x-init="init()"';
-
-// Styles spécifiques
-$pageStyles = <<<'CSS'
-    .lightbox-overlay { background: rgba(0, 0, 0, 0.9); }
-    .scroll-mt { scroll-margin-top: 10rem; }
-    .category-nav { overflow-x: auto; scrollbar-width: thin; scroll-behavior: smooth; }
-    .category-nav::-webkit-scrollbar { height: 8px; }
-    .category-nav::-webkit-scrollbar-thumb { background: #006eb8; border-radius: 4px; }
-    .category-nav::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-    .category-btn { transition: all 0.2s; border: 2px solid transparent; }
-    .category-btn:hover { border-color: #006eb8; transform: translateY(-2px); }
-    .category-btn.active { border-color: #e73029; box-shadow: 0 4px 6px rgba(231, 48, 41, 0.3); }
-    .product-card { transition: transform 0.2s, box-shadow 0.2s; }
-    .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-CSS;
-
-ob_start();
 ?>
+
+<?php
+// ========================================
+// BANDEAU DEV PUBLIC - À COLLER APRÈS <body>
+// ========================================
+$appEnv = $_ENV['APP_ENV'] ?? 'production';
+$isDev = ($appEnv === 'development');
+if ($isDev): 
+?>
+<div id="dev-banner-public" style="
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    text-align: center;
+    padding: 6px 15px;
+    font-weight: 500;
+    font-size: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+    font-family: system-ui, -apple-system, sans-serif;
+">
+    🔧 MODE TEST — Ceci est l'environnement de développement
+    <button onclick="this.parentElement.style.display='none'" style="
+        margin-left: 15px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.4);
+        color: white;
+        padding: 2px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+    ">✕</button>
+</div>
+<style>
+    /* Décaler le contenu pour le bandeau DEV */
+    body { padding-top: 32px !important; }
+</style>
+<?php endif; ?>
+<?php
+// ========================================
+// FIN DU BANDEAU PUBLIC
+// ========================================
+?>
+
+
     <!-- Header -->
 
     <header class="bg-white shadow-md sticky top-0 z-40">
@@ -1367,202 +1609,24 @@ ob_start();
 
     </script>
 
-<?php
-$content = ob_get_clean();
+      <!-- Footer -->
 
-$pageScripts = <<<'JAVASCRIPT'
-    const t = {
-        added: '<?= $customer["language"] === "fr" ? "Produit ajouté au panier" : "Product toegevoegd aan winkelwagen" ?>',
-        removed: '<?= $customer["language"] === "fr" ? "Produit retiré" : "Product verwijderd" ?>',
-        cartCleared: '<?= $customer["language"] === "fr" ? "Panier vidé" : "Winkelwagen leeggemaakt" ?>',
-        error: '<?= $customer["language"] === "fr" ? "Erreur" : "Fout" ?>',
-        connectionError: '<?= $customer["language"] === "fr" ? "Erreur de connexion" : "Verbindingsfout" ?>',
-        invalidQty: '<?= $customer["language"] === "fr" ? "Quantité invalide. Maximum" : "Ongeldige hoeveelheid. Maximum" ?>',
-        removeConfirm: '<?= $customer["language"] === "fr" ? "Retirer ce produit du panier ?" : "Dit product uit de winkelwagen verwijderen?" ?>',
-        clearConfirm: '<?= $customer["language"] === "fr" ? "Vider tout le panier ?" : "Hele winkelwagen leegmaken?" ?>',
-        emptyCart: '<?= $customer["language"] === "fr" ? "Votre panier est vide" : "Uw winkelwagen is leeg" ?>'
-    };
-    
-    function cartManager() {
-        return {
-            cart: <?= json_encode($_SESSION["cart"] ?? ["items" => []]) ?>,
-            isCartOpen: false,
-            showLightbox: false,
-            lightboxImage: '',
-            
-            get cartItemCount() {
-                return this.cart.items ? this.cart.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
-            },
-            
-            init() {
-                const sections = document.querySelectorAll('section[id^="category-"]');
-                const options = { root: null, rootMargin: '-50% 0px -50% 0px', threshold: 0 };
-                
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            const catId = entry.target.id.replace('category-', '');
-                            document.querySelectorAll('.category-btn').forEach(btn => {
-                                btn.classList.remove('active');
-                                btn.style.backgroundColor = '';
-                                btn.style.color = '';
-                                const icon = btn.querySelector('i');
-                                if (icon) icon.style.color = '';
-                                const img = btn.querySelector('img');
-                                if (img && btn.getAttribute('data-original-filter')) {
-                                    img.style.filter = btn.getAttribute('data-original-filter');
-                                }
-                            });
-                            const btn = document.getElementById('cat-btn-' + catId);
-                            if (btn) {
-                                if (!btn.getAttribute('data-original-bg')) {
-                                    btn.setAttribute('data-original-bg', btn.style.backgroundColor);
-                                    btn.setAttribute('data-original-color', btn.style.color);
-                                }
-                                btn.classList.add('active');
-                                btn.style.backgroundColor = '#e73029';
-                                btn.style.color = 'white';
-                                const icon = btn.querySelector('i');
-                                if (icon) icon.style.color = 'white';
-                                const img = btn.querySelector('img');
-                                if (img) {
-                                    if (!btn.getAttribute('data-original-filter')) {
-                                        btn.setAttribute('data-original-filter', img.style.filter || 'none');
-                                    }
-                                    img.style.filter = 'brightness(0) invert(1)';
-                                }
-                            }
-                        }
-                    });
-                }, options);
-                
-                sections.forEach(section => observer.observe(section));
-            },
-            
-            toggleCartMobile() {
-                this.isCartOpen = !this.isCartOpen;
-            },
-            
-            async addToCart(productId, maxOrderable) {
-                const qtyInput = document.getElementById('qty-' + productId);
-                const quantity = parseInt(qtyInput.value);
-                
-                if (quantity <= 0 || quantity > maxOrderable) {
-                    alert(t.invalidQty + ' : ' + maxOrderable);
-                    return;
-                }
-                
-                try {
-                    const formData = new FormData();
-                    formData.append('product_id', productId);
-                    formData.append('quantity', quantity);
-                    
-                    const response = await fetch('/stm/c/<?= $uuid ?>/cart/add', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        this.cart = data.cart;
-                        qtyInput.value = 1;
-                        this.showNotification(t.added);
-                    } else {
-                        alert(t.error + ' : ' + data.error);
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert(t.connectionError);
-                }
-            },
-            
-            async updateQuantity(productId, newQuantity) {
-                if (newQuantity <= 0) {
-                    return this.removeFromCart(productId);
-                }
-                
-                try {
-                    const formData = new FormData();
-                    formData.append('product_id', productId);
-                    formData.append('quantity', newQuantity);
-                    
-                    const response = await fetch('/stm/c/<?= $uuid ?>/cart/update', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        this.cart = data.cart;
-                    } else {
-                        alert(t.error + ' : ' + data.error);
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                }
-            },
-            
-            async removeFromCart(productId) {
-                if (!confirm(t.removeConfirm)) return;
-                
-                try {
-                    const formData = new FormData();
-                    formData.append('product_id', productId);
-                    
-                    const response = await fetch('/stm/c/<?= $uuid ?>/cart/remove', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        this.cart = data.cart;
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                }
-            },
-            
-            async clearCart() {
-                if (!confirm(t.clearConfirm)) return;
-                
-                try {
-                    const response = await fetch('/stm/c/<?= $uuid ?>/cart/clear', {
-                        method: 'POST'
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        this.cart = data.cart;
-                        this.showNotification(t.cartCleared);
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                }
-            },
-            
-            validateOrder() {
-                if (this.cart.items.length === 0) {
-                    alert(t.emptyCart);
-                    return;
-                }
-                window.location.href = '/stm/c/<?= $uuid ?>/checkout';
-            },
-            
-            showNotification(message) {
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-20 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-                notification.textContent = message;
-                document.body.appendChild(notification);
-                setTimeout(() => notification.remove(), 3000);
-            }
-        }
-    }
-JAVASCRIPT;
+    <footer class="bg-gray-800 text-gray-300 py-6 mt-12 relative z-10">
 
-require __DIR__ . '/../../layouts/public.php';
-?>
+        <div class="container mx-auto px-4 text-center">
+
+            <p class="text-sm">
+
+                © <?= date('Y') ?> Trendy Foods - 
+
+                <?= $customer['language'] === 'fr' ? 'Tous droits réservés' : 'Alle rechten voorbehouden' ?>
+
+            </p>
+
+        </div>
+
+    </footer>
+
+</body>
+
+</html>

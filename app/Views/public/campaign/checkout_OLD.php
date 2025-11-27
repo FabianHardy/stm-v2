@@ -1,26 +1,213 @@
 <?php
+
 /**
+
  * Vue : Page de validation de commande (checkout)
+
  * 
+
+ * Permet au client de valider sa commande en fournissant son email
+
+ * et en acceptant les conditions générales
+
+ * 
+
  * @package STM
- * @created 2025/11/17
- * @modified 2025/11/21 - Adaptation au layout public centralisé
+
+ * @created 17/11/2025
+
+ * @modified 21/11/2025 - Fix responsive barre orange (titre + bouton retour)
+
  */
 
+
+
+// Vérifier que l'utilisateur a bien une session client
+
 if (!isset($_SESSION['public_customer'])) {
+
     header('Location: /stm/');
+
     exit;
+
 }
 
-$customer = $_SESSION['public_customer'];
-$lang = $customer['language'];
-$title = ($lang === 'fr' ? 'Validation de commande' : 'Validatie bestelling') . ' - ' . htmlspecialchars($campaign['name']);
-$useAlpine = true;
-$bodyAttrs = 'x-data="{ showCGU: false, showRGPD: false }"';
-$pageStyles = '';
 
-ob_start();
+
+$customer = $_SESSION['public_customer'];
+
 ?>
+
+<!DOCTYPE html>
+
+<html lang="<?= $customer['language'] ?>">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title><?= $customer['language'] === 'fr' ? 'Validation de commande' : 'Validatie bestelling' ?> - <?= htmlspecialchars($campaign['name']) ?></title>
+
+    
+
+    <!-- Tailwind CSS -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    
+
+    <!-- Alpine.js -->
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    
+
+    <!-- Font Awesome -->
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+
+
+    <style>
+
+        /* Alpine.js cloak */
+
+        [x-cloak] {
+
+            display: none !important;
+
+        }
+
+
+
+        html, body {
+
+    height: 100%;
+
+}
+
+body {
+
+    display: flex;
+
+    flex-direction: column;
+
+    min-height: 100vh;
+
+}
+
+        /* Fond Trendy Foods en bas à droite - AU-DESSUS du footer */
+
+        body::before {
+
+            content: '';
+
+            position: fixed;
+
+            bottom: 0;
+
+            right: 0;
+
+            width: 400px;
+
+            height: 400px;
+
+            background: url('/stm/assets/images/fond.png') no-repeat;
+
+            background-size: contain;
+
+            background-position: bottom right;
+
+            opacity: 0.6;
+
+            pointer-events: none;
+
+            z-index: -1;
+
+        }
+
+
+
+        /* Contenu principal au-dessus du fond */
+
+.content-wrapper {
+
+    flex: 1;  /* Prend tout l'espace disponible */
+
+}
+
+footer {
+
+    margin-top: 0;  /* Enlever le mt-12 */
+
+}
+
+    </style>
+
+</head>
+
+<body class="bg-gray-50" x-data="{ showCGU: false, showRGPD: false }">
+<?php
+/**
+ * BANDEAU ENVIRONNEMENT DEV - PARTIE PUBLIQUE
+ * 
+ * À ajouter dans /app/Views/layouts/public.php
+ * OU dans chaque vue publique (show.php, catalog.php, checkout.php)
+ * Juste APRÈS la balise <body>
+ * 
+ * Style plus discret que l'admin (bandeau fin orange)
+ * pour ne pas trop perturber l'expérience client en test
+ */
+?>
+
+<?php
+// ========================================
+// BANDEAU DEV PUBLIC - À COLLER APRÈS <body>
+// ========================================
+$appEnv = $_ENV['APP_ENV'] ?? 'production';
+$isDev = ($appEnv === 'development');
+if ($isDev): 
+?>
+<div id="dev-banner-public" style="
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    text-align: center;
+    padding: 6px 15px;
+    font-weight: 500;
+    font-size: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+    font-family: system-ui, -apple-system, sans-serif;
+">
+    🔧 MODE TEST — Ceci est l'environnement de développement
+    <button onclick="this.parentElement.style.display='none'" style="
+        margin-left: 15px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.4);
+        color: white;
+        padding: 2px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+    ">✕</button>
+</div>
+<style>
+    /* Décaler le contenu pour le bandeau DEV */
+    body { padding-top: 32px !important; }
+</style>
+<?php endif; ?>
+<?php
+// ========================================
+// FIN DU BANDEAU PUBLIC
+// ========================================
+?>
+
 
     <div class="content-wrapper">
 
@@ -1204,35 +1391,24 @@ ob_start();
 
     </script>
 
+      <!-- Footer -->
 
-<?php
-$content = ob_get_clean();
+    <footer class="bg-gray-800 text-gray-300 py-6 mt-12 relative z-10">
 
-$pageScripts = <<<'JAVASCRIPT'
-    document.getElementById('checkoutForm')?.addEventListener('submit', function(e) {
-        const cgv1 = document.querySelector('input[name="cgv_1"]');
-        const cgv2 = document.querySelector('input[name="cgv_2"]');
-        const cgv3 = document.querySelector('input[name="cgv_3"]');
-        
-        if (!cgv1?.checked || !cgv2?.checked || !cgv3?.checked) {
-            e.preventDefault();
-            alert('<?= $lang === "fr" ? "Veuillez accepter toutes les conditions pour continuer" : "Gelieve alle voorwaarden te aanvaarden om verder te gaan" ?>');
-            return false;
-        }
-        
-        const email = document.getElementById('customer_email').value;
-        if (!email || !email.includes('@')) {
-            e.preventDefault();
-            alert('<?= $lang === "fr" ? "Veuillez saisir une adresse email valide" : "Gelieve een geldig e-mailadres in te voeren" ?>');
-            return false;
-        }
-        
-        if (!confirm('<?= $lang === "fr" ? "Êtes-vous sûr de vouloir confirmer votre commande ?" : "Bent u zeker dat u uw bestelling wilt bevestigen?" ?>')) {
-            e.preventDefault();
-            return false;
-        }
-    });
-JAVASCRIPT;
+        <div class="container mx-auto px-4 text-center">
 
-require __DIR__ . '/../../layouts/public.php';
-?>
+            <p class="text-sm">
+
+                © <?= date('Y') ?> Trendy Foods - 
+
+                <?= $customer['language'] === 'fr' ? 'Tous droits réservés' : 'Alle rechten voorbehouden' ?>
+
+            </p>
+
+        </div>
+
+    </footer>
+
+</body>
+
+</html>
