@@ -3,13 +3,14 @@
  * Contrôleur des commandes (Admin)
  *
  * Gère l'affichage et la gestion des commandes côté administration.
- * Pour l'instant, seule la méthode show() est implémentée.
+ * Inclut l'export TXT au format ERP identique à la validation publique.
  *
  * @package    App\Controllers
  * @author     Fabian Hardy
- * @version    1.0.1
+ * @version    1.1.0
  * @created    2025/11/27
  * @modified   2025/11/27 - Fix colonnes customers (pas de contact_name, phone, address)
+ * @modified   2025/11/27 - Correction exportTxt() : format ERP identique à generateOrderFile()
  */
 
 namespace App\Controllers;
@@ -133,20 +134,28 @@ class OrderController
     /**
      * Exporter le fichier TXT de la commande (format ERP)
      *
+     * Format identique à generateOrderFile() de PublicCampaignController :
+     * I00{DDMMYY}{DDMMYY_livraison si deferred_delivery}
+     * H{numClient8char}{V/W}{NomCampagne}
+     * D{codeProduit}{quantité10digits}
+     *
      * @param int $id ID de la commande
      * @return void
      */
     public function exportTxt(int $id): void
     {
-        // Récupérer la commande
+        // Récupérer la commande avec toutes les infos nécessaires
         $order = $this->db->queryOne(
             "
             SELECT
                 o.*,
                 c.name as campaign_name,
                 c.order_type,
+                c.deferred_delivery,
+                c.delivery_date,
                 cu.customer_number,
-                cu.company_name
+                cu.company_name,
+                cu.country as customer_country
             FROM orders o
             LEFT JOIN campaigns c ON o.campaign_id = c.id
             LEFT JOIN customers cu ON o.customer_id = cu.id
@@ -170,7 +179,6 @@ class OrderController
             SELECT
                 ol.quantity,
                 ol.product_code,
-                ol.product_name,
                 p.product_code as current_product_code
             FROM order_lines ol
             LEFT JOIN products p ON ol.product_id = p.id
@@ -180,26 +188,42 @@ class OrderController
             [":order_id" => $id],
         );
 
-        // Générer le contenu du fichier TXT
-        $content = "";
-        $orderType = $order["order_type"] ?? "W";
-        $customerNumber = $order["customer_number"] ?? "";
+        // ========================================
+        // GÉNÉRATION FORMAT ERP (identique à generateOrderFile)
+        // ========================================
 
-        foreach ($orderLines as $line) {
-            $productCode = $line["product_code"] ?? ($line["current_product_code"] ?? "");
-            $quantity = (int) ($line["quantity"] ?? 0);
+        $today = date("dmy"); // Format: 271125
 
-            // Format: TYPE;CUSTOMER_NUMBER;PRODUCT_CODE;QUANTITY
-            $content .= sprintf("%s;%s;%s;%d\n", $orderType, $customerNumber, $productCode, $quantity);
+        // Ligne I00 : Date commande + date livraison (si applicable)
+        if ($order["deferred_delivery"] == 1 && !empty($order["delivery_date"])) {
+            $deliveryDate = date("dmy", strtotime($order["delivery_date"]));
+            $lineI = "I00{$today}{$deliveryDate}\n";
+        } else {
+            $lineI = "I00{$today}\n";
         }
 
-        // Nom du fichier
-        $filename = sprintf(
-            "commande_%s_%s_%s.txt",
-            $customerNumber,
-            preg_replace("/[^a-zA-Z0-9]/", "_", $order["campaign_name"] ?? "campagne"),
-            date("Ymd_His", strtotime($order["created_at"])),
-        );
+        // Formater numéro client sur 8 caractères
+        $customerNumber8 = $this->formatCustomerNumber($order["customer_number"] ?? "");
+
+        // Ligne H : Numéro client + Type commande + Nom campagne
+        $orderType = $order["order_type"] ?? "W"; // V ou W, défaut W
+        $campaignName = str_replace([" ", "-", "_"], "", $order["campaign_name"] ?? ""); // Enlever espaces et tirets
+        $lineH = "H{$customerNumber8}{$orderType}{$campaignName}\n";
+
+        // Lignes D : Détails produits
+        $linesD = "";
+        foreach ($orderLines as $line) {
+            // Utiliser product_code stocké dans order_lines, sinon celui du produit actuel
+            $productCode = $line["product_code"] ?? ($line["current_product_code"] ?? "");
+            $quantity = sprintf("%'.010d", (int) $line["quantity"]); // Padding 10 digits avec 0
+            $linesD .= "D{$productCode}{$quantity}\n";
+        }
+
+        // Contenu complet du fichier
+        $content = $lineI . $lineH . $linesD;
+
+        // Nom du fichier : WebAction_{Ymd-His}_{numClient8}.txt
+        $filename = "WebAction_" . date("Ymd-His") . "_" . $customerNumber8 . ".txt";
 
         // Headers pour téléchargement
         header("Content-Type: text/plain; charset=utf-8");
@@ -211,5 +235,40 @@ class OrderController
 
         echo $content;
         exit();
+    }
+
+    /**
+     * Formater un numéro client sur 8 caractères
+     *
+     * Règles (identiques à PublicCampaignController) :
+     * - Si 6 chiffres (ex: 802412) → Ajouter "00" à la fin (80241200)
+     * - Si format avec tiret (ex: 802412-12) → Enlever tiret (80241212)
+     * - Enlever aussi les * et les lettres E, CB
+     * - Si moins de 8 caractères → padding avec 0 à gauche
+     *
+     * @param string $number Numéro client brut
+     * @return string Numéro sur 8 caractères
+     */
+    private function formatCustomerNumber(string $number): string
+    {
+        // Enlever *, tirets, E, CB
+        $cleaned = str_replace(["*", "-", "E", "CB"], "", $number);
+
+        // Ne garder que les chiffres
+        $cleaned = preg_replace("/[^0-9]/", "", $cleaned);
+
+        $length = strlen($cleaned);
+
+        if ($length === 6) {
+            return $cleaned . "00"; // Ajouter 00 à la fin
+        }
+
+        // Si plus de 8, tronquer à 8
+        if ($length > 8) {
+            return substr($cleaned, 0, 8);
+        }
+
+        // Si moins de 8, padding avec 0 à gauche (pour *12345 → 00012345)
+        return str_pad($cleaned, 8, "0", STR_PAD_LEFT);
     }
 }
