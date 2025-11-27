@@ -19,14 +19,14 @@
 use Core\Session;
 use App\Models\Campaign;
 
-$currentUser = Session::get('user');
-$currentRoute = $_SERVER['REQUEST_URI'] ?? '/admin/dashboard';
+$currentUser = Session::get("user");
+$currentRoute = $_SERVER["REQUEST_URI"] ?? "/admin/dashboard";
 
 // Récupérer les statistiques pour la sidebar
 try {
     $campaignModel = new Campaign();
     $campaignStats = $campaignModel->getStats();
-    $activeCampaignsCount = $campaignStats['active']; // ✅ Campagnes ACTIVES uniquement
+    $activeCampaignsCount = $campaignStats["active"]; // ✅ Campagnes ACTIVES uniquement
 } catch (\Exception $e) {
     error_log("Erreur récupération stats campagnes: " . $e->getMessage());
     $activeCampaignsCount = 0;
@@ -36,7 +36,7 @@ try {
 try {
     $db = \Core\Database::getInstance();
     $result = $db->query("SELECT COUNT(*) as total FROM customers");
-    $customerCount = $result[0]['total'] ?? 0;
+    $customerCount = $result[0]["total"] ?? 0;
 } catch (\PDOException $e) {
     error_log("Erreur récupération compteur clients: " . $e->getMessage());
     $customerCount = 0;
@@ -48,9 +48,9 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="csrf-token" content="<?= Session::get('csrf_token') ?>">
+    <meta name="csrf-token" content="<?= Session::get("csrf_token") ?>">
 
-    <title><?= htmlspecialchars($title ?? 'Dashboard') ?> - STM Admin</title>
+    <title><?= htmlspecialchars($title ?? "Dashboard") ?> - STM Admin</title>
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="/assets/images/favicon.png">
@@ -167,10 +167,9 @@ try {
 // ========================================
 // BANDEAU ENVIRONNEMENT DEV - À COLLER APRÈS <body>
 // ========================================
-$appEnv = $_ENV['APP_ENV'] ?? 'production';
-$isDev = ($appEnv === 'development');
-if ($isDev):
-?>
+$appEnv = $_ENV["APP_ENV"] ?? "production";
+$isDev = $appEnv === "development";
+if ($isDev): ?>
 <div id="dev-banner" style="
     background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
     color: white;
@@ -205,7 +204,8 @@ if ($isDev):
     /* Ajuster la sidebar si elle est fixed */
     .sidebar, aside { top: 50px !important; }
 </style>
-<?php endif; ?>
+<?php endif;
+?>
 <?php
 // ========================================
 // FIN DU BANDEAU
@@ -228,31 +228,31 @@ if ($isDev):
     <div class="flex h-full">
 
         <!-- Sidebar -->
-        <?php include __DIR__ . '/../admin/partials/sidebar.php'; ?>
+        <?php include __DIR__ . "/../admin/partials/sidebar.php"; ?>
 
         <!-- Zone de contenu principale -->
         <div class="flex flex-col flex-1 min-w-0 lg:pl-64">
 
             <!-- Header / Topbar -->
-            <?php include __DIR__ . '/../admin/partials/header.php'; ?>
+            <?php include __DIR__ . "/../admin/partials/header.php"; ?>
 
             <!-- Contenu principal -->
             <main class="flex-1 overflow-y-auto bg-gray-100">
 
                 <!-- Messages flash -->
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <?php include __DIR__ . '/../admin/partials/flash.php'; ?>
+                    <?php include __DIR__ . "/../admin/partials/flash.php"; ?>
                 </div>
 
                 <!-- Contenu de la page -->
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-                    <?= $content ?? '' ?>
+                    <?= $content ?? "" ?>
                 </div>
 
             </main>
 
             <!-- Footer -->
-            <?php include __DIR__ . '/../admin/partials/footer.php'; ?>
+            <?php include __DIR__ . "/../admin/partials/footer.php"; ?>
 
         </div>
     </div>
@@ -291,7 +291,8 @@ if ($isDev):
     </script>
 
     <!-- Scripts spécifiques à la page -->
-    <?= $pageScripts ?? '' ?>
-
+    <?= $pageScripts ?? "" ?>
+<!-- Persistance des filtres -->
+<script src="/stm/public/assets/js/filters-persist.js"></script>
 </body>
 </html>
