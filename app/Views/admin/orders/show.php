@@ -10,8 +10,9 @@
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.0.1
  * @created    2025/11/27
+ * @modified   2025/11/27 - Fix colonnes customers (pas de contact_name, phone, address)
  */
 
 ob_start();
@@ -29,12 +30,9 @@ $orderNumber = htmlspecialchars($order["order_number"] ?? "N/A");
 $campaignName = htmlspecialchars($order["campaign_name"] ?? "N/A");
 $companyName = htmlspecialchars($order["company_name"] ?? "N/A");
 $customerNumber = htmlspecialchars($order["customer_number"] ?? "N/A");
-$contactName = htmlspecialchars($order["contact_name"] ?? "");
 $customerEmail = htmlspecialchars($order["customer_email"] ?? ($order["customer_email_db"] ?? "N/A"));
-$phone = htmlspecialchars($order["phone"] ?? "");
-$address = htmlspecialchars($order["address"] ?? "");
-$postalCode = htmlspecialchars($order["postal_code"] ?? "");
-$city = htmlspecialchars($order["city"] ?? "");
+$repName = htmlspecialchars($order["rep_name"] ?? "");
+$customerLanguage = $order["customer_language"] ?? "fr";
 $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
 ?>
 
@@ -91,12 +89,6 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
                     </span>
                 </dd>
             </div>
-            <?php if ($contactName): ?>
-            <div>
-                <dt class="text-xs font-medium text-gray-500 uppercase">Contact</dt>
-                <dd class="text-sm text-gray-700"><?php echo $contactName; ?></dd>
-            </div>
-            <?php endif; ?>
             <div>
                 <dt class="text-xs font-medium text-gray-500 uppercase">Email</dt>
                 <dd class="text-sm text-gray-700">
@@ -105,29 +97,18 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
                     </a>
                 </dd>
             </div>
-            <?php if ($phone): ?>
+            <?php if ($repName): ?>
             <div>
-                <dt class="text-xs font-medium text-gray-500 uppercase">Téléphone</dt>
-                <dd class="text-sm text-gray-700">
-                    <a href="tel:<?php echo $phone; ?>" class="text-indigo-600 hover:underline">
-                        <?php echo $phone; ?>
-                    </a>
-                </dd>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Commercial</dt>
+                <dd class="text-sm text-gray-700"><?php echo $repName; ?></dd>
             </div>
             <?php endif; ?>
-            <?php if ($address || $city): ?>
             <div>
-                <dt class="text-xs font-medium text-gray-500 uppercase">Adresse</dt>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Langue</dt>
                 <dd class="text-sm text-gray-700">
-                    <?php if ($address):
-                        echo $address . "<br>";
-                    endif; ?>
-                    <?php if ($postalCode || $city):
-                        echo $postalCode . " " . $city;
-                    endif; ?>
+                    <?php echo $customerLanguage === "nl" ? "🇳🇱 Néerlandais" : "🇫🇷 Français"; ?>
                 </dd>
             </div>
-            <?php endif; ?>
             <div>
                 <dt class="text-xs font-medium text-gray-500 uppercase">Pays</dt>
                 <dd class="text-sm text-gray-700">
@@ -274,9 +255,7 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-                <?php
-                $currentCategory = null;
-                foreach ($orderLines as $line):
+                <?php foreach ($orderLines as $line):
 
                     $productName = htmlspecialchars(
                         $line["product_name"] ?? ($line["product_name_fr"] ?? "Produit inconnu"),
@@ -289,10 +268,10 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4">
                         <div class="flex items-center">
-                            <?php if (!empty($line["image_path_fr"])): ?>
+                            <?php if (!empty($line["image_fr"])): ?>
                             <div class="flex-shrink-0 h-10 w-10 mr-3">
-                                <img class="h-10 w-10 rounded object-cover" src="/stm/<?php echo htmlspecialchars(
-                                    $line["image_path_fr"],
+                                <img class="h-10 w-10 rounded object-cover" src="<?php echo htmlspecialchars(
+                                    $line["image_fr"],
                                 ); ?>" alt="<?php echo $productName; ?>">
                             </div>
                             <?php else: ?>
@@ -322,8 +301,7 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
                     </td>
                 </tr>
                 <?php
-                endforeach;
-                ?>
+                endforeach; ?>
             </tbody>
             <tfoot class="bg-gray-50">
                 <tr>

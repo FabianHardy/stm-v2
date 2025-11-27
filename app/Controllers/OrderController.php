@@ -7,8 +7,9 @@
  *
  * @package    App\Controllers
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.0.1
  * @created    2025/11/27
+ * @modified   2025/11/27 - Fix colonnes customers (pas de contact_name, phone, address)
  */
 
 namespace App\Controllers;
@@ -40,6 +41,7 @@ class OrderController
     public function show(int $id): void
     {
         // Récupérer la commande avec les infos client et campagne
+        // Note: customers n'a pas contact_name, phone, address, postal_code, city
         $order = $this->db->queryOne(
             "
             SELECT
@@ -50,12 +52,9 @@ class OrderController
                 c.end_date as campaign_end,
                 cu.customer_number,
                 cu.company_name,
-                cu.contact_name,
                 cu.email as customer_email_db,
-                cu.phone,
-                cu.address,
-                cu.postal_code,
-                cu.city,
+                cu.language as customer_language,
+                cu.rep_name,
                 cu.country as customer_country
             FROM orders o
             LEFT JOIN campaigns c ON o.campaign_id = c.id
@@ -76,18 +75,19 @@ class OrderController
         }
 
         // Récupérer les lignes de commande avec les infos produit
+        // Note: products.image_fr (pas image_path_fr), table = product_categories (pas categories)
         $orderLines = $this->db->query(
             "
             SELECT
                 ol.*,
                 p.name_fr as product_name_fr,
                 p.name_nl as product_name_nl,
-                p.image_path_fr,
+                p.image_fr,
                 cat.name_fr as category_name,
                 cat.color as category_color
             FROM order_lines ol
             LEFT JOIN products p ON ol.product_id = p.id
-            LEFT JOIN categories cat ON p.category_id = cat.id
+            LEFT JOIN product_categories cat ON p.category_id = cat.id
             WHERE ol.order_id = :order_id
             ORDER BY cat.display_order ASC, p.name_fr ASC
         ",
