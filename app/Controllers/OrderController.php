@@ -75,7 +75,8 @@ class OrderController
         }
 
         // Récupérer les lignes de commande avec les infos produit
-        // Note: products.image_fr (pas image_path_fr), table = product_categories (pas categories)
+        // Table categories (pas product_categories)
+        // Tri par catégorie puis par code produit
         $orderLines = $this->db->query(
             "
             SELECT
@@ -83,13 +84,14 @@ class OrderController
                 p.name_fr as product_name_fr,
                 p.name_nl as product_name_nl,
                 p.image_fr,
+                p.product_code,
                 cat.name_fr as category_name,
                 cat.color as category_color
             FROM order_lines ol
             LEFT JOIN products p ON ol.product_id = p.id
-            LEFT JOIN product_categories cat ON p.category_id = cat.id
+            LEFT JOIN categories cat ON p.category_id = cat.id
             WHERE ol.order_id = :order_id
-            ORDER BY cat.display_order ASC, p.name_fr ASC
+            ORDER BY cat.display_order ASC, p.product_code ASC
         ",
             [":order_id" => $id],
         );
@@ -125,6 +127,89 @@ class OrderController
             "message" => "Module commandes en cours de développement.",
         ];
         header("Location: /stm/admin/dashboard");
+        exit();
+    }
+
+    /**
+     * Exporter le fichier TXT de la commande (format ERP)
+     *
+     * @param int $id ID de la commande
+     * @return void
+     */
+    public function exportTxt(int $id): void
+    {
+        // Récupérer la commande
+        $order = $this->db->queryOne(
+            "
+            SELECT
+                o.*,
+                c.name as campaign_name,
+                c.order_type,
+                cu.customer_number,
+                cu.company_name
+            FROM orders o
+            LEFT JOIN campaigns c ON o.campaign_id = c.id
+            LEFT JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.id = :id
+        ",
+            [":id" => $id],
+        );
+
+        if (!$order) {
+            $_SESSION["flash"] = [
+                "type" => "error",
+                "message" => "Commande introuvable.",
+            ];
+            header("Location: /stm/admin/dashboard");
+            exit();
+        }
+
+        // Récupérer les lignes de commande
+        $orderLines = $this->db->query(
+            "
+            SELECT
+                ol.quantity,
+                ol.product_code,
+                ol.product_name,
+                p.product_code as current_product_code
+            FROM order_lines ol
+            LEFT JOIN products p ON ol.product_id = p.id
+            WHERE ol.order_id = :order_id
+            ORDER BY ol.product_code ASC
+        ",
+            [":order_id" => $id],
+        );
+
+        // Générer le contenu du fichier TXT
+        $content = "";
+        $orderType = $order["order_type"] ?? "W";
+        $customerNumber = $order["customer_number"] ?? "";
+
+        foreach ($orderLines as $line) {
+            $productCode = $line["product_code"] ?? ($line["current_product_code"] ?? "");
+            $quantity = (int) ($line["quantity"] ?? 0);
+
+            // Format: TYPE;CUSTOMER_NUMBER;PRODUCT_CODE;QUANTITY
+            $content .= sprintf("%s;%s;%s;%d\n", $orderType, $customerNumber, $productCode, $quantity);
+        }
+
+        // Nom du fichier
+        $filename = sprintf(
+            "commande_%s_%s_%s.txt",
+            $customerNumber,
+            preg_replace("/[^a-zA-Z0-9]/", "_", $order["campaign_name"] ?? "campagne"),
+            date("Ymd_His", strtotime($order["created_at"])),
+        );
+
+        // Headers pour téléchargement
+        header("Content-Type: text/plain; charset=utf-8");
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header("Content-Length: " . strlen($content));
+        header("Cache-Control: no-cache, no-store, must-revalidate");
+        header("Pragma: no-cache");
+        header("Expires: 0");
+
+        echo $content;
         exit();
     }
 }

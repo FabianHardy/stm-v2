@@ -419,6 +419,15 @@ $router->get("/admin/orders", function () {
     $controller->index();
 });
 
+// Exporter le fichier TXT d'une commande (AVANT la route générique {id})
+$router->get("/admin/orders/{id}/export-txt", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->exportTxt((int) $id);
+});
+
 // Détails d'une commande
 $router->get("/admin/orders/{id}", function ($id) {
     $middleware = new AuthMiddleware();

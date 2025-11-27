@@ -10,9 +10,9 @@
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.0.1
+ * @version    1.0.2
  * @created    2025/11/27
- * @modified   2025/11/27 - Fix colonnes customers (pas de contact_name, phone, address)
+ * @modified   2025/11/27 - Titre avec n° client + campagne, export TXT, tri catégorie
  */
 
 ob_start();
@@ -34,11 +34,14 @@ $customerEmail = htmlspecialchars($order["customer_email"] ?? ($order["customer_
 $repName = htmlspecialchars($order["rep_name"] ?? "");
 $customerLanguage = $order["customer_language"] ?? "fr";
 $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
+
+// Titre de la page : "Commande - N° Client - Nom Campagne"
+$pageTitle = "Commande - {$customerNumber} - {$campaignName}";
 ?>
 
 <!-- En-tête de page -->
 <div class="mb-6">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-4">
             <a href="<?php echo htmlspecialchars(
                 $backUrl,
@@ -49,14 +52,21 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
             <div class="h-6 w-px bg-gray-300"></div>
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">
-                    Commande #<?php echo $orderNumber; ?>
+                    <?php echo $pageTitle; ?>
                 </h1>
                 <p class="text-sm text-gray-500 mt-1">
                     Passée le <?php echo date("d/m/Y à H:i", strtotime($order["created_at"])); ?>
                 </p>
             </div>
         </div>
-        <div>
+        <div class="flex items-center gap-3">
+            <!-- Bouton Export TXT -->
+            <a href="/stm/admin/orders/<?php echo (int) $order["id"]; ?>/export-txt"
+               class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <i class="fas fa-file-export mr-2"></i>
+                Exporter TXT
+            </a>
+            <!-- Statut -->
             <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium <?php echo $currentStatus[
                 "class"
             ]; ?>">
@@ -341,7 +351,7 @@ $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
 
 <?php
 $content = ob_get_clean();
-$title = "Commande #" . $orderNumber;
+$title = $pageTitle;
 
 // Pas de scripts spécifiques pour cette page
 $pageScripts = "";
