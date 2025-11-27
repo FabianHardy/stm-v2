@@ -9,8 +9,8 @@
  *
  * @package    Config
  * @author     Fabian Hardy
- * @version    1.8.0
- * @modified   14/11/2025 - Sprint 7 Sous-tâche 2 : Routes panier complètes
+ * @version    1.9.0
+ * @modified   27/11/2025 - Ajout routes commandes admin (show)
  */
 
 // ============================================
@@ -31,6 +31,7 @@ use App\Controllers\CampaignController;
 use App\Controllers\ProductController;
 use App\Controllers\CustomerController;
 use App\Controllers\PublicCampaignController;
+use App\Controllers\OrderController;
 
 // ============================================
 // ROUTES PUBLIQUES
@@ -403,6 +404,28 @@ $router->post("/admin/customers/{id}/delete", function ($id) {
 
     $controller = new CustomerController();
     $controller->delete((int) $id);
+});
+
+// ============================================
+// ROUTES COMMANDES ADMIN
+// ============================================
+
+// Liste des commandes (placeholder pour l'instant)
+$router->get("/admin/orders", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->index();
+});
+
+// Détails d'une commande
+$router->get("/admin/orders/{id}", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->show((int) $id);
 });
 
 // ============================================

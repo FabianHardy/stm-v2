@@ -4,7 +4,7 @@
  * Description : Page principale du dashboard avec KPI et statistiques
  * Layout : layouts/admin.php
  *
- * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours au lieu de 6 mois
+ * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours + Lien détail commande
  */
 
 use Core\Database;
@@ -400,13 +400,13 @@ $chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"))
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N° Commande</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campagne</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pays</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantité</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -432,7 +432,7 @@ $chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"))
                             "label" => $order["status"] ?? "Inconnu",
                             "class" => "bg-gray-100 text-gray-800",
                         ];
-                        $orderNumber = $order["order_number"] ?? "";
+                        $orderId = (int) ($order["id"] ?? 0);
                         $campaignName = $order["campaign_name"] ?? "N/A";
                         $companyName = $order["company_name"] ?? "N/A";
                         $country = $order["country"] ?? "BE";
@@ -440,13 +440,10 @@ $chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"))
                         $createdAt = $order["created_at"] ?? date("Y-m-d H:i:s");
                         ?>
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                <?php echo htmlspecialchars($orderNumber); ?>
-                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <?php echo htmlspecialchars($campaignName); ?>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                                 <?php echo htmlspecialchars($companyName); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -473,6 +470,12 @@ $chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"))
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <?php echo date("d/m/Y H:i", strtotime($createdAt)); ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                <a href="/stm/admin/orders/<?php echo $orderId; ?>" class="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 transition-colors">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    Voir
+                                </a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
