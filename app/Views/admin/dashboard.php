@@ -4,7 +4,7 @@
  * Description : Page principale du dashboard avec KPI et statistiques
  * Layout : layouts/admin.php
  *
- * @modified 2025/11/26 - Correction requêtes et ajout stats promos
+ * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours au lieu de 6 mois
  */
 
 use Core\Database;
@@ -28,7 +28,7 @@ $stats = [
 $recent_orders = [];
 $campaign_stats = [];
 $product_categories = [];
-$monthly_orders = [];
+$daily_orders = [];
 
 // KPI 1: Campagnes totales et actives (calcul dynamique basé sur les dates)
 try {
@@ -155,24 +155,24 @@ try {
     $product_categories = [];
 }
 
-// Commandes des 6 derniers mois (uniquement validées)
+// Commandes des 7 derniers jours (uniquement validées)
 try {
-    $monthly_orders = $db->query("
+    $daily_orders = $db->query("
         SELECT
-            DATE_FORMAT(o.created_at, '%Y-%m') as month,
-            DATE_FORMAT(o.created_at, '%M %Y') as month_label,
+            DATE(o.created_at) as day,
+            DATE_FORMAT(o.created_at, '%a %d/%m') as day_label,
             COUNT(DISTINCT o.id) as orders_count,
             COALESCE(SUM(ol.quantity), 0) as quantity_count
         FROM orders o
         LEFT JOIN order_lines ol ON o.id = ol.order_id
-        WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         AND o.status = 'validated'
-        GROUP BY DATE_FORMAT(o.created_at, '%Y-%m'), DATE_FORMAT(o.created_at, '%M %Y')
-        ORDER BY month ASC
+        GROUP BY DATE(o.created_at), DATE_FORMAT(o.created_at, '%a %d/%m')
+        ORDER BY day ASC
     ");
 } catch (\PDOException $e) {
-    error_log("Erreur récupération commandes mensuelles: " . $e->getMessage());
-    $monthly_orders = [];
+    error_log("Erreur récupération commandes quotidiennes: " . $e->getMessage());
+    $daily_orders = [];
 }
 
 // Préparation des données pour Chart.js
@@ -192,9 +192,9 @@ $chart_category_colors = json_encode(
     }, $product_categories),
 );
 
-$chart_month_labels = json_encode(array_column($monthly_orders, "month_label"));
-$chart_month_counts = json_encode(array_column($monthly_orders, "orders_count"));
-$chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_count"));
+$chart_day_labels = json_encode(array_column($daily_orders, "day_label"));
+$chart_day_counts = json_encode(array_column($daily_orders, "orders_count"));
+$chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"));
 ?>
 
 <!-- En-tête de page -->
@@ -223,8 +223,8 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
 
 <!-- KPI Cards -->
 <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-    <!-- Campagnes actives -->
-    <div class="overflow-hidden rounded-lg bg-white shadow">
+    <!-- Campagnes -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -234,9 +234,15 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Campagnes actives</dt>
-                        <dd class="text-2xl font-bold text-gray-900"><?php echo $stats["active_campaigns"]; ?></dd>
-                        <dd class="text-xs text-gray-400"><?php echo $stats["total_campaigns"]; ?> au total</dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Campagnes</dt>
+                        <dd class="flex items-baseline">
+                            <span class="text-2xl font-bold text-indigo-600"><?php echo $stats[
+                                "active_campaigns"
+                            ]; ?></span>
+                            <span class="ml-2 text-sm text-gray-500">/ <?php echo $stats[
+                                "total_campaigns"
+                            ]; ?> actives</span>
+                        </dd>
                     </dl>
                 </div>
             </div>
@@ -244,7 +250,7 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
     </div>
 
     <!-- Clients -->
-    <div class="overflow-hidden rounded-lg bg-white shadow">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -254,7 +260,7 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Clients ayant commandé</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Clients actifs</dt>
                         <dd class="text-2xl font-bold text-green-600"><?php echo number_format(
                             $stats["total_customers"],
                             0,
@@ -268,7 +274,7 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
     </div>
 
     <!-- Commandes -->
-    <div class="overflow-hidden rounded-lg bg-white shadow">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -278,7 +284,7 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Commandes validées</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Commandes</dt>
                         <dd class="text-2xl font-bold text-blue-600"><?php echo number_format(
                             $stats["total_orders"],
                             0,
@@ -291,8 +297,8 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
         </div>
     </div>
 
-    <!-- Promos vendues -->
-    <div class="overflow-hidden rounded-lg bg-white shadow">
+    <!-- Quantité totale -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -316,7 +322,7 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
     </div>
 
     <!-- Promos actives -->
-    <div class="overflow-hidden rounded-lg bg-white shadow">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -369,16 +375,16 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
     </div>
 </div>
 
-<!-- Évolution mensuelle -->
+<!-- Évolution quotidienne (7 derniers jours) -->
 <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes (6 derniers mois)</h3>
-    <?php if (empty($monthly_orders)): ?>
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes (7 derniers jours)</h3>
+    <?php if (empty($daily_orders)): ?>
     <div class="text-center py-8 text-gray-500">
         <i class="fas fa-chart-line text-4xl text-gray-300 mb-3"></i>
-        <p>Aucune donnée sur les 6 derniers mois</p>
+        <p>Aucune donnée sur les 7 derniers jours</p>
     </div>
     <?php else: ?>
-    <canvas id="monthlyChart" height="80"></canvas>
+    <canvas id="dailyChart" height="80"></canvas>
     <?php endif; ?>
 </div>
 
@@ -411,7 +417,10 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                             <p>Aucune commande pour le moment</p>
                         </td>
                     </tr>
-                <?php else: ?>
+                <?php
+                    // Sécurisation des valeurs nullables
+                    // Sécurisation des valeurs nullables
+                    else: ?>
                     <?php foreach ($recent_orders as $order): ?>
                         <?php
                         $statusLabels = [
@@ -419,29 +428,34 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                             "validated" => ["label" => "Validée", "class" => "bg-green-100 text-green-800"],
                             "cancelled" => ["label" => "Annulée", "class" => "bg-red-100 text-red-800"],
                         ];
-                        $status = $statusLabels[$order["status"]] ?? [
-                            "label" => $order["status"],
+                        $status = $statusLabels[$order["status"] ?? "pending"] ?? [
+                            "label" => $order["status"] ?? "Inconnu",
                             "class" => "bg-gray-100 text-gray-800",
                         ];
+                        $orderNumber = $order["order_number"] ?? "";
+                        $campaignName = $order["campaign_name"] ?? "N/A";
+                        $companyName = $order["company_name"] ?? "N/A";
+                        $country = $order["country"] ?? "BE";
+                        $itemsCount = (int) ($order["items_count"] ?? 0);
+                        $createdAt = $order["created_at"] ?? date("Y-m-d H:i:s");
                         ?>
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                <?php echo htmlspecialchars($order["order_number"]); ?>
+                                <?php echo htmlspecialchars($orderNumber); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?php echo htmlspecialchars($order["campaign_name"] ?? "N/A"); ?>
+                                <?php echo htmlspecialchars($campaignName); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <?php echo htmlspecialchars($order["company_name"] ?? "N/A"); ?>
+                                <?php echo htmlspecialchars($companyName); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $order[
-                                    "country"
-                                ] === "BE"
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $country ===
+                                "BE"
                                     ? "bg-blue-100 text-blue-800"
                                     : "bg-yellow-100 text-yellow-800"; ?>">
-                                    <?php echo $order["country"] === "BE" ? "🇧🇪" : "🇱🇺"; ?> <?php echo strtoupper(
-     $order["country"],
+                                    <?php echo $country === "BE" ? "🇧🇪" : "🇱🇺"; ?> <?php echo htmlspecialchars(
+     strtoupper($country),
  ); ?>
                                 </span>
                             </td>
@@ -449,18 +463,16 @@ $chart_month_quantity = json_encode(array_column($monthly_orders, "quantity_coun
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $status[
                                     "class"
                                 ]; ?>">
-                                    <?php echo $status["label"]; ?>
+                                    <?php echo htmlspecialchars($status["label"]); ?>
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
-                                <?php echo number_format($order["items_count"], 0, ",", " "); ?> promo<?php echo $order[
-     "items_count"
- ] > 1
+                                <?php echo number_format($itemsCount, 0, ",", " "); ?> promo<?php echo $itemsCount > 1
      ? "s"
      : ""; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?php echo date("d/m/Y H:i", strtotime($order["created_at"])); ?>
+                                <?php echo date("d/m/Y H:i", strtotime($createdAt)); ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -589,37 +601,37 @@ if (ctxCategory) {
 ";
 }
 
-// Graphique mensuel (seulement si données)
-if (!empty($monthly_orders)) {
+// Graphique quotidien (seulement si données)
+if (!empty($daily_orders)) {
     $pageScripts .= "
-// Graphique mensuel (Ligne)
-const ctxMonthly = document.getElementById('monthlyChart');
-if (ctxMonthly) {
-    new Chart(ctxMonthly.getContext('2d'), {
+// Graphique quotidien (Ligne) - 7 derniers jours
+const ctxDaily = document.getElementById('dailyChart');
+if (ctxDaily) {
+    new Chart(ctxDaily.getContext('2d'), {
         type: 'line',
         data: {
-            labels: {$chart_month_labels},
+            labels: {$chart_day_labels},
             datasets: [
                 {
                     label: 'Commandes',
-                    data: {$chart_month_counts},
+                    data: {$chart_day_counts},
                     borderColor: 'rgba(99, 102, 241, 1)',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     tension: 0.4,
                     fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Promos vendues',
-                    data: {$chart_month_quantity},
+                    data: {$chart_day_quantity},
                     borderColor: 'rgba(249, 115, 22, 1)',
                     backgroundColor: 'rgba(249, 115, 22, 0.1)',
                     tension: 0.4,
                     fill: true,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
                     yAxisID: 'y1'
                 }
             ]
@@ -666,5 +678,6 @@ $pageScripts .= "</script>";
 
 // Inclure le layout admin
 require __DIR__ . "/../layouts/admin.php";
+
 
 ?>
