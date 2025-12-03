@@ -1,7 +1,7 @@
 <?php
 /**
  * ProductController - Gestion des Promotions
- * 
+ *
  * @created 11/11/2025
  * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
  */
@@ -29,9 +29,9 @@ class ProductController
     {
         // Récupérer les filtres
         $filters = [
-            'search' => $_GET['search'] ?? '',
-            'category' => $_GET['category'] ?? '',
-            'status' => $_GET['status'] ?? ''
+            "search" => $_GET["search"] ?? "",
+            "category" => $_GET["category"] ?? "",
+            "status" => $_GET["status"] ?? "",
         ];
 
         // Récupérer les Promotions filtrés
@@ -45,26 +45,26 @@ class ProductController
         $categories = $categoryModel->getAll();
 
         // Charger la vue
-        require_once __DIR__ . '/../Views/admin/products/index.php';
+        require_once __DIR__ . "/../Views/admin/products/index.php";
     }
 
     /**
      * Afficher le formulaire de création
-     * 
-     * @modified 12/11/2025 15:45 - FIX : Utilisation product_categories
+     *
+     * @modified 12/11/2025 15:45 - FIX : Utilisation categories
      */
     public function create(): void
     {
-        // Récupérer les catégories depuis product_categories
+        // Récupérer les catégories depuis categories
         $db = \Core\Database::getInstance();
         $categories = $db->query("SELECT * FROM categories ORDER BY display_order ASC");
 
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
-        
-        if (method_exists($campaignModel, 'getActiveOrFuture')) {
+
+        if (method_exists($campaignModel, "getActiveOrFuture")) {
             $campaigns = $campaignModel->getActiveOrFuture();
-        } elseif (method_exists($campaignModel, 'getActive')) {
+        } elseif (method_exists($campaignModel, "getActive")) {
             $campaigns = $campaignModel->getActive();
         } else {
             $campaigns = $campaignModel->getAll();
@@ -74,76 +74,76 @@ class ProductController
         error_log("ProductController::create() - Nombre de campagnes: " . count($campaigns));
 
         // Charger la vue
-        require_once __DIR__ . '/../Views/admin/products/create.php';
+        require_once __DIR__ . "/../Views/admin/products/create.php";
     }
 
     /**
      * Enregistrer un nouveau Promotion
-     * 
+     *
      * @modified 12/11/2025 17:30 - Ajout quotas
      */
     public function store(): void
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products/create');
-            exit;
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/products/create");
+            exit();
         }
 
         // Récupérer les données du formulaire
         $data = [
-            'campaign_id' => $_POST['campaign_id'] ?? null,
-            'category_id' => $_POST['category_id'] ?? null,
-            'product_code' => trim($_POST['product_code'] ?? ''),
-            'name_fr' => trim($_POST['name_fr'] ?? ''),
-            'name_nl' => trim($_POST['name_nl'] ?? ''),
-            'description_fr' => trim($_POST['description_fr'] ?? ''),
-            'description_nl' => trim($_POST['description_nl'] ?? ''),
-            'display_order' => (int)($_POST['display_order'] ?? 0),
-            'max_total' => !empty($_POST['max_total']) ? (int)$_POST['max_total'] : null,
-            'max_per_customer' => !empty($_POST['max_per_customer']) ? (int)$_POST['max_per_customer'] : null,
-            'is_active' => isset($_POST['is_active']) ? 1 : 0
+            "campaign_id" => $_POST["campaign_id"] ?? null,
+            "category_id" => $_POST["category_id"] ?? null,
+            "product_code" => trim($_POST["product_code"] ?? ""),
+            "name_fr" => trim($_POST["name_fr"] ?? ""),
+            "name_nl" => trim($_POST["name_nl"] ?? ""),
+            "description_fr" => trim($_POST["description_fr"] ?? ""),
+            "description_nl" => trim($_POST["description_nl"] ?? ""),
+            "display_order" => (int) ($_POST["display_order"] ?? 0),
+            "max_total" => !empty($_POST["max_total"]) ? (int) $_POST["max_total"] : null,
+            "max_per_customer" => !empty($_POST["max_per_customer"]) ? (int) $_POST["max_per_customer"] : null,
+            "is_active" => isset($_POST["is_active"]) ? 1 : 0,
         ];
 
         // Validation
         $errors = $this->productModel->validate($data);
 
         if (!empty($errors)) {
-            Session::set('errors', $errors);
-            Session::set('old', $data);
-            header('Location: /stm/admin/products/create');
-            exit;
+            Session::set("errors", $errors);
+            Session::set("old", $data);
+            header("Location: /stm/admin/products/create");
+            exit();
         }
 
         // Upload image FR (OBLIGATOIRE)
         try {
-            if (!empty($_FILES['image_fr']['tmp_name'])) {
-                $data['image_fr'] = $this->handleImageUpload($_FILES['image_fr'], 'fr');
+            if (!empty($_FILES["image_fr"]["tmp_name"])) {
+                $data["image_fr"] = $this->handleImageUpload($_FILES["image_fr"], "fr");
             } else {
-                Session::setFlash('error', 'L\'image française est obligatoire');
-                Session::set('old', $data);
-                header('Location: /stm/admin/products/create');
-                exit;
+                Session::setFlash("error", 'L\'image française est obligatoire');
+                Session::set("old", $data);
+                header("Location: /stm/admin/products/create");
+                exit();
             }
         } catch (\Exception $e) {
-            Session::setFlash('error', 'Erreur image FR : ' . $e->getMessage());
-            Session::set('old', $data);
-            header('Location: /stm/admin/products/create');
-            exit;
+            Session::setFlash("error", "Erreur image FR : " . $e->getMessage());
+            Session::set("old", $data);
+            header("Location: /stm/admin/products/create");
+            exit();
         }
 
         // Upload image NL (OPTIONNEL - sinon copier FR)
         try {
-            if (!empty($_FILES['image_nl']['tmp_name'])) {
-                $data['image_nl'] = $this->handleImageUpload($_FILES['image_nl'], 'nl');
+            if (!empty($_FILES["image_nl"]["tmp_name"])) {
+                $data["image_nl"] = $this->handleImageUpload($_FILES["image_nl"], "nl");
             } else {
                 // Copier l'image FR vers NL
-                $data['image_nl'] = $data['image_fr'];
+                $data["image_nl"] = $data["image_fr"];
             }
         } catch (\Exception $e) {
             // Si erreur, utiliser l'image FR
-            $data['image_nl'] = $data['image_fr'];
+            $data["image_nl"] = $data["image_fr"];
         }
 
         // Créer le Promotion
@@ -151,18 +151,18 @@ class ProductController
             $productId = $this->productModel->create($data);
 
             if ($productId) {
-                Session::setFlash('success', 'Promotion créée avec succès');
-                header('Location: /stm/admin/products/' . $productId);
-        } else {
-            Session::setFlash('error', 'Erreur lors de la création de la Promotion');
-            Session::set('old', $data);
-            header('Location: /stm/admin/products/create');
-        }
+                Session::setFlash("success", "Promotion créée avec succès");
+                header("Location: /stm/admin/products/" . $productId);
+            } else {
+                Session::setFlash("error", "Erreur lors de la création de la Promotion");
+                Session::set("old", $data);
+                header("Location: /stm/admin/products/create");
+            }
         } catch (\Exception $e) {
-            Session::set('old', $data);
-            header('Location: /stm/admin/products/create');
+            Session::set("old", $data);
+            header("Location: /stm/admin/products/create");
         }
-        exit;
+        exit();
     }
 
     /**
@@ -174,13 +174,13 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::setFlash('error', 'Promotion non trouvée');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // Charger la vue
-        require_once __DIR__ . '/../Views/admin/products/show.php';
+        require_once __DIR__ . "/../Views/admin/products/show.php";
     }
 
     /**
@@ -192,9 +192,9 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::setFlash('error', 'Promotion non trouvée');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // Récupérer les catégories
@@ -203,10 +203,10 @@ class ProductController
 
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
-        
-        if (method_exists($campaignModel, 'getActiveOrFuture')) {
+
+        if (method_exists($campaignModel, "getActiveOrFuture")) {
             $campaigns = $campaignModel->getActiveOrFuture();
-        } elseif (method_exists($campaignModel, 'getActive')) {
+        } elseif (method_exists($campaignModel, "getActive")) {
             $campaigns = $campaignModel->getActive();
         } else {
             $campaigns = $campaignModel->getAll();
@@ -216,21 +216,21 @@ class ProductController
         error_log("ProductController::edit() - Nombre de campagnes: " . count($campaigns));
 
         // Charger la vue
-        require_once __DIR__ . '/../Views/admin/products/edit.php';
+        require_once __DIR__ . "/../Views/admin/products/edit.php";
     }
 
     /**
      * Mettre à jour un Promotion
-     * 
+     *
      * @modified 12/11/2025 17:30 - Ajout quotas
      */
     public function update(int $id): void
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products/' . $id . '/edit');
-            exit;
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/products/" . $id . "/edit");
+            exit();
         }
 
         // ✅ CORRECTIF : Utiliser findById() au lieu de find()
@@ -238,132 +238,135 @@ class ProductController
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::setFlash('error', 'Promotion non trouvée');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // Récupérer les données
         $data = [
-            'id' => $id, // ✅ AJOUT : Nécessaire pour la validation (vérification unicité code produit)
-            'campaign_id' => $_POST['campaign_id'] ?? null,
-            'category_id' => $_POST['category_id'] ?? null,
-            'product_code' => trim($_POST['product_code'] ?? ''),
-            'name_fr' => trim($_POST['name_fr'] ?? ''),
-            'name_nl' => trim($_POST['name_nl'] ?? ''),
-            'description_fr' => trim($_POST['description_fr'] ?? ''),
-            'description_nl' => trim($_POST['description_nl'] ?? ''),
-            'display_order' => (int)($_POST['display_order'] ?? 0),
-            'max_total' => !empty($_POST['max_total']) ? (int)$_POST['max_total'] : null,
-            'max_per_customer' => !empty($_POST['max_per_customer']) ? (int)$_POST['max_per_customer'] : null,
-            'is_active' => isset($_POST['is_active']) ? 1 : 0,
-            'image_fr' => $product['image_fr'], // Garder ancienne par défaut
-            'image_nl' => $product['image_nl']
+            "id" => $id, // ✅ AJOUT : Nécessaire pour la validation (vérification unicité code produit)
+            "campaign_id" => $_POST["campaign_id"] ?? null,
+            "category_id" => $_POST["category_id"] ?? null,
+            "product_code" => trim($_POST["product_code"] ?? ""),
+            "name_fr" => trim($_POST["name_fr"] ?? ""),
+            "name_nl" => trim($_POST["name_nl"] ?? ""),
+            "description_fr" => trim($_POST["description_fr"] ?? ""),
+            "description_nl" => trim($_POST["description_nl"] ?? ""),
+            "display_order" => (int) ($_POST["display_order"] ?? 0),
+            "max_total" => !empty($_POST["max_total"]) ? (int) $_POST["max_total"] : null,
+            "max_per_customer" => !empty($_POST["max_per_customer"]) ? (int) $_POST["max_per_customer"] : null,
+            "is_active" => isset($_POST["is_active"]) ? 1 : 0,
+            "image_fr" => $product["image_fr"], // Garder ancienne par défaut
+            "image_nl" => $product["image_nl"],
         ];
 
         // Validation
         $errors = $this->productModel->validate($data);
 
         if (!empty($errors)) {
-            Session::set('errors', $errors);
-            Session::set('old', $data);
-            header('Location: /stm/admin/products/' . $id . '/edit');
-            exit;
+            Session::set("errors", $errors);
+            Session::set("old", $data);
+            header("Location: /stm/admin/products/" . $id . "/edit");
+            exit();
         }
 
         // Upload nouvelle image FR si fournie
-        if (!empty($_FILES['image_fr']['tmp_name'])) {
+        if (!empty($_FILES["image_fr"]["tmp_name"])) {
             try {
                 // Supprimer ancienne image FR
-                $this->deleteImage($product['image_fr']);
+                $this->deleteImage($product["image_fr"]);
 
                 // Upload nouvelle
-                $data['image_fr'] = $this->handleImageUpload($_FILES['image_fr'], 'fr');
+                $data["image_fr"] = $this->handleImageUpload($_FILES["image_fr"], "fr");
             } catch (\Exception $e) {
-                Session::setFlash('error', 'Erreur image FR : ' . $e->getMessage());
+                Session::setFlash("error", "Erreur image FR : " . $e->getMessage());
             }
         }
 
         // Upload nouvelle image NL si fournie, sinon copier FR
-        if (!empty($_FILES['image_nl']['tmp_name'])) {
+        if (!empty($_FILES["image_nl"]["tmp_name"])) {
             try {
                 // Supprimer ancienne image NL (si différente de FR)
-                if ($product['image_nl'] !== $product['image_fr']) {
-                    $this->deleteImage($product['image_nl']);
+                if ($product["image_nl"] !== $product["image_fr"]) {
+                    $this->deleteImage($product["image_nl"]);
                 }
 
                 // Upload nouvelle
-                $data['image_nl'] = $this->handleImageUpload($_FILES['image_nl'], 'nl');
+                $data["image_nl"] = $this->handleImageUpload($_FILES["image_nl"], "nl");
             } catch (\Exception $e) {
                 // Utiliser FR en cas d'erreur
-                $data['image_nl'] = $data['image_fr'];
+                $data["image_nl"] = $data["image_fr"];
             }
         } else {
             // Si pas de nouvel upload NL, copier FR
-            $data['image_nl'] = $data['image_fr'];
+            $data["image_nl"] = $data["image_fr"];
         }
 
         // Mettre à jour
         if ($this->productModel->update($id, $data)) {
-            Session::setFlash('success', 'Promotion modifiée avec succès');
-            header('Location: /stm/admin/products/' . $id);
+            Session::setFlash("success", "Promotion modifiée avec succès");
+            header("Location: /stm/admin/products/" . $id);
         } else {
-            Session::setFlash('error', 'Erreur lors de la modification');
-            header('Location: /stm/admin/products/' . $id . '/edit');
+            Session::setFlash("error", "Erreur lors de la modification");
+            header("Location: /stm/admin/products/" . $id . "/edit");
         }
-        exit;
+        exit();
     }
 
     /**
      * Supprimer un Promotion
-     * 
+     *
      * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
      */
     public function destroy(int $id): void
     {
         // Validation CSRF
         if (!$this->validateCSRF()) {
-            Session::setFlash('error', 'Token de sécurité invalide');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // ✅ CORRECTIF : Utiliser findById() au lieu de find()
         $product = $this->productModel->findById($id);
 
         if (!$product) {
-            Session::setFlash('error', 'Promotion non trouvée');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // ✅ NOUVEAU : Vérifier si la promotion a des commandes associées
         if ($this->productModel->hasOrders($id)) {
-            Session::setFlash('error', 'Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.');
-            header('Location: /stm/admin/products');
-            exit;
+            Session::setFlash(
+                "error",
+                "Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.",
+            );
+            header("Location: /stm/admin/products");
+            exit();
         }
 
         // Supprimer les images
-        $this->deleteImage($product['image_fr']);
-        if ($product['image_nl'] !== $product['image_fr']) {
-            $this->deleteImage($product['image_nl']);
+        $this->deleteImage($product["image_fr"]);
+        if ($product["image_nl"] !== $product["image_fr"]) {
+            $this->deleteImage($product["image_nl"]);
         }
 
         // Supprimer le Promotion
         if ($this->productModel->delete($id)) {
-            Session::setFlash('success', 'Promotion supprimée avec succès (incluant les images)');
+            Session::setFlash("success", "Promotion supprimée avec succès (incluant les images)");
         } else {
-            Session::setFlash('error', 'Erreur lors de la suppression');
+            Session::setFlash("error", "Erreur lors de la suppression");
         }
 
-        header('Location: /stm/admin/products');
-        exit;
+        header("Location: /stm/admin/products");
+        exit();
     }
 
     /**
      * Gérer l'upload d'une image avec NOM ALÉATOIRE
-     * 
+     *
      * @param array $file Fichier $_FILES
      * @param string $lang 'fr' ou 'nl'
      * @return string Chemin relatif de l'image
@@ -372,14 +375,14 @@ class ProductController
     private function handleImageUpload(array $file, string $lang): string
     {
         // Vérifier si fichier uploadé
-        if (empty($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+        if (empty($file["tmp_name"]) || $file["error"] !== UPLOAD_ERR_OK) {
             throw new \Exception("Aucun fichier uploadé ou erreur d'upload");
         }
 
         // Validation type MIME
-        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        $allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        $mimeType = finfo_file($finfo, $file["tmp_name"]);
         finfo_close($finfo);
 
         if (!in_array($mimeType, $allowedTypes)) {
@@ -387,16 +390,16 @@ class ProductController
         }
 
         // Validation taille (5MB max)
-        if ($file['size'] > 5 * 1024 * 1024) {
+        if ($file["size"] > 5 * 1024 * 1024) {
             throw new \Exception("L'image ne doit pas dépasser 5MB");
         }
 
         // Générer nom ALÉATOIRE (sécurité)
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $randomName = 'product_' . $lang . '_' . uniqid() . '_' . time() . '.' . $extension;
+        $extension = pathinfo($file["name"], PATHINFO_EXTENSION);
+        $randomName = "product_" . $lang . "_" . uniqid() . "_" . time() . "." . $extension;
 
         // Chemin de destination
-        $uploadDir = __DIR__ . '/../../public/uploads/products/';
+        $uploadDir = __DIR__ . "/../../public/uploads/products/";
         $filePath = $uploadDir . $randomName;
 
         // Créer dossier si inexistant
@@ -405,17 +408,17 @@ class ProductController
         }
 
         // Déplacer le fichier
-        if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+        if (!move_uploaded_file($file["tmp_name"], $filePath)) {
             throw new \Exception("Erreur lors de l'enregistrement de l'image");
         }
 
         // Retourner chemin relatif
-        return '/stm/uploads/products/' . $randomName;
+        return "/stm/uploads/products/" . $randomName;
     }
 
     /**
      * Supprimer une image du serveur
-     * 
+     *
      * @param string|null $imagePath Chemin relatif de l'image
      * @return bool
      */
@@ -425,7 +428,7 @@ class ProductController
             return false;
         }
 
-        $fullPath = __DIR__ . '/../../public' . $imagePath;
+        $fullPath = __DIR__ . "/../../public" . $imagePath;
 
         if (file_exists($fullPath)) {
             return unlink($fullPath);
@@ -436,12 +439,12 @@ class ProductController
 
     /**
      * Valider le token CSRF
-     * 
+     *
      * @return bool
      */
     private function validateCSRF(): bool
     {
-        $token = $_POST['_token'] ?? '';
-        return $token === Session::get('csrf_token');
+        $token = $_POST["_token"] ?? "";
+        return $token === Session::get("csrf_token");
     }
 }

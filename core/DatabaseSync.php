@@ -454,7 +454,6 @@ class DatabaseSync
     {
         // Ordre recommandé pour STM v2 (tables parent d'abord)
         $preferredOrder = [
-            "product_categories",
             "categories",
             "campaigns",
             "products",
