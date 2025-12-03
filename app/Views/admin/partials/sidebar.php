@@ -127,6 +127,11 @@ $settingsItems = [
         "route" => "/stm/admin/users",
     ],
     [
+        "label" => "Comptes internes",
+        "icon" => "fa-user-shield",
+        "route" => "/stm/admin/config/internal-customers",
+    ],
+    [
         "label" => "Configuration",
         "icon" => "fa-cog",
         "route" => "/stm/admin/settings",

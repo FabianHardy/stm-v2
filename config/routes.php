@@ -591,3 +591,77 @@ $router->post("/admin/stats/export", function () {
     $controller = new \App\Controllers\StatsController();
     $controller->export();
 });
+
+/**
+ * ROUTES À AJOUTER dans config/routes.php
+ *
+ * Copier ce bloc dans la section des routes admin
+ * AVANT les routes génériques avec {id}
+ */
+
+// ============================================
+// ROUTES CONFIGURATION - COMPTES INTERNES
+// ============================================
+
+// Liste des comptes internes
+$router->get("/admin/config/internal-customers", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->index();
+});
+
+// Formulaire création
+$router->get("/admin/config/internal-customers/create", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->create();
+});
+
+// Enregistrer nouveau (POST)
+$router->post("/admin/config/internal-customers", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->store();
+});
+
+// Formulaire modification
+$router->get("/admin/config/internal-customers/{id}/edit", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->edit((int) $id);
+});
+
+// Mettre à jour (POST)
+$router->post("/admin/config/internal-customers/{id}", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->update((int) $id);
+});
+
+// Supprimer (POST)
+$router->post("/admin/config/internal-customers/{id}/delete", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->destroy((int) $id);
+});
+
+// Toggle actif (AJAX)
+$router->post("/admin/config/internal-customers/{id}/toggle", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\InternalCustomerController();
+    $controller->toggleActive((int) $id);
+});
