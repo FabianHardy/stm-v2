@@ -165,17 +165,17 @@ if (!$selectedCountry && $campaignStats) {
             </thead>
             <tbody class="text-sm divide-y divide-gray-100">
                 <?php usort($repClients, function ($a, $b) {
-                    return $b["total_quantity"] - $a["total_quantity"];
+                    return ($b["total_quantity"] ?? 0) - ($a["total_quantity"] ?? 0);
                 }); ?>
                 <?php foreach ($repClients as $client): ?>
                 <tr class="hover:bg-gray-50">
                     <td class="py-3 px-4">
                         <p class="font-medium text-gray-900"><?= htmlspecialchars($client["company_name"] ?? "-") ?></p>
-                        <p class="text-xs text-gray-500"><?= htmlspecialchars($client["customer_number"]) ?></p>
+                        <p class="text-xs text-gray-500"><?= htmlspecialchars($client["customer_number"] ?? "") ?></p>
                     </td>
                     <td class="py-3 px-4 text-gray-600"><?= htmlspecialchars($client["city"] ?? "-") ?></td>
                     <td class="py-3 px-4 text-center">
-                        <?php if ($client["total_orders"] > 0): ?>
+                        <?php if ($client["has_ordered"] ?? false): ?>
                             <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
                                 <i class="fas fa-check mr-1"></i> Commandé
                             </span>
@@ -185,8 +185,8 @@ if (!$selectedCountry && $campaignStats) {
                             </span>
                         <?php endif; ?>
                     </td>
-                    <td class="py-3 px-4 text-right font-medium"><?= $client["total_orders"] ?></td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($client["total_quantity"], 0, ",", " ") ?></td>
+                    <td class="py-3 px-4 text-right font-medium"><?= $client["orders_count"] ?? 0 ?></td>
+                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($client["total_quantity"] ?? 0, 0, ",", " ") ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -199,6 +199,27 @@ if (!$selectedCountry && $campaignStats) {
 <!-- ============================================ -->
 <!-- VUE CAMPAGNE (sans détail rep)               -->
 <!-- ============================================ -->
+
+<?php
+// Statuts
+$statusLabels = [
+    "draft" => "Brouillon",
+    "scheduled" => "Programmée",
+    "active" => "En cours",
+    "ended" => "Terminée",
+    "cancelled" => "Annulée",
+];
+$statusColors = [
+    "draft" => "bg-gray-100 text-gray-800",
+    "scheduled" => "bg-blue-100 text-blue-800",
+    "active" => "bg-green-100 text-green-800",
+    "ended" => "bg-orange-100 text-orange-800",
+    "cancelled" => "bg-red-100 text-red-800",
+];
+$currentStatus = $campaignStats["campaign"]["status"] ?? "draft";
+$statusLabel = $statusLabels[$currentStatus] ?? ucfirst($currentStatus);
+$statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
+?>
 
 <!-- Infos campagne -->
 <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -214,19 +235,7 @@ if (!$selectedCountry && $campaignStats) {
                 <span class="inline-flex items-center px-2 py-1 <?= $campaignStats["campaign"]["country"] === "BE" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700" ?> rounded text-xs">
                     <?= $campaignStats["campaign"]["country"] === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?>
                 </span>
-                <?php
-                $status = $campaignStats["campaign"]["status"] ?? "active";
-                $statusConfig = [
-                    "draft" => ["bg-gray-100 text-gray-700", "Brouillon"],
-                    "scheduled" => ["bg-blue-100 text-blue-700", "Programmée"],
-                    "active" => ["bg-green-100 text-green-700", "En cours"],
-                    "ended" => ["bg-orange-100 text-orange-700", "Terminée"],
-                    "cancelled" => ["bg-red-100 text-red-700", "Annulée"],
-                ];
-                $statusClass = $statusConfig[$status][0] ?? "bg-gray-100 text-gray-700";
-                $statusLabel = $statusConfig[$status][1] ?? $status;
-                ?>
-                <span class="inline-flex items-center px-2 py-1 <?= $statusClass ?> rounded text-xs">
+                <span class="inline-flex items-center px-2 py-1 <?= $statusColor ?> rounded text-xs">
                     <?= $statusLabel ?>
                 </span>
             </div>
@@ -238,28 +247,27 @@ if (!$selectedCountry && $campaignStats) {
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Clients éligibles</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1"><?= number_format($campaignStats["kpis"]["eligible_customers"] ?? 0, 0, ",", " ") ?></p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">
+            <?= is_numeric($campaignStats["eligible_customers"])
+                ? number_format($campaignStats["eligible_customers"], 0, ",", " ")
+                : ($campaignStats["eligible_customers"] ?? 0) ?>
+        </p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Clients ayant commandé</p>
-        <p class="text-2xl font-bold text-green-600 mt-1"><?= number_format($campaignStats["kpis"]["customers_ordered"] ?? 0, 0, ",", " ") ?></p>
+        <p class="text-2xl font-bold text-green-600 mt-1"><?= number_format($campaignStats["customers_ordered"] ?? 0, 0, ",", " ") ?></p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Taux de participation</p>
-        <?php
-        $eligible = $campaignStats["kpis"]["eligible_customers"] ?? 0;
-        $ordered = $campaignStats["kpis"]["customers_ordered"] ?? 0;
-        $participation = $eligible > 0 ? round(($ordered / $eligible) * 100, 1) : 0;
-        ?>
-        <p class="text-2xl font-bold text-indigo-600 mt-1"><?= $participation ?>%</p>
+        <p class="text-2xl font-bold text-indigo-600 mt-1"><?= $campaignStats["participation_rate"] ?? 0 ?>%</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Total commandes</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1"><?= number_format($campaignStats["kpis"]["total_orders"] ?? 0, 0, ",", " ") ?></p>
+        <p class="text-2xl font-bold text-gray-900 mt-1"><?= number_format($campaignStats["total_orders"] ?? 0, 0, ",", " ") ?></p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Promos vendues</p>
-        <p class="text-2xl font-bold text-orange-600 mt-1"><?= number_format($campaignStats["kpis"]["total_quantity"] ?? 0, 0, ",", " ") ?></p>
+        <p class="text-2xl font-bold text-orange-600 mt-1"><?= number_format($campaignStats["total_quantity"] ?? 0, 0, ",", " ") ?></p>
     </div>
 </div>
 
@@ -323,16 +331,16 @@ if (!$selectedCountry && $campaignStats) {
                 <?php
                 $rank = 0;
                 $qtys = array_filter(array_map(function($p) {
-                    return $p["total_quantity"] ?? $p["quantity"] ?? 0;
+                    return $p["quantity_sold"] ?? 0;
                 }, $campaignProducts));
                 $maxQty = !empty($qtys) ? max($qtys) : 1;
 
                 foreach ($campaignProducts as $product):
                     $rank++;
-                    $productName = $product["name"] ?? $product["product_name"] ?? $product["name_fr"] ?? "-";
-                    $productCode = $product["product_code"] ?? $product["code"] ?? "-";
-                    $ordersCount = $product["orders_count"] ?? $product["total_orders"] ?? 0;
-                    $totalQty = $product["total_quantity"] ?? $product["quantity"] ?? 0;
+                    $productName = $product["product_name"] ?? "-";
+                    $productCode = $product["product_code"] ?? "-";
+                    $ordersCount = $product["orders_count"] ?? 0;
+                    $totalQty = $product["quantity_sold"] ?? 0;
                     $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
                 ?>
                 <tr class="hover:bg-gray-50">
@@ -372,6 +380,10 @@ if (!$selectedCountry && $campaignStats) {
     // Grouper par cluster
     $clusters = [];
     foreach ($reps as $rep) {
+        // Ignorer les reps sans clients
+        if (($rep["total_clients"] ?? 0) == 0) {
+            continue;
+        }
         $clusterName = $rep["cluster"] ?? "Sans cluster";
         if (!isset($clusters[$clusterName])) {
             $clusters[$clusterName] = [
@@ -380,11 +392,31 @@ if (!$selectedCountry && $campaignStats) {
             ];
         }
         $clusters[$clusterName]["reps"][] = $rep;
-        $clusters[$clusterName]["totals"]["clients"] += $rep["total_clients"];
-        $clusters[$clusterName]["totals"]["ordered"] += $rep["stats"]["customers_ordered"];
-        $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"];
+        $clusters[$clusterName]["totals"]["clients"] += $rep["total_clients"] ?? 0;
+        $clusters[$clusterName]["totals"]["ordered"] += $rep["stats"]["customers_ordered"] ?? 0;
+        $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"] ?? 0;
     }
+
+    // Supprimer les clusters vides
+    $clusters = array_filter($clusters, function($c) {
+        return !empty($c["reps"]);
+    });
+
+    // Trier par quantité
+    uasort($clusters, function($a, $b) {
+        return $b["totals"]["quantity"] - $a["totals"]["quantity"];
+    });
     ?>
+
+    <?php if (empty($clusters)): ?>
+    <div class="text-center py-8">
+        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="fas fa-users text-gray-400"></i>
+        </div>
+        <p class="text-gray-500">Aucune donnée représentant</p>
+        <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
+    </div>
+    <?php else: ?>
 
     <div x-data="{ openClusters: {} }">
         <?php foreach ($clusters as $clusterName => $clusterData):
@@ -422,11 +454,13 @@ if (!$selectedCountry && $campaignStats) {
                  x-transition:enter-end="opacity-100">
                 <div class="divide-y divide-gray-100">
                     <?php usort($clusterData["reps"], function ($a, $b) {
-                        return $b["stats"]["total_quantity"] - $a["stats"]["total_quantity"];
+                        return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
                     }); ?>
                     <?php foreach ($clusterData["reps"] as $rep): ?>
                     <?php
-                    $repRate = $rep["total_clients"] > 0 ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) : 0;
+                    $repRate = ($rep["total_clients"] ?? 0) > 0
+                        ? round((($rep["stats"]["customers_ordered"] ?? 0) / $rep["total_clients"]) * 100, 1)
+                        : 0;
                     $repDetailUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId . "&rep_id=" . urlencode($rep["id"]) . "&rep_country=" . $rep["country"];
                     if (!empty($selectedCountry)) {
                         $repDetailUrl .= "&country=" . $selectedCountry;
@@ -435,19 +469,19 @@ if (!$selectedCountry && $campaignStats) {
                     <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-50">
                         <div class="flex items-center gap-2 pl-6">
                             <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
-                                <span class="text-xs font-medium text-indigo-600"><?= strtoupper(substr($rep["name"], 0, 2)) ?></span>
+                                <span class="text-xs font-medium text-indigo-600"><?= strtoupper(substr($rep["name"] ?? "", 0, 2)) ?></span>
                             </div>
-                            <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"]) ?></span>
+                            <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"] ?? "") ?></span>
                         </div>
 
                         <div class="flex items-center gap-4 text-sm">
                             <div class="text-center">
-                                <span class="text-gray-700"><?= $rep["total_clients"] ?></span>
+                                <span class="text-gray-700"><?= $rep["total_clients"] ?? 0 ?></span>
                                 <span class="text-gray-400">/</span>
-                                <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?></span>
+                                <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?? 0 ?></span>
                             </div>
                             <div class="w-16 text-right">
-                                <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"], 0, ",", " ") ?></span>
+                                <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"] ?? 0, 0, ",", " ") ?></span>
                             </div>
                             <a href="<?= $repDetailUrl ?>" onclick="showLoader()"
                                class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
@@ -465,6 +499,8 @@ if (!$selectedCountry && $campaignStats) {
     <p class="text-xs text-gray-400 mt-3 text-center">
         Format: Total clients / Clients ayant commandé | Promos vendues
     </p>
+
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
