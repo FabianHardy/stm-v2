@@ -110,6 +110,15 @@ class StatsController
         require __DIR__ . "/../Views/admin/stats/index.php";
     }
 
+
+/**
+ * MODIFICATIONS À APPLIQUER DANS StatsController.php
+ *
+ * Remplacer la méthode campaigns() par celle-ci
+ *
+ * @modified 2025/12/04 - Ajout graphiques évolution + catégories
+ */
+
     /**
      * Statistiques par campagne
      *
@@ -133,12 +142,21 @@ class StatsController
         $repDetail = null;
         $repClients = [];
 
+        // NOUVEAU : Données pour graphiques
+        $dailyEvolution = [];
+        $categoryStats = [];
+        $chartLabels = [];
+        $chartOrders = [];
+        $chartQuantity = [];
+        $categoryLabels = [];
+        $categoryData = [];
+        $categoryColors = [];
+
         if ($campaignId) {
             $campaignStats = $this->statsModel->getCampaignStats($campaignId);
             $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
 
             // Récupérer les représentants filtrés sur cette campagne
-            // Le pays est déterminé par la campagne
             $campaignCountry = $campaignStats["campaign"]["country"] ?? null;
             $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
 
@@ -146,7 +164,6 @@ class StatsController
             if ($repId && $repCountry) {
                 $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
 
-                // Trouver les infos du rep
                 foreach ($reps as $rep) {
                     if ($rep["id"] === $repId && $rep["country"] === $repCountry) {
                         $repDetail = $rep;
@@ -154,11 +171,107 @@ class StatsController
                     }
                 }
             }
+
+            // ============================================
+            // NOUVEAU : Évolution journalière sur la période de la campagne
+            // ============================================
+            $campaign = $campaignStats["campaign"];
+            $startDate = $campaign["start_date"];
+            $endDate = $campaign["end_date"];
+
+            // Si la campagne est toujours en cours, limiter à aujourd'hui
+            $today = date("Y-m-d");
+            if ($endDate > $today) {
+                $endDate = $today;
+            }
+
+            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId);
+
+            // Préparer les données pour le graphique d'évolution
+            $currentDate = new \DateTime($startDate);
+            $endDateObj = new \DateTime($endDate);
+            $dailyMap = [];
+
+            foreach ($dailyEvolution as $row) {
+                $dailyMap[$row["day"]] = $row;
+            }
+
+            while ($currentDate <= $endDateObj) {
+                $day = $currentDate->format("Y-m-d");
+                $chartLabels[] = $currentDate->format("D d/m");
+                $chartOrders[] = (int) ($dailyMap[$day]["orders_count"] ?? 0);
+                $chartQuantity[] = (int) ($dailyMap[$day]["quantity"] ?? 0);
+                $currentDate->modify("+1 day");
+            }
+
+            // ============================================
+            // NOUVEAU : Stats par catégorie pour le donut
+            // ============================================
+            $categoryStats = $this->getCategoryStatsForCampaign($campaignId);
+
+            foreach ($categoryStats as $cat) {
+                $categoryLabels[] = $cat["category_name"];
+                $categoryData[] = (int) $cat["quantity"];
+                $categoryColors[] = $cat["color"] ?? $this->getRandomColor();
+            }
         }
 
         $title = "Statistiques - Par campagne";
 
+        // Encoder les données JSON pour les graphiques
+        $chartLabelsJson = json_encode($chartLabels);
+        $chartOrdersJson = json_encode($chartOrders);
+        $chartQuantityJson = json_encode($chartQuantity);
+        $categoryLabelsJson = json_encode($categoryLabels);
+        $categoryDataJson = json_encode($categoryData);
+        $categoryColorsJson = json_encode($categoryColors);
+
         require __DIR__ . "/../Views/admin/stats/campaigns.php";
+    }
+
+    /**
+     * Récupérer les stats par catégorie pour une campagne
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array Stats par catégorie
+     */
+    private function getCategoryStatsForCampaign(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $query = "
+            SELECT
+                c.name_fr as category_name,
+                c.color,
+                COALESCE(SUM(ol.quantity), 0) as quantity
+            FROM categories c
+            INNER JOIN products p ON c.id = p.category_id AND p.campaign_id = :campaign_id
+            LEFT JOIN order_lines ol ON p.id = ol.product_id
+            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            GROUP BY c.id, c.name_fr, c.color
+            HAVING quantity > 0
+            ORDER BY quantity DESC
+        ";
+
+        return $db->query($query, [
+            ":campaign_id" => $campaignId,
+        ]);
+    }
+
+    /**
+     * Générer une couleur aléatoire pour les graphiques
+     *
+     * @return string Couleur hex
+     */
+    private function getRandomColor(): string
+    {
+        $colors = [
+            '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+            '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#eab308',
+            '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
+            '#0ea5e9', '#3b82f6', '#6366f1'
+        ];
+        return $colors[array_rand($colors)];
     }
 
     /**
