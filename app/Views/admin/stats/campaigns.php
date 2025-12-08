@@ -8,7 +8,7 @@
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
- * @modified 2025/12/08 - Loader visible au F5
+ * @modified 2025/12/08 - Loader visible au F5 + légende colonnes
  */
 
 // Variable pour le menu actif
@@ -31,8 +31,8 @@ if (!$selectedCountry && $campaignStats) {
 }
 ?>
 
-<!-- Loader Overlay - Visible immédiatement -->
-<style>#page-loader { display: flex !important; }</style>
+<!-- Loader Overlay - Visible immédiatement au chargement -->
+<style>#page-loader:not(.loaded) { display: flex !important; }</style>
 <div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 items-center justify-center">
     <div class="text-center">
         <div class="relative">
@@ -43,9 +43,8 @@ if (!$selectedCountry && $campaignStats) {
     </div>
 </div>
 <script>
-    // Cacher le loader dès que la page est prête
     window.addEventListener('load', function() {
-        document.getElementById('page-loader').style.display = 'none';
+        document.getElementById('page-loader').classList.add('loaded');
     });
 </script>
 
@@ -424,21 +423,21 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
         <p class="text-gray-500">Aucune donnée représentant</p>
         <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
     </div>
-<?php else: ?>
+    <?php else: ?>
 
-<!-- Légende des colonnes -->
-<p class="text-xs text-gray-500 mb-4 text-right">
-    <span class="inline-flex items-center gap-1">
-        <span class="font-medium">Format :</span>
-        <span class="text-gray-700">Total clients</span>
-        <span class="text-gray-400">/</span>
-        <span class="text-green-600">Clients ayant commandé</span>
-        <span class="text-gray-400">|</span>
-        <span class="text-orange-600">Promos vendues</span>
-    </span>
-</p>
+    <!-- Légende des colonnes (en haut) -->
+    <p class="text-xs text-gray-500 mb-4 text-right">
+        <span class="inline-flex items-center gap-1">
+            <span class="font-medium">Format :</span>
+            <span class="text-gray-700">Total clients</span>
+            <span class="text-gray-400">/</span>
+            <span class="text-green-600">Clients ayant commandé</span>
+            <span class="text-gray-400">|</span>
+            <span class="text-orange-600">Promos vendues</span>
+        </span>
+    </p>
 
-<div x-data="{ openClusters: {} }">
+    <div x-data="{ openClusters: {} }">
         <?php foreach ($clusters as $clusterName => $clusterData):
             $clusterId = md5($clusterName);
         ?>
@@ -562,19 +561,9 @@ $pageScripts = <<<SCRIPTS
 // LOADER
 // ============================================
 function showLoader() {
-    document.getElementById('page-loader').classList.remove('hidden');
-    document.getElementById('page-loader').classList.add('flex');
+    var loader = document.getElementById('page-loader');
+    loader.classList.remove('loaded');
 }
-
-function hideLoader() {
-    document.getElementById('page-loader').classList.add('hidden');
-    document.getElementById('page-loader').classList.remove('flex');
-}
-
-// Cacher le loader une fois la page complètement chargée
-window.addEventListener('load', function() {
-    hideLoader();
-});
 
 // ============================================
 // FILTRAGE CAMPAGNES
