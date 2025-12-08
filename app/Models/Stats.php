@@ -702,81 +702,104 @@ class Stats
     // ========================================
 
     /**
-     * Liste des représentants avec leurs stats
-     *
-     * @param string|null $country
-     * @param int|null $campaignId
-     * @return array
-     */
-    public function getRepStats(?string $country = null, ?int $campaignId = null): array
-    {
-        if (!$this->extDb) {
-            return [];
-        }
-
-        $reps = [];
-
-        try {
-            // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
-            if (!$country || $country === "BE") {
-                $beReps = $this->extDb->query(
-                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                     FROM BE_REP r
-                     LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                     LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                     ORDER BY c.CLU_LIB1, r.REP_NOM",
-                );
-
-                foreach ($beReps as $rep) {
-                    $reps[] = [
-                        "id" => $rep["IDE_REP"],
-                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                        "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["cluster_name"] ?: "Non défini",
-                        "country" => "BE",
-                    ];
-                }
-            }
-
-            // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
-            if (!$country || $country === "LU") {
-                $luReps = $this->extDb->query(
-                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                     FROM LU_REP r
-                     LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                     LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                     ORDER BY c.CLU_LIB1, r.REP_NOM",
-                );
-
-                foreach ($luReps as $rep) {
-                    $reps[] = [
-                        "id" => $rep["IDE_REP"],
-                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                        "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["cluster_name"] ?: "Non défini",
-                        "country" => "LU",
-                    ];
-                }
-            }
-
-            // Enrichir avec les stats de commandes
-            foreach ($reps as &$rep) {
-                $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
-                $rep["total_clients"] = $this->getRepClientsCount($rep["id"], $rep["country"]);
-            }
-        } catch (\Exception $e) {
-            error_log("Stats::getRepStats error: " . $e->getMessage());
-        }
-
-        // Trier par quantité commandée
-        usort($reps, function ($a, $b) {
-            return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
-        });
-
-        return $reps;
+ * Liste des représentants avec leurs stats
+ *
+ * @modified 2025/12/08 - Filtrage clients éligibles selon mode campagne
+ *
+ * @param string|null $country
+ * @param int|null $campaignId
+ * @return array
+ */
+public function getRepStats(?string $country = null, ?int $campaignId = null): array
+{
+    if (!$this->extDb) {
+        return [];
     }
+
+    $reps = [];
+
+    // Récupérer les infos de la campagne si spécifiée (pour le filtrage clients)
+    $campaign = null;
+    if ($campaignId) {
+        $result = $this->db->query(
+            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+            [":id" => $campaignId]
+        );
+        if (!empty($result)) {
+            $campaign = $result[0];
+            // Forcer le filtrage sur le pays de la campagne
+            $country = $campaign["country"];
+        }
+    }
+
+    try {
+        // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
+        if (!$country || $country === "BE") {
+            $beReps = $this->extDb->query(
+                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                 FROM BE_REP r
+                 LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                 LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                 ORDER BY c.CLU_LIB1, r.REP_NOM",
+            );
+
+            foreach ($beReps as $rep) {
+                $reps[] = [
+                    "id" => $rep["IDE_REP"],
+                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                    "email" => $rep["REP_EMAIL"],
+                    "cluster" => $rep["cluster_name"] ?: "Non défini",
+                    "country" => "BE",
+                ];
+            }
+        }
+
+        // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
+        if (!$country || $country === "LU") {
+            $luReps = $this->extDb->query(
+                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                 FROM LU_REP r
+                 LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                 LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                 ORDER BY c.CLU_LIB1, r.REP_NOM",
+            );
+
+            foreach ($luReps as $rep) {
+                $reps[] = [
+                    "id" => $rep["IDE_REP"],
+                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                    "email" => $rep["REP_EMAIL"],
+                    "cluster" => $rep["cluster_name"] ?: "Non défini",
+                    "country" => "LU",
+                ];
+            }
+        }
+
+        // Enrichir avec les stats de commandes ET le nombre de clients éligibles
+        foreach ($reps as &$rep) {
+            $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
+
+            // 🔧 CORRECTION : Utiliser la nouvelle méthode qui filtre selon le mode campagne
+            $rep["total_clients"] = $this->getRepClientsCountForCampaign(
+                $rep["id"],
+                $rep["country"],
+                $campaignId,
+                $campaign
+            );
+        }
+    } catch (\Exception $e) {
+        error_log("Stats::getRepStats error: " . $e->getMessage());
+    }
+
+    // Trier par quantité commandée
+    usort($reps, function ($a, $b) {
+        return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
+    });
+
+    return $reps;
+}
 
     /**
      * Stats de commandes pour un représentant
