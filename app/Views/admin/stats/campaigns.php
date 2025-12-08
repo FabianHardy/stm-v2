@@ -31,7 +31,7 @@ if (!$selectedCountry && $campaignStats) {
 ?>
 
 <!-- Loader Overlay -->
-<div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 hidden items-center justify-center">
+<div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 flex items-center justify-center">
     <div class="text-center">
         <div class="relative">
             <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
@@ -557,6 +557,16 @@ function showLoader() {
     document.getElementById('page-loader').classList.remove('hidden');
     document.getElementById('page-loader').classList.add('flex');
 }
+
+function hideLoader() {
+    document.getElementById('page-loader').classList.add('hidden');
+    document.getElementById('page-loader').classList.remove('flex');
+}
+
+// Cacher le loader une fois la page complètement chargée
+window.addEventListener('load', function() {
+    hideLoader();
+});
 
 // ============================================
 // FILTRAGE CAMPAGNES
