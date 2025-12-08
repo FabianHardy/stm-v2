@@ -8,6 +8,7 @@
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
+ * @modified 2025/12/08 - Loader visible au F5
  */
 
 // Variable pour le menu actif
@@ -30,8 +31,9 @@ if (!$selectedCountry && $campaignStats) {
 }
 ?>
 
-<!-- Loader Overlay -->
-<div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 flex items-center justify-center">
+<!-- Loader Overlay - Visible immédiatement -->
+<style>#page-loader { display: flex !important; }</style>
+<div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 items-center justify-center">
     <div class="text-center">
         <div class="relative">
             <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
@@ -40,6 +42,12 @@ if (!$selectedCountry && $campaignStats) {
         <p class="text-sm text-gray-400 mt-1">Cela peut prendre quelques secondes</p>
     </div>
 </div>
+<script>
+    // Cacher le loader dès que la page est prête
+    window.addEventListener('load', function() {
+        document.getElementById('page-loader').style.display = 'none';
+    });
+</script>
 
 <!-- En-tête -->
 <div class="mb-6">
