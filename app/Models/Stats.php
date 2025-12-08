@@ -880,6 +880,115 @@ class Stats
         }
     }
 
+/**
+ * Nombre de clients d'un représentant ÉLIGIBLES pour une campagne
+ *
+ * Filtre selon le mode d'attribution de la campagne :
+ * - MANUAL : Intersection clients rep ET campaign_customers
+ * - AUTOMATIC/PROTECTED : Tous les clients du rep
+ *
+ * @param string $repId ID du représentant
+ * @param string $country Pays (BE/LU)
+ * @param int|null $campaignId ID de la campagne
+ * @param array|null $campaign Données de la campagne (optionnel, sera chargé si null)
+ * @return int Nombre de clients éligibles
+ *
+ * @created 2025/12/08
+ */
+private function getRepClientsCountForCampaign(
+    string $repId,
+    string $country,
+    ?int $campaignId = null,
+    ?array $campaign = null
+): int {
+    // Si pas de campagne spécifiée, retourner le total normal
+    if (!$campaignId) {
+        return $this->getRepClientsCount($repId, $country);
+    }
+
+    // Charger les infos campagne si pas fournies
+    if ($campaign === null) {
+        $result = $this->db->query(
+            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+            [":id" => $campaignId]
+        );
+        if (empty($result)) {
+            return $this->getRepClientsCount($repId, $country);
+        }
+        $campaign = $result[0];
+    }
+
+    $mode = $campaign["customer_assignment_mode"] ?? "automatic";
+    $campaignCountry = $campaign["country"] ?? "BE";
+
+    // Si le pays du rep ne correspond pas à la campagne, retourner 0
+    if ($country !== $campaignCountry) {
+        return 0;
+    }
+
+    // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
+    if ($mode !== "manual") {
+        return $this->getRepClientsCount($repId, $country);
+    }
+
+    // Mode MANUAL : intersection clients rep ET campaign_customers
+    if (!$this->extDb) {
+        return 0;
+    }
+
+    try {
+        $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
+
+        // Récupérer les numéros clients du représentant
+        $repClients = $this->extDb->query(
+            "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+            [":rep_id" => $repId]
+        );
+
+        if (empty($repClients)) {
+            return 0;
+        }
+
+        // Extraire les numéros clients
+        $customerNumbers = array_filter(
+            array_column($repClients, "customer_number"),
+            fn($n) => $n !== null && $n !== ""
+        );
+
+        if (empty($customerNumbers)) {
+            return 0;
+        }
+
+        // Créer les placeholders pour la requête IN
+        $placeholders = [];
+        $params = [":campaign_id" => $campaignId];
+        foreach ($customerNumbers as $i => $num) {
+            $placeholders[] = ":num{$i}";
+            $params[":num{$i}"] = $num;
+        }
+        $inClause = implode(",", $placeholders);
+
+        // Compter l'intersection avec campaign_customers
+        $query = "
+            SELECT COUNT(*) as total
+            FROM campaign_customers
+            WHERE campaign_id = :campaign_id
+            AND is_authorized = 1
+            AND customer_number IN ({$inClause})
+        ";
+
+        $result = $this->db->query($query, $params);
+
+        return (int) ($result[0]["total"] ?? 0);
+
+    } catch (\Exception $e) {
+        error_log("Stats::getRepClientsCountForCampaign error: " . $e->getMessage());
+        return 0;
+    }
+}
+
+
+
     /**
      * Récupère le cluster d'un représentant via REPCLU → CLU
      *
