@@ -416,9 +416,21 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
         <p class="text-gray-500">Aucune donnée représentant</p>
         <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
     </div>
-    <?php else: ?>
+<?php else: ?>
 
-    <div x-data="{ openClusters: {} }">
+<!-- Légende des colonnes -->
+<p class="text-xs text-gray-500 mb-4 text-right">
+    <span class="inline-flex items-center gap-1">
+        <span class="font-medium">Format :</span>
+        <span class="text-gray-700">Total clients</span>
+        <span class="text-gray-400">/</span>
+        <span class="text-green-600">Clients ayant commandé</span>
+        <span class="text-gray-400">|</span>
+        <span class="text-orange-600">Promos vendues</span>
+    </span>
+</p>
+
+<div x-data="{ openClusters: {} }">
         <?php foreach ($clusters as $clusterName => $clusterData):
             $clusterId = md5($clusterName);
         ?>
