@@ -729,3 +729,15 @@ $router->post('/admin/agent/delete/{session_id}', function ($session_id) {
     $controller = new \App\Controllers\AgentController();
     $controller->delete($session_id);
 });
+// Test connexion externe - À SUPPRIMER APRÈS
+$router->get('/admin/test-external', function() {
+    header('Content-Type: application/json');
+
+    try {
+        $extDb = \Core\ExternalDatabase::getInstance();
+        $result = $extDb->query("SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP WHERE REP_NOM LIKE '%ZERAFI%' LIMIT 1");
+        echo json_encode(['success' => true, 'data' => $result]);
+    } catch (\Exception $e) {
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+});

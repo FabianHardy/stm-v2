@@ -35,8 +35,9 @@ Colonnes: id, customer_number, email, company_name, country (BE/LU), language (f
 Note: Se remplit à la volée lors des commandes. Pour les infos complètes des clients/reps, utiliser la BASE EXTERNE.
 
 ### Table: orders
-Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items, total_quantity, total_products, status (pending/confirmed/processing/completed/cancelled), notes, created_at
+Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items (nombre total d'articles), total_products (nombre de produits différents), status (pending/confirmed/processing/completed/cancelled), notes, created_at
 Clé primaire: id
+Note: Pour compter les promos vendues, utiliser SUM depuis order_lines.quantity
 
 ### Table: order_lines
 Colonnes: id, order_id (FK orders), product_id (FK products), product_code, product_name, quantity, created_at
@@ -358,94 +359,189 @@ SCHEMA;
         try {
             // 1. Trouver la campagne
             $campaign = $this->db->query(
-                "SELECT id, name, country FROM campaigns WHERE name LIKE :name AND country = :country LIMIT 1",
-                [':name' => '%' . $campaignName . '%', ':country' => $country]
+                "SELECT id, name, country, start_date, end_date FROM campaigns
+                 WHERE name LIKE :name
+                 ORDER BY start_date DESC LIMIT 1",
+                [':name' => '%' . $campaignName . '%']
             );
 
             if (empty($campaign)) {
-                return ['error' => "Campagne '{$campaignName}' non trouvée pour {$country}"];
+                return ['error' => "Campagne '{$campaignName}' non trouvée"];
             }
             $campaign = $campaign[0];
+            $country = $campaign['country'];
 
-            // 2. Trouver le représentant dans la base externe
-            $extDb = ExternalDatabase::getInstance();
+            // 2. Essayer de se connecter à la base externe
+            $extDb = $this->getExternalDb();
+
+            if ($extDb === null) {
+                return ['error' => 'Impossible de se connecter à la base externe'];
+            }
+
+            // 3. Trouver le représentant dans la base externe
             $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
 
-            // Utiliser fetchAll pour la base externe
-            $repSql = "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
-                       WHERE REP_NOM LIKE '%{$repName}%' OR REP_PRENOM LIKE '%{$repName}%' LIMIT 1";
-            $stmt = $extDb->query($repSql);
-            $repResults = is_array($stmt) ? $stmt : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $searchPattern = '%' . $repName . '%';
+            $repResults = $extDb->query(
+                "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
+                 WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
+                [':name1' => $searchPattern, ':name2' => $searchPattern]
+            );
 
-            if (empty($repResults)) {
-                return ['error' => "Représentant '{$repName}' non trouvé dans {$repTable}"];
+            // Si false (erreur) ou vide, essayer l'autre pays
+            if ($repResults === false || empty($repResults)) {
+                $repTable = $country === 'BE' ? 'LU_REP' : 'BE_REP';
+                $repResults = $extDb->query(
+                    "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
+                     WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
+                    [':name1' => $searchPattern, ':name2' => $searchPattern]
+                );
             }
+
+            if ($repResults === false || empty($repResults)) {
+                return ['error' => "Représentant '{$repName}' non trouvé dans les bases externes"];
+            }
+
             $rep = $repResults[0];
-            $repFullName = trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']);
+            $repFullName = trim(($rep['REP_PRENOM'] ?? '') . ' ' . ($rep['REP_NOM'] ?? ''));
+            $ideRep = $rep['IDE_REP'];
 
-            // 3. Trouver les clients de ce rep
+            // 4. Compter les clients de ce rep dans la base externe
             $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
-            $clientSql = "SELECT CLL_NCLIXX FROM {$clientTable} WHERE IDE_REP = '{$rep['IDE_REP']}'";
-            $stmt = $extDb->query($clientSql);
-            $clients = is_array($stmt) ? $stmt : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $totalClientsResult = $extDb->query(
+                "SELECT COUNT(*) as total FROM {$clientTable} WHERE IDE_REP = :ide_rep",
+                [':ide_rep' => (string) $ideRep]
+            );
 
-            $customerNumbers = array_column($clients, 'CLL_NCLIXX');
-            $totalClients = count($customerNumbers);
+            if ($totalClientsResult === false) {
+                return ['error' => 'Erreur lors du comptage des clients'];
+            }
+            $totalClients = (int) ($totalClientsResult[0]['total'] ?? 0);
 
-            if (empty($customerNumbers)) {
+            // 5. Récupérer les customer_numbers de ce rep
+            $clientsResult = $extDb->query(
+                "SELECT CLL_NCLIXX FROM {$clientTable} WHERE IDE_REP = :ide_rep",
+                [':ide_rep' => (string) $ideRep]
+            );
+
+            if ($clientsResult === false) {
+                $clientsResult = [];
+            }
+            $repCustomerNumbers = array_column($clientsResult, 'CLL_NCLIXX');
+
+            if (empty($repCustomerNumbers)) {
                 return [
                     'representant' => $repFullName,
-                    'rep_id' => $rep['IDE_REP'],
+                    'rep_id' => $ideRep,
                     'campagne' => $campaign['name'],
                     'total_clients' => 0,
                     'clients_commande' => 0,
                     'commandes' => 0,
-                    'promos_vendues' => 0,
-                    'message' => 'Aucun client assigné à ce représentant'
+                    'promos_vendues' => 0
                 ];
             }
 
-            // 4. Trouver les commandes de ces clients sur cette campagne
-            // Créer les placeholders pour IN clause
+            // 6. Chercher les stats de commandes pour cette campagne
+            // On part des orders et on filtre par customer_number
+            $stats = $this->db->query(
+                "SELECT
+                    COUNT(DISTINCT o.id) as total_orders,
+                    COUNT(DISTINCT c.customer_number) as clients_ordered,
+                    COALESCE(SUM(ol.quantity), 0) as total_promos
+                 FROM orders o
+                 JOIN customers c ON c.id = o.customer_id
+                 JOIN order_lines ol ON ol.order_id = o.id
+                 WHERE o.campaign_id = :campaign_id
+                 AND c.country = :country",
+                [':campaign_id' => $campaign['id'], ':country' => $country]
+            );
+
+            $allStats = $stats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
+
+            // 7. Filtrer pour ne garder que les clients du rep
+            // On doit faire une requête plus précise
             $placeholders = [];
-            $params = [':campaign_id' => $campaign['id']];
-            foreach ($customerNumbers as $i => $num) {
+            $params = [':campaign_id' => $campaign['id'], ':country' => $country];
+            foreach ($repCustomerNumbers as $i => $num) {
                 $placeholders[] = ":cn{$i}";
                 $params[":cn{$i}"] = $num;
             }
             $inClause = implode(',', $placeholders);
 
-            $stats = $this->db->query(
+            $repStats = $this->db->query(
                 "SELECT
                     COUNT(DISTINCT o.id) as total_orders,
                     COUNT(DISTINCT c.customer_number) as clients_ordered,
-                    COALESCE(SUM(o.total_quantity), 0) as total_quantity
-                 FROM customers c
-                 LEFT JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
-                 WHERE c.customer_number IN ({$inClause}) AND c.country = '{$country}'",
+                    COALESCE(SUM(ol.quantity), 0) as total_promos
+                 FROM orders o
+                 JOIN customers c ON c.id = o.customer_id
+                 JOIN order_lines ol ON ol.order_id = o.id
+                 WHERE o.campaign_id = :campaign_id
+                 AND c.country = :country
+                 AND c.customer_number IN ({$inClause})",
                 $params
             );
 
-            $stats = $stats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_quantity' => 0];
+            $repStatsData = $repStats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
 
             return [
                 'representant' => $repFullName,
-                'rep_id' => $rep['IDE_REP'],
+                'rep_id' => $ideRep,
                 'campagne' => $campaign['name'],
                 'pays' => $country,
                 'total_clients' => $totalClients,
-                'clients_commande' => (int) $stats['clients_ordered'],
+                'clients_commande' => (int) $repStatsData['clients_ordered'],
                 'taux_participation' => $totalClients > 0
-                    ? round(($stats['clients_ordered'] / $totalClients) * 100, 1) . '%'
+                    ? round(($repStatsData['clients_ordered'] / $totalClients) * 100, 1) . '%'
                     : '0%',
-                'commandes' => (int) $stats['total_orders'],
-                'promos_vendues' => (int) $stats['total_quantity']
+                'commandes' => (int) $repStatsData['total_orders'],
+                'promos_vendues' => (int) $repStatsData['total_promos']
             ];
 
         } catch (\Exception $e) {
             error_log("getRepCampaignStats error: " . $e->getMessage());
             return ['error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Fallback : Stats rep depuis la base locale uniquement
+     */
+    private function getRepCampaignStatsFromLocal(string $repName, array $campaign): array
+    {
+        // Chercher dans customers.rep_name
+        $stats = $this->db->query(
+            "SELECT
+                c.rep_name,
+                COUNT(DISTINCT o.id) as total_orders,
+                COUNT(DISTINCT c.id) as total_clients,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+             FROM customers c
+             LEFT JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
+             LEFT JOIN order_lines ol ON ol.order_id = o.id
+             WHERE c.rep_name LIKE :rep_name
+             GROUP BY c.rep_name
+             LIMIT 1",
+            [':campaign_id' => $campaign['id'], ':rep_name' => '%' . $repName . '%']
+        );
+
+        if (empty($stats)) {
+            return [
+                'error' => "Représentant '{$repName}' non trouvé (base locale)",
+                'note' => 'La connexion à la base externe a échoué, recherche dans la base locale uniquement'
+            ];
+        }
+
+        $stat = $stats[0];
+        return [
+            'representant' => $stat['rep_name'] ?? $repName,
+            'campagne' => $campaign['name'],
+            'source' => 'base_locale',
+            'clients_ayant_commande' => (int) $stat['total_clients'],
+            'commandes' => (int) $stat['total_orders'],
+            'promos_vendues' => (int) $stat['total_quantity'],
+            'note' => 'Stats basées sur les clients ayant déjà commandé (base locale)'
+        ];
     }
 
     /**
@@ -493,6 +589,7 @@ SCHEMA;
 
     /**
      * Liste des campagnes (simplifié)
+     * Le statut est calculé dynamiquement basé sur les dates
      */
     private function listCampaigns(array $args): array
     {
@@ -504,30 +601,35 @@ SCHEMA;
             $params[':country'] = $args['country'];
         }
 
-        if (!empty($args['status'])) {
-            $sql .= " AND status = :status";
-            $params[':status'] = $args['status'];
-        }
-
         $sql .= " ORDER BY start_date DESC LIMIT 20";
 
         $campaigns = $this->db->query($sql, $params);
 
-        $statusLabels = [
-            'draft' => 'Brouillon',
-            'scheduled' => 'Programmée',
-            'active' => 'En cours',
-            'ended' => 'Terminée',
-            'cancelled' => 'Annulée'
-        ];
-
+        $today = date('Y-m-d');
         $result = [];
+
         foreach ($campaigns as $c) {
+            // Calculer le statut dynamiquement basé sur les dates
+            $calculatedStatus = $this->calculateCampaignStatus($c['start_date'], $c['end_date'], $c['status']);
+
+            // Filtrer par statut si demandé
+            if (!empty($args['status']) && $calculatedStatus !== $args['status']) {
+                continue;
+            }
+
+            $statusLabels = [
+                'draft' => 'Brouillon',
+                'scheduled' => 'Programmée',
+                'active' => 'En cours',
+                'ended' => 'Terminée',
+                'cancelled' => 'Annulée'
+            ];
+
             $result[] = [
                 'id' => $c['id'],
                 'nom' => $c['name'],
                 'pays' => $c['country'],
-                'statut' => $statusLabels[$c['status']] ?? $c['status'],
+                'statut' => $statusLabels[$calculatedStatus] ?? $calculatedStatus,
                 'debut' => date('d/m/Y', strtotime($c['start_date'])),
                 'fin' => date('d/m/Y', strtotime($c['end_date']))
             ];
@@ -537,5 +639,41 @@ SCHEMA;
             'campagnes' => $result,
             'total' => count($result)
         ];
+    }
+
+    /**
+     * Calculer le statut d'une campagne basé sur ses dates
+     */
+    private function calculateCampaignStatus(string $startDate, string $endDate, string $dbStatus): string
+    {
+        // Si annulée dans la DB, garder ce statut
+        if ($dbStatus === 'cancelled') {
+            return 'cancelled';
+        }
+
+        $today = date('Y-m-d');
+        $start = date('Y-m-d', strtotime($startDate));
+        $end = date('Y-m-d', strtotime($endDate));
+
+        if ($today < $start) {
+            return 'scheduled';
+        } elseif ($today >= $start && $today <= $end) {
+            return 'active';
+        } else {
+            return 'ended';
+        }
+    }
+
+    /**
+     * Obtenir une connexion à la base externe avec gestion d'erreur
+     */
+    private function getExternalDb(): ?ExternalDatabase
+    {
+        try {
+            return ExternalDatabase::getInstance();
+        } catch (\Exception $e) {
+            error_log("Agent: Impossible de se connecter à la base externe: " . $e->getMessage());
+            return null;
+        }
     }
 }
