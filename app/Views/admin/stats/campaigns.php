@@ -618,7 +618,10 @@ $suppliersCount = count($supplierStats ?? []);
                     <div class="bg-gray-50 rounded-t-lg border border-gray-200 px-4 py-3">
                         <div class="flex items-center justify-between text-xs text-gray-500 uppercase font-medium">
                             <div class="w-8">#</div>
-                            <div class="flex-1 min-w-[200px]">Fournisseur</div>
+                            <button @click="sortBy('supplier_name')" class="flex-1 min-w-[200px] text-left hover:text-indigo-600 transition flex items-center gap-1">
+                                Fournisseur
+                                <i class="fas" :class="sortField === 'supplier_name' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
+                            </button>
                             <button @click="sortBy('customers_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
                                 Clients
                                 <i class="fas" :class="sortField === 'customers_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
@@ -824,8 +827,23 @@ function supplierTable() {
         
         get sortedSuppliers() {
             return [...this.suppliers].sort((a, b) => {
-                let valA = a[this.sortField] || 0;
-                let valB = b[this.sortField] || 0;
+                let valA = a[this.sortField];
+                let valB = b[this.sortField];
+                
+                // Tri alphabétique pour supplier_name
+                if (this.sortField === 'supplier_name') {
+                    valA = (valA || '').toLowerCase();
+                    valB = (valB || '').toLowerCase();
+                    
+                    if (this.sortDir === 'asc') {
+                        return valA.localeCompare(valB, 'fr');
+                    }
+                    return valB.localeCompare(valA, 'fr');
+                }
+                
+                // Tri numérique pour les autres colonnes
+                valA = valA || 0;
+                valB = valB || 0;
                 
                 if (this.sortDir === 'asc') {
                     return valA - valB;
@@ -839,7 +857,8 @@ function supplierTable() {
                 this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
             } else {
                 this.sortField = field;
-                this.sortDir = 'desc';
+                // Tri par nom : A-Z par défaut, autres : desc par défaut
+                this.sortDir = field === 'supplier_name' ? 'asc' : 'desc';
             }
         },
         
