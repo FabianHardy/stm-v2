@@ -10,11 +10,12 @@
  * - LU_CLL : Clients Luxembourg
  * - BE_REP : Représentants Belgique
  * - LU_REP : Représentants Luxembourg
- * - BE_ART : Articles/Produits
+ * - BE_COLIS : Mapping codes articles (Art_Colis → Detail_Art)
+ * - BE_ART : Articles/Produits (détails)
  * - BE_FOD : Fournisseurs
  *
  * @created  2025/11/12 19:25
- * @modified 2025/12/09 - Ajout méthodes fournisseurs (BE_FOD) pour stats campagnes
+ * @modified 2025/12/09 - Ajout méthodes fournisseurs via BE_COLIS → BE_ART → BE_FOD
  */
 
 namespace Core;
@@ -298,7 +299,7 @@ class ExternalDatabase
      */
     public function checkTables(): array
     {
-        $tables = ['BE_CLL', 'LU_CLL', 'BE_REP', 'LU_REP', 'BE_ART', 'BE_FOD'];
+        $tables = ['BE_CLL', 'LU_CLL', 'BE_REP', 'LU_REP', 'BE_COLIS', 'BE_ART', 'BE_FOD'];
         $result = [];
 
         foreach ($tables as $table) {
@@ -347,9 +348,9 @@ class ExternalDatabase
     public function getSupplier(string $ideFod): ?array
     {
         try {
-            $sql = "SELECT IDE_FOD, FOD_NFOUXX, FOD_NOM
-                    FROM BE_FOD
-                    WHERE IDE_FOD = :ide_fod
+            $sql = "SELECT IDE_FOD, FOD_NFOUXX, FOD_NOM 
+                    FROM BE_FOD 
+                    WHERE IDE_FOD = :ide_fod 
                     LIMIT 1";
 
             $stmt = $this->pdo->prepare($sql);
@@ -371,8 +372,8 @@ class ExternalDatabase
     public function getAllSuppliers(): array
     {
         try {
-            $sql = "SELECT IDE_FOD, FOD_NFOUXX, FOD_NOM
-                    FROM BE_FOD
+            $sql = "SELECT IDE_FOD, FOD_NFOUXX, FOD_NOM 
+                    FROM BE_FOD 
                     ORDER BY FOD_NOM ASC";
 
             $stmt = $this->pdo->query($sql);
@@ -385,9 +386,10 @@ class ExternalDatabase
 
     /**
      * Récupérer les fournisseurs pour une liste de codes articles
-     * Joint BE_ART et BE_FOD via IDE_FODI
+     * 
+     * Chemin : product_code → BE_COLIS.Art_Colis → BE_COLIS.Detail_Art → BE_ART.ART_RECHART → BE_FOD
      *
-     * @param array $productCodes Liste des codes articles (ART_RECHART)
+     * @param array $productCodes Liste des codes articles (Art_Colis dans BE_COLIS)
      * @return array Mapping [code_article => ['supplier_id', 'supplier_number', 'supplier_name']]
      */
     public function getSuppliersForProducts(array $productCodes): array
@@ -400,14 +402,16 @@ class ExternalDatabase
             // Créer les placeholders pour IN
             $placeholders = implode(',', array_fill(0, count($productCodes), '?'));
 
-            $sql = "SELECT
-                        a.ART_RECHART as product_code,
+            // Jointure via BE_COLIS pour lier product_code → fournisseur
+            $sql = "SELECT 
+                        co.Art_Colis as product_code,
                         a.IDE_FODI as supplier_id,
                         COALESCE(f.FOD_NFOUXX, 'N/A') as supplier_number,
                         COALESCE(f.FOD_NOM, 'Fournisseur inconnu') as supplier_name
-                    FROM BE_ART a
+                    FROM BE_COLIS co
+                    LEFT JOIN BE_ART a ON a.ART_RECHART = co.Detail_Art
                     LEFT JOIN BE_FOD f ON a.IDE_FODI = f.IDE_FOD
-                    WHERE a.ART_RECHART IN ({$placeholders})";
+                    WHERE co.Art_Colis IN ({$placeholders})";
 
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($productCodes);
@@ -433,23 +437,27 @@ class ExternalDatabase
 
     /**
      * Récupérer un article avec ses informations fournisseur
+     * 
+     * Chemin : product_code → BE_COLIS.Art_Colis → BE_COLIS.Detail_Art → BE_ART → BE_FOD
      *
-     * @param string $productCode Code article (ART_RECHART)
+     * @param string $productCode Code article (Art_Colis dans BE_COLIS)
      * @return array|null Article avec fournisseur ou null
      */
     public function getArticleWithSupplier(string $productCode): ?array
     {
         try {
-            $sql = "SELECT
+            $sql = "SELECT 
+                        co.Art_Colis as product_code,
                         a.IDE_ART,
-                        a.ART_RECHART as product_code,
+                        a.ART_RECHART as detail_code,
                         a.ART_LIB1 as product_name,
                         a.IDE_FODI as supplier_id,
                         COALESCE(f.FOD_NFOUXX, 'N/A') as supplier_number,
                         COALESCE(f.FOD_NOM, 'Fournisseur inconnu') as supplier_name
-                    FROM BE_ART a
+                    FROM BE_COLIS co
+                    LEFT JOIN BE_ART a ON a.ART_RECHART = co.Detail_Art
                     LEFT JOIN BE_FOD f ON a.IDE_FODI = f.IDE_FOD
-                    WHERE a.ART_RECHART = :product_code
+                    WHERE co.Art_Colis = :product_code
                     LIMIT 1";
 
             $stmt = $this->pdo->prepare($sql);
