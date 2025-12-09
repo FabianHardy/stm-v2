@@ -665,3 +665,21 @@ $router->post("/admin/config/internal-customers/{id}/toggle", function ($id) {
     $controller = new \App\Controllers\InternalCustomerController();
     $controller->toggleActive((int) $id);
 });
+// ========================================
+// AGENT (Chatbot IA)
+// ========================================
+$router->get('/admin/agent', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->index();
+});
+
+$router->post('/admin/agent/chat', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->chat();
+});
