@@ -118,6 +118,7 @@ class StatsController
      * @return void
      * @modified 2025/12/04 - Ajout graphiques évolution + catégories
      * @modified 2025/12/09 - Ajout stats par fournisseur
+     * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
      */
     public function campaigns(): void
     {
@@ -147,8 +148,11 @@ class StatsController
         $categoryData = [];
         $categoryColors = [];
 
-        // NOUVEAU : Stats par fournisseur
+        // Stats par fournisseur
         $supplierStats = [];
+        
+        // Mapping produit → fournisseur pour l'onglet Produits
+        $productSuppliers = [];
 
         if ($campaignId) {
             $campaignStats = $this->statsModel->getCampaignStats($campaignId);
@@ -167,6 +171,20 @@ class StatsController
                         $repDetail = $rep;
                         break;
                     }
+                }
+            }
+
+            // ============================================
+            // Mapping produit → fournisseur pour onglet Produits
+            // ============================================
+            if (!empty($campaignProducts)) {
+                try {
+                    $productCodes = array_column($campaignProducts, 'product_code');
+                    $externalDb = \Core\ExternalDatabase::getInstance();
+                    $productSuppliers = $externalDb->getSuppliersForProducts($productCodes);
+                } catch (\Exception $e) {
+                    error_log("Erreur getSuppliersForProducts: " . $e->getMessage());
+                    $productSuppliers = [];
                 }
             }
 
@@ -214,7 +232,7 @@ class StatsController
             }
 
             // ============================================
-            // NOUVEAU : Stats par fournisseur (09/12/2025)
+            // Stats par fournisseur (09/12/2025)
             // ============================================
             try {
                 $supplierStats = $this->campaignModel->getSupplierStats($campaignId);

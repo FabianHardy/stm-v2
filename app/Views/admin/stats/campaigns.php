@@ -9,8 +9,8 @@
  * @created 2025/11/25
  * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
  * @modified 2025/12/08 - Légende colonnes représentants
- * @modified 2025/12/09 - Ajout section statistiques fournisseurs
- * @modified 2025/12/09 - Refactoring en système d'onglets (Produits/Reps/Fournisseurs)
+ * @modified 2025/12/09 - Système d'onglets (Produits/Reps/Fournisseurs)
+ * @modified 2025/12/09 - Ajout fournisseur dans Produits, accordion dans Fournisseurs, tri par colonnes
  */
 
 // Variable pour le menu actif
@@ -31,6 +31,9 @@ $selectedCountry = $_GET["country"] ?? "";
 if (!$selectedCountry && $campaignStats) {
     $selectedCountry = $campaignStats["campaign"]["country"] ?? "";
 }
+
+// Encoder les stats fournisseurs en JSON pour le tri Alpine.js
+$supplierStatsJson = json_encode($supplierStats ?? []);
 ?>
 
 <!-- Loader Overlay -->
@@ -373,7 +376,7 @@ $suppliersCount = count($supplierStats ?? []);
     <div class="p-6">
         
         <!-- ============================================ -->
-        <!-- ONGLET PRODUITS                              -->
+        <!-- ONGLET PRODUITS (avec fournisseur)           -->
         <!-- ============================================ -->
         <div x-show="activeTab === 'products'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
             <?php if (empty($campaignProducts)): ?>
@@ -390,6 +393,7 @@ $suppliersCount = count($supplierStats ?? []);
                         <tr class="text-left text-xs text-gray-500 uppercase">
                             <th class="py-3 px-4">#</th>
                             <th class="py-3 px-4">Produit</th>
+                            <th class="py-3 px-4">Fournisseur</th>
                             <th class="py-3 px-4 text-right">CMD</th>
                             <th class="py-3 px-4 text-right">Promos</th>
                             <th class="py-3 px-4 w-32"></th>
@@ -410,6 +414,9 @@ $suppliersCount = count($supplierStats ?? []);
                             $ordersCount = $product["orders_count"] ?? 0;
                             $totalQty = $product["quantity_sold"] ?? 0;
                             $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
+                            
+                            // Récupérer le fournisseur
+                            $supplierName = $productSuppliers[$productCode]['supplier_name'] ?? 'Non référencé';
                         ?>
                         <tr class="hover:bg-gray-50">
                             <td class="py-3 px-4">
@@ -420,6 +427,12 @@ $suppliersCount = count($supplierStats ?? []);
                             <td class="py-3 px-4">
                                 <p class="font-medium text-gray-900"><?= htmlspecialchars($productName) ?></p>
                                 <p class="text-xs text-gray-500"><?= htmlspecialchars($productCode) ?></p>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">
+                                    <i class="fas fa-truck mr-1 text-[10px]"></i>
+                                    <?= htmlspecialchars($supplierName) ?>
+                                </span>
                             </td>
                             <td class="py-3 px-4 text-right font-medium"><?= $ordersCount ?></td>
                             <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
@@ -453,7 +466,6 @@ $suppliersCount = count($supplierStats ?? []);
             // Grouper par cluster
             $clusters = [];
             foreach ($reps as $rep) {
-                // Ignorer les reps sans clients
                 if (($rep["total_clients"] ?? 0) == 0) {
                     continue;
                 }
@@ -470,12 +482,10 @@ $suppliersCount = count($supplierStats ?? []);
                 $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"] ?? 0;
             }
 
-            // Supprimer les clusters vides
             $clusters = array_filter($clusters, function($c) {
                 return !empty($c["reps"]);
             });
 
-            // Trier par quantité
             uasort($clusters, function($a, $b) {
                 return $b["totals"]["quantity"] - $a["totals"]["quantity"];
             });
@@ -507,7 +517,6 @@ $suppliersCount = count($supplierStats ?? []);
                     $clusterId = md5($clusterName);
                 ?>
                 <div class="border border-gray-200 rounded-lg mb-2 overflow-hidden">
-                    <!-- En-tête cluster -->
                     <div class="bg-gray-50 px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
                          @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
                         <div class="flex items-center gap-3">
@@ -531,7 +540,6 @@ $suppliersCount = count($supplierStats ?? []);
                         </div>
                     </div>
 
-                    <!-- Liste des représentants -->
                     <div x-show="openClusters['<?= $clusterId ?>']"
                          x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0"
@@ -542,9 +550,6 @@ $suppliersCount = count($supplierStats ?? []);
                             }); ?>
                             <?php foreach ($clusterData["reps"] as $rep): ?>
                             <?php
-                            $repRate = ($rep["total_clients"] ?? 0) > 0
-                                ? round((($rep["stats"]["customers_ordered"] ?? 0) / $rep["total_clients"]) * 100, 1)
-                                : 0;
                             $repDetailUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId . "&rep_id=" . urlencode($rep["id"]) . "&rep_country=" . $rep["country"];
                             if (!empty($selectedCountry)) {
                                 $repDetailUrl .= "&country=" . $selectedCountry;
@@ -589,95 +594,128 @@ $suppliersCount = count($supplierStats ?? []);
         </div>
         
         <!-- ============================================ -->
-        <!-- ONGLET FOURNISSEURS                          -->
+        <!-- ONGLET FOURNISSEURS (accordion + tri)        -->
         <!-- ============================================ -->
-        <div x-show="activeTab === 'suppliers'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-            <?php if (empty($supplierStats)): ?>
-            <div class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-truck text-gray-400"></i>
-                </div>
-                <p class="text-gray-500">Aucune donnée fournisseur</p>
-                <p class="text-xs text-gray-400 mt-1">Vérifiez que les codes produits correspondent à BE_ART</p>
-            </div>
-            <?php else: ?>
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr class="text-left text-xs text-gray-500 uppercase">
-                            <th class="py-3 px-4">#</th>
-                            <th class="py-3 px-4">N° Fournisseur</th>
-                            <th class="py-3 px-4">Nom</th>
-                            <th class="py-3 px-4 text-center">
-                                <span title="Clients distincts ayant commandé">Clients</span>
-                            </th>
-                            <th class="py-3 px-4 text-center">
-                                <span title="Nombre de commandes">Commandes</span>
-                            </th>
-                            <th class="py-3 px-4 text-center">
-                                <span title="Nombre de promotions de ce fournisseur">Promos</span>
-                            </th>
-                            <th class="py-3 px-4 text-right">
-                                <span title="Quantité totale vendue">Qté vendue</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-sm divide-y divide-gray-100">
-                        <?php 
-                        $rank = 0;
-                        foreach ($supplierStats as $supplier): 
-                            $rank++;
-                            $isTop3 = $rank <= 3;
-                        ?>
-                        <tr class="hover:bg-gray-50 <?= $isTop3 ? 'bg-yellow-50' : '' ?>">
-                            <td class="py-3 px-4">
-                                <?php if ($isTop3): ?>
-                                    <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
-                                <?php else: ?>
-                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
-                                        <?= $rank ?>
-                                    </span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="py-3 px-4 font-mono text-gray-900">
-                                <?= htmlspecialchars($supplier['supplier_number']) ?>
-                            </td>
-                            <td class="py-3 px-4">
-                                <p class="font-medium text-gray-900"><?= htmlspecialchars($supplier['supplier_name']) ?></p>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                                    <?= number_format($supplier['customers_count'], 0, ',', ' ') ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                    <?= number_format($supplier['orders_count'], 0, ',', ' ') ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                                    <?= number_format($supplier['promos_count'], 0, ',', ' ') ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-right font-bold text-orange-600">
-                                <?= number_format($supplier['total_quantity'], 0, ',', ' ') ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <div x-show="activeTab === 'suppliers'" 
+             x-data="supplierTable()"
+             x-transition:enter="transition ease-out duration-200" 
+             x-transition:enter-start="opacity-0" 
+             x-transition:enter-end="opacity-100">
             
-            <!-- Légende -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <p class="text-xs text-gray-500">
-                    <strong>Clients</strong> : Clients distincts ayant commandé un produit de ce fournisseur •
-                    <strong>Commandes</strong> : Nombre de commandes contenant un produit de ce fournisseur •
-                    <strong>Promos</strong> : Nombre de promotions de ce fournisseur dans la campagne
-                </p>
-            </div>
-            <?php endif; ?>
+            <template x-if="suppliers.length === 0">
+                <div class="text-center py-8">
+                    <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-truck text-gray-400"></i>
+                    </div>
+                    <p class="text-gray-500">Aucune donnée fournisseur</p>
+                    <p class="text-xs text-gray-400 mt-1">Vérifiez que les codes produits correspondent à BE_COLIS</p>
+                </div>
+            </template>
+            
+            <template x-if="suppliers.length > 0">
+                <div>
+                    <!-- En-tête avec tri -->
+                    <div class="bg-gray-50 rounded-t-lg border border-gray-200 px-4 py-3">
+                        <div class="flex items-center justify-between text-xs text-gray-500 uppercase font-medium">
+                            <div class="w-8">#</div>
+                            <div class="flex-1 min-w-[200px]">Fournisseur</div>
+                            <button @click="sortBy('customers_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
+                                Clients
+                                <i class="fas" :class="sortField === 'customers_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
+                            </button>
+                            <button @click="sortBy('orders_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
+                                CMD
+                                <i class="fas" :class="sortField === 'orders_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
+                            </button>
+                            <button @click="sortBy('promos_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
+                                Promos
+                                <i class="fas" :class="sortField === 'promos_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
+                            </button>
+                            <button @click="sortBy('total_quantity')" class="w-24 text-right hover:text-indigo-600 transition flex items-center justify-end gap-1">
+                                Qté
+                                <i class="fas" :class="sortField === 'total_quantity' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Liste des fournisseurs -->
+                    <div class="border-x border-b border-gray-200 rounded-b-lg divide-y divide-gray-100">
+                        <template x-for="(supplier, index) in sortedSuppliers" :key="supplier.supplier_id">
+                            <div>
+                                <!-- Ligne fournisseur -->
+                                <div class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
+                                     :class="{ 'bg-yellow-50': index < 3 }"
+                                     @click="toggleSupplier(supplier.supplier_id)">
+                                    <div class="flex items-center gap-3 w-8">
+                                        <template x-if="index < 3">
+                                            <span class="text-lg" x-text="['🥇', '🥈', '🥉'][index]"></span>
+                                        </template>
+                                        <template x-if="index >= 3">
+                                            <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium" x-text="index + 1"></span>
+                                        </template>
+                                    </div>
+                                    <div class="flex-1 min-w-[200px] flex items-center gap-3">
+                                        <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
+                                           :class="{ 'rotate-90': openSuppliers[supplier.supplier_id] }"></i>
+                                        <div>
+                                            <p class="font-medium text-gray-900" x-text="supplier.supplier_name"></p>
+                                            <p class="text-xs text-gray-500 font-mono" x-text="supplier.supplier_number"></p>
+                                        </div>
+                                    </div>
+                                    <div class="w-20 text-center">
+                                        <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium" x-text="supplier.customers_count"></span>
+                                    </div>
+                                    <div class="w-20 text-center">
+                                        <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium" x-text="supplier.orders_count"></span>
+                                    </div>
+                                    <div class="w-20 text-center">
+                                        <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium" x-text="supplier.promos_count"></span>
+                                    </div>
+                                    <div class="w-24 text-right font-bold text-orange-600" x-text="formatNumber(supplier.total_quantity)"></div>
+                                </div>
+                                
+                                <!-- Détail produits du fournisseur -->
+                                <div x-show="openSuppliers[supplier.supplier_id]"
+                                     x-transition:enter="transition ease-out duration-200"
+                                     x-transition:enter-start="opacity-0"
+                                     x-transition:enter-end="opacity-100"
+                                     class="bg-gray-50 px-4 py-3 border-t border-gray-100">
+                                    <p class="text-xs font-medium text-gray-500 mb-2">
+                                        <i class="fas fa-box mr-1"></i>
+                                        Produits de ce fournisseur (<span x-text="supplier.products ? supplier.products.length : 0"></span>)
+                                    </p>
+                                    <div class="space-y-1 pl-4">
+                                        <template x-for="prod in supplier.products" :key="prod.product_id">
+                                            <div class="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                                                <div class="flex-1">
+                                                    <span class="text-gray-900" x-text="prod.product_name"></span>
+                                                    <span class="text-xs text-gray-400 ml-2" x-text="prod.product_code"></span>
+                                                </div>
+                                                <div class="flex items-center gap-4">
+                                                    <span class="text-xs text-gray-500">
+                                                        <span x-text="prod.orders_count"></span> cmd
+                                                    </span>
+                                                    <span class="font-medium text-orange-600" x-text="formatNumber(prod.quantity_sold)"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Légende -->
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <p class="text-xs text-gray-500">
+                            <strong>Clients</strong> : Clients distincts ayant commandé •
+                            <strong>CMD</strong> : Nombre de commandes •
+                            <strong>Promos</strong> : Nombre de produits du fournisseur •
+                            <i class="fas fa-sort mx-1"></i> Cliquez sur les en-têtes pour trier
+                        </p>
+                    </div>
+                </div>
+            </template>
         </div>
         
     </div>
@@ -770,6 +808,47 @@ function campaignFilter() {
             if (this.selectedCampaign && !campaignIds.includes(this.selectedCampaign.toString())) {
                 this.selectedCampaign = '';
             }
+        }
+    }
+}
+
+// ============================================
+// TABLEAU FOURNISSEURS AVEC TRI
+// ============================================
+function supplierTable() {
+    return {
+        suppliers: {$supplierStatsJson},
+        sortField: 'total_quantity',
+        sortDir: 'desc',
+        openSuppliers: {},
+        
+        get sortedSuppliers() {
+            return [...this.suppliers].sort((a, b) => {
+                let valA = a[this.sortField] || 0;
+                let valB = b[this.sortField] || 0;
+                
+                if (this.sortDir === 'asc') {
+                    return valA - valB;
+                }
+                return valB - valA;
+            });
+        },
+        
+        sortBy(field) {
+            if (this.sortField === field) {
+                this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
+            } else {
+                this.sortField = field;
+                this.sortDir = 'desc';
+            }
+        },
+        
+        toggleSupplier(supplierId) {
+            this.openSuppliers[supplierId] = !this.openSuppliers[supplierId];
+        },
+        
+        formatNumber(num) {
+            return new Intl.NumberFormat('fr-FR').format(num || 0);
         }
     }
 }
