@@ -294,5 +294,6 @@ if ($isDev): ?>
     <?= $pageScripts ?? "" ?>
 <!-- Persistance des filtres -->
 <script src="/stm/public/assets/js/filters-persist.js"></script>
+<?php include __DIR__ . '/../components/chat-widget.php'; ?>
 </body>
 </html>
