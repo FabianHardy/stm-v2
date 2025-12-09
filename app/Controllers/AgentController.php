@@ -29,29 +29,40 @@ class AgentController
         $this->openai = new OpenAIService();
         $this->tools = new AgentTools();
         $this->db = Database::getInstance();
-        
+
+        // Récupérer le schéma DB pour le prompt
+        $dbSchema = $this->tools->getDbSchema();
+
         $this->systemPrompt = <<<PROMPT
 Tu es l'assistant STM, un agent intelligent pour le système de gestion de campagnes promotionnelles STM v2 de Trendy Foods.
 
-Tu aides les utilisateurs à :
-- Consulter les statistiques des campagnes (ventes, commandes, produits, représentants)
-- Obtenir des informations sur les performances
-- Comparer les campagnes entre elles
+## TON RÔLE
+Tu aides les utilisateurs à interroger les données des campagnes promotionnelles.
 
-Règles importantes :
+## ARCHITECTURE DES DONNÉES
+Il y a DEUX bases de données :
+1. **Base LOCALE** (trendyblog_stm_v2) : campaigns, orders, products, order_lines, customers
+2. **Base EXTERNE** (trendyblog_sig) : BE_CLL/LU_CLL (clients), BE_REP/LU_REP (représentants)
+
+⚠️ IMPORTANT : Les représentants et leurs clients sont dans la BASE EXTERNE !
+- Pour chercher un rep par nom → utilise `query_external_database` sur BE_REP
+- Pour les stats d'un rep sur une campagne → utilise `get_rep_campaign_stats`
+- Pour les commandes/produits → utilise `query_database` sur la base locale
+
+## RÈGLES
 1. Réponds toujours en français
-2. Sois concis et précis dans tes réponses
-3. Utilise les tools disponibles pour obtenir les données réelles
-4. Formate les nombres avec des espaces (ex: 6 314 au lieu de 6314)
-5. Si tu ne trouves pas une campagne, suggère à l'utilisateur de vérifier le nom
-6. Si une question ne concerne pas STM, indique poliment que tu es spécialisé dans les stats STM
+2. Sois concis et précis
+3. Choisis le bon tool selon le type de données
+4. Formate les nombres avec espaces (6 314)
 
-Tu as accès aux tools suivants :
-- list_campaigns : lister les campagnes
-- get_campaign_stats : stats détaillées d'une campagne
-- get_top_products : classement des produits
-- get_rep_stats : stats par représentant
-- compare_campaigns : comparer plusieurs campagnes
+## TOOLS DISPONIBLES
+- `get_rep_campaign_stats` : Stats d'un rep sur une campagne (RECOMMANDÉ pour les questions type "Stats de Tahir sur Black Friday")
+- `query_external_database` : Requêtes sur BE_CLL, LU_CLL, BE_REP, LU_REP
+- `query_database` : Requêtes sur la base locale (orders, products, etc.)
+- `list_campaigns` : Liste rapide des campagnes
+
+## SCHÉMA DES BASES
+{$dbSchema}
 PROMPT;
     }
 
@@ -72,9 +83,9 @@ PROMPT;
         if (!$userId) return;
 
         try {
-            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content) 
+            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content)
                     VALUES (:user_id, :session_id, :title, :role, :content)";
-            
+
             $this->db->query($sql, [
                 ':user_id' => $userId,
                 ':session_id' => $sessionId,
@@ -132,7 +143,7 @@ PROMPT;
 
             // Construire l'historique des messages
             $messages = [];
-            
+
             foreach ($history as $msg) {
                 $messages[] = [
                     'role' => $msg['role'],
@@ -202,7 +213,7 @@ PROMPT;
 
         // Exécuter les tool calls
         $toolResults = [];
-        
+
         foreach ($extracted['tool_calls'] as $toolCall) {
             $toolName = $toolCall['function']['name'];
             $arguments = json_decode($toolCall['function']['arguments'], true) ?? [];
@@ -258,16 +269,16 @@ PROMPT;
     public function history(): void
     {
         $userId = $this->getCurrentUserId();
-        
+
         // Récupérer les conversations groupées par session
         $conversations = $this->db->query(
-            "SELECT 
+            "SELECT
                 session_id,
                 MIN(title) as title,
                 MIN(created_at) as started_at,
                 MAX(created_at) as last_message_at,
                 COUNT(*) as message_count
-             FROM agent_conversations 
+             FROM agent_conversations
              WHERE user_id = :user_id
              GROUP BY session_id
              ORDER BY last_message_at DESC
@@ -292,11 +303,11 @@ PROMPT;
     public function conversation(string $sessionId): void
     {
         $userId = $this->getCurrentUserId();
-        
+
         // Récupérer les messages de cette conversation
         $messages = $this->db->query(
             "SELECT role, content, created_at
-             FROM agent_conversations 
+             FROM agent_conversations
              WHERE user_id = :user_id AND session_id = :session_id
              ORDER BY created_at ASC",
             [':user_id' => $userId, ':session_id' => $sessionId]
@@ -310,7 +321,7 @@ PROMPT;
         // Récupérer le titre
         $info = $this->db->query(
             "SELECT title, MIN(created_at) as started_at
-             FROM agent_conversations 
+             FROM agent_conversations
              WHERE session_id = :session_id
              GROUP BY session_id",
             [':session_id' => $sessionId]
@@ -336,12 +347,12 @@ PROMPT;
     public function load(string $sessionId): void
     {
         header('Content-Type: application/json');
-        
+
         $userId = $this->getCurrentUserId();
-        
+
         $messages = $this->db->query(
             "SELECT role, content
-             FROM agent_conversations 
+             FROM agent_conversations
              WHERE user_id = :user_id AND session_id = :session_id
              ORDER BY created_at ASC",
             [':user_id' => $userId, ':session_id' => $sessionId]
@@ -361,12 +372,12 @@ PROMPT;
     public function delete(string $sessionId): void
     {
         header('Content-Type: application/json');
-        
+
         $userId = $this->getCurrentUserId();
-        
+
         try {
             $this->db->query(
-                "DELETE FROM agent_conversations 
+                "DELETE FROM agent_conversations
                  WHERE user_id = :user_id AND session_id = :session_id",
                 [':user_id' => $userId, ':session_id' => $sessionId]
             );
