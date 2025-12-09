@@ -733,4 +733,204 @@ class Campaign
             "with_orders" => $this->countCustomersWithOrders($campaignId),
         ];
     }
+/**
+ * MÉTHODES À AJOUTER À Campaign.php
+ *
+ * Ajouter ces méthodes à la fin du fichier /app/Models/Campaign.php
+ * (avant la dernière accolade fermante })
+ *
+ * @created  2025/12/09
+ * @author   Claude + Fabian
+ */
+
+// ============================================================================
+// AJOUTER CES MÉTHODES À LA FIN DE LA CLASSE Campaign (avant la dernière })
+// ============================================================================
+
+    /**
+     * Récupérer les statistiques des promotions pour une campagne
+     * Inclut : total, moyenne par client, dernières promos
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array Stats promotions
+     * @created 2025/12/09 - Stats avancées campagne
+     */
+    public function getPromotionStats(int $campaignId): array
+    {
+        // Nombre total de promotions actives
+        $promoCountResult = $this->db->queryOne(
+            "SELECT COUNT(*) as count FROM products WHERE campaign_id = :id AND is_active = 1",
+            [':id' => $campaignId]
+        );
+        $promoCount = (int)($promoCountResult['count'] ?? 0);
+
+        // Récupérer le nombre de clients éligibles
+        $customerCount = $this->countCustomers($campaignId);
+
+        // Calculer la moyenne par client
+        $avgPerCustomer = 0;
+        if (is_numeric($customerCount) && $customerCount > 0) {
+            $avgPerCustomer = round($promoCount / $customerCount, 1);
+        }
+
+        // Les 5 dernières promotions ajoutées
+        try {
+            $recentPromos = $this->db->query(
+                "SELECT id, product_code, name_fr, max_total, max_per_customer, created_at
+                 FROM products
+                 WHERE campaign_id = :id AND is_active = 1
+                 ORDER BY created_at DESC
+                 LIMIT 5",
+                [':id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getPromotionStats recentPromos: " . $e->getMessage());
+            $recentPromos = [];
+        }
+
+        return [
+            'total_count' => $promoCount,
+            'customer_count' => $customerCount,
+            'avg_per_customer' => $avgPerCustomer,
+            'recent_promos' => $recentPromos
+        ];
+    }
+
+    /**
+     * Récupérer les statistiques par fournisseur pour une campagne
+     * Compte : promos, clients distincts, commandes par fournisseur
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array Stats par fournisseur triées par nb commandes
+     * @created 2025/12/09 - Stats avancées campagne
+     */
+    public function getSupplierStats(int $campaignId): array
+    {
+        // Récupérer les produits de la campagne
+        try {
+            $products = $this->db->query(
+                "SELECT id, product_code, name_fr
+                 FROM products
+                 WHERE campaign_id = :campaign_id AND is_active = 1",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getSupplierStats products: " . $e->getMessage());
+            return [];
+        }
+
+        if (empty($products)) {
+            return [];
+        }
+
+        $productCodes = array_column($products, 'product_code');
+        $productIds = array_column($products, 'id');
+
+        // Mapping product_code => product info
+        $productMap = [];
+        foreach ($products as $p) {
+            $productMap[$p['product_code']] = $p;
+        }
+
+        // Récupérer les fournisseurs depuis la base externe
+        try {
+            $externalDb = \Core\ExternalDatabase::getInstance();
+            $suppliersMap = $externalDb->getSuppliersForProducts($productCodes);
+        } catch (\Exception $e) {
+            error_log("Erreur getSupplierStats external: " . $e->getMessage());
+            $suppliersMap = [];
+        }
+
+        // Créer le mapping product_id => supplier
+        $productIdToSupplier = [];
+        foreach ($products as $p) {
+            $code = $p['product_code'];
+            $productIdToSupplier[$p['id']] = $suppliersMap[$code] ?? [
+                'supplier_id' => 'unknown',
+                'supplier_number' => 'N/A',
+                'supplier_name' => 'Non référencé'
+            ];
+        }
+
+        // Récupérer toutes les lignes de commande de la campagne
+        try {
+            $orderLines = $this->db->query(
+                "SELECT
+                    ol.product_id,
+                    o.id as order_id,
+                    o.customer_id,
+                    ol.quantity
+                 FROM order_lines ol
+                 INNER JOIN orders o ON ol.order_id = o.id
+                 WHERE o.campaign_id = :campaign_id",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getSupplierStats orderLines: " . $e->getMessage());
+            $orderLines = [];
+        }
+
+        // Agréger par fournisseur avec sets pour valeurs distinctes
+        $supplierData = [];
+
+        // Initialiser avec les produits
+        foreach ($products as $p) {
+            $suppInfo = $productIdToSupplier[$p['id']];
+            $suppId = $suppInfo['supplier_id'] ?? 'unknown';
+
+            if (!isset($supplierData[$suppId])) {
+                $supplierData[$suppId] = [
+                    'supplier_id' => $suppId,
+                    'supplier_number' => $suppInfo['supplier_number'],
+                    'supplier_name' => $suppInfo['supplier_name'],
+                    'product_ids' => [],
+                    'order_ids' => [],
+                    'customer_ids' => [],
+                    'total_quantity' => 0
+                ];
+            }
+
+            $supplierData[$suppId]['product_ids'][$p['id']] = true;
+        }
+
+        // Parcourir les lignes de commande
+        foreach ($orderLines as $line) {
+            $productId = $line['product_id'];
+
+            if (!isset($productIdToSupplier[$productId])) {
+                continue;
+            }
+
+            $suppId = $productIdToSupplier[$productId]['supplier_id'] ?? 'unknown';
+
+            if (!isset($supplierData[$suppId])) {
+                continue;
+            }
+
+            $supplierData[$suppId]['order_ids'][$line['order_id']] = true;
+            $supplierData[$suppId]['customer_ids'][$line['customer_id']] = true;
+            $supplierData[$suppId]['total_quantity'] += (int)$line['quantity'];
+        }
+
+        // Convertir en format final
+        $result = [];
+        foreach ($supplierData as $suppId => $data) {
+            $result[] = [
+                'supplier_id' => $data['supplier_id'],
+                'supplier_number' => $data['supplier_number'],
+                'supplier_name' => $data['supplier_name'],
+                'promos_count' => count($data['product_ids']),
+                'orders_count' => count($data['order_ids']),
+                'customers_count' => count($data['customer_ids']),
+                'total_quantity' => $data['total_quantity']
+            ];
+        }
+
+        // Trier par nombre de commandes (décroissant)
+        usort($result, function($a, $b) {
+            return $b['orders_count'] <=> $a['orders_count'];
+        });
+
+        return $result;
+    }
 }
