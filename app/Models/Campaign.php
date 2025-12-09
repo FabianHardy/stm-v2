@@ -6,6 +6,7 @@
  *
  * @created  2025/11/08 10:00
  * @modified 2025/11/14 00:00 - Sprint 5 : Ajout colonnes order_password, order_type, deferred_delivery, delivery_date + modification addCustomersToCampaign() pour utiliser customer_number + country
+ * @modified 2025/12/09 - Ajout méthodes getPromotionStats() et getSupplierStats() pour stats fournisseurs
  */
 
 namespace App\Models;
@@ -587,7 +588,6 @@ class Campaign
     }
 
     /**
-    /**
      * Compter le nombre de clients éligibles pour une campagne
      *
      * @param int $campaignId ID de la campagne
@@ -618,6 +618,7 @@ class Campaign
             return 0;
         }
     }
+
     /**
      * Compter le nombre de promotions (produits) actives pour une campagne
      *
@@ -638,6 +639,7 @@ class Campaign
             return 0;
         }
     }
+
     /**
      * Compter le nombre de campagnes par pays
      *
@@ -733,19 +735,10 @@ class Campaign
             "with_orders" => $this->countCustomersWithOrders($campaignId),
         ];
     }
-/**
- * MÉTHODES À AJOUTER À Campaign.php
- *
- * Ajouter ces méthodes à la fin du fichier /app/Models/Campaign.php
- * (avant la dernière accolade fermante })
- *
- * @created  2025/12/09
- * @author   Claude + Fabian
- */
 
-// ============================================================================
-// AJOUTER CES MÉTHODES À LA FIN DE LA CLASSE Campaign (avant la dernière })
-// ============================================================================
+    // ========================================================================
+    // MÉTHODES STATS FOURNISSEURS - Ajout 09/12/2025
+    // ========================================================================
 
     /**
      * Récupérer les statistiques des promotions pour une campagne
@@ -824,13 +817,6 @@ class Campaign
         }
 
         $productCodes = array_column($products, 'product_code');
-        $productIds = array_column($products, 'id');
-
-        // Mapping product_code => product info
-        $productMap = [];
-        foreach ($products as $p) {
-            $productMap[$p['product_code']] = $p;
-        }
 
         // Récupérer les fournisseurs depuis la base externe
         try {
