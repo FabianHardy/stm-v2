@@ -3,13 +3,14 @@
  * Vue : Statistiques - Par campagne
  *
  * Stats détaillées pour une campagne spécifique
- * Avec graphiques, loader et vue détail représentant
+ * Avec graphiques, loader et système d'onglets
  *
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
  * @modified 2025/12/08 - Légende colonnes représentants
  * @modified 2025/12/09 - Ajout section statistiques fournisseurs
+ * @modified 2025/12/09 - Refactoring en système d'onglets (Produits/Reps/Fournisseurs)
  */
 
 // Variable pour le menu actif
@@ -308,304 +309,379 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
 </div>
 <?php endif; ?>
 
-<!-- Produits de la campagne -->
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        <i class="fas fa-box text-green-500 mr-2"></i>
-        Produits de la campagne
-    </h3>
-
-    <?php if (empty($campaignProducts)): ?>
-    <p class="text-gray-500 text-center py-8">Aucun produit dans cette campagne</p>
-    <?php else: ?>
-    <div class="overflow-x-auto">
-        <table class="min-w-full">
-            <thead class="bg-gray-50">
-                <tr class="text-left text-xs text-gray-500 uppercase">
-                    <th class="py-3 px-4">#</th>
-                    <th class="py-3 px-4">Produit</th>
-                    <th class="py-3 px-4 text-right">CMD</th>
-                    <th class="py-3 px-4 text-right">Promos</th>
-                    <th class="py-3 px-4 w-32"></th>
-                </tr>
-            </thead>
-            <tbody class="text-sm divide-y divide-gray-100">
-                <?php
-                $rank = 0;
-                $qtys = array_filter(array_map(function($p) {
-                    return $p["quantity_sold"] ?? 0;
-                }, $campaignProducts));
-                $maxQty = !empty($qtys) ? max($qtys) : 1;
-
-                foreach ($campaignProducts as $product):
-                    $rank++;
-                    $productName = $product["product_name"] ?? "-";
-                    $productCode = $product["product_code"] ?? "-";
-                    $ordersCount = $product["orders_count"] ?? 0;
-                    $totalQty = $product["quantity_sold"] ?? 0;
-                    $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
-                ?>
-                <tr class="hover:bg-gray-50">
-                    <td class="py-3 px-4">
-                        <span class="inline-flex items-center justify-center w-6 h-6 <?= $rank <= 3 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500' ?> rounded-full text-xs font-medium">
-                            <?= $rank ?>
-                        </span>
-                    </td>
-                    <td class="py-3 px-4">
-                        <p class="font-medium text-gray-900"><?= htmlspecialchars($productName) ?></p>
-                        <p class="text-xs text-gray-500"><?= htmlspecialchars($productCode) ?></p>
-                    </td>
-                    <td class="py-3 px-4 text-right font-medium"><?= $ordersCount ?></td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
-                    <td class="py-3 px-4">
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-indigo-500 h-2 rounded-full" style="width: <?= $percent ?>%"></div>
-                        </div>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-    <?php endif; ?>
-</div>
-
-<!-- Performance par représentant -->
-<?php if (!empty($reps)): ?>
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        <i class="fas fa-users text-blue-500 mr-2"></i>
-        Performance par représentant
-    </h3>
-
-    <?php
-    // Grouper par cluster
-    $clusters = [];
+<!-- ============================================ -->
+<!-- SYSTÈME D'ONGLETS                            -->
+<!-- ============================================ -->
+<?php
+// Compter les éléments pour les badges
+$productsCount = count($campaignProducts ?? []);
+$repsCount = 0;
+if (!empty($reps)) {
     foreach ($reps as $rep) {
-        // Ignorer les reps sans clients
-        if (($rep["total_clients"] ?? 0) == 0) {
-            continue;
+        if (($rep["total_clients"] ?? 0) > 0) {
+            $repsCount++;
         }
-        $clusterName = $rep["cluster"] ?? "Sans cluster";
-        if (!isset($clusters[$clusterName])) {
-            $clusters[$clusterName] = [
-                "reps" => [],
-                "totals" => ["clients" => 0, "ordered" => 0, "quantity" => 0]
-            ];
-        }
-        $clusters[$clusterName]["reps"][] = $rep;
-        $clusters[$clusterName]["totals"]["clients"] += $rep["total_clients"] ?? 0;
-        $clusters[$clusterName]["totals"]["ordered"] += $rep["stats"]["customers_ordered"] ?? 0;
-        $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"] ?? 0;
     }
+}
+$suppliersCount = count($supplierStats ?? []);
+?>
 
-    // Supprimer les clusters vides
-    $clusters = array_filter($clusters, function($c) {
-        return !empty($c["reps"]);
-    });
-
-    // Trier par quantité
-    uasort($clusters, function($a, $b) {
-        return $b["totals"]["quantity"] - $a["totals"]["quantity"];
-    });
-    ?>
-
-    <?php if (empty($clusters)): ?>
-    <div class="text-center py-8">
-        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <i class="fas fa-users text-gray-400"></i>
-        </div>
-        <p class="text-gray-500">Aucune donnée représentant</p>
-        <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
+<div class="bg-white rounded-lg shadow-sm mb-6" x-data="{ activeTab: 'products' }">
+    
+    <!-- Navigation onglets -->
+    <div class="border-b border-gray-200">
+        <nav class="flex -mb-px">
+            <!-- Onglet Produits -->
+            <button @click="activeTab = 'products'" 
+                    :class="activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
+                <i class="fas fa-box"></i>
+                <span>Produits</span>
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="activeTab === 'products' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
+                    <?= $productsCount ?>
+                </span>
+            </button>
+            
+            <!-- Onglet Représentants -->
+            <button @click="activeTab = 'reps'" 
+                    :class="activeTab === 'reps' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
+                <i class="fas fa-users"></i>
+                <span>Représentants</span>
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="activeTab === 'reps' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
+                    <?= $repsCount ?>
+                </span>
+            </button>
+            
+            <!-- Onglet Fournisseurs -->
+            <button @click="activeTab = 'suppliers'" 
+                    :class="activeTab === 'suppliers' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
+                <i class="fas fa-truck"></i>
+                <span>Fournisseurs</span>
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="activeTab === 'suppliers' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
+                    <?= $suppliersCount ?>
+                </span>
+            </button>
+        </nav>
     </div>
-    <?php else: ?>
-
-    <!-- Légende des colonnes (en haut) -->
-    <p class="text-xs text-gray-500 mb-4 text-right">
-        <span class="inline-flex items-center gap-1">
-            <span class="font-medium">Format :</span>
-            <span class="text-gray-700">Total clients</span>
-            <span class="text-gray-400">/</span>
-            <span class="text-green-600">Clients ayant commandé</span>
-            <span class="text-gray-400">|</span>
-            <span class="text-orange-600">Promos vendues</span>
-        </span>
-    </p>
-
-    <div x-data="{ openClusters: {} }">
-        <?php foreach ($clusters as $clusterName => $clusterData):
-            $clusterId = md5($clusterName);
-        ?>
-        <div class="border border-gray-200 rounded-lg mb-2 overflow-hidden">
-            <!-- En-tête cluster -->
-            <div class="bg-gray-50 px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
-                 @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
-                       :class="{ 'rotate-90': openClusters['<?= $clusterId ?>'] }"></i>
-                    <div>
-                        <span class="font-medium text-gray-900"><?= htmlspecialchars($clusterName) ?></span>
-                        <span class="text-xs text-gray-500 ml-2"><?= count($clusterData["reps"]) ?> rep.</span>
-                    </div>
+    
+    <!-- Contenu des onglets -->
+    <div class="p-6">
+        
+        <!-- ============================================ -->
+        <!-- ONGLET PRODUITS                              -->
+        <!-- ============================================ -->
+        <div x-show="activeTab === 'products'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <?php if (empty($campaignProducts)): ?>
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-box text-gray-400"></i>
                 </div>
-
-                <div class="flex items-center gap-4 text-sm">
-                    <div class="text-center">
-                        <span class="font-bold text-gray-900"><?= $clusterData["totals"]["clients"] ?></span>
-                        <span class="text-gray-400">/</span>
-                        <span class="font-bold text-green-600"><?= $clusterData["totals"]["ordered"] ?></span>
-                    </div>
-                    <div class="w-16 text-right">
-                        <span class="font-bold text-orange-600"><?= number_format($clusterData["totals"]["quantity"], 0, ",", " ") ?></span>
-                    </div>
-                </div>
+                <p class="text-gray-500">Aucun produit dans cette campagne</p>
             </div>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr class="text-left text-xs text-gray-500 uppercase">
+                            <th class="py-3 px-4">#</th>
+                            <th class="py-3 px-4">Produit</th>
+                            <th class="py-3 px-4 text-right">CMD</th>
+                            <th class="py-3 px-4 text-right">Promos</th>
+                            <th class="py-3 px-4 w-32"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        <?php
+                        $rank = 0;
+                        $qtys = array_filter(array_map(function($p) {
+                            return $p["quantity_sold"] ?? 0;
+                        }, $campaignProducts));
+                        $maxQty = !empty($qtys) ? max($qtys) : 1;
 
-            <!-- Liste des représentants -->
-            <div x-show="openClusters['<?= $clusterId ?>']"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100">
-                <div class="divide-y divide-gray-100">
-                    <?php usort($clusterData["reps"], function ($a, $b) {
-                        return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
-                    }); ?>
-                    <?php foreach ($clusterData["reps"] as $rep): ?>
-                    <?php
-                    $repRate = ($rep["total_clients"] ?? 0) > 0
-                        ? round((($rep["stats"]["customers_ordered"] ?? 0) / $rep["total_clients"]) * 100, 1)
-                        : 0;
-                    $repDetailUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId . "&rep_id=" . urlencode($rep["id"]) . "&rep_country=" . $rep["country"];
-                    if (!empty($selectedCountry)) {
-                        $repDetailUrl .= "&country=" . $selectedCountry;
-                    }
-                    ?>
-                    <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-50">
-                        <div class="flex items-center gap-2 pl-6">
-                            <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
-                                <span class="text-xs font-medium text-indigo-600"><?= strtoupper(substr($rep["name"] ?? "", 0, 2)) ?></span>
+                        foreach ($campaignProducts as $product):
+                            $rank++;
+                            $productName = $product["product_name"] ?? "-";
+                            $productCode = $product["product_code"] ?? "-";
+                            $ordersCount = $product["orders_count"] ?? 0;
+                            $totalQty = $product["quantity_sold"] ?? 0;
+                            $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
+                        ?>
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-3 px-4">
+                                <span class="inline-flex items-center justify-center w-6 h-6 <?= $rank <= 3 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500' ?> rounded-full text-xs font-medium">
+                                    <?= $rank ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <p class="font-medium text-gray-900"><?= htmlspecialchars($productName) ?></p>
+                                <p class="text-xs text-gray-500"><?= htmlspecialchars($productCode) ?></p>
+                            </td>
+                            <td class="py-3 px-4 text-right font-medium"><?= $ordersCount ?></td>
+                            <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
+                            <td class="py-3 px-4">
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-indigo-500 h-2 rounded-full" style="width: <?= $percent ?>%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- ONGLET REPRÉSENTANTS                         -->
+        <!-- ============================================ -->
+        <div x-show="activeTab === 'reps'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <?php if (empty($reps)): ?>
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-users text-gray-400"></i>
+                </div>
+                <p class="text-gray-500">Aucune donnée représentant</p>
+                <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
+            </div>
+            <?php else: ?>
+            <?php
+            // Grouper par cluster
+            $clusters = [];
+            foreach ($reps as $rep) {
+                // Ignorer les reps sans clients
+                if (($rep["total_clients"] ?? 0) == 0) {
+                    continue;
+                }
+                $clusterName = $rep["cluster"] ?? "Sans cluster";
+                if (!isset($clusters[$clusterName])) {
+                    $clusters[$clusterName] = [
+                        "reps" => [],
+                        "totals" => ["clients" => 0, "ordered" => 0, "quantity" => 0]
+                    ];
+                }
+                $clusters[$clusterName]["reps"][] = $rep;
+                $clusters[$clusterName]["totals"]["clients"] += $rep["total_clients"] ?? 0;
+                $clusters[$clusterName]["totals"]["ordered"] += $rep["stats"]["customers_ordered"] ?? 0;
+                $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"] ?? 0;
+            }
+
+            // Supprimer les clusters vides
+            $clusters = array_filter($clusters, function($c) {
+                return !empty($c["reps"]);
+            });
+
+            // Trier par quantité
+            uasort($clusters, function($a, $b) {
+                return $b["totals"]["quantity"] - $a["totals"]["quantity"];
+            });
+            ?>
+
+            <?php if (empty($clusters)): ?>
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-users text-gray-400"></i>
+                </div>
+                <p class="text-gray-500">Aucune donnée représentant</p>
+            </div>
+            <?php else: ?>
+
+            <!-- Légende des colonnes -->
+            <p class="text-xs text-gray-500 mb-4 text-right">
+                <span class="inline-flex items-center gap-1">
+                    <span class="font-medium">Format :</span>
+                    <span class="text-gray-700">Total clients</span>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-green-600">Clients ayant commandé</span>
+                    <span class="text-gray-400">|</span>
+                    <span class="text-orange-600">Promos vendues</span>
+                </span>
+            </p>
+
+            <div x-data="{ openClusters: {} }">
+                <?php foreach ($clusters as $clusterName => $clusterData):
+                    $clusterId = md5($clusterName);
+                ?>
+                <div class="border border-gray-200 rounded-lg mb-2 overflow-hidden">
+                    <!-- En-tête cluster -->
+                    <div class="bg-gray-50 px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
+                         @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
+                               :class="{ 'rotate-90': openClusters['<?= $clusterId ?>'] }"></i>
+                            <div>
+                                <span class="font-medium text-gray-900"><?= htmlspecialchars($clusterName) ?></span>
+                                <span class="text-xs text-gray-500 ml-2"><?= count($clusterData["reps"]) ?> rep.</span>
                             </div>
-                            <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"] ?? "") ?></span>
                         </div>
 
                         <div class="flex items-center gap-4 text-sm">
                             <div class="text-center">
-                                <span class="text-gray-700"><?= $rep["total_clients"] ?? 0 ?></span>
+                                <span class="font-bold text-gray-900"><?= $clusterData["totals"]["clients"] ?></span>
                                 <span class="text-gray-400">/</span>
-                                <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?? 0 ?></span>
+                                <span class="font-bold text-green-600"><?= $clusterData["totals"]["ordered"] ?></span>
                             </div>
                             <div class="w-16 text-right">
-                                <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"] ?? 0, 0, ",", " ") ?></span>
+                                <span class="font-bold text-orange-600"><?= number_format($clusterData["totals"]["quantity"], 0, ",", " ") ?></span>
                             </div>
-                            <a href="<?= $repDetailUrl ?>" onclick="showLoader()"
-                               class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
-                                <i class="fas fa-eye mr-1"></i> Voir
-                            </a>
                         </div>
                     </div>
-                    <?php endforeach; ?>
+
+                    <!-- Liste des représentants -->
+                    <div x-show="openClusters['<?= $clusterId ?>']"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100">
+                        <div class="divide-y divide-gray-100">
+                            <?php usort($clusterData["reps"], function ($a, $b) {
+                                return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
+                            }); ?>
+                            <?php foreach ($clusterData["reps"] as $rep): ?>
+                            <?php
+                            $repRate = ($rep["total_clients"] ?? 0) > 0
+                                ? round((($rep["stats"]["customers_ordered"] ?? 0) / $rep["total_clients"]) * 100, 1)
+                                : 0;
+                            $repDetailUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId . "&rep_id=" . urlencode($rep["id"]) . "&rep_country=" . $rep["country"];
+                            if (!empty($selectedCountry)) {
+                                $repDetailUrl .= "&country=" . $selectedCountry;
+                            }
+                            ?>
+                            <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-50">
+                                <div class="flex items-center gap-2 pl-6">
+                                    <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
+                                        <span class="text-xs font-medium text-indigo-600"><?= strtoupper(substr($rep["name"] ?? "", 0, 2)) ?></span>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"] ?? "") ?></span>
+                                </div>
+
+                                <div class="flex items-center gap-4 text-sm">
+                                    <div class="text-center">
+                                        <span class="text-gray-700"><?= $rep["total_clients"] ?? 0 ?></span>
+                                        <span class="text-gray-400">/</span>
+                                        <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?? 0 ?></span>
+                                    </div>
+                                    <div class="w-16 text-right">
+                                        <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"] ?? 0, 0, ",", " ") ?></span>
+                                    </div>
+                                    <a href="<?= $repDetailUrl ?>" onclick="showLoader()"
+                                       class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
+                                        <i class="fas fa-eye mr-1"></i> Voir
+                                    </a>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-
-    <p class="text-xs text-gray-400 mt-3 text-center">
-        Format: Total clients / Clients ayant commandé | Promos vendues
-    </p>
-
-    <?php endif; ?>
-</div>
-<?php endif; ?>
-
-<!-- ============================================ -->
-<!-- STATISTIQUES PAR FOURNISSEUR (NOUVEAU)       -->
-<!-- ============================================ -->
-<?php if (!empty($supplierStats)): ?>
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        <i class="fas fa-truck text-orange-500 mr-2"></i>
-        Statistiques par fournisseur
-    </h3>
-
-    <div class="overflow-x-auto">
-        <table class="min-w-full">
-            <thead class="bg-gray-50">
-                <tr class="text-left text-xs text-gray-500 uppercase">
-                    <th class="py-3 px-4">#</th>
-                    <th class="py-3 px-4">N° Fournisseur</th>
-                    <th class="py-3 px-4">Nom</th>
-                    <th class="py-3 px-4 text-center">
-                        <span title="Clients distincts ayant commandé">Clients</span>
-                    </th>
-                    <th class="py-3 px-4 text-center">
-                        <span title="Nombre de commandes">Commandes</span>
-                    </th>
-                    <th class="py-3 px-4 text-center">
-                        <span title="Nombre de promotions de ce fournisseur">Promos</span>
-                    </th>
-                    <th class="py-3 px-4 text-right">
-                        <span title="Quantité totale vendue">Qté vendue</span>
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="text-sm divide-y divide-gray-100">
-                <?php
-                $rank = 0;
-                foreach ($supplierStats as $supplier):
-                    $rank++;
-                    $isTop3 = $rank <= 3;
-                ?>
-                <tr class="hover:bg-gray-50 <?= $isTop3 ? 'bg-yellow-50' : '' ?>">
-                    <td class="py-3 px-4">
-                        <?php if ($isTop3): ?>
-                            <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
-                        <?php else: ?>
-                            <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
-                                <?= $rank ?>
-                            </span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="py-3 px-4 font-mono text-gray-900">
-                        <?= htmlspecialchars($supplier['supplier_number']) ?>
-                    </td>
-                    <td class="py-3 px-4">
-                        <p class="font-medium text-gray-900"><?= htmlspecialchars($supplier['supplier_name']) ?></p>
-                    </td>
-                    <td class="py-3 px-4 text-center">
-                        <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                            <?= number_format($supplier['customers_count'], 0, ',', ' ') ?>
-                        </span>
-                    </td>
-                    <td class="py-3 px-4 text-center">
-                        <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                            <?= number_format($supplier['orders_count'], 0, ',', ' ') ?>
-                        </span>
-                    </td>
-                    <td class="py-3 px-4 text-center">
-                        <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                            <?= number_format($supplier['promos_count'], 0, ',', ' ') ?>
-                        </span>
-                    </td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600">
-                        <?= number_format($supplier['total_quantity'], 0, ',', ' ') ?>
-                    </td>
-                </tr>
                 <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
+            </div>
 
-    <!-- Légende -->
-    <div class="mt-4 pt-4 border-t border-gray-100">
-        <p class="text-xs text-gray-500">
-            <strong>Clients</strong> : Clients distincts ayant commandé un produit de ce fournisseur •
-            <strong>Commandes</strong> : Nombre de commandes contenant un produit de ce fournisseur •
-            <strong>Promos</strong> : Nombre de promotions de ce fournisseur dans la campagne
-        </p>
+            <p class="text-xs text-gray-400 mt-3 text-center">
+                Format: Total clients / Clients ayant commandé | Promos vendues
+            </p>
+
+            <?php endif; ?>
+            <?php endif; ?>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- ONGLET FOURNISSEURS                          -->
+        <!-- ============================================ -->
+        <div x-show="activeTab === 'suppliers'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <?php if (empty($supplierStats)): ?>
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-truck text-gray-400"></i>
+                </div>
+                <p class="text-gray-500">Aucune donnée fournisseur</p>
+                <p class="text-xs text-gray-400 mt-1">Vérifiez que les codes produits correspondent à BE_ART</p>
+            </div>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr class="text-left text-xs text-gray-500 uppercase">
+                            <th class="py-3 px-4">#</th>
+                            <th class="py-3 px-4">N° Fournisseur</th>
+                            <th class="py-3 px-4">Nom</th>
+                            <th class="py-3 px-4 text-center">
+                                <span title="Clients distincts ayant commandé">Clients</span>
+                            </th>
+                            <th class="py-3 px-4 text-center">
+                                <span title="Nombre de commandes">Commandes</span>
+                            </th>
+                            <th class="py-3 px-4 text-center">
+                                <span title="Nombre de promotions de ce fournisseur">Promos</span>
+                            </th>
+                            <th class="py-3 px-4 text-right">
+                                <span title="Quantité totale vendue">Qté vendue</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        <?php 
+                        $rank = 0;
+                        foreach ($supplierStats as $supplier): 
+                            $rank++;
+                            $isTop3 = $rank <= 3;
+                        ?>
+                        <tr class="hover:bg-gray-50 <?= $isTop3 ? 'bg-yellow-50' : '' ?>">
+                            <td class="py-3 px-4">
+                                <?php if ($isTop3): ?>
+                                    <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
+                                <?php else: ?>
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                                        <?= $rank ?>
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-3 px-4 font-mono text-gray-900">
+                                <?= htmlspecialchars($supplier['supplier_number']) ?>
+                            </td>
+                            <td class="py-3 px-4">
+                                <p class="font-medium text-gray-900"><?= htmlspecialchars($supplier['supplier_name']) ?></p>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                    <?= number_format($supplier['customers_count'], 0, ',', ' ') ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                    <?= number_format($supplier['orders_count'], 0, ',', ' ') ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                                    <?= number_format($supplier['promos_count'], 0, ',', ' ') ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-right font-bold text-orange-600">
+                                <?= number_format($supplier['total_quantity'], 0, ',', ' ') ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Légende -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <p class="text-xs text-gray-500">
+                    <strong>Clients</strong> : Clients distincts ayant commandé un produit de ce fournisseur •
+                    <strong>Commandes</strong> : Nombre de commandes contenant un produit de ce fournisseur •
+                    <strong>Promos</strong> : Nombre de promotions de ce fournisseur dans la campagne
+                </p>
+            </div>
+            <?php endif; ?>
+        </div>
+        
     </div>
 </div>
-<?php endif; ?>
 
 <?php endif; ?>
 <!-- Fin condition repDetail -->
