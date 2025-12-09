@@ -6,6 +6,7 @@
  *
  * @package STM
  * @created 2025/11/25
+ * @modified 2025/12/09 - Ajout stats fournisseurs dans campaigns()
  */
 
 namespace App\Controllers;
@@ -111,18 +112,12 @@ class StatsController
     }
 
 
-/**
- * MODIFICATIONS À APPLIQUER DANS StatsController.php
- *
- * Remplacer la méthode campaigns() par celle-ci
- *
- * @modified 2025/12/04 - Ajout graphiques évolution + catégories
- */
-
     /**
      * Statistiques par campagne
      *
      * @return void
+     * @modified 2025/12/04 - Ajout graphiques évolution + catégories
+     * @modified 2025/12/09 - Ajout stats par fournisseur
      */
     public function campaigns(): void
     {
@@ -142,7 +137,7 @@ class StatsController
         $repDetail = null;
         $repClients = [];
 
-        // NOUVEAU : Données pour graphiques
+        // Données pour graphiques
         $dailyEvolution = [];
         $categoryStats = [];
         $chartLabels = [];
@@ -151,6 +146,9 @@ class StatsController
         $categoryLabels = [];
         $categoryData = [];
         $categoryColors = [];
+
+        // NOUVEAU : Stats par fournisseur
+        $supplierStats = [];
 
         if ($campaignId) {
             $campaignStats = $this->statsModel->getCampaignStats($campaignId);
@@ -173,7 +171,7 @@ class StatsController
             }
 
             // ============================================
-            // NOUVEAU : Évolution journalière sur la période de la campagne
+            // Évolution journalière sur la période de la campagne
             // ============================================
             $campaign = $campaignStats["campaign"];
             $startDate = $campaign["start_date"];
@@ -205,7 +203,7 @@ class StatsController
             }
 
             // ============================================
-            // NOUVEAU : Stats par catégorie pour le donut
+            // Stats par catégorie pour le donut
             // ============================================
             $categoryStats = $this->getCategoryStatsForCampaign($campaignId);
 
@@ -213,6 +211,16 @@ class StatsController
                 $categoryLabels[] = $cat["category_name"];
                 $categoryData[] = (int) $cat["quantity"];
                 $categoryColors[] = $cat["color"] ?? $this->getRandomColor();
+            }
+
+            // ============================================
+            // NOUVEAU : Stats par fournisseur (09/12/2025)
+            // ============================================
+            try {
+                $supplierStats = $this->campaignModel->getSupplierStats($campaignId);
+            } catch (\Exception $e) {
+                error_log("Erreur getSupplierStats: " . $e->getMessage());
+                $supplierStats = [];
             }
         }
 
