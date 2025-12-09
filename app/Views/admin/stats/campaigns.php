@@ -55,38 +55,84 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
 
 <!-- Sélecteur de campagne avec filtre pays -->
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6" x-data="campaignFilter()" x-init="init()">
-    <form method="GET" action="/stm/admin/stats/campaigns" class="flex flex-wrap gap-4 items-end" id="campaign-form">
+    <div class="flex flex-wrap gap-4 items-center">
 
-        <!-- Pays -->
-        <div class="w-40">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-            <select name="country" x-model="selectedCountry" @change="filterCampaigns()"
-                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                <option value="">Tous</option>
-                <option value="BE">🇧🇪 Belgique</option>
-                <option value="LU">🇱🇺 Luxembourg</option>
-            </select>
+        <!-- Partie gauche : Sélecteur -->
+        <form method="GET" action="/stm/admin/stats/campaigns" class="flex flex-wrap gap-4 items-end <?= $campaignStats ? 'flex-shrink-0' : 'flex-1' ?>" id="campaign-form">
+
+            <!-- Pays -->
+            <div class="w-40">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                <select name="country" x-model="selectedCountry" @change="filterCampaigns()"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">Tous</option>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
+                </select>
+            </div>
+
+            <!-- Campagne -->
+            <div class="<?= $campaignStats ? 'w-64' : 'flex-1 min-w-[300px]' ?>">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
+                <select name="campaign_id" x-ref="campaignSelect"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- Choisir une campagne --</option>
+                    <template x-for="c in filteredCampaigns" :key="c.id">
+                        <option :value="c.id"
+                                :selected="c.id == selectedCampaign"
+                                x-text="c.name + ' (' + c.country + ' - ' + getStatusLabel(c.status) + ')'"></option>
+                    </template>
+                </select>
+            </div>
+
+            <button type="submit" onclick="showLoader()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition inline-flex items-center gap-2">
+                <i class="fas fa-chart-bar"></i>
+                <span>Voir les stats</span>
+            </button>
+        </form>
+
+        <?php if ($campaignStats): ?>
+        <!-- Partie droite : Infos campagne -->
+        <div class="flex-1 flex items-center justify-end gap-4 pl-4 border-l border-gray-200">
+            <div class="text-right">
+                <h2 class="text-lg font-bold text-gray-900"><?= htmlspecialchars($campaignStats["campaign"]["name"]) ?></h2>
+                <p class="text-xs text-gray-500"><?= htmlspecialchars($campaignStats["campaign"]["title_fr"] ?? "") ?></p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                    <i class="fas fa-calendar mr-1"></i>
+                    <?= date("d/m/Y", strtotime($campaignStats["campaign"]["start_date"])) ?> - <?= date("d/m/Y", strtotime($campaignStats["campaign"]["end_date"])) ?>
+                </span>
+                <span class="inline-flex items-center px-2 py-1 <?= $campaignStats["campaign"]["country"] === "BE" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700" ?> rounded text-xs">
+                    <?= $campaignStats["campaign"]["country"] === "BE" ? "🇧🇪" : "🇱🇺" ?>
+                </span>
+                <?php
+                $statusLabels = [
+                    "draft" => "Brouillon",
+                    "scheduled" => "Programmée",
+                    "active" => "En cours",
+                    "ended" => "Terminée",
+                    "cancelled" => "Annulée",
+                ];
+                $statusColors = [
+                    "draft" => "bg-gray-100 text-gray-800",
+                    "scheduled" => "bg-blue-100 text-blue-800",
+                    "active" => "bg-green-100 text-green-800",
+                    "ended" => "bg-orange-100 text-orange-800",
+                    "cancelled" => "bg-red-100 text-red-800",
+                ];
+                $currentStatus = $campaignStats["campaign"]["status"] ?? "draft";
+                $statusLabel = $statusLabels[$currentStatus] ?? ucfirst($currentStatus);
+                $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
+                ?>
+                <span class="inline-flex items-center px-2 py-1 <?= $statusColor ?> rounded text-xs">
+                    <?= $statusLabel ?>
+                </span>
+            </div>
         </div>
+        <?php endif; ?>
 
-        <!-- Campagne -->
-        <div class="flex-1 min-w-[300px]">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
-            <select name="campaign_id" x-ref="campaignSelect"
-                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                <option value="">-- Choisir une campagne --</option>
-                <template x-for="c in filteredCampaigns" :key="c.id">
-                    <option :value="c.id"
-                            :selected="c.id == selectedCampaign"
-                            x-text="c.name + ' (' + c.country + ' - ' + getStatusLabel(c.status) + ')'"></option>
-                </template>
-            </select>
-        </div>
-
-        <button type="submit" onclick="showLoader()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition inline-flex items-center gap-2">
-            <i class="fas fa-chart-bar"></i>
-            <span>Voir les stats</span>
-        </button>
-    </form>
+    </div>
 </div>
 
 <?php if ($campaignStats): ?>
@@ -206,51 +252,8 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
 <!-- VUE CAMPAGNE (sans détail rep)               -->
 <!-- ============================================ -->
 
-<?php
-// Statuts
-$statusLabels = [
-    "draft" => "Brouillon",
-    "scheduled" => "Programmée",
-    "active" => "En cours",
-    "ended" => "Terminée",
-    "cancelled" => "Annulée",
-];
-$statusColors = [
-    "draft" => "bg-gray-100 text-gray-800",
-    "scheduled" => "bg-blue-100 text-blue-800",
-    "active" => "bg-green-100 text-green-800",
-    "ended" => "bg-orange-100 text-orange-800",
-    "cancelled" => "bg-red-100 text-red-800",
-];
-$currentStatus = $campaignStats["campaign"]["status"] ?? "draft";
-$statusLabel = $statusLabels[$currentStatus] ?? ucfirst($currentStatus);
-$statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
-?>
-
-<!-- Infos campagne -->
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <div class="flex items-start justify-between">
-        <div>
-            <h2 class="text-xl font-bold text-gray-900"><?= htmlspecialchars($campaignStats["campaign"]["name"]) ?></h2>
-            <p class="text-sm text-gray-500 mt-1"><?= htmlspecialchars($campaignStats["campaign"]["title_fr"] ?? "") ?></p>
-            <div class="flex items-center gap-3 mt-2">
-                <span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                    <i class="fas fa-calendar mr-1"></i>
-                    <?= date("d/m/Y", strtotime($campaignStats["campaign"]["start_date"])) ?> - <?= date("d/m/Y", strtotime($campaignStats["campaign"]["end_date"])) ?>
-                </span>
-                <span class="inline-flex items-center px-2 py-1 <?= $campaignStats["campaign"]["country"] === "BE" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700" ?> rounded text-xs">
-                    <?= $campaignStats["campaign"]["country"] === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?>
-                </span>
-                <span class="inline-flex items-center px-2 py-1 <?= $statusColor ?> rounded text-xs">
-                    <?= $statusLabel ?>
-                </span>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- KPIs -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Clients éligibles</p>
         <p class="text-2xl font-bold text-gray-900 mt-1">
@@ -274,6 +277,15 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
     <div class="bg-white rounded-lg shadow-sm p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Promos vendues</p>
         <p class="text-2xl font-bold text-orange-600 mt-1"><?= number_format($campaignStats["total_quantity"] ?? 0, 0, ",", " ") ?></p>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Moy. / commande</p>
+        <?php
+        $totalOrders = $campaignStats["total_orders"] ?? 0;
+        $totalQuantity = $campaignStats["total_quantity"] ?? 0;
+        $avgPerOrder = $totalOrders > 0 ? round($totalQuantity / $totalOrders, 1) : 0;
+        ?>
+        <p class="text-2xl font-bold text-purple-600 mt-1"><?= number_format($avgPerOrder, 1, ",", " ") ?></p>
     </div>
 </div>
 
@@ -396,16 +408,11 @@ $suppliersCount = count($supplierStats ?? []);
                             <th class="py-3 px-4">Fournisseur</th>
                             <th class="py-3 px-4 text-right">CMD</th>
                             <th class="py-3 px-4 text-right">Promos</th>
-                            <th class="py-3 px-4 w-32"></th>
                         </tr>
                     </thead>
                     <tbody class="text-sm divide-y divide-gray-100">
                         <?php
                         $rank = 0;
-                        $qtys = array_filter(array_map(function($p) {
-                            return $p["quantity_sold"] ?? 0;
-                        }, $campaignProducts));
-                        $maxQty = !empty($qtys) ? max($qtys) : 1;
 
                         foreach ($campaignProducts as $product):
                             $rank++;
@@ -413,7 +420,6 @@ $suppliersCount = count($supplierStats ?? []);
                             $productCode = $product["product_code"] ?? "-";
                             $ordersCount = $product["orders_count"] ?? 0;
                             $totalQty = $product["quantity_sold"] ?? 0;
-                            $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
 
                             // Récupérer le fournisseur
                             $supplierName = $productSuppliers[$productCode]['supplier_name'] ?? 'Non référencé';
@@ -436,11 +442,6 @@ $suppliersCount = count($supplierStats ?? []);
                             </td>
                             <td class="py-3 px-4 text-right font-medium"><?= $ordersCount ?></td>
                             <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
-                            <td class="py-3 px-4">
-                                <div class="w-full bg-gray-200 rounded-full h-2">
-                                    <div class="bg-indigo-500 h-2 rounded-full" style="width: <?= $percent ?>%"></div>
-                                </div>
-                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
