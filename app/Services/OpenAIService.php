@@ -33,11 +33,57 @@ class OpenAIService
      */
     public function __construct()
     {
-        $this->apiKey = $_ENV['OPENAI_API_KEY'] ?? '';
+        // Essayer plusieurs méthodes pour récupérer la clé API
+        $this->apiKey = $this->getApiKey();
 
         if (empty($this->apiKey)) {
             throw new \Exception('OPENAI_API_KEY non configurée dans .env');
         }
+    }
+
+    /**
+     * Récupérer la clé API depuis différentes sources
+     *
+     * @return string
+     */
+    private function getApiKey(): string
+    {
+        // 1. Depuis $_ENV (si chargé par dotenv)
+        if (!empty($_ENV['OPENAI_API_KEY'])) {
+            return $_ENV['OPENAI_API_KEY'];
+        }
+
+        // 2. Depuis getenv()
+        $key = getenv('OPENAI_API_KEY');
+        if (!empty($key)) {
+            return $key;
+        }
+
+        // 3. Depuis $_SERVER
+        if (!empty($_SERVER['OPENAI_API_KEY'])) {
+            return $_SERVER['OPENAI_API_KEY'];
+        }
+
+        // 4. Lecture directe du fichier .env
+        $envFile = dirname(__DIR__, 2) . '/.env';
+        if (file_exists($envFile)) {
+            $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                // Ignorer les commentaires
+                if (strpos(trim($line), '#') === 0) {
+                    continue;
+                }
+
+                if (strpos($line, 'OPENAI_API_KEY=') === 0) {
+                    $value = substr($line, strlen('OPENAI_API_KEY='));
+                    // Retirer les guillemets si présents
+                    $value = trim($value, '"\'');
+                    return $value;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
