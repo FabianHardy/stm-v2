@@ -4,34 +4,35 @@
  *
  * Définition et exécution des tools disponibles pour l'agent
  * Inclut le tool Text-to-SQL pour requêtes dynamiques
+ * Accès aux bases locale ET externe
  *
  * @created  2025/12/09
- * @modified 2025/12/09 - Ajout Text-to-SQL
+ * @modified 2025/12/09 - Ajout Text-to-SQL + base externe
  * @package  STM Agent
  */
 
 namespace App\Agent;
 
 use Core\Database;
+use Core\ExternalDatabase;
 
 class AgentTools
 {
     private Database $db;
 
     /**
-     * Schéma de la base de données pour le Text-to-SQL
+     * Schéma de la base de données LOCALE pour le Text-to-SQL
      */
     private string $dbSchema = <<<'SCHEMA'
-## BASE DE DONNÉES STM v2
+## BASE DE DONNÉES LOCALE (trendyblog_stm_v2)
 
 ### Table: campaigns
 Colonnes: id, uuid, name, slug, title_fr, title_nl, description_fr, description_nl, country (BE/LU), status (draft/scheduled/active/ended/cancelled), start_date, end_date, customer_access_mode (automatic/manual/protected), is_active, created_at
 Clé primaire: id
 
-### Table: customers
+### Table: customers (remplie lors des commandes)
 Colonnes: id, customer_number, email, company_name, country (BE/LU), language (fr/nl), rep_name, rep_id, customer_type, is_active, total_orders, last_order_date, created_at
-Clé primaire: id
-Note: customer_number + country est UNIQUE (même numéro peut exister en BE et LU)
+Note: Se remplit à la volée lors des commandes. Pour les infos complètes des clients/reps, utiliser la BASE EXTERNE.
 
 ### Table: orders
 Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items, total_quantity, total_products, status (pending/confirmed/processing/completed/cancelled), notes, created_at
@@ -53,38 +54,44 @@ Clé primaire: id
 Colonnes: id, campaign_id (FK campaigns), customer_number, country (BE/LU), is_authorized, has_ordered, created_at
 Note: Utilisée uniquement en mode customer_access_mode='manual'
 
-### Table: users (admins)
-Colonnes: id, username, email, password_hash, role (admin/manager/user), is_active, last_login, created_at
-
-### RELATIONS IMPORTANTES:
+### RELATIONS:
 - orders.customer_id → customers.id
 - orders.campaign_id → campaigns.id
 - order_lines.order_id → orders.id
 - order_lines.product_id → products.id
 - products.campaign_id → campaigns.id
-- products.category_id → categories.id
+SCHEMA;
 
-### EXEMPLES DE REQUÊTES UTILES:
--- Stats d'un représentant sur une campagne:
-SELECT c.rep_name, COUNT(DISTINCT o.id) as commandes, SUM(o.total_quantity) as promos
-FROM orders o
-JOIN customers c ON o.customer_id = c.id
-WHERE o.campaign_id = X AND c.rep_name LIKE '%NomRep%'
-GROUP BY c.rep_id
+    /**
+     * Schéma de la base externe (trendyblog_sig)
+     */
+    private string $externalDbSchema = <<<'SCHEMA'
+## BASE DE DONNÉES EXTERNE (trendyblog_sig) - Données Trendy Foods
 
--- Clients ayant commandé plus de X promos:
-SELECT c.customer_number, c.company_name, SUM(o.total_quantity) as total
-FROM orders o
-JOIN customers c ON o.customer_id = c.id
-WHERE o.campaign_id = X
-GROUP BY c.id
-HAVING total > X
+### Table: BE_CLL (Clients Belgique - 26000+ clients)
+Colonnes: IDE_CLL (PK), CLL_NCLIXX (numéro client), CLL_NOM (nom entreprise), CLL_PRENOM, CLL_ADRESSE1, CLL_ADRESSE2, CLL_CPOSTAL, CLL_LOCALITE, IDE_REP (ID représentant)
 
--- Produits jamais commandés:
-SELECT p.product_code, p.name_fr
-FROM products p
-LEFT JOIN order_lines ol ON p.id = ol.product_id
-WHERE p.campaign_id = X AND ol.id IS NULL
+### Table: LU_CLL (Clients Luxembourg)
+Structure identique à BE_CLL
+
+### Table: BE_REP (Représentants Belgique)
+Colonnes: IDE_REP (PK), REP_PRENOM, REP_NOM, REP_EMAIL, REP_CLU (cluster), REP_SIPAD
+
+### Table: LU_REP (Représentants Luxembourg)
+Structure identique à BE_REP
+
+### EXEMPLE - Trouver un représentant par nom:
+SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP WHERE REP_NOM LIKE '%ZERAFI%' OR REP_PRENOM LIKE '%Tahir%'
+
+### EXEMPLE - Clients d'un représentant:
+SELECT c.CLL_NCLIXX, c.CLL_NOM, c.CLL_LOCALITE
+FROM BE_CLL c
+WHERE c.IDE_REP = (SELECT IDE_REP FROM BE_REP WHERE REP_NOM LIKE '%ZERAFI%')
+
+### EXEMPLE - Stats complètes d'un rep sur une campagne (jointure locale + externe):
+-- D'abord trouver l'IDE_REP dans BE_REP
+-- Puis trouver les customer_number dans BE_CLL avec cet IDE_REP
+-- Puis chercher les commandes dans la base locale avec ces customer_number
 SCHEMA;
 
     public function __construct()
@@ -93,11 +100,11 @@ SCHEMA;
     }
 
     /**
-     * Obtenir le schéma DB (pour le system prompt)
+     * Obtenir le schéma DB complet (pour le system prompt)
      */
     public function getDbSchema(): string
     {
-        return $this->dbSchema;
+        return $this->dbSchema . "\n\n" . $this->externalDbSchema;
     }
 
     /**
@@ -106,18 +113,18 @@ SCHEMA;
     public function getToolsDefinition(): array
     {
         return [
-            // Tool principal : Text-to-SQL
+            // Tool principal : Text-to-SQL BASE LOCALE
             [
                 'type' => 'function',
                 'function' => [
                     'name' => 'query_database',
-                    'description' => 'Exécute une requête SQL SELECT sur la base de données STM. Utilise ce tool pour répondre à TOUTES les questions sur les données (stats, clients, représentants, produits, commandes, etc.). Tu dois générer la requête SQL toi-même basée sur le schéma de la base de données.',
+                    'description' => 'Exécute une requête SQL SELECT sur la base de données LOCALE STM (campaigns, orders, products, etc.). Pour les infos des clients/représentants Trendy Foods, utilise query_external_database.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
                             'sql' => [
                                 'type' => 'string',
-                                'description' => 'Requête SQL SELECT à exécuter. UNIQUEMENT SELECT (pas de INSERT, UPDATE, DELETE). Limite toujours à 100 résultats max avec LIMIT.'
+                                'description' => 'Requête SQL SELECT. UNIQUEMENT SELECT. Limite à 100 résultats avec LIMIT.'
                             ],
                             'explanation' => [
                                 'type' => 'string',
@@ -128,12 +135,61 @@ SCHEMA;
                     ]
                 ]
             ],
+            // Tool : Text-to-SQL BASE EXTERNE
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'query_external_database',
+                    'description' => 'Exécute une requête SQL SELECT sur la base de données EXTERNE Trendy Foods (BE_CLL, LU_CLL, BE_REP, LU_REP). Utilise ce tool pour chercher des représentants, des clients par nom, ou des infos sur les commerciaux.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'sql' => [
+                                'type' => 'string',
+                                'description' => 'Requête SQL SELECT sur les tables BE_CLL, LU_CLL, BE_REP, LU_REP. UNIQUEMENT SELECT.'
+                            ],
+                            'explanation' => [
+                                'type' => 'string',
+                                'description' => 'Explication courte de ce que fait la requête'
+                            ]
+                        ],
+                        'required' => ['sql', 'explanation']
+                    ]
+                ]
+            ],
+            // Tool combiné : Stats rep sur campagne
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'get_rep_campaign_stats',
+                    'description' => 'Obtenir les statistiques d\'un représentant sur une campagne. Combine les données externes (rep, clients) et locales (commandes).',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'rep_name' => [
+                                'type' => 'string',
+                                'description' => 'Nom ou partie du nom du représentant (ex: Tahir, ZERAFI)'
+                            ],
+                            'campaign_name' => [
+                                'type' => 'string',
+                                'description' => 'Nom ou partie du nom de la campagne (ex: Black Friday)'
+                            ],
+                            'country' => [
+                                'type' => 'string',
+                                'description' => 'Pays (BE ou LU). Défaut: BE',
+                                'enum' => ['BE', 'LU']
+                            ]
+                        ],
+                        'required' => ['rep_name', 'campaign_name']
+                    ]
+                ]
+            ],
             // Tool simplifié : Liste campagnes
             [
                 'type' => 'function',
                 'function' => [
                     'name' => 'list_campaigns',
-                    'description' => 'Liste rapide des campagnes. Pour des questions simples sur les campagnes disponibles.',
+                    'description' => 'Liste rapide des campagnes disponibles.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -151,24 +207,6 @@ SCHEMA;
                         'required' => []
                     ]
                 ]
-            ],
-            // Tool : Rechercher un représentant
-            [
-                'type' => 'function',
-                'function' => [
-                    'name' => 'search_representative',
-                    'description' => 'Rechercher un représentant par nom pour obtenir son rep_id et ses infos',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'name' => [
-                                'type' => 'string',
-                                'description' => 'Nom ou partie du nom du représentant à rechercher'
-                            ]
-                        ],
-                        'required' => ['name']
-                    ]
-                ]
             ]
         ];
     }
@@ -183,11 +221,14 @@ SCHEMA;
                 case 'query_database':
                     return $this->queryDatabase($arguments);
 
+                case 'query_external_database':
+                    return $this->queryExternalDatabase($arguments);
+
+                case 'get_rep_campaign_stats':
+                    return $this->getRepCampaignStats($arguments);
+
                 case 'list_campaigns':
                     return $this->listCampaigns($arguments);
-
-                case 'search_representative':
-                    return $this->searchRepresentative($arguments);
 
                 default:
                     return ['error' => "Tool inconnu: {$toolName}"];
@@ -199,7 +240,7 @@ SCHEMA;
     }
 
     /**
-     * Tool Text-to-SQL : Exécuter une requête SQL générée par l'agent
+     * Tool Text-to-SQL : Base LOCALE
      */
     private function queryDatabase(array $args): array
     {
@@ -210,80 +251,244 @@ SCHEMA;
             return ['error' => 'Requête SQL vide'];
         }
 
-        // ========================================
-        // SÉCURITÉ : Validation de la requête
-        // ========================================
-
-        // 1. Convertir en minuscules pour vérification
-        $sqlLower = strtolower($sql);
-
-        // 2. Vérifier que c'est un SELECT
-        if (!preg_match('/^\s*select\s/i', $sql)) {
-            return ['error' => 'Seules les requêtes SELECT sont autorisées'];
+        // Validation sécurité
+        $validation = $this->validateSql($sql);
+        if ($validation !== true) {
+            return ['error' => $validation];
         }
 
-        // 3. Interdire les mots-clés dangereux
-        $forbidden = ['insert', 'update', 'delete', 'drop', 'truncate', 'alter', 'create', 'grant', 'revoke', 'exec', 'execute', '--'];
-        foreach ($forbidden as $word) {
-            if ($word === '--') {
-                if (strpos($sql, $word) !== false) {
-                    return ['error' => "Caractère interdit détecté: {$word}"];
-                }
-            } else {
-                if (preg_match('/\b' . $word . '\b/i', $sql)) {
-                    return ['error' => "Mot-clé interdit: {$word}"];
-                }
-            }
-        }
-
-        // 4. Ajouter LIMIT si absent
-        if (!preg_match('/\blimit\s+\d+/i', $sql)) {
-            $sql = rtrim($sql, ' ;') . ' LIMIT 100';
-        }
-
-        // 5. S'assurer que LIMIT ne dépasse pas 100
-        if (preg_match('/\blimit\s+(\d+)/i', $sql, $matches)) {
-            $limit = (int) $matches[1];
-            if ($limit > 100) {
-                $sql = preg_replace('/\blimit\s+\d+/i', 'LIMIT 100', $sql);
-            }
-        }
-
-        // ========================================
-        // Exécution de la requête
-        // ========================================
+        // Ajouter LIMIT si absent
+        $sql = $this->ensureLimit($sql);
 
         try {
             $startTime = microtime(true);
             $results = $this->db->query($sql);
             $duration = round((microtime(true) - $startTime) * 1000, 2);
 
-            // Formater les résultats
-            $count = count($results);
-
-            // Si trop de colonnes, limiter l'affichage
-            if ($count > 0 && count($results[0]) > 10) {
-                $results = array_map(function($row) {
-                    return array_slice($row, 0, 10);
-                }, $results);
-            }
-
             return [
                 'success' => true,
+                'database' => 'locale',
                 'explanation' => $explanation,
                 'query' => $sql,
-                'results' => $results,
-                'count' => $count,
+                'results' => array_slice($results, 0, 100),
+                'count' => count($results),
                 'duration_ms' => $duration
             ];
 
         } catch (\PDOException $e) {
-            error_log("Agent SQL Error: " . $e->getMessage() . " | Query: " . $sql);
-            return [
-                'error' => 'Erreur SQL: ' . $e->getMessage(),
-                'query' => $sql
-            ];
+            error_log("Agent SQL Error (local): " . $e->getMessage() . " | Query: " . $sql);
+            return ['error' => 'Erreur SQL: ' . $e->getMessage(), 'query' => $sql];
         }
+    }
+
+    /**
+     * Tool Text-to-SQL : Base EXTERNE
+     */
+    private function queryExternalDatabase(array $args): array
+    {
+        $sql = trim($args['sql'] ?? '');
+        $explanation = $args['explanation'] ?? '';
+
+        if (empty($sql)) {
+            return ['error' => 'Requête SQL vide'];
+        }
+
+        // Validation sécurité
+        $validation = $this->validateSql($sql);
+        if ($validation !== true) {
+            return ['error' => $validation];
+        }
+
+        // Vérifier que les tables sont autorisées
+        $allowedTables = ['BE_CLL', 'LU_CLL', 'BE_REP', 'LU_REP', 'BE_ART', 'BE_COLIS', 'BE_FOD'];
+        $sqlUpper = strtoupper($sql);
+        $hasAllowedTable = false;
+        foreach ($allowedTables as $table) {
+            if (strpos($sqlUpper, $table) !== false) {
+                $hasAllowedTable = true;
+                break;
+            }
+        }
+        if (!$hasAllowedTable) {
+            return ['error' => 'Tables autorisées: BE_CLL, LU_CLL, BE_REP, LU_REP, BE_ART'];
+        }
+
+        // Ajouter LIMIT si absent
+        $sql = $this->ensureLimit($sql);
+
+        try {
+            $extDb = ExternalDatabase::getInstance();
+            $startTime = microtime(true);
+
+            // ExternalDatabase::query retourne un PDOStatement, utiliser fetchAll
+            $stmt = $extDb->query($sql);
+            $results = is_array($stmt) ? $stmt : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            return [
+                'success' => true,
+                'database' => 'externe',
+                'explanation' => $explanation,
+                'query' => $sql,
+                'results' => array_slice($results, 0, 100),
+                'count' => count($results),
+                'duration_ms' => $duration
+            ];
+
+        } catch (\Exception $e) {
+            error_log("Agent SQL Error (external): " . $e->getMessage() . " | Query: " . $sql);
+            return ['error' => 'Erreur SQL: ' . $e->getMessage(), 'query' => $sql];
+        }
+    }
+
+    /**
+     * Tool combiné : Stats d'un rep sur une campagne
+     */
+    private function getRepCampaignStats(array $args): array
+    {
+        $repName = $args['rep_name'] ?? '';
+        $campaignName = $args['campaign_name'] ?? '';
+        $country = $args['country'] ?? 'BE';
+
+        if (empty($repName) || empty($campaignName)) {
+            return ['error' => 'rep_name et campaign_name sont requis'];
+        }
+
+        try {
+            // 1. Trouver la campagne
+            $campaign = $this->db->query(
+                "SELECT id, name, country FROM campaigns WHERE name LIKE :name AND country = :country LIMIT 1",
+                [':name' => '%' . $campaignName . '%', ':country' => $country]
+            );
+
+            if (empty($campaign)) {
+                return ['error' => "Campagne '{$campaignName}' non trouvée pour {$country}"];
+            }
+            $campaign = $campaign[0];
+
+            // 2. Trouver le représentant dans la base externe
+            $extDb = ExternalDatabase::getInstance();
+            $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
+
+            // Utiliser fetchAll pour la base externe
+            $repSql = "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
+                       WHERE REP_NOM LIKE '%{$repName}%' OR REP_PRENOM LIKE '%{$repName}%' LIMIT 1";
+            $stmt = $extDb->query($repSql);
+            $repResults = is_array($stmt) ? $stmt : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (empty($repResults)) {
+                return ['error' => "Représentant '{$repName}' non trouvé dans {$repTable}"];
+            }
+            $rep = $repResults[0];
+            $repFullName = trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']);
+
+            // 3. Trouver les clients de ce rep
+            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            $clientSql = "SELECT CLL_NCLIXX FROM {$clientTable} WHERE IDE_REP = '{$rep['IDE_REP']}'";
+            $stmt = $extDb->query($clientSql);
+            $clients = is_array($stmt) ? $stmt : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $customerNumbers = array_column($clients, 'CLL_NCLIXX');
+            $totalClients = count($customerNumbers);
+
+            if (empty($customerNumbers)) {
+                return [
+                    'representant' => $repFullName,
+                    'rep_id' => $rep['IDE_REP'],
+                    'campagne' => $campaign['name'],
+                    'total_clients' => 0,
+                    'clients_commande' => 0,
+                    'commandes' => 0,
+                    'promos_vendues' => 0,
+                    'message' => 'Aucun client assigné à ce représentant'
+                ];
+            }
+
+            // 4. Trouver les commandes de ces clients sur cette campagne
+            // Créer les placeholders pour IN clause
+            $placeholders = [];
+            $params = [':campaign_id' => $campaign['id']];
+            foreach ($customerNumbers as $i => $num) {
+                $placeholders[] = ":cn{$i}";
+                $params[":cn{$i}"] = $num;
+            }
+            $inClause = implode(',', $placeholders);
+
+            $stats = $this->db->query(
+                "SELECT
+                    COUNT(DISTINCT o.id) as total_orders,
+                    COUNT(DISTINCT c.customer_number) as clients_ordered,
+                    COALESCE(SUM(o.total_quantity), 0) as total_quantity
+                 FROM customers c
+                 LEFT JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
+                 WHERE c.customer_number IN ({$inClause}) AND c.country = '{$country}'",
+                $params
+            );
+
+            $stats = $stats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_quantity' => 0];
+
+            return [
+                'representant' => $repFullName,
+                'rep_id' => $rep['IDE_REP'],
+                'campagne' => $campaign['name'],
+                'pays' => $country,
+                'total_clients' => $totalClients,
+                'clients_commande' => (int) $stats['clients_ordered'],
+                'taux_participation' => $totalClients > 0
+                    ? round(($stats['clients_ordered'] / $totalClients) * 100, 1) . '%'
+                    : '0%',
+                'commandes' => (int) $stats['total_orders'],
+                'promos_vendues' => (int) $stats['total_quantity']
+            ];
+
+        } catch (\Exception $e) {
+            error_log("getRepCampaignStats error: " . $e->getMessage());
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Validation SQL (sécurité)
+     */
+    private function validateSql(string $sql): bool|string
+    {
+        // Vérifier que c'est un SELECT
+        if (!preg_match('/^\s*select\s/i', $sql)) {
+            return 'Seules les requêtes SELECT sont autorisées';
+        }
+
+        // Interdire les mots-clés dangereux
+        $forbidden = ['insert', 'update', 'delete', 'drop', 'truncate', 'alter', 'create', 'grant', 'revoke', 'exec', 'execute', '--'];
+        foreach ($forbidden as $word) {
+            if ($word === '--') {
+                if (strpos($sql, $word) !== false) {
+                    return "Caractère interdit: {$word}";
+                }
+            } else {
+                if (preg_match('/\b' . $word . '\b/i', $sql)) {
+                    return "Mot-clé interdit: {$word}";
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * S'assurer qu'il y a un LIMIT
+     */
+    private function ensureLimit(string $sql): string
+    {
+        if (!preg_match('/\blimit\s+\d+/i', $sql)) {
+            $sql = rtrim($sql, ' ;') . ' LIMIT 100';
+        } else {
+            // S'assurer que LIMIT <= 100
+            $sql = preg_replace_callback('/\blimit\s+(\d+)/i', function($m) {
+                return 'LIMIT ' . min((int)$m[1], 100);
+            }, $sql);
+        }
+        return $sql;
     }
 
     /**
@@ -331,42 +536,6 @@ SCHEMA;
         return [
             'campagnes' => $result,
             'total' => count($result)
-        ];
-    }
-
-    /**
-     * Rechercher un représentant par nom
-     */
-    private function searchRepresentative(array $args): array
-    {
-        $name = $args['name'] ?? '';
-
-        if (empty($name)) {
-            return ['error' => 'Nom du représentant requis'];
-        }
-
-        // Chercher dans la table customers (rep_name)
-        $results = $this->db->query(
-            "SELECT DISTINCT rep_id, rep_name, country, COUNT(*) as nb_clients
-             FROM customers
-             WHERE rep_name LIKE :name AND rep_name IS NOT NULL
-             GROUP BY rep_id, rep_name, country
-             ORDER BY nb_clients DESC
-             LIMIT 10",
-            [':name' => '%' . $name . '%']
-        );
-
-        if (empty($results)) {
-            return [
-                'found' => false,
-                'message' => "Aucun représentant trouvé avec le nom '{$name}'"
-            ];
-        }
-
-        return [
-            'found' => true,
-            'representants' => $results,
-            'count' => count($results)
         ];
     }
 }
