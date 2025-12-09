@@ -330,12 +330,12 @@ $suppliersCount = count($supplierStats ?? []);
 ?>
 
 <div class="bg-white rounded-lg shadow-sm mb-6" x-data="{ activeTab: 'products' }">
-    
+
     <!-- Navigation onglets -->
     <div class="border-b border-gray-200">
         <nav class="flex -mb-px">
             <!-- Onglet Produits -->
-            <button @click="activeTab = 'products'" 
+            <button @click="activeTab = 'products'"
                     :class="activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
                 <i class="fas fa-box"></i>
@@ -345,9 +345,9 @@ $suppliersCount = count($supplierStats ?? []);
                     <?= $productsCount ?>
                 </span>
             </button>
-            
+
             <!-- Onglet Représentants -->
-            <button @click="activeTab = 'reps'" 
+            <button @click="activeTab = 'reps'"
                     :class="activeTab === 'reps' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
                 <i class="fas fa-users"></i>
@@ -357,9 +357,9 @@ $suppliersCount = count($supplierStats ?? []);
                     <?= $repsCount ?>
                 </span>
             </button>
-            
+
             <!-- Onglet Fournisseurs -->
-            <button @click="activeTab = 'suppliers'" 
+            <button @click="activeTab = 'suppliers'"
                     :class="activeTab === 'suppliers' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
                 <i class="fas fa-truck"></i>
@@ -371,10 +371,10 @@ $suppliersCount = count($supplierStats ?? []);
             </button>
         </nav>
     </div>
-    
+
     <!-- Contenu des onglets -->
     <div class="p-6">
-        
+
         <!-- ============================================ -->
         <!-- ONGLET PRODUITS (avec fournisseur)           -->
         <!-- ============================================ -->
@@ -414,7 +414,7 @@ $suppliersCount = count($supplierStats ?? []);
                             $ordersCount = $product["orders_count"] ?? 0;
                             $totalQty = $product["quantity_sold"] ?? 0;
                             $percent = $maxQty > 0 ? ($totalQty / $maxQty) * 100 : 0;
-                            
+
                             // Récupérer le fournisseur
                             $supplierName = $productSuppliers[$productCode]['supplier_name'] ?? 'Non référencé';
                         ?>
@@ -448,7 +448,7 @@ $suppliersCount = count($supplierStats ?? []);
             </div>
             <?php endif; ?>
         </div>
-        
+
         <!-- ============================================ -->
         <!-- ONGLET REPRÉSENTANTS                         -->
         <!-- ============================================ -->
@@ -592,16 +592,16 @@ $suppliersCount = count($supplierStats ?? []);
             <?php endif; ?>
             <?php endif; ?>
         </div>
-        
+
         <!-- ============================================ -->
         <!-- ONGLET FOURNISSEURS (accordion + tri)        -->
         <!-- ============================================ -->
-        <div x-show="activeTab === 'suppliers'" 
+        <div x-show="activeTab === 'suppliers'"
              x-data="supplierTable()"
-             x-transition:enter="transition ease-out duration-200" 
-             x-transition:enter-start="opacity-0" 
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
              x-transition:enter-end="opacity-100">
-            
+
             <template x-if="suppliers.length === 0">
                 <div class="text-center py-8">
                     <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -611,7 +611,7 @@ $suppliersCount = count($supplierStats ?? []);
                     <p class="text-xs text-gray-400 mt-1">Vérifiez que les codes produits correspondent à BE_COLIS</p>
                 </div>
             </template>
-            
+
             <template x-if="suppliers.length > 0">
                 <div>
                     <!-- En-tête avec tri -->
@@ -640,7 +640,7 @@ $suppliersCount = count($supplierStats ?? []);
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Liste des fournisseurs -->
                     <div class="border-x border-b border-gray-200 rounded-b-lg divide-y divide-gray-100">
                         <template x-for="(supplier, index) in sortedSuppliers" :key="supplier.supplier_id">
@@ -676,7 +676,7 @@ $suppliersCount = count($supplierStats ?? []);
                                     </div>
                                     <div class="w-24 text-right font-bold text-orange-600" x-text="formatNumber(supplier.total_quantity)"></div>
                                 </div>
-                                
+
                                 <!-- Détail produits du fournisseur -->
                                 <div x-show="openSuppliers[supplier.supplier_id]"
                                      x-transition:enter="transition ease-out duration-200"
@@ -707,7 +707,7 @@ $suppliersCount = count($supplierStats ?? []);
                             </div>
                         </template>
                     </div>
-                    
+
                     <!-- Légende -->
                     <div class="mt-4 pt-4 border-t border-gray-100">
                         <p class="text-xs text-gray-500">
@@ -720,7 +720,7 @@ $suppliersCount = count($supplierStats ?? []);
                 </div>
             </template>
         </div>
-        
+
     </div>
 </div>
 
@@ -824,34 +824,34 @@ function supplierTable() {
         sortField: 'total_quantity',
         sortDir: 'desc',
         openSuppliers: {},
-        
+
         get sortedSuppliers() {
             return [...this.suppliers].sort((a, b) => {
                 let valA = a[this.sortField];
                 let valB = b[this.sortField];
-                
+
                 // Tri alphabétique pour supplier_name
                 if (this.sortField === 'supplier_name') {
                     valA = (valA || '').toLowerCase();
                     valB = (valB || '').toLowerCase();
-                    
+
                     if (this.sortDir === 'asc') {
                         return valA.localeCompare(valB, 'fr');
                     }
                     return valB.localeCompare(valA, 'fr');
                 }
-                
+
                 // Tri numérique pour les autres colonnes
                 valA = valA || 0;
                 valB = valB || 0;
-                
+
                 if (this.sortDir === 'asc') {
                     return valA - valB;
                 }
                 return valB - valA;
             });
         },
-        
+
         sortBy(field) {
             if (this.sortField === field) {
                 this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
@@ -861,11 +861,11 @@ function supplierTable() {
                 this.sortDir = field === 'supplier_name' ? 'asc' : 'desc';
             }
         },
-        
+
         toggleSupplier(supplierId) {
             this.openSuppliers[supplierId] = !this.openSuppliers[supplierId];
         },
-        
+
         formatNumber(num) {
             return new Intl.NumberFormat('fr-FR').format(num || 0);
         }
