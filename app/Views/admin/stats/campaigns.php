@@ -9,6 +9,7 @@
  * @created 2025/11/25
  * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
  * @modified 2025/12/08 - Légende colonnes représentants
+ * @modified 2025/12/09 - Ajout section statistiques fournisseurs
  */
 
 // Variable pour le menu actif
@@ -371,7 +372,7 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
 
 <!-- Performance par représentant -->
 <?php if (!empty($reps)): ?>
-<div class="bg-white rounded-lg shadow-sm p-6">
+<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
     <h3 class="text-lg font-semibold text-gray-900 mb-4">
         <i class="fas fa-users text-blue-500 mr-2"></i>
         Performance par représentant
@@ -514,6 +515,95 @@ $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
     </p>
 
     <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- ============================================ -->
+<!-- STATISTIQUES PAR FOURNISSEUR (NOUVEAU)       -->
+<!-- ============================================ -->
+<?php if (!empty($supplierStats)): ?>
+<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+        <i class="fas fa-truck text-orange-500 mr-2"></i>
+        Statistiques par fournisseur
+    </h3>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full">
+            <thead class="bg-gray-50">
+                <tr class="text-left text-xs text-gray-500 uppercase">
+                    <th class="py-3 px-4">#</th>
+                    <th class="py-3 px-4">N° Fournisseur</th>
+                    <th class="py-3 px-4">Nom</th>
+                    <th class="py-3 px-4 text-center">
+                        <span title="Clients distincts ayant commandé">Clients</span>
+                    </th>
+                    <th class="py-3 px-4 text-center">
+                        <span title="Nombre de commandes">Commandes</span>
+                    </th>
+                    <th class="py-3 px-4 text-center">
+                        <span title="Nombre de promotions de ce fournisseur">Promos</span>
+                    </th>
+                    <th class="py-3 px-4 text-right">
+                        <span title="Quantité totale vendue">Qté vendue</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-gray-100">
+                <?php
+                $rank = 0;
+                foreach ($supplierStats as $supplier):
+                    $rank++;
+                    $isTop3 = $rank <= 3;
+                ?>
+                <tr class="hover:bg-gray-50 <?= $isTop3 ? 'bg-yellow-50' : '' ?>">
+                    <td class="py-3 px-4">
+                        <?php if ($isTop3): ?>
+                            <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                                <?= $rank ?>
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="py-3 px-4 font-mono text-gray-900">
+                        <?= htmlspecialchars($supplier['supplier_number']) ?>
+                    </td>
+                    <td class="py-3 px-4">
+                        <p class="font-medium text-gray-900"><?= htmlspecialchars($supplier['supplier_name']) ?></p>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                            <?= number_format($supplier['customers_count'], 0, ',', ' ') ?>
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                            <?= number_format($supplier['orders_count'], 0, ',', ' ') ?>
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                            <?= number_format($supplier['promos_count'], 0, ',', ' ') ?>
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-bold text-orange-600">
+                        <?= number_format($supplier['total_quantity'], 0, ',', ' ') ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Légende -->
+    <div class="mt-4 pt-4 border-t border-gray-100">
+        <p class="text-xs text-gray-500">
+            <strong>Clients</strong> : Clients distincts ayant commandé un produit de ce fournisseur •
+            <strong>Commandes</strong> : Nombre de commandes contenant un produit de ce fournisseur •
+            <strong>Promos</strong> : Nombre de promotions de ce fournisseur dans la campagne
+        </p>
+    </div>
 </div>
 <?php endif; ?>
 
