@@ -665,9 +665,18 @@ $router->post("/admin/config/internal-customers/{id}/toggle", function ($id) {
     $controller = new \App\Controllers\InternalCustomerController();
     $controller->toggleActive((int) $id);
 });
+
+/**
+ * ROUTES AGENT - À ajouter dans config/routes.php
+ *
+ * Copier ce bloc dans la section des routes admin
+ */
+
 // ========================================
 // AGENT (Chatbot IA)
 // ========================================
+
+// Page d'accueil agent
 $router->get('/admin/agent', function () {
     $middleware = new \Middleware\AuthMiddleware();
     $middleware->handle();
@@ -676,10 +685,47 @@ $router->get('/admin/agent', function () {
     $controller->index();
 });
 
+// Endpoint chat (POST)
 $router->post('/admin/agent/chat', function () {
     $middleware = new \Middleware\AuthMiddleware();
     $middleware->handle();
 
     $controller = new \App\Controllers\AgentController();
     $controller->chat();
+});
+
+// Historique des conversations
+$router->get('/admin/agent/history', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->history();
+});
+
+// Voir une conversation spécifique
+$router->get('/admin/agent/conversation/{session_id}', function ($session_id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->conversation($session_id);
+});
+
+// Charger une conversation dans le widget (AJAX)
+$router->get('/admin/agent/load/{session_id}', function ($session_id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->load($session_id);
+});
+
+// Supprimer une conversation (AJAX)
+$router->post('/admin/agent/delete/{session_id}', function ($session_id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->delete($session_id);
 });

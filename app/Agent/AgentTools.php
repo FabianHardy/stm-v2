@@ -3,9 +3,10 @@
  * AgentTools.php
  *
  * Définition et exécution des tools disponibles pour l'agent
- * Chaque tool correspond à une fonction que l'agent peut appeler
+ * Inclut le tool Text-to-SQL pour requêtes dynamiques
  *
  * @created  2025/12/09
+ * @modified 2025/12/09 - Ajout Text-to-SQL
  * @package  STM Agent
  */
 
@@ -17,35 +18,133 @@ class AgentTools
 {
     private Database $db;
 
+    /**
+     * Schéma de la base de données pour le Text-to-SQL
+     */
+    private string $dbSchema = <<<'SCHEMA'
+## BASE DE DONNÉES STM v2
+
+### Table: campaigns
+Colonnes: id, uuid, name, slug, title_fr, title_nl, description_fr, description_nl, country (BE/LU), status (draft/scheduled/active/ended/cancelled), start_date, end_date, customer_access_mode (automatic/manual/protected), is_active, created_at
+Clé primaire: id
+
+### Table: customers
+Colonnes: id, customer_number, email, company_name, country (BE/LU), language (fr/nl), rep_name, rep_id, customer_type, is_active, total_orders, last_order_date, created_at
+Clé primaire: id
+Note: customer_number + country est UNIQUE (même numéro peut exister en BE et LU)
+
+### Table: orders
+Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items, total_quantity, total_products, status (pending/confirmed/processing/completed/cancelled), notes, created_at
+Clé primaire: id
+
+### Table: order_lines
+Colonnes: id, order_id (FK orders), product_id (FK products), product_code, product_name, quantity, created_at
+Clé primaire: id
+
+### Table: products
+Colonnes: id, product_code, name_fr, name_nl, description_fr, description_nl, category_id (FK categories), campaign_id (FK campaigns), max_per_customer, max_total, total_ordered, unit_size, package_size, brand, image_path, display_order, is_active, created_at
+Clé primaire: id
+
+### Table: categories
+Colonnes: id, code, name_fr, name_nl, color, icon_path, display_order, is_active
+Clé primaire: id
+
+### Table: campaign_customers
+Colonnes: id, campaign_id (FK campaigns), customer_number, country (BE/LU), is_authorized, has_ordered, created_at
+Note: Utilisée uniquement en mode customer_access_mode='manual'
+
+### Table: users (admins)
+Colonnes: id, username, email, password_hash, role (admin/manager/user), is_active, last_login, created_at
+
+### RELATIONS IMPORTANTES:
+- orders.customer_id → customers.id
+- orders.campaign_id → campaigns.id
+- order_lines.order_id → orders.id
+- order_lines.product_id → products.id
+- products.campaign_id → campaigns.id
+- products.category_id → categories.id
+
+### EXEMPLES DE REQUÊTES UTILES:
+-- Stats d'un représentant sur une campagne:
+SELECT c.rep_name, COUNT(DISTINCT o.id) as commandes, SUM(o.total_quantity) as promos
+FROM orders o
+JOIN customers c ON o.customer_id = c.id
+WHERE o.campaign_id = X AND c.rep_name LIKE '%NomRep%'
+GROUP BY c.rep_id
+
+-- Clients ayant commandé plus de X promos:
+SELECT c.customer_number, c.company_name, SUM(o.total_quantity) as total
+FROM orders o
+JOIN customers c ON o.customer_id = c.id
+WHERE o.campaign_id = X
+GROUP BY c.id
+HAVING total > X
+
+-- Produits jamais commandés:
+SELECT p.product_code, p.name_fr
+FROM products p
+LEFT JOIN order_lines ol ON p.id = ol.product_id
+WHERE p.campaign_id = X AND ol.id IS NULL
+SCHEMA;
+
     public function __construct()
     {
         $this->db = Database::getInstance();
     }
 
     /**
+     * Obtenir le schéma DB (pour le system prompt)
+     */
+    public function getDbSchema(): string
+    {
+        return $this->dbSchema;
+    }
+
+    /**
      * Obtenir la définition des tools au format OpenAI
-     *
-     * @return array Liste des tools
      */
     public function getToolsDefinition(): array
     {
         return [
+            // Tool principal : Text-to-SQL
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'query_database',
+                    'description' => 'Exécute une requête SQL SELECT sur la base de données STM. Utilise ce tool pour répondre à TOUTES les questions sur les données (stats, clients, représentants, produits, commandes, etc.). Tu dois générer la requête SQL toi-même basée sur le schéma de la base de données.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'sql' => [
+                                'type' => 'string',
+                                'description' => 'Requête SQL SELECT à exécuter. UNIQUEMENT SELECT (pas de INSERT, UPDATE, DELETE). Limite toujours à 100 résultats max avec LIMIT.'
+                            ],
+                            'explanation' => [
+                                'type' => 'string',
+                                'description' => 'Explication courte de ce que fait la requête'
+                            ]
+                        ],
+                        'required' => ['sql', 'explanation']
+                    ]
+                ]
+            ],
+            // Tool simplifié : Liste campagnes
             [
                 'type' => 'function',
                 'function' => [
                     'name' => 'list_campaigns',
-                    'description' => 'Liste toutes les campagnes disponibles avec leur statut. Utiliser pour savoir quelles campagnes existent.',
+                    'description' => 'Liste rapide des campagnes. Pour des questions simples sur les campagnes disponibles.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
                             'country' => [
                                 'type' => 'string',
-                                'description' => 'Filtrer par pays (BE ou LU). Optionnel.',
+                                'description' => 'Filtrer par pays (BE ou LU)',
                                 'enum' => ['BE', 'LU']
                             ],
                             'status' => [
                                 'type' => 'string',
-                                'description' => 'Filtrer par statut. Optionnel.',
+                                'description' => 'Filtrer par statut',
                                 'enum' => ['draft', 'scheduled', 'active', 'ended', 'cancelled']
                             ]
                         ],
@@ -53,92 +152,21 @@ class AgentTools
                     ]
                 ]
             ],
+            // Tool : Rechercher un représentant
             [
                 'type' => 'function',
                 'function' => [
-                    'name' => 'get_campaign_stats',
-                    'description' => 'Obtenir les statistiques détaillées d\'une campagne: nombre de commandes, clients, promos vendues, taux de participation.',
+                    'name' => 'search_representative',
+                    'description' => 'Rechercher un représentant par nom pour obtenir son rep_id et ses infos',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
-                            'campaign_name' => [
+                            'name' => [
                                 'type' => 'string',
-                                'description' => 'Nom ou partie du nom de la campagne à rechercher'
-                            ],
-                            'campaign_id' => [
-                                'type' => 'integer',
-                                'description' => 'ID de la campagne (si connu)'
+                                'description' => 'Nom ou partie du nom du représentant à rechercher'
                             ]
                         ],
-                        'required' => []
-                    ]
-                ]
-            ],
-            [
-                'type' => 'function',
-                'function' => [
-                    'name' => 'get_top_products',
-                    'description' => 'Obtenir le classement des produits les plus vendus d\'une campagne',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'campaign_name' => [
-                                'type' => 'string',
-                                'description' => 'Nom ou partie du nom de la campagne'
-                            ],
-                            'campaign_id' => [
-                                'type' => 'integer',
-                                'description' => 'ID de la campagne (si connu)'
-                            ],
-                            'limit' => [
-                                'type' => 'integer',
-                                'description' => 'Nombre de produits à retourner (défaut: 10)'
-                            ]
-                        ],
-                        'required' => []
-                    ]
-                ]
-            ],
-            [
-                'type' => 'function',
-                'function' => [
-                    'name' => 'get_rep_stats',
-                    'description' => 'Obtenir les statistiques par représentant pour une campagne: clients, commandes, promos vendues par rep',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'campaign_name' => [
-                                'type' => 'string',
-                                'description' => 'Nom ou partie du nom de la campagne'
-                            ],
-                            'campaign_id' => [
-                                'type' => 'integer',
-                                'description' => 'ID de la campagne (si connu)'
-                            ],
-                            'limit' => [
-                                'type' => 'integer',
-                                'description' => 'Nombre de représentants à retourner (défaut: 10)'
-                            ]
-                        ],
-                        'required' => []
-                    ]
-                ]
-            ],
-            [
-                'type' => 'function',
-                'function' => [
-                    'name' => 'compare_campaigns',
-                    'description' => 'Comparer les performances de plusieurs campagnes entre elles',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'campaign_names' => [
-                                'type' => 'array',
-                                'items' => ['type' => 'string'],
-                                'description' => 'Liste des noms de campagnes à comparer'
-                            ]
-                        ],
-                        'required' => ['campaign_names']
+                        'required' => ['name']
                     ]
                 ]
             ]
@@ -147,29 +175,19 @@ class AgentTools
 
     /**
      * Exécuter un tool avec ses arguments
-     *
-     * @param string $toolName Nom du tool
-     * @param array $arguments Arguments du tool
-     * @return array Résultat de l'exécution
      */
     public function executeTool(string $toolName, array $arguments): array
     {
         try {
             switch ($toolName) {
+                case 'query_database':
+                    return $this->queryDatabase($arguments);
+
                 case 'list_campaigns':
                     return $this->listCampaigns($arguments);
 
-                case 'get_campaign_stats':
-                    return $this->getCampaignStats($arguments);
-
-                case 'get_top_products':
-                    return $this->getTopProducts($arguments);
-
-                case 'get_rep_stats':
-                    return $this->getRepStats($arguments);
-
-                case 'compare_campaigns':
-                    return $this->compareCampaigns($arguments);
+                case 'search_representative':
+                    return $this->searchRepresentative($arguments);
 
                 default:
                     return ['error' => "Tool inconnu: {$toolName}"];
@@ -181,7 +199,95 @@ class AgentTools
     }
 
     /**
-     * Liste des campagnes
+     * Tool Text-to-SQL : Exécuter une requête SQL générée par l'agent
+     */
+    private function queryDatabase(array $args): array
+    {
+        $sql = trim($args['sql'] ?? '');
+        $explanation = $args['explanation'] ?? '';
+
+        if (empty($sql)) {
+            return ['error' => 'Requête SQL vide'];
+        }
+
+        // ========================================
+        // SÉCURITÉ : Validation de la requête
+        // ========================================
+
+        // 1. Convertir en minuscules pour vérification
+        $sqlLower = strtolower($sql);
+
+        // 2. Vérifier que c'est un SELECT
+        if (!preg_match('/^\s*select\s/i', $sql)) {
+            return ['error' => 'Seules les requêtes SELECT sont autorisées'];
+        }
+
+        // 3. Interdire les mots-clés dangereux
+        $forbidden = ['insert', 'update', 'delete', 'drop', 'truncate', 'alter', 'create', 'grant', 'revoke', 'exec', 'execute', '--'];
+        foreach ($forbidden as $word) {
+            if ($word === '--') {
+                if (strpos($sql, $word) !== false) {
+                    return ['error' => "Caractère interdit détecté: {$word}"];
+                }
+            } else {
+                if (preg_match('/\b' . $word . '\b/i', $sql)) {
+                    return ['error' => "Mot-clé interdit: {$word}"];
+                }
+            }
+        }
+
+        // 4. Ajouter LIMIT si absent
+        if (!preg_match('/\blimit\s+\d+/i', $sql)) {
+            $sql = rtrim($sql, ' ;') . ' LIMIT 100';
+        }
+
+        // 5. S'assurer que LIMIT ne dépasse pas 100
+        if (preg_match('/\blimit\s+(\d+)/i', $sql, $matches)) {
+            $limit = (int) $matches[1];
+            if ($limit > 100) {
+                $sql = preg_replace('/\blimit\s+\d+/i', 'LIMIT 100', $sql);
+            }
+        }
+
+        // ========================================
+        // Exécution de la requête
+        // ========================================
+
+        try {
+            $startTime = microtime(true);
+            $results = $this->db->query($sql);
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            // Formater les résultats
+            $count = count($results);
+
+            // Si trop de colonnes, limiter l'affichage
+            if ($count > 0 && count($results[0]) > 10) {
+                $results = array_map(function($row) {
+                    return array_slice($row, 0, 10);
+                }, $results);
+            }
+
+            return [
+                'success' => true,
+                'explanation' => $explanation,
+                'query' => $sql,
+                'results' => $results,
+                'count' => $count,
+                'duration_ms' => $duration
+            ];
+
+        } catch (\PDOException $e) {
+            error_log("Agent SQL Error: " . $e->getMessage() . " | Query: " . $sql);
+            return [
+                'error' => 'Erreur SQL: ' . $e->getMessage(),
+                'query' => $sql
+            ];
+        }
+    }
+
+    /**
+     * Liste des campagnes (simplifié)
      */
     private function listCampaigns(array $args): array
     {
@@ -229,227 +335,38 @@ class AgentTools
     }
 
     /**
-     * Stats d'une campagne
+     * Rechercher un représentant par nom
      */
-    private function getCampaignStats(array $args): array
+    private function searchRepresentative(array $args): array
     {
-        // Trouver la campagne
-        $campaign = $this->findCampaign($args);
+        $name = $args['name'] ?? '';
 
-        if (!$campaign) {
-            return ['error' => 'Campagne non trouvée'];
+        if (empty($name)) {
+            return ['error' => 'Nom du représentant requis'];
         }
 
-        $campaignId = $campaign['id'];
-
-        // Nombre de commandes
-        $ordersResult = $this->db->query(
-            "SELECT COUNT(*) as total, SUM(total_quantity) as quantity
-             FROM orders WHERE campaign_id = :id",
-            [':id' => $campaignId]
-        );
-        $orders = $ordersResult[0] ?? ['total' => 0, 'quantity' => 0];
-
-        // Clients ayant commandé
-        $customersResult = $this->db->query(
-            "SELECT COUNT(DISTINCT customer_id) as total
-             FROM orders WHERE campaign_id = :id",
-            [':id' => $campaignId]
-        );
-        $customersOrdered = $customersResult[0]['total'] ?? 0;
-
-        // Clients éligibles
-        $eligibleResult = $this->db->query(
-            "SELECT COUNT(*) as total FROM campaign_customers WHERE campaign_id = :id",
-            [':id' => $campaignId]
-        );
-        $eligibleCustomers = $eligibleResult[0]['total'] ?? 0;
-
-        // Nombre de produits
-        $productsResult = $this->db->query(
-            "SELECT COUNT(*) as total FROM products WHERE campaign_id = :id AND is_active = 1",
-            [':id' => $campaignId]
-        );
-        $productsCount = $productsResult[0]['total'] ?? 0;
-
-        // Calcul taux de participation
-        $participationRate = $eligibleCustomers > 0
-            ? round(($customersOrdered / $eligibleCustomers) * 100, 1)
-            : 0;
-
-        // Moyenne par commande
-        $avgPerOrder = $orders['total'] > 0
-            ? round($orders['quantity'] / $orders['total'], 1)
-            : 0;
-
-        return [
-            'campagne' => $campaign['name'],
-            'pays' => $campaign['country'],
-            'statut' => $campaign['status'],
-            'periode' => date('d/m/Y', strtotime($campaign['start_date'])) . ' - ' . date('d/m/Y', strtotime($campaign['end_date'])),
-            'stats' => [
-                'clients_eligibles' => (int) $eligibleCustomers,
-                'clients_ayant_commande' => (int) $customersOrdered,
-                'taux_participation' => $participationRate . '%',
-                'nombre_commandes' => (int) $orders['total'],
-                'promos_vendues' => (int) $orders['quantity'],
-                'moyenne_par_commande' => $avgPerOrder,
-                'nombre_produits' => (int) $productsCount
-            ]
-        ];
-    }
-
-    /**
-     * Top produits d'une campagne
-     */
-    private function getTopProducts(array $args): array
-    {
-        $campaign = $this->findCampaign($args);
-
-        if (!$campaign) {
-            return ['error' => 'Campagne non trouvée'];
-        }
-
-        $limit = min($args['limit'] ?? 10, 50);
-
-        $products = $this->db->query(
-            "SELECT
-                p.name_fr as nom,
-                p.product_code as code,
-                COUNT(DISTINCT ol.order_id) as commandes,
-                SUM(ol.quantity) as quantite_vendue
-             FROM products p
-             LEFT JOIN order_lines ol ON p.id = ol.product_id
-             WHERE p.campaign_id = :campaign_id AND p.is_active = 1
-             GROUP BY p.id
-             ORDER BY quantite_vendue DESC
-             LIMIT {$limit}",
-            [':campaign_id' => $campaign['id']]
+        // Chercher dans la table customers (rep_name)
+        $results = $this->db->query(
+            "SELECT DISTINCT rep_id, rep_name, country, COUNT(*) as nb_clients
+             FROM customers
+             WHERE rep_name LIKE :name AND rep_name IS NOT NULL
+             GROUP BY rep_id, rep_name, country
+             ORDER BY nb_clients DESC
+             LIMIT 10",
+            [':name' => '%' . $name . '%']
         );
 
-        $result = [];
-        $rank = 0;
-        foreach ($products as $p) {
-            $rank++;
-            $result[] = [
-                'rang' => $rank,
-                'nom' => $p['nom'],
-                'code' => $p['code'],
-                'commandes' => (int) $p['commandes'],
-                'quantite_vendue' => (int) $p['quantite_vendue']
+        if (empty($results)) {
+            return [
+                'found' => false,
+                'message' => "Aucun représentant trouvé avec le nom '{$name}'"
             ];
         }
 
         return [
-            'campagne' => $campaign['name'],
-            'top_produits' => $result
+            'found' => true,
+            'representants' => $results,
+            'count' => count($results)
         ];
-    }
-
-    /**
-     * Stats par représentant
-     */
-    private function getRepStats(array $args): array
-    {
-        $campaign = $this->findCampaign($args);
-
-        if (!$campaign) {
-            return ['error' => 'Campagne non trouvée'];
-        }
-
-        $limit = min($args['limit'] ?? 10, 50);
-
-        // Stats par rep depuis les commandes
-        $reps = $this->db->query(
-            "SELECT
-                o.rep_id,
-                COUNT(DISTINCT o.id) as commandes,
-                COUNT(DISTINCT o.customer_id) as clients,
-                SUM(o.total_quantity) as promos_vendues
-             FROM orders o
-             WHERE o.campaign_id = :campaign_id AND o.rep_id IS NOT NULL
-             GROUP BY o.rep_id
-             ORDER BY promos_vendues DESC
-             LIMIT {$limit}",
-            [':campaign_id' => $campaign['id']]
-        );
-
-        // Récupérer les noms des reps depuis la base externe si possible
-        $result = [];
-        $rank = 0;
-        foreach ($reps as $r) {
-            $rank++;
-            $result[] = [
-                'rang' => $rank,
-                'rep_id' => $r['rep_id'],
-                'clients' => (int) $r['clients'],
-                'commandes' => (int) $r['commandes'],
-                'promos_vendues' => (int) $r['promos_vendues']
-            ];
-        }
-
-        return [
-            'campagne' => $campaign['name'],
-            'representants' => $result
-        ];
-    }
-
-    /**
-     * Comparer plusieurs campagnes
-     */
-    private function compareCampaigns(array $args): array
-    {
-        $names = $args['campaign_names'] ?? [];
-
-        if (empty($names)) {
-            return ['error' => 'Aucune campagne spécifiée'];
-        }
-
-        $comparisons = [];
-
-        foreach ($names as $name) {
-            $stats = $this->getCampaignStats(['campaign_name' => $name]);
-
-            if (!isset($stats['error'])) {
-                $comparisons[] = [
-                    'campagne' => $stats['campagne'],
-                    'pays' => $stats['pays'],
-                    'commandes' => $stats['stats']['nombre_commandes'],
-                    'promos_vendues' => $stats['stats']['promos_vendues'],
-                    'taux_participation' => $stats['stats']['taux_participation']
-                ];
-            }
-        }
-
-        return [
-            'comparaison' => $comparisons,
-            'nb_campagnes' => count($comparisons)
-        ];
-    }
-
-    /**
-     * Trouver une campagne par nom ou ID
-     */
-    private function findCampaign(array $args): ?array
-    {
-        // Par ID
-        if (!empty($args['campaign_id'])) {
-            $result = $this->db->query(
-                "SELECT * FROM campaigns WHERE id = :id",
-                [':id' => $args['campaign_id']]
-            );
-            return $result[0] ?? null;
-        }
-
-        // Par nom (recherche partielle)
-        if (!empty($args['campaign_name'])) {
-            $result = $this->db->query(
-                "SELECT * FROM campaigns WHERE name LIKE :name ORDER BY start_date DESC LIMIT 1",
-                [':name' => '%' . $args['campaign_name'] . '%']
-            );
-            return $result[0] ?? null;
-        }
-
-        return null;
     }
 }

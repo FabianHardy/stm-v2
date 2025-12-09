@@ -4,8 +4,10 @@
  *
  * Controller pour l'agent conversationnel STM
  * Gère les échanges entre l'utilisateur et OpenAI
+ * Sauvegarde l'historique des conversations par utilisateur
  *
  * @created  2025/12/09
+ * @modified 2025/12/09 - Ajout historique conversations
  * @package  STM Agent
  */
 
@@ -13,18 +15,21 @@ namespace App\Controllers;
 
 use App\Services\OpenAIService;
 use App\Agent\AgentTools;
+use Core\Database;
 
 class AgentController
 {
     private OpenAIService $openai;
     private AgentTools $tools;
+    private Database $db;
     private string $systemPrompt;
 
     public function __construct()
     {
         $this->openai = new OpenAIService();
         $this->tools = new AgentTools();
-
+        $this->db = Database::getInstance();
+        
         $this->systemPrompt = <<<PROMPT
 Tu es l'assistant STM, un agent intelligent pour le système de gestion de campagnes promotionnelles STM v2 de Trendy Foods.
 
@@ -51,6 +56,50 @@ PROMPT;
     }
 
     /**
+     * Obtenir l'ID de l'utilisateur connecté
+     */
+    private function getCurrentUserId(): ?int
+    {
+        return $_SESSION['user_id'] ?? null;
+    }
+
+    /**
+     * Sauvegarder un message dans l'historique
+     */
+    private function saveMessage(string $sessionId, string $role, string $content, ?string $title = null): void
+    {
+        $userId = $this->getCurrentUserId();
+        if (!$userId) return;
+
+        try {
+            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content) 
+                    VALUES (:user_id, :session_id, :title, :role, :content)";
+            
+            $this->db->query($sql, [
+                ':user_id' => $userId,
+                ':session_id' => $sessionId,
+                ':title' => $title,
+                ':role' => $role,
+                ':content' => $content
+            ]);
+        } catch (\Exception $e) {
+            error_log("Erreur sauvegarde message agent: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Générer un titre à partir du premier message
+     */
+    private function generateTitle(string $message): string
+    {
+        $title = mb_substr($message, 0, 50);
+        if (mb_strlen($message) > 50) {
+            $title .= '...';
+        }
+        return $title;
+    }
+
+    /**
      * Endpoint principal du chat
      * POST /stm/admin/agent/chat
      */
@@ -68,6 +117,8 @@ PROMPT;
         $input = json_decode(file_get_contents('php://input'), true);
         $userMessage = trim($input['message'] ?? '');
         $history = $input['history'] ?? [];
+        $sessionId = $input['session_id'] ?? $this->generateSessionId();
+        $isNewSession = empty($input['session_id']);
 
         if (empty($userMessage)) {
             echo json_encode(['error' => 'Message vide']);
@@ -75,9 +126,13 @@ PROMPT;
         }
 
         try {
+            // Sauvegarder le message utilisateur
+            $title = $isNewSession ? $this->generateTitle($userMessage) : null;
+            $this->saveMessage($sessionId, 'user', $userMessage, $title);
+
             // Construire l'historique des messages
             $messages = [];
-
+            
             foreach ($history as $msg) {
                 $messages[] = [
                     'role' => $msg['role'],
@@ -101,9 +156,13 @@ PROMPT;
             // Traiter les tool calls si présents
             $finalResponse = $this->processResponse($response, $messages);
 
+            // Sauvegarder la réponse de l'assistant
+            $this->saveMessage($sessionId, 'assistant', $finalResponse);
+
             echo json_encode([
                 'success' => true,
-                'response' => $finalResponse
+                'response' => $finalResponse,
+                'session_id' => $sessionId
             ]);
 
         } catch (\Exception $e) {
@@ -112,6 +171,21 @@ PROMPT;
                 'error' => 'Erreur: ' . $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Générer un ID de session unique
+     */
+    private function generateSessionId(): string
+    {
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
     }
 
     /**
@@ -128,7 +202,7 @@ PROMPT;
 
         // Exécuter les tool calls
         $toolResults = [];
-
+        
         foreach ($extracted['tool_calls'] as $toolCall) {
             $toolName = $toolCall['function']['name'];
             $arguments = json_decode($toolCall['function']['arguments'], true) ?? [];
@@ -178,6 +252,132 @@ PROMPT;
     }
 
     /**
+     * Page historique des conversations
+     * GET /stm/admin/agent/history
+     */
+    public function history(): void
+    {
+        $userId = $this->getCurrentUserId();
+        
+        // Récupérer les conversations groupées par session
+        $conversations = $this->db->query(
+            "SELECT 
+                session_id,
+                MIN(title) as title,
+                MIN(created_at) as started_at,
+                MAX(created_at) as last_message_at,
+                COUNT(*) as message_count
+             FROM agent_conversations 
+             WHERE user_id = :user_id
+             GROUP BY session_id
+             ORDER BY last_message_at DESC
+             LIMIT 50",
+            [':user_id' => $userId]
+        );
+
+        $title = "Historique - Agent STM";
+        $activeMenu = "agent-history";
+
+        ob_start();
+        require __DIR__ . '/../Views/admin/agent/history.php';
+        $content = ob_get_clean();
+
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+
+    /**
+     * Voir une conversation spécifique
+     * GET /stm/admin/agent/conversation/{session_id}
+     */
+    public function conversation(string $sessionId): void
+    {
+        $userId = $this->getCurrentUserId();
+        
+        // Récupérer les messages de cette conversation
+        $messages = $this->db->query(
+            "SELECT role, content, created_at
+             FROM agent_conversations 
+             WHERE user_id = :user_id AND session_id = :session_id
+             ORDER BY created_at ASC",
+            [':user_id' => $userId, ':session_id' => $sessionId]
+        );
+
+        if (empty($messages)) {
+            header('Location: /stm/admin/agent/history');
+            exit;
+        }
+
+        // Récupérer le titre
+        $info = $this->db->query(
+            "SELECT title, MIN(created_at) as started_at
+             FROM agent_conversations 
+             WHERE session_id = :session_id
+             GROUP BY session_id",
+            [':session_id' => $sessionId]
+        );
+
+        $conversationTitle = $info[0]['title'] ?? 'Conversation';
+        $startedAt = $info[0]['started_at'] ?? null;
+
+        $title = "Conversation - Agent STM";
+        $activeMenu = "agent-history";
+
+        ob_start();
+        require __DIR__ . '/../Views/admin/agent/conversation.php';
+        $content = ob_get_clean();
+
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+
+    /**
+     * Charger une conversation dans le widget (AJAX)
+     * GET /stm/admin/agent/load/{session_id}
+     */
+    public function load(string $sessionId): void
+    {
+        header('Content-Type: application/json');
+        
+        $userId = $this->getCurrentUserId();
+        
+        $messages = $this->db->query(
+            "SELECT role, content
+             FROM agent_conversations 
+             WHERE user_id = :user_id AND session_id = :session_id
+             ORDER BY created_at ASC",
+            [':user_id' => $userId, ':session_id' => $sessionId]
+        );
+
+        echo json_encode([
+            'success' => true,
+            'session_id' => $sessionId,
+            'messages' => $messages
+        ]);
+    }
+
+    /**
+     * Supprimer une conversation
+     * POST /stm/admin/agent/delete/{session_id}
+     */
+    public function delete(string $sessionId): void
+    {
+        header('Content-Type: application/json');
+        
+        $userId = $this->getCurrentUserId();
+        
+        try {
+            $this->db->query(
+                "DELETE FROM agent_conversations 
+                 WHERE user_id = :user_id AND session_id = :session_id",
+                [':user_id' => $userId, ':session_id' => $sessionId]
+            );
+
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Page de test de l'agent (GET)
      */
     public function index(): void
@@ -204,7 +404,14 @@ PROMPT;
                     </ul>
                 </div>
 
-                <p class="text-sm text-gray-500">
+                <div class="flex gap-4">
+                    <a href="/stm/admin/agent/history" class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                        <i class="fas fa-history mr-2"></i>
+                        Voir l'historique
+                    </a>
+                </div>
+
+                <p class="text-sm text-gray-500 mt-4">
                     💡 Utilisez le widget en bas à droite pour discuter avec l'agent.
                 </p>
             </div>
