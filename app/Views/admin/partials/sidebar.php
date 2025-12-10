@@ -13,6 +13,7 @@
  * @version 2.0
  * @modified 10/11/2025 - Utilisation de $activeCampaignsCount au lieu de hardcodé
  * @modified 25/11/2025 - Ajout section Outils Dev (visible uniquement en mode development)
+ * @modified 10/12/2025 - Protection function_exists pour éviter redéclaration
  */
 
 $currentRoute = $_SERVER["REQUEST_URI"] ?? "";
@@ -24,23 +25,27 @@ $isDev = $appEnv === "development";
 /**
  * Vérifie si une route est active
  */
-function isActive(string $route, string $currentRoute): bool
-{
-    return str_starts_with($currentRoute, $route);
+if (!function_exists('isActive')) {
+    function isActive(string $route, string $currentRoute): bool
+    {
+        return str_starts_with($currentRoute, $route);
+    }
 }
 
 /**
  * Retourne les classes CSS pour un lien actif/inactif
  */
-function getNavLinkClass(string $route, string $currentRoute): string
-{
-    $baseClass = "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200";
+if (!function_exists('getNavLinkClass')) {
+    function getNavLinkClass(string $route, string $currentRoute): string
+    {
+        $baseClass = "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200";
 
-    if (isActive($route, $currentRoute)) {
-        return $baseClass . " bg-primary-50 text-primary-700 border-l-4 border-primary-600";
+        if (isActive($route, $currentRoute)) {
+            return $baseClass . " bg-primary-50 text-primary-700 border-l-4 border-primary-600";
+        }
+
+        return $baseClass . " text-gray-600 hover:bg-gray-50 hover:text-primary-600 border-l-4 border-transparent";
     }
-
-    return $baseClass . " text-gray-600 hover:bg-gray-50 hover:text-primary-600 border-l-4 border-transparent";
 }
 
 // Menu items avec structure hiérarchique

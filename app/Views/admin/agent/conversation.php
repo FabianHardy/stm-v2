@@ -17,6 +17,23 @@
     50% { transform: translateY(-6px); }
 }
 .animate-float { animation: float 3s ease-in-out infinite; }
+
+/* Styles pour le contenu formaté des messages */
+.prose-content strong { font-weight: 600; }
+.prose-content em { font-style: italic; }
+.prose-content code {
+    background: rgba(0,0,0,0.05);
+    padding: 0.1em 0.3em;
+    border-radius: 0.25em;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+.prose-content ul, .prose-content ol {
+    margin: 0.5em 0;
+    padding-left: 1.25em;
+}
+.prose-content li { margin: 0.25em 0; }
+.prose-content .list-bullet { opacity: 0.5; margin-right: 0.5em; }
 </style>
 
 <!-- Container Alpine.js pour gérer la mascotte -->
@@ -111,7 +128,7 @@
                 <?php if ($msg['role'] === 'assistant'): ?>
                 <!-- Bulle assistant -->
                 <div class="bg-gray-50 text-gray-800 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm border border-gray-100">
-                    <div class="text-sm whitespace-pre-wrap leading-relaxed"><?= nl2br(htmlspecialchars($msg['content'])) ?></div>
+                    <div class="text-sm leading-relaxed prose-content" x-html="formatMessage(<?= htmlspecialchars(json_encode($msg['content']), ENT_QUOTES) ?>)"></div>
                 </div>
                 <div class="text-xs text-gray-400 mt-1.5 ml-2">
                     <span x-text="currentMascot.name"></span> • <?= date('H:i', strtotime($msg['created_at'])) ?>
@@ -120,7 +137,7 @@
                 <!-- Bulle utilisateur -->
                 <div class="text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-md"
                      :class="currentMascot.userBubble">
-                    <div class="text-sm whitespace-pre-wrap leading-relaxed"><?= nl2br(htmlspecialchars($msg['content'])) ?></div>
+                    <div class="text-sm leading-relaxed"><?= nl2br(htmlspecialchars($msg['content'])) ?></div>
                 </div>
                 <div class="text-xs text-gray-400 mt-1.5 text-right mr-2">
                     Vous • <?= date('H:i', strtotime($msg['created_at'])) ?>
@@ -327,6 +344,46 @@ function conversationPage() {
             } else {
                 alert('Le widget de chat n\'est pas disponible. Actualisez la page.');
             }
+        },
+
+        /**
+         * Formater le message pour l'affichage (même logique que le widget)
+         */
+        formatMessage(content) {
+            if (!content) return '';
+
+            // Supprimer les balises boutons du texte
+            let formatted = content.replace(/\[BTN:[^\]]+\]/g, '');
+
+            // Échapper HTML
+            formatted = formatted
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            // Convertir les retours à la ligne
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            // Mettre en gras **texte**
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // Mettre en italique *texte* (mais pas les ** déjà traités)
+            formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+
+            // Code inline `code`
+            formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Listes avec - ou •
+            formatted = formatted.replace(/(^|<br>)- /g, '$1<span class="list-bullet">•</span>');
+            formatted = formatted.replace(/(^|<br>)• /g, '$1<span class="list-bullet">•</span>');
+
+            // Listes numérotées
+            formatted = formatted.replace(/(^|<br>)(\d+)\. /g, '$1<span class="list-bullet">$2.</span> ');
+
+            // Nettoyer les lignes vides multiples
+            formatted = formatted.replace(/(<br>\s*){3,}/g, '<br><br>');
+
+            return formatted.trim();
         }
     }
 }
