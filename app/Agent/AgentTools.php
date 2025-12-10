@@ -35,8 +35,9 @@ Colonnes: id, customer_number, email, company_name, country (BE/LU), language (f
 Note: Se remplit à la volée lors des commandes. Pour les infos complètes des clients/reps, utiliser la BASE EXTERNE.
 
 ### Table: orders
-Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items (nombre total d'articles), total_products (nombre de produits différents), status (pending/confirmed/processing/completed/cancelled), notes, created_at
+Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items (nombre total d'articles), total_products (nombre de produits différents), status (pending/validated/cancelled), notes, created_at
 Clé primaire: id
+⚠️ IMPORTANT: Toujours filtrer par status = 'validated' pour les stats ! Les commandes pending ou cancelled ne comptent pas.
 Note: Pour compter les promos vendues, utiliser SUM depuis order_lines.quantity
 
 ### Table: order_lines
@@ -452,6 +453,7 @@ SCHEMA;
                  JOIN customers c ON c.id = o.customer_id
                  JOIN order_lines ol ON ol.order_id = o.id
                  WHERE o.campaign_id = :campaign_id
+                 AND o.status = 'validated'
                  AND c.country = :country",
                 [':campaign_id' => $campaign['id'], ':country' => $country]
             );
@@ -459,14 +461,11 @@ SCHEMA;
             $allStats = $stats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
 
             // 7. Filtrer pour ne garder que les clients du rep
-            // On doit faire une requête plus précise
-            $placeholders = [];
-            $params = [':campaign_id' => $campaign['id'], ':country' => $country];
-            foreach ($repCustomerNumbers as $i => $num) {
-                $placeholders[] = ":cn{$i}";
-                $params[":cn{$i}"] = $num;
-            }
-            $inClause = implode(',', $placeholders);
+            // Échapper les numéros pour la requête IN (comme dans Stats.php)
+            $escapedNumbers = array_map(function ($num) {
+                return "'" . addslashes((string) $num) . "'";
+            }, $repCustomerNumbers);
+            $inClause = implode(',', $escapedNumbers);
 
             $repStats = $this->db->query(
                 "SELECT
@@ -474,12 +473,13 @@ SCHEMA;
                     COUNT(DISTINCT c.customer_number) as clients_ordered,
                     COALESCE(SUM(ol.quantity), 0) as total_promos
                  FROM orders o
-                 JOIN customers c ON c.id = o.customer_id
-                 JOIN order_lines ol ON ol.order_id = o.id
+                 INNER JOIN customers c ON o.customer_id = c.id
+                 LEFT JOIN order_lines ol ON o.id = ol.order_id
                  WHERE o.campaign_id = :campaign_id
+                 AND o.status = 'validated'
                  AND c.country = :country
                  AND c.customer_number IN ({$inClause})",
-                $params
+                [':campaign_id' => $campaign['id'], ':country' => $country]
             );
 
             $repStatsData = $repStats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
@@ -517,9 +517,10 @@ SCHEMA;
                 COUNT(DISTINCT c.id) as total_clients,
                 COALESCE(SUM(ol.quantity), 0) as total_quantity
              FROM customers c
-             LEFT JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
+             INNER JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
              LEFT JOIN order_lines ol ON ol.order_id = o.id
              WHERE c.rep_name LIKE :rep_name
+             AND o.status = 'validated'
              GROUP BY c.rep_name
              LIMIT 1",
             [':campaign_id' => $campaign['id'], ':rep_name' => '%' . $repName . '%']
