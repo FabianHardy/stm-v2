@@ -14,6 +14,11 @@ namespace App\Controllers;
 use App\Models\Stats;
 use App\Models\Campaign;
 use Core\Session;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class StatsController
 {
@@ -150,7 +155,7 @@ class StatsController
 
         // Stats par fournisseur
         $supplierStats = [];
-        
+
         // Mapping produit → fournisseur pour l'onglet Produits
         $productSuppliers = [];
 
@@ -581,5 +586,290 @@ class StatsController
 
         fclose($output);
         exit();
+    }
+    /**
+     * Export Excel détaillé des représentants pour une campagne
+     *
+     * Génère un fichier Excel multi-feuilles :
+     * - Feuille 1 : Récap de tous les représentants
+     * - Feuilles 2+ : Détail par représentant (clients + quantités par produit)
+     *
+     * @return void
+     * @created 2025/12/10
+     */
+    public function exportRepsExcel(): void
+    {
+        $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
+
+        if (!$campaignId) {
+            Session::setFlash("error", "Veuillez sélectionner une campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Récupérer les infos de la campagne
+        $campaign = $this->campaignModel->findById($campaignId);
+        if (!$campaign) {
+            Session::setFlash("error", "Campagne introuvable");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        $campaignCountry = $campaign["country"];
+        $campaignName = $campaign["name"];
+
+        // Récupérer les représentants avec leurs stats
+        $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+        if (empty($reps)) {
+            Session::setFlash("error", "Aucun représentant trouvé pour cette campagne");
+            header("Location: /stm/admin/stats/campaigns?campaign_id=" . $campaignId);
+            exit();
+        }
+
+        // Récupérer tous les produits de la campagne (pour les colonnes)
+        $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
+
+        // Trier les produits par nom
+        usort($campaignProducts, function($a, $b) {
+            return strcasecmp($a["name"] ?? "", $b["name"] ?? "");
+        });
+
+        // Créer le spreadsheet
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+
+        // Style en-têtes (réutilisé partout)
+        $headerStyle = [
+            "font" => ["bold" => true, "color" => ["rgb" => "FFFFFF"]],
+            "fill" => [
+                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                "startColor" => ["rgb" => "4F46E5"]
+            ],
+            "alignment" => ["horizontal" => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER]
+        ];
+
+        // ============================================
+        // FEUILLE 1 : RÉCAP REPRÉSENTANTS
+        // ============================================
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle("Récap Représentants");
+
+        // En-têtes
+        $headers = ["N° Rep", "Nom", "Email", "Cluster", "Clients assignés", "Ont commandé", "Pas commandé", "Qté totale", "% Conversion"];
+        $colIndex = 1;
+        foreach ($headers as $header) {
+            $sheet->setCellValueByColumnAndRow($colIndex, 1, $header);
+            $colIndex++;
+        }
+
+        // Style en-têtes
+        $sheet->getStyle("A1:I1")->applyFromArray($headerStyle);
+
+        // Données
+        $row = 2;
+        foreach ($reps as $rep) {
+            $totalClients = $rep["total_clients"] ?? 0;
+            $customersOrdered = $rep["stats"]["customers_ordered"] ?? 0;
+            $notOrdered = $totalClients - $customersOrdered;
+            $totalQty = $rep["stats"]["total_quantity"] ?? 0;
+            $convRate = $totalClients > 0 ? round(($customersOrdered / $totalClients) * 100, 1) : 0;
+
+            $sheet->setCellValueByColumnAndRow(1, $row, $rep["id"] ?? "");
+            $sheet->setCellValueByColumnAndRow(2, $row, $rep["name"] ?? "");
+            $sheet->setCellValueByColumnAndRow(3, $row, $rep["email"] ?? "");
+            $sheet->setCellValueByColumnAndRow(4, $row, $rep["cluster"] ?? "");
+            $sheet->setCellValueByColumnAndRow(5, $row, $totalClients);
+            $sheet->setCellValueByColumnAndRow(6, $row, $customersOrdered);
+            $sheet->setCellValueByColumnAndRow(7, $row, $notOrdered);
+            $sheet->setCellValueByColumnAndRow(8, $row, $totalQty);
+            $sheet->setCellValueByColumnAndRow(9, $row, $convRate . "%");
+
+            $row++;
+        }
+
+        // Ajuster largeur colonnes
+        foreach (range(1, 9) as $colIdx) {
+            $sheet->getColumnDimensionByColumn($colIdx)->setAutoSize(true);
+        }
+
+        // ============================================
+        // FEUILLES PAR REPRÉSENTANT
+        // ============================================
+        $fixedColCount = 5; // N° Client, Nom, Ville, A commandé, Qté totale
+
+        foreach ($reps as $repIndex => $rep) {
+            // Créer une nouvelle feuille
+            $repSheet = $spreadsheet->createSheet();
+
+            // Nom de la feuille (max 31 caractères, sans caractères spéciaux)
+            $cleanName = preg_replace("/[^a-zA-Z0-9\s\-]/", "", $rep["name"] ?? "Inconnu");
+            $sheetName = substr("Rep - " . $cleanName, 0, 31);
+
+            // Gérer les doublons de noms de feuilles
+            $originalSheetName = $sheetName;
+            $counter = 1;
+            while ($spreadsheet->getSheetByName($sheetName) !== null) {
+                $sheetName = substr($originalSheetName, 0, 28) . " " . $counter;
+                $counter++;
+            }
+            $repSheet->setTitle($sheetName);
+
+            // Récupérer les clients du représentant
+            $repClients = $this->statsModel->getRepClients($rep["id"], $rep["country"], $campaignId);
+
+            // En-têtes fixes
+            $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale"];
+            $colIndex = 1;
+            foreach ($fixedHeaders as $header) {
+                $repSheet->setCellValueByColumnAndRow($colIndex, 1, $header);
+                $colIndex++;
+            }
+
+            // En-têtes produits (colonnes dynamiques à partir de la colonne 6)
+            $productColumns = []; // product_id => colIndex
+            foreach ($campaignProducts as $product) {
+                $productColumns[$product["id"]] = $colIndex;
+                $repSheet->setCellValueByColumnAndRow($colIndex, 1, $product["name"] ?? $product["product_code"]);
+                $colIndex++;
+            }
+
+            $lastColIndex = $colIndex - 1;
+
+            // Style en-têtes
+            $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIndex);
+            $repSheet->getStyle("A1:" . $lastColLetter . "1")->applyFromArray($headerStyle);
+
+            // Récupérer les quantités par produit pour chaque client
+            $clientProductQuantities = $this->getClientProductQuantities($campaignId, $rep["id"], $rep["country"]);
+
+            // Trier les clients : ceux qui ont commandé en premier, puis par quantité décroissante
+            usort($repClients, function($a, $b) {
+                $aOrdered = $a["has_ordered"] ?? false;
+                $bOrdered = $b["has_ordered"] ?? false;
+
+                if ($aOrdered && !$bOrdered) return -1;
+                if (!$aOrdered && $bOrdered) return 1;
+
+                return ($b["total_quantity"] ?? 0) - ($a["total_quantity"] ?? 0);
+            });
+
+            // Données clients
+            $row = 2;
+            foreach ($repClients as $client) {
+                $customerNumber = $client["customer_number"] ?? "";
+                $hasOrdered = $client["has_ordered"] ?? false;
+
+                $repSheet->setCellValueByColumnAndRow(1, $row, $customerNumber);
+                $repSheet->setCellValueByColumnAndRow(2, $row, $client["company_name"] ?? "-");
+                $repSheet->setCellValueByColumnAndRow(3, $row, $client["city"] ?? "-");
+                $repSheet->setCellValueByColumnAndRow(4, $row, $hasOrdered ? "Oui" : "Non");
+                $repSheet->setCellValueByColumnAndRow(5, $row, $client["total_quantity"] ?? 0);
+
+                // Style conditionnel pour "A commandé"
+                if ($hasOrdered) {
+                    $repSheet->getStyle("D" . $row)->applyFromArray([
+                        "font" => ["color" => ["rgb" => "059669"]],
+                        "fill" => [
+                            "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            "startColor" => ["rgb" => "D1FAE5"]
+                        ]
+                    ]);
+                } else {
+                    $repSheet->getStyle("D" . $row)->applyFromArray([
+                        "font" => ["color" => ["rgb" => "DC2626"]],
+                        "fill" => [
+                            "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            "startColor" => ["rgb" => "FEE2E2"]
+                        ]
+                    ]);
+                }
+
+                // Quantités par produit
+                foreach ($campaignProducts as $product) {
+                    $productId = $product["id"];
+                    $prodColIndex = $productColumns[$productId];
+                    $qty = $clientProductQuantities[$customerNumber][$productId] ?? 0;
+                    $repSheet->setCellValueByColumnAndRow($prodColIndex, $row, $qty);
+                }
+
+                $row++;
+            }
+
+            // Ajuster largeur colonnes fixes
+            foreach (range(1, $fixedColCount) as $colIdx) {
+                $repSheet->getColumnDimensionByColumn($colIdx)->setAutoSize(true);
+            }
+
+            // Figer la première ligne et les 5 premières colonnes
+            $repSheet->freezePane("F2");
+        }
+
+        // Activer la première feuille
+        $spreadsheet->setActiveSheetIndex(0);
+
+        // Générer le fichier
+        $filename = "export_reps_" . preg_replace("/[^a-zA-Z0-9]/", "_", $campaignName) . "_" . date("Ymd_His") . ".xlsx";
+
+        header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        header("Content-Disposition: attachment;filename=\"" . $filename . "\"");
+        header("Cache-Control: max-age=0");
+        header("Pragma: public");
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save("php://output");
+
+        // Libérer la mémoire
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        exit();
+    }
+
+    /**
+     * Récupère les quantités par produit pour chaque client d'un représentant
+     *
+     * @param int $campaignId
+     * @param string $repId
+     * @param string $repCountry
+     * @return array [customer_number => [product_id => quantity]]
+     * @created 2025/12/10
+     */
+    private function getClientProductQuantities(int $campaignId, string $repId, string $repCountry): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $query = "
+            SELECT
+                cu.customer_number,
+                ol.product_id,
+                SUM(ol.quantity) as quantity
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'validated'
+            AND cu.rep_id = :rep_id
+            AND cu.country = :country
+            GROUP BY cu.customer_number, ol.product_id
+        ";
+
+        $results = $db->query($query, [
+            ":campaign_id" => $campaignId,
+            ":rep_id" => $repId,
+            ":country" => $repCountry
+        ]);
+
+        $quantities = [];
+        foreach ($results as $row) {
+            $customerNumber = $row["customer_number"];
+            $productId = $row["product_id"];
+
+            if (!isset($quantities[$customerNumber])) {
+                $quantities[$customerNumber] = [];
+            }
+            $quantities[$customerNumber][$productId] = (int) $row["quantity"];
+        }
+
+        return $quantities;
     }
 }

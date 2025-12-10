@@ -591,7 +591,7 @@ $router->post("/admin/stats/export", function () {
     $controller = new \App\Controllers\StatsController();
     $controller->export();
 });
-
+$router->post('/admin/stats/export-reps-excel', [App\Controllers\StatsController::class, 'exportRepsExcel']);
 /**
  * ROUTES À AJOUTER dans config/routes.php
  *

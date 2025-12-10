@@ -454,6 +454,23 @@ $suppliersCount = count($supplierStats ?? []);
         <!-- ONGLET REPRÉSENTANTS                         -->
         <!-- ============================================ -->
         <div x-show="activeTab === 'reps'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <!-- Bouton Export Excel Représentants -->
+            <?php if (!empty($reps) && !empty($clusters)): ?>
+            <div class="flex justify-end mb-4">
+                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline">
+                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
+                    <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-sm">
+                        <i class="fas fa-file-excel"></i>
+                        <span>Export Excel Représentants</span>
+                    </button>
+                </form>
+            </div>
+            <?php endif; ?>
+
+            <?php if (empty($reps) || empty($clusters)): ?>
+
             <?php if (empty($reps)): ?>
             <div class="text-center py-8">
                 <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
