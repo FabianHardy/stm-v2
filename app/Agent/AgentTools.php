@@ -426,40 +426,71 @@ SCHEMA;
             $log("Found rep: {$repFullName}, IDE_REP: {$ideRep}, Country: {$repCountry}");
 
             // 2. TROUVER LA CAMPAGNE DANS LE PAYS DU REP
-            // Si plusieurs campagnes matchent, prendre celle avec le plus de commandes
+            // Si plusieurs campagnes matchent, demander clarification
             $log("Searching campaign '{$campaignName}' for country {$repCountry}");
 
-            // D'abord essayer une correspondance exacte
-            $campaign = $this->db->query(
-                "SELECT id, name, country, start_date, end_date FROM campaigns
-                 WHERE name LIKE :name
-                 AND country = :country
-                 ORDER BY start_date DESC LIMIT 1",
+            // Chercher toutes les campagnes qui matchent avec leur nombre de commandes
+            $allMatches = $this->db->query(
+                "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
+                        (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
+                 FROM campaigns c
+                 WHERE c.name LIKE :name
+                 AND c.country = :country
+                 ORDER BY order_count DESC, c.start_date DESC
+                 LIMIT 10",
                 [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
             );
 
-            $log("Campaign results: " . json_encode($campaign));
+            $log("All matching campaigns: " . json_encode($allMatches));
 
-            // Si plusieurs campagnes, prendre celle avec le plus de commandes
-            if (!empty($campaign) && count($campaign) > 0) {
-                // Vérifier s'il y a plusieurs campagnes qui matchent
-                $allMatches = $this->db->query(
-                    "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
-                            (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
-                     FROM campaigns c
-                     WHERE c.name LIKE :name
-                     AND c.country = :country
-                     ORDER BY order_count DESC, c.start_date DESC
-                     LIMIT 5",
-                    [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
-                );
+            // Filtrer les campagnes avec au moins quelques commandes ou récentes
+            $relevantCampaigns = array_filter($allMatches, function($c) {
+                return $c['order_count'] > 0 || strtotime($c['end_date']) > strtotime('-6 months');
+            });
+            $relevantCampaigns = array_values($relevantCampaigns);
 
-                $log("All matching campaigns: " . json_encode($allMatches));
+            // Si plusieurs campagnes pertinentes, demander clarification avec boutons
+            if (count($relevantCampaigns) > 1) {
+                $log("Multiple campaigns found, asking for clarification");
+                $campaignList = [];
+                $buttons = [];
 
-                if (!empty($allMatches)) {
-                    $campaign = [$allMatches[0]]; // Prendre celle avec le plus de commandes
-                    $log("Selected campaign with most orders: ID={$allMatches[0]['id']}, orders={$allMatches[0]['order_count']}");
+                foreach ($relevantCampaigns as $c) {
+                    $period = date('d/m', strtotime($c['start_date'])) . ' - ' . date('d/m/Y', strtotime($c['end_date']));
+                    $campaignList[] = [
+                        'id' => $c['id'],
+                        'name' => $c['name'],
+                        'periode' => $period,
+                        'commandes' => (int) $c['order_count']
+                    ];
+
+                    // Créer un bouton pour chaque campagne
+                    $buttonLabel = $c['name'] . ' (' . $c['order_count'] . ' cmd)';
+                    $buttons[] = [
+                        'label' => $buttonLabel,
+                        'action' => "Stats de {$repName} sur {$c['name']}"
+                    ];
                 }
+
+                return [
+                    'clarification_needed' => true,
+                    'message' => "Plusieurs campagnes correspondent à '{$campaignName}' pour {$repFullName}. Laquelle souhaitez-vous ?",
+                    'campagnes_disponibles' => $campaignList,
+                    'buttons' => $buttons,
+                    'representant' => $repFullName
+                ];
+            }
+
+            // Si une seule campagne ou aucune pertinente, continuer normalement
+            if (!empty($relevantCampaigns)) {
+                $campaign = [$relevantCampaigns[0]];
+                $log("Selected single campaign: ID={$relevantCampaigns[0]['id']}");
+            } elseif (!empty($allMatches)) {
+                // Prendre la première même sans commandes
+                $campaign = [$allMatches[0]];
+                $log("Selected campaign (no orders): ID={$allMatches[0]['id']}");
+            } else {
+                $campaign = [];
             }
 
             if (empty($campaign)) {
