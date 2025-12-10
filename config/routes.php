@@ -729,7 +729,7 @@ $router->post('/admin/agent/delete/{session_id}', function ($session_id) {
     $controller = new \App\Controllers\AgentController();
     $controller->delete($session_id);
 });
-<?php
+
 /**
  * ROUTES UTILISATEURS - À ajouter dans config/routes.php
  *
