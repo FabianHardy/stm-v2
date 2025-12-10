@@ -803,3 +803,10 @@ $router->post("/admin/users/{id}/toggle", function ($id) {
     $controller = new \App\Controllers\UserController();
     $controller->toggle((int) $id);
 });
+
+$router->get("/admin/settings", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\SettingsController();
+    $controller->index();
+});
