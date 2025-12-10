@@ -346,156 +346,127 @@ SCHEMA;
 
     /**
      * Tool combiné : Stats d'un rep sur une campagne
+     * Utilise une jointure cross-database pour plus de fiabilité
+     *
+     * LOGIQUE CORRIGÉE :
+     * 1. Trouver le représentant d'abord → déterminer son pays
+     * 2. Chercher la campagne dans CE pays
      */
     private function getRepCampaignStats(array $args): array
     {
         $repName = $args['rep_name'] ?? '';
         $campaignName = $args['campaign_name'] ?? '';
-        $country = $args['country'] ?? 'BE';
 
         if (empty($repName) || empty($campaignName)) {
             return ['error' => 'rep_name et campaign_name sont requis'];
         }
 
         try {
-            // 1. Trouver la campagne
-            $campaign = $this->db->query(
-                "SELECT id, name, country, start_date, end_date FROM campaigns
-                 WHERE name LIKE :name
-                 ORDER BY start_date DESC LIMIT 1",
-                [':name' => '%' . $campaignName . '%']
-            );
-
-            if (empty($campaign)) {
-                return ['error' => "Campagne '{$campaignName}' non trouvée"];
-            }
-            $campaign = $campaign[0];
-            $country = $campaign['country'];
-
-            // 2. Essayer de se connecter à la base externe
+            // 1. TROUVER LE REPRÉSENTANT D'ABORD (pour déterminer son pays)
             $extDb = $this->getExternalDb();
-
             if ($extDb === null) {
                 return ['error' => 'Impossible de se connecter à la base externe'];
             }
 
-            // 3. Trouver le représentant dans la base externe
-            $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
-
             $searchPattern = '%' . $repName . '%';
+            $repCountry = null;
+            $rep = null;
+
+            // Chercher dans BE_REP
             $repResults = $extDb->query(
-                "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
+                "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP
                  WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
                 [':name1' => $searchPattern, ':name2' => $searchPattern]
             );
 
-            // Si false (erreur) ou vide, essayer l'autre pays
-            if ($repResults === false || empty($repResults)) {
-                $repTable = $country === 'BE' ? 'LU_REP' : 'BE_REP';
+            if ($repResults !== false && !empty($repResults)) {
+                $rep = $repResults[0];
+                $repCountry = 'BE';
+            } else {
+                // Chercher dans LU_REP
                 $repResults = $extDb->query(
-                    "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM {$repTable}
+                    "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM LU_REP
                      WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
                     [':name1' => $searchPattern, ':name2' => $searchPattern]
                 );
+
+                if ($repResults !== false && !empty($repResults)) {
+                    $rep = $repResults[0];
+                    $repCountry = 'LU';
+                }
             }
 
-            if ($repResults === false || empty($repResults)) {
-                return ['error' => "Représentant '{$repName}' non trouvé dans les bases externes"];
+            if (!$rep) {
+                return ['error' => "Représentant '{$repName}' non trouvé"];
             }
 
-            $rep = $repResults[0];
             $repFullName = trim(($rep['REP_PRENOM'] ?? '') . ' ' . ($rep['REP_NOM'] ?? ''));
             $ideRep = $rep['IDE_REP'];
 
-            // 4. Compter les clients de ce rep dans la base externe
-            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            // 2. TROUVER LA CAMPAGNE DANS LE PAYS DU REP
+            $campaign = $this->db->query(
+                "SELECT id, name, country, start_date, end_date FROM campaigns
+                 WHERE name LIKE :name
+                 AND country = :country
+                 ORDER BY start_date DESC LIMIT 1",
+                [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
+            );
+
+            if (empty($campaign)) {
+                // Fallback : chercher sans filtre pays si pas trouvé
+                $campaign = $this->db->query(
+                    "SELECT id, name, country, start_date, end_date FROM campaigns
+                     WHERE name LIKE :name
+                     ORDER BY start_date DESC LIMIT 1",
+                    [':name' => '%' . $campaignName . '%']
+                );
+
+                if (empty($campaign)) {
+                    return ['error' => "Campagne '{$campaignName}' non trouvée"];
+                }
+            }
+            $campaign = $campaign[0];
+
+            // 3. Compter le total de clients du rep (base externe)
+            $clientTable = $repCountry === 'BE' ? 'BE_CLL' : 'LU_CLL';
             $totalClientsResult = $extDb->query(
                 "SELECT COUNT(*) as total FROM {$clientTable} WHERE IDE_REP = :ide_rep",
                 [':ide_rep' => (string) $ideRep]
             );
-
-            if ($totalClientsResult === false) {
-                return ['error' => 'Erreur lors du comptage des clients'];
-            }
             $totalClients = (int) ($totalClientsResult[0]['total'] ?? 0);
 
-            // 5. Récupérer les customer_numbers de ce rep
-            $clientsResult = $extDb->query(
-                "SELECT CLL_NCLIXX FROM {$clientTable} WHERE IDE_REP = :ide_rep",
-                [':ide_rep' => (string) $ideRep]
-            );
-
-            if ($clientsResult === false) {
-                $clientsResult = [];
-            }
-            $repCustomerNumbers = array_column($clientsResult, 'CLL_NCLIXX');
-
-            if (empty($repCustomerNumbers)) {
-                return [
-                    'representant' => $repFullName,
-                    'rep_id' => $ideRep,
-                    'campagne' => $campaign['name'],
-                    'total_clients' => 0,
-                    'clients_commande' => 0,
-                    'commandes' => 0,
-                    'promos_vendues' => 0
-                ];
-            }
-
-            // 6. Chercher les stats de commandes pour cette campagne
-            // On part des orders et on filtre par customer_number
-            $stats = $this->db->query(
-                "SELECT
-                    COUNT(DISTINCT o.id) as total_orders,
-                    COUNT(DISTINCT c.customer_number) as clients_ordered,
-                    COALESCE(SUM(ol.quantity), 0) as total_promos
-                 FROM orders o
-                 JOIN customers c ON c.id = o.customer_id
-                 JOIN order_lines ol ON ol.order_id = o.id
-                 WHERE o.campaign_id = :campaign_id
-                 AND o.status = 'validated'
-                 AND c.country = :country",
-                [':campaign_id' => $campaign['id'], ':country' => $country]
-            );
-
-            $allStats = $stats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
-
-            // 7. Filtrer pour ne garder que les clients du rep
-            // Échapper les numéros pour la requête IN (comme dans Stats.php)
-            $escapedNumbers = array_map(function ($num) {
-                return "'" . addslashes((string) $num) . "'";
-            }, $repCustomerNumbers);
-            $inClause = implode(',', $escapedNumbers);
+            // 4. Stats via jointure cross-database
+            $extClientTable = $repCountry === 'BE' ? 'trendyblog_sig.BE_CLL' : 'trendyblog_sig.LU_CLL';
 
             $repStats = $this->db->query(
                 "SELECT
-                    COUNT(DISTINCT o.id) as total_orders,
-                    COUNT(DISTINCT c.customer_number) as clients_ordered,
-                    COALESCE(SUM(ol.quantity), 0) as total_promos
+                    COUNT(DISTINCT o.id) as commandes,
+                    COUNT(DISTINCT c.id) as clients,
+                    COALESCE(SUM(ol.quantity), 0) as promos
                  FROM orders o
-                 INNER JOIN customers c ON o.customer_id = c.id
-                 LEFT JOIN order_lines ol ON o.id = ol.order_id
+                 JOIN customers c ON c.id = o.customer_id
+                 JOIN order_lines ol ON o.id = ol.order_id
+                 JOIN {$extClientTable} ext ON ext.CLL_NCLIXX = c.customer_number
                  WHERE o.campaign_id = :campaign_id
                  AND o.status = 'validated'
-                 AND c.country = :country
-                 AND c.customer_number IN ({$inClause})",
-                [':campaign_id' => $campaign['id'], ':country' => $country]
+                 AND ext.IDE_REP = :rep_id",
+                [':campaign_id' => $campaign['id'], ':rep_id' => (string) $ideRep]
             );
 
-            $repStatsData = $repStats[0] ?? ['total_orders' => 0, 'clients_ordered' => 0, 'total_promos' => 0];
+            $stats = $repStats[0] ?? ['commandes' => 0, 'clients' => 0, 'promos' => 0];
 
             return [
                 'representant' => $repFullName,
                 'rep_id' => $ideRep,
                 'campagne' => $campaign['name'],
-                'pays' => $country,
+                'pays' => $repCountry,
                 'total_clients' => $totalClients,
-                'clients_commande' => (int) $repStatsData['clients_ordered'],
+                'clients_commande' => (int) $stats['clients'],
                 'taux_participation' => $totalClients > 0
-                    ? round(($repStatsData['clients_ordered'] / $totalClients) * 100, 1) . '%'
+                    ? round(($stats['clients'] / $totalClients) * 100, 1) . '%'
                     : '0%',
-                'commandes' => (int) $repStatsData['total_orders'],
-                'promos_vendues' => (int) $repStatsData['total_promos']
+                'commandes' => (int) $stats['commandes'],
+                'promos_vendues' => (int) $stats['promos']
             ];
 
         } catch (\Exception $e) {
