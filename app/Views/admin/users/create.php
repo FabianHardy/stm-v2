@@ -4,7 +4,7 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Fix heredoc syntax
+ * @modified 2025/12/10 - Suppression liaison rep (auto via Microsoft)
  */
 
 use App\Models\User;
@@ -13,6 +13,14 @@ use Core\Session;
 $activeMenu = 'users';
 $oldInput = Session::get('old_input') ?? [];
 Session::remove('old_input');
+
+// Rôles disponibles pour création manuelle (pas rep, il est auto-créé)
+$availableRoles = [
+    'superadmin' => 'Super Admin',
+    'admin' => 'Administrateur',
+    'createur' => 'Créateur',
+    'manager_reps' => 'Manager Reps'
+];
 
 ob_start();
 ?>
@@ -30,8 +38,19 @@ ob_start();
     </div>
 </div>
 
+<!-- Info -->
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div class="flex gap-3">
+        <i class="fas fa-info-circle text-blue-500 mt-0.5"></i>
+        <div class="text-sm text-blue-700">
+            <p class="font-medium">Note sur les commerciaux (reps)</p>
+            <p class="mt-1">Les comptes commerciaux sont créés automatiquement lors de leur première connexion Microsoft, si leur manager est un <strong>Manager Reps</strong> existant.</p>
+        </div>
+    </div>
+</div>
+
 <!-- Formulaire -->
-<div class="bg-white rounded-lg shadow-sm" x-data="{ selectedRole: '<?= $oldInput['role'] ?? '' ?>', selectedCountry: '<?= $oldInput['rep_country'] ?? '' ?>' }">
+<div class="bg-white rounded-lg shadow-sm" x-data="{ selectedRole: '<?= $oldInput['role'] ?? '' ?>' }">
     <form method="POST" action="/stm/admin/users" class="p-6 space-y-6">
         <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
@@ -54,22 +73,22 @@ ob_start();
                 <!-- Email -->
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-                        Email <span class="text-red-500">*</span>
+                        Email Microsoft <span class="text-red-500">*</span>
                     </label>
                     <input type="email" id="email" name="email" required
                            value="<?= htmlspecialchars($oldInput['email'] ?? '') ?>"
                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="jean.dupont@trendyfoods.com">
                     <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Doit correspondre à l'email Microsoft pour la connexion SSO
+                        <i class="fab fa-microsoft mr-1"></i>
+                        Doit correspondre exactement à l'email du compte Microsoft Entra
                     </p>
                 </div>
             </div>
         </div>
 
         <!-- Rôle et permissions -->
-        <div class="border-b border-gray-200 pb-6">
+        <div class="pb-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Rôle et permissions</h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -81,7 +100,7 @@ ob_start();
                     <select id="role" name="role" required x-model="selectedRole"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                         <option value="">-- Sélectionner un rôle --</option>
-                        <?php foreach ($roles as $value => $label): ?>
+                        <?php foreach ($availableRoles as $value => $label): ?>
                         <option value="<?= $value ?>" <?= ($oldInput['role'] ?? '') === $value ? 'selected' : '' ?>>
                             <?= htmlspecialchars($label) ?>
                         </option>
@@ -106,44 +125,8 @@ ob_start();
                     <li x-show="selectedRole === 'superadmin'"><i class="fas fa-check text-green-500 mr-2"></i>Accès complet à toutes les fonctionnalités</li>
                     <li x-show="selectedRole === 'admin'"><i class="fas fa-check text-green-500 mr-2"></i>Gestion des campagnes, produits, clients, stats (pas de gestion utilisateurs)</li>
                     <li x-show="selectedRole === 'createur'"><i class="fas fa-check text-green-500 mr-2"></i>Création de campagnes, catégories, produits (modification de ses créations uniquement)</li>
-                    <li x-show="selectedRole === 'manager_reps'"><i class="fas fa-check text-green-500 mr-2"></i>Visualisation des campagnes et stats de ses commerciaux</li>
-                    <li x-show="selectedRole === 'rep'"><i class="fas fa-check text-green-500 mr-2"></i>Visualisation de ses propres clients, stats et commandes</li>
+                    <li x-show="selectedRole === 'manager_reps'"><i class="fas fa-check text-green-500 mr-2"></i>Visualisation des campagnes et stats de ses commerciaux (liaison auto)</li>
                 </ul>
-            </div>
-        </div>
-
-        <!-- Liaison représentant (si rôle rep ou manager_reps) -->
-        <div class="pb-6" x-show="selectedRole === 'rep' || selectedRole === 'manager_reps'" x-cloak>
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Liaison représentant</h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Pays -->
-                <div>
-                    <label for="rep_country" class="block text-sm font-medium text-gray-700 mb-1">
-                        Pays <span class="text-red-500">*</span>
-                    </label>
-                    <select id="rep_country" name="rep_country" x-model="selectedCountry"
-                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="">-- Sélectionner --</option>
-                        <option value="BE" <?= ($oldInput['rep_country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                        <option value="LU" <?= ($oldInput['rep_country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
-                    </select>
-                </div>
-
-                <!-- Représentant -->
-                <div>
-                    <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">
-                        Représentant <span class="text-red-500">*</span>
-                    </label>
-                    <select id="rep_id" name="rep_id"
-                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="">-- Sélectionner un pays d'abord --</option>
-                    </select>
-                    <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Liste des représentants depuis la base externe
-                    </p>
-                </div>
             </div>
         </div>
 
@@ -163,46 +146,6 @@ ob_start();
 
 <?php
 $content = ob_get_clean();
-?>
-
-<script>
-// Liste des représentants par pays
-const repsByCountry = {
-    BE: <?= json_encode($reps['BE'] ?? []) ?>,
-    LU: <?= json_encode($reps['LU'] ?? []) ?>
-};
-
-// Mettre à jour la liste des reps quand le pays change
-document.getElementById('rep_country').addEventListener('change', function() {
-    const country = this.value;
-    const repSelect = document.getElementById('rep_id');
-
-    // Vider la liste
-    repSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
-
-    if (country && repsByCountry[country]) {
-        repsByCountry[country].forEach(function(rep) {
-            const option = document.createElement('option');
-            option.value = rep.id;
-            option.textContent = rep.name + ' (' + rep.id + ')';
-            repSelect.appendChild(option);
-        });
-    }
-});
-
-// Initialiser si pays déjà sélectionné
-document.addEventListener('DOMContentLoaded', function() {
-    const countrySelect = document.getElementById('rep_country');
-    if (countrySelect.value) {
-        countrySelect.dispatchEvent(new Event('change'));
-        <?php if (!empty($oldInput['rep_id'])): ?>
-        document.getElementById('rep_id').value = '<?= $oldInput['rep_id'] ?>';
-        <?php endif; ?>
-    }
-});
-</script>
-
-<?php
 $pageScripts = '';
 require __DIR__ . '/../../layouts/admin.php';
 ?>

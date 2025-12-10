@@ -7,14 +7,13 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Protection suppression superadmin
+ * @modified 2025/12/10 - Suppression liaison rep (auto via Microsoft)
  */
 
 namespace App\Controllers;
 
 use App\Models\User;
 use Core\Session;
-use Core\ExternalDatabase;
 
 class UserController
 {
@@ -59,7 +58,6 @@ class UserController
 
         $title = 'Gestion des utilisateurs';
 
-        // Charger la vue (elle gère elle-même le layout)
         require __DIR__ . '/../Views/admin/users/index.php';
     }
 
@@ -69,9 +67,6 @@ class UserController
      */
     public function create(): void
     {
-        $roles = User::ROLE_LABELS;
-        $reps = $this->getRepsList();
-
         $title = 'Nouvel utilisateur';
 
         require __DIR__ . '/../Views/admin/users/create.php';
@@ -108,13 +103,13 @@ class UserController
             exit();
         }
 
-        // Créer l'utilisateur
+        // Créer l'utilisateur (sans rep_id/rep_country - sera rempli à la connexion Microsoft)
         $data = [
             'email' => trim($_POST['email']),
             'name' => trim($_POST['name']),
             'role' => $_POST['role'],
-            'rep_id' => $_POST['rep_id'] ?: null,
-            'rep_country' => $_POST['rep_country'] ?: null,
+            'rep_id' => null,
+            'rep_country' => null,
             'is_active' => isset($_POST['is_active']) ? 1 : 0,
             'created_by' => Session::get('user')['id'] ?? null
         ];
@@ -146,9 +141,6 @@ class UserController
             header('Location: /stm/admin/users');
             exit();
         }
-
-        $roles = User::ROLE_LABELS;
-        $reps = $this->getRepsList();
 
         $title = 'Modifier ' . $user['name'];
 
@@ -182,6 +174,11 @@ class UserController
             $_POST['is_active'] = 1;
         }
 
+        // Protection : un rep ne peut pas changer son rôle (auto-créé)
+        if ($user['role'] === 'rep') {
+            $_POST['role'] = 'rep';
+        }
+
         // Validation
         $errors = $this->validateUserData($_POST, $id);
 
@@ -191,12 +188,10 @@ class UserController
             exit();
         }
 
-        // Mise à jour
+        // Mise à jour (on ne touche pas à rep_id/rep_country)
         $data = [
             'name' => trim($_POST['name']),
             'role' => $_POST['role'],
-            'rep_id' => $_POST['rep_id'] ?: null,
-            'rep_country' => $_POST['rep_country'] ?: null,
             'is_active' => isset($_POST['is_active']) ? 1 : 0
         ];
 
@@ -300,52 +295,6 @@ class UserController
     }
 
     /**
-     * Récupérer la liste des représentants (DB externe)
-     *
-     * @return array
-     */
-    private function getRepsList(): array
-    {
-        $reps = ['BE' => [], 'LU' => []];
-
-        try {
-            $extDb = ExternalDatabase::getInstance();
-
-            // Reps BE
-            $beReps = $extDb->query(
-                "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL
-                 FROM BE_REP
-                 ORDER BY REP_NOM"
-            );
-            foreach ($beReps as $rep) {
-                $reps['BE'][] = [
-                    'id' => $rep['IDE_REP'],
-                    'name' => trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']),
-                    'email' => $rep['REP_EMAIL']
-                ];
-            }
-
-            // Reps LU
-            $luReps = $extDb->query(
-                "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL
-                 FROM LU_REP
-                 ORDER BY REP_NOM"
-            );
-            foreach ($luReps as $rep) {
-                $reps['LU'][] = [
-                    'id' => $rep['IDE_REP'],
-                    'name' => trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']),
-                    'email' => $rep['REP_EMAIL']
-                ];
-            }
-        } catch (\Exception $e) {
-            error_log("UserController::getRepsList error: " . $e->getMessage());
-        }
-
-        return $reps;
-    }
-
-    /**
      * Valider les données utilisateur
      *
      * @param array $data
@@ -374,16 +323,6 @@ class UserController
         $validRoles = array_keys(User::ROLE_LABELS);
         if (empty($data['role']) || !in_array($data['role'], $validRoles)) {
             $errors[] = 'Le rôle sélectionné n\'est pas valide';
-        }
-
-        // Si role rep ou manager_reps, rep_id et rep_country requis
-        if (in_array($data['role'] ?? '', ['rep', 'manager_reps'])) {
-            if (empty($data['rep_id'])) {
-                $errors[] = 'Le représentant doit être sélectionné pour ce rôle';
-            }
-            if (empty($data['rep_country'])) {
-                $errors[] = 'Le pays doit être sélectionné pour ce rôle';
-            }
         }
 
         return $errors;

@@ -4,13 +4,23 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Fix heredoc syntax + protection superadmin
+ * @modified 2025/12/10 - Suppression édition liaison rep (lecture seule si existe)
  */
 
 use App\Models\User;
 
 $activeMenu = 'users';
 $isSuperadmin = $user['role'] === 'superadmin';
+$isRep = $user['role'] === 'rep';
+
+// Rôles disponibles (pas rep en création manuelle)
+$availableRoles = [
+    'superadmin' => 'Super Admin',
+    'admin' => 'Administrateur',
+    'createur' => 'Créateur',
+    'manager_reps' => 'Manager Reps',
+    'rep' => 'Commercial' // Affiché seulement si déjà rep
+];
 
 ob_start();
 ?>
@@ -29,7 +39,7 @@ ob_start();
 </div>
 
 <!-- Formulaire -->
-<div class="bg-white rounded-lg shadow-sm" x-data="{ selectedRole: '<?= $user['role'] ?>', selectedCountry: '<?= $user['rep_country'] ?? '' ?>' }">
+<div class="bg-white rounded-lg shadow-sm" x-data="{ selectedRole: '<?= $user['role'] ?>' }">
     <form method="POST" action="/stm/admin/users/<?= $user['id'] ?>" class="p-6 space-y-6">
         <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
@@ -51,7 +61,7 @@ ob_start();
                 <!-- Email (lecture seule) -->
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-                        Email
+                        Email Microsoft
                     </label>
                     <input type="email" id="email" disabled
                            value="<?= htmlspecialchars($user['email']) ?>"
@@ -93,11 +103,19 @@ ob_start();
                         </span>
                         <span class="text-xs ml-2">(non modifiable)</span>
                     </div>
+                    <?php elseif ($isRep): ?>
+                    <input type="hidden" name="role" value="rep">
+                    <div class="w-full border border-gray-200 rounded-lg px-4 py-2 bg-gray-50 text-gray-500">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Commercial
+                        </span>
+                        <span class="text-xs ml-2">(compte auto-créé)</span>
+                    </div>
                     <?php else: ?>
                     <select id="role" name="role" required x-model="selectedRole"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <?php foreach ($roles as $value => $label): ?>
-                        <?php if ($value !== 'superadmin'): ?>
+                        <?php foreach ($availableRoles as $value => $label): ?>
+                        <?php if ($value !== 'superadmin' && $value !== 'rep'): ?>
                         <option value="<?= $value ?>" <?= $user['role'] === $value ? 'selected' : '' ?>>
                             <?= htmlspecialchars($label) ?>
                         </option>
@@ -139,39 +157,38 @@ ob_start();
             </div>
         </div>
 
-        <!-- Liaison représentant (si rôle rep ou manager_reps) -->
-        <div class="pb-6" x-show="selectedRole === 'rep' || selectedRole === 'manager_reps'">
+        <!-- Liaison représentant (lecture seule - si existe) -->
+        <?php if ($user['rep_id']): ?>
+        <div class="border-b border-gray-200 pb-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Liaison représentant</h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Pays -->
-                <div>
-                    <label for="rep_country" class="block text-sm font-medium text-gray-700 mb-1">
-                        Pays <span class="text-red-500">*</span>
-                    </label>
-                    <select id="rep_country" name="rep_country" x-model="selectedCountry"
-                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="">-- Sélectionner --</option>
-                        <option value="BE" <?= $user['rep_country'] === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                        <option value="LU" <?= $user['rep_country'] === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
-                    </select>
+            <div class="p-4 bg-gray-50 rounded-lg">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Code Rep</p>
+                        <p class="font-medium text-gray-900"><?= htmlspecialchars($user['rep_id']) ?></p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">Pays</p>
+                        <p class="font-medium text-gray-900">
+                            <?php if ($user['rep_country'] === 'BE'): ?>
+                            🇧🇪 Belgique
+                            <?php else: ?>
+                            🇱🇺 Luxembourg
+                            <?php endif; ?>
+                        </p>
+                    </div>
                 </div>
-
-                <!-- Représentant -->
-                <div>
-                    <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">
-                        Représentant <span class="text-red-500">*</span>
-                    </label>
-                    <select id="rep_id" name="rep_id"
-                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="">-- Sélectionner un pays d'abord --</option>
-                    </select>
-                </div>
+                <p class="text-xs text-gray-500 mt-3">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Liaison établie automatiquement à la connexion Microsoft
+                </p>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Infos système -->
-        <div class="pb-6 border-b border-gray-200">
+        <div class="pb-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Informations système</h2>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -197,7 +214,7 @@ ob_start();
         </div>
 
         <!-- Boutons -->
-        <div class="flex items-center justify-between pt-6">
+        <div class="flex items-center justify-between pt-6 border-t border-gray-200">
             <?php if (!$isSuperadmin): ?>
             <button type="button" onclick="confirmDelete()"
                     class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition">
@@ -253,51 +270,8 @@ ob_start();
         </div>
     </div>
 </div>
-<?php endif; ?>
-
-<?php
-$content = ob_get_clean();
-?>
 
 <script>
-// Liste des représentants par pays
-const repsByCountry = {
-    BE: <?= json_encode($reps['BE'] ?? []) ?>,
-    LU: <?= json_encode($reps['LU'] ?? []) ?>
-};
-
-const currentRepId = '<?= $user['rep_id'] ?? '' ?>';
-
-// Mettre à jour la liste des reps quand le pays change
-document.getElementById('rep_country').addEventListener('change', function() {
-    const country = this.value;
-    const repSelect = document.getElementById('rep_id');
-
-    // Vider la liste
-    repSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
-
-    if (country && repsByCountry[country]) {
-        repsByCountry[country].forEach(function(rep) {
-            const option = document.createElement('option');
-            option.value = rep.id;
-            option.textContent = rep.name + ' (' + rep.id + ')';
-            if (rep.id === currentRepId) {
-                option.selected = true;
-            }
-            repSelect.appendChild(option);
-        });
-    }
-});
-
-// Initialiser si pays déjà sélectionné
-document.addEventListener('DOMContentLoaded', function() {
-    const countrySelect = document.getElementById('rep_country');
-    if (countrySelect.value) {
-        countrySelect.dispatchEvent(new Event('change'));
-    }
-});
-
-<?php if (!$isSuperadmin): ?>
 function confirmDelete() {
     document.getElementById('deleteModal').classList.remove('hidden');
     document.getElementById('deleteModal').classList.add('flex');
@@ -311,10 +285,11 @@ function closeDeleteModal() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeDeleteModal();
 });
-<?php endif; ?>
 </script>
+<?php endif; ?>
 
 <?php
+$content = ob_get_clean();
 $pageScripts = '';
 require __DIR__ . '/../../layouts/admin.php';
 ?>
