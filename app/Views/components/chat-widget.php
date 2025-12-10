@@ -3,11 +3,12 @@
  * Widget Chat Agent STM
  *
  * Widget flottant avec choix de mascotte (Zippy, Mochi, Pepper)
- * Supporte les boutons d'action cliquables pour les clarifications
- * Le choix de mascotte est sauvegardé en localStorage
+ * Suggestions contextuelles selon la page courante
+ * - Dans le message d'accueil (disparaissent après 1er message)
+ * - Bouton 💡 permanent pour revoir les suggestions
  *
  * @created  2025/12/09
- * @modified 2025/12/10 - Ajout choix mascotte + boutons cliquables
+ * @modified 2025/12/10 - Ajout suggestions contextuelles + bouton 💡
  * @package  STM Agent
  */
 ?>
@@ -95,30 +96,32 @@
         <!-- Messages -->
         <div class="flex-1 overflow-y-auto p-4 space-y-4" x-ref="messagesContainer">
 
-            <!-- Message de bienvenue -->
+            <!-- Message de bienvenue contextuel -->
             <template x-if="messages.length === 0">
-                <div class="text-center py-6">
+                <div class="text-center py-4">
                     <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center animate-bounce-slow"
                          :class="currentMascot.btnGradient">
                         <div x-html="currentMascot.largeAvatar"></div>
                     </div>
                     <h4 class="font-bold text-gray-900 mb-1" x-text="currentMascot.greeting"></h4>
-                    <p class="text-sm text-gray-500 mb-4">
-                        Comment puis-je vous aider ?
+
+                    <!-- Message contextuel -->
+                    <p class="text-sm text-gray-500 mb-1" x-show="pageContext.name">
+                        Tu es sur <strong x-text="pageContext.name" class="text-gray-700"></strong>
                     </p>
+                    <p class="text-sm text-gray-500 mb-4" x-show="!pageContext.name">
+                        Comment puis-je t'aider ?
+                    </p>
+
+                    <!-- Suggestions contextuelles dans l'accueil -->
                     <div class="space-y-2">
-                        <button @click="sendQuickQuestion('Quelles sont les campagnes en cours ?')"
-                                class="block w-full text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-gray-700 transition">
-                            📊 Campagnes en cours
-                        </button>
-                        <button @click="sendQuickQuestion('Montre-moi les stats de Black Friday 2025')"
-                                class="block w-full text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-gray-700 transition">
-                            📈 Stats Black Friday
-                        </button>
-                        <button @click="sendQuickQuestion('Top 10 des produits vendus')"
-                                class="block w-full text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-gray-700 transition">
-                            🏆 Top produits
-                        </button>
+                        <template x-for="(suggestion, idx) in currentSuggestions" :key="idx">
+                            <button @click="sendQuickQuestion(suggestion.action)"
+                                    class="block w-full text-left text-sm bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-gray-700 transition border border-gray-100 hover:border-gray-200">
+                                <span x-text="suggestion.icon" class="mr-2"></span>
+                                <span x-text="suggestion.label"></span>
+                            </button>
+                        </template>
                     </div>
                 </div>
             </template>
@@ -165,13 +168,62 @@
             </div>
         </div>
 
-        <!-- Input -->
+        <!-- Input avec bouton 💡 -->
         <div class="border-t border-gray-200 p-3 flex-shrink-0 bg-white">
             <form @submit.prevent="sendMessage()" class="flex gap-2">
+                <!-- Bouton suggestions 💡 -->
+                <div class="relative" x-data="{ showSuggestions: false }">
+                    <button type="button"
+                            @click="showSuggestions = !showSuggestions"
+                            class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition"
+                            :class="{ 'bg-yellow-100 text-yellow-600': showSuggestions }"
+                            title="Suggestions">
+                        <i class="fas fa-lightbulb"></i>
+                    </button>
+
+                    <!-- Menu suggestions -->
+                    <div x-show="showSuggestions"
+                         @click.outside="showSuggestions = false"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 translate-y-2"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-2"
+                         class="absolute bottom-12 left-0 bg-white rounded-xl shadow-xl border border-gray-200 p-3 z-50 w-72">
+
+                        <!-- Titre contextuel -->
+                        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100">
+                            <span class="text-lg">💡</span>
+                            <div>
+                                <p class="text-xs font-medium text-gray-700">Suggestions</p>
+                                <p class="text-xs text-gray-400" x-text="pageContext.name || 'Général'"></p>
+                            </div>
+                        </div>
+
+                        <!-- Liste suggestions -->
+                        <div class="space-y-1">
+                            <template x-for="(suggestion, idx) in currentSuggestions" :key="idx">
+                                <button type="button"
+                                        @click="sendQuickQuestion(suggestion.action); showSuggestions = false"
+                                        class="block w-full text-left text-sm hover:bg-gray-50 rounded-lg px-3 py-2 text-gray-700 transition">
+                                    <span x-text="suggestion.icon" class="mr-2"></span>
+                                    <span x-text="suggestion.label"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Note -->
+                        <p class="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                            Ou pose ta propre question !
+                        </p>
+                    </div>
+                </div>
+
                 <input type="text"
                        x-model="inputMessage"
                        :disabled="isLoading"
-                       placeholder="Posez votre question..."
+                       placeholder="Pose ta question..."
                        class="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent disabled:bg-gray-100"
                        :class="currentMascot.focusRing">
                 <button type="submit"
@@ -204,6 +256,62 @@ function chatWidget() {
         messages: [],
         sessionId: null,
         currentMascotKey: 'zippy',
+
+        // Contexte de page détecté
+        pageContext: {
+            type: 'dashboard',
+            id: null,
+            name: null
+        },
+
+        // Suggestions par type de page
+        suggestions: {
+            dashboard: [
+                { icon: '📊', label: 'Campagnes en cours', action: 'Quelles sont les campagnes en cours ?' },
+                { icon: '📦', label: 'Commandes du jour', action: 'Combien de commandes aujourd\'hui ?' },
+                { icon: '⚠️', label: 'Alertes quotas', action: 'Y a-t-il des produits avec quotas atteints ?' }
+            ],
+            campaigns: [
+                { icon: '📋', label: 'Liste des campagnes', action: 'Liste toutes les campagnes' },
+                { icon: '🔄', label: 'Comparer 2 campagnes', action: 'Compare les stats de Black Friday et Noël 2025' },
+                { icon: '📈', label: 'Stats globales', action: 'Résumé des stats de toutes les campagnes actives' }
+            ],
+            campaign: [
+                { icon: '📊', label: 'Stats de cette campagne', action: 'Stats de {name}' },
+                { icon: '🏆', label: 'Top 10 produits', action: 'Top 10 des produits vendus sur {name}' },
+                { icon: '👥', label: 'Meilleurs représentants', action: 'Classement des représentants sur {name}' }
+            ],
+            promotions: [
+                { icon: '🏆', label: 'Produits les + vendus', action: 'Quels sont les produits les plus vendus ?' },
+                { icon: '⚠️', label: 'Quotas atteints', action: 'Quels produits ont atteint leur quota ?' },
+                { icon: '📦', label: 'Stock disponible', action: 'Produits avec stock restant faible' }
+            ],
+            orders: [
+                { icon: '📦', label: 'Commandes du jour', action: 'Combien de commandes aujourd\'hui ?' },
+                { icon: '⏳', label: 'En attente', action: 'Combien de commandes en attente de validation ?' },
+                { icon: '📊', label: 'Total promos vendues', action: 'Combien de promos vendues ce mois-ci ?' }
+            ],
+            customers: [
+                { icon: '👥', label: 'Clients actifs', action: 'Combien de clients ont commandé ce mois-ci ?' },
+                { icon: '😴', label: 'Clients inactifs', action: 'Quels clients n\'ont jamais commandé ?' },
+                { icon: '🔍', label: 'Rechercher client', action: 'Infos sur le client numéro ' }
+            ],
+            reps: [
+                { icon: '🏆', label: 'Classement des reps', action: 'Classement des représentants par nombre de commandes' },
+                { icon: '📊', label: 'Stats d\'un rep', action: 'Stats de ' },
+                { icon: '😴', label: 'Reps inactifs', action: 'Représentants sans commande ce mois' }
+            ],
+            rep: [
+                { icon: '📊', label: 'Stats de ce rep', action: 'Stats de {name}' },
+                { icon: '👥', label: 'Clients de ce rep', action: 'Liste des clients de {name}' },
+                { icon: '📈', label: 'Performance', action: 'Performance de {name} sur toutes les campagnes' }
+            ],
+            categories: [
+                { icon: '📁', label: 'Stats par catégorie', action: 'Ventes par catégorie de produits' },
+                { icon: '🏆', label: 'Catégorie top', action: 'Quelle catégorie se vend le mieux ?' },
+                { icon: '📊', label: 'Répartition', action: 'Répartition des ventes par catégorie' }
+            ]
+        },
 
         // Définition des 3 mascottes
         mascots: {
@@ -278,10 +386,10 @@ function chatWidget() {
                 subtitle: 'Assistant Kawaii',
                 greeting: 'Coucou ! 🌸 Je suis Mochi !',
                 thinkingText: 'Mochi réfléchit...',
-                headerGradient: 'bg-gradient-to-r from-pink-300 to-rose-400',
+                headerGradient: 'bg-gradient-to-r from-pink-400 to-rose-500',
                 btnGradient: 'bg-gradient-to-br from-pink-300 to-rose-400',
-                textColor: 'text-gray-900',
-                userBubble: 'bg-pink-400',
+                textColor: 'text-white',
+                userBubble: 'bg-pink-500',
                 sendButton: 'bg-pink-500 hover:bg-pink-600',
                 focusRing: 'focus:ring-pink-400',
                 dotColor: 'bg-pink-400',
@@ -419,6 +527,22 @@ function chatWidget() {
             return this.mascots[this.currentMascotKey];
         },
 
+        // Suggestions actuelles (basées sur le contexte)
+        get currentSuggestions() {
+            const contextType = this.pageContext.type;
+            let suggestions = this.suggestions[contextType] || this.suggestions.dashboard;
+
+            // Remplacer {name} par le nom réel si disponible
+            if (this.pageContext.name) {
+                suggestions = suggestions.map(s => ({
+                    ...s,
+                    action: s.action.replace('{name}', this.pageContext.name)
+                }));
+            }
+
+            return suggestions;
+        },
+
         init() {
             // Charger la mascotte sauvegardée
             const saved = localStorage.getItem('stm_mascot');
@@ -426,9 +550,74 @@ function chatWidget() {
                 this.currentMascotKey = saved;
             }
 
+            // Détecter le contexte de page
+            this.detectPageContext();
+
             // Exposer des fonctions globales pour l'historique
             window.chatWidgetOpen = () => this.openChat();
             window.chatWidgetLoad = (sessionId) => this.loadConversation(sessionId);
+        },
+
+        /**
+         * Détecter le contexte de la page courante
+         */
+        detectPageContext() {
+            const path = window.location.pathname;
+
+            // Essayer de lire le data-attribute si présent
+            const contextEl = document.querySelector('[data-page-context]');
+            if (contextEl) {
+                try {
+                    const ctx = JSON.parse(contextEl.dataset.pageContext);
+                    this.pageContext = { ...this.pageContext, ...ctx };
+                    return;
+                } catch (e) {
+                    console.warn('Invalid page context data');
+                }
+            }
+
+            // Sinon, détecter via l'URL
+            if (path.includes('/admin/dashboard')) {
+                this.pageContext = { type: 'dashboard', id: null, name: null };
+            }
+            else if (path.match(/\/admin\/campaigns\/(\d+)/)) {
+                const match = path.match(/\/admin\/campaigns\/(\d+)/);
+                this.pageContext = { type: 'campaign', id: match[1], name: null };
+                // Essayer de récupérer le nom depuis le DOM
+                const titleEl = document.querySelector('h1, .page-title, [data-campaign-name]');
+                if (titleEl) {
+                    this.pageContext.name = titleEl.dataset.campaignName || titleEl.textContent.trim().substring(0, 50);
+                }
+            }
+            else if (path.includes('/admin/campaigns')) {
+                this.pageContext = { type: 'campaigns', id: null, name: null };
+            }
+            else if (path.includes('/admin/promotions') || path.includes('/admin/products')) {
+                this.pageContext = { type: 'promotions', id: null, name: null };
+            }
+            else if (path.includes('/admin/orders')) {
+                this.pageContext = { type: 'orders', id: null, name: null };
+            }
+            else if (path.includes('/admin/customers')) {
+                this.pageContext = { type: 'customers', id: null, name: null };
+            }
+            else if (path.match(/\/admin\/reps\/(\d+)/)) {
+                const match = path.match(/\/admin\/reps\/(\d+)/);
+                this.pageContext = { type: 'rep', id: match[1], name: null };
+                const titleEl = document.querySelector('h1, .page-title, [data-rep-name]');
+                if (titleEl) {
+                    this.pageContext.name = titleEl.dataset.repName || titleEl.textContent.trim().substring(0, 50);
+                }
+            }
+            else if (path.includes('/admin/reps')) {
+                this.pageContext = { type: 'reps', id: null, name: null };
+            }
+            else if (path.includes('/admin/categories')) {
+                this.pageContext = { type: 'categories', id: null, name: null };
+            }
+            else {
+                this.pageContext = { type: 'dashboard', id: null, name: null };
+            }
         },
 
         changeMascot(key) {
