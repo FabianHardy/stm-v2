@@ -596,12 +596,12 @@ class StatsController
      *
      * @return void
      * @created 2025/12/10
-     * @modified 2025/12/10 - Optimisation performances (suppression autoSize)
+     * @modified 2025/12/10 - Filtrage selon mode campagne + reps avec clients uniquement
      */
     public function exportRepsExcel(): void
     {
         // Augmenter les limites pour la génération Excel
-        set_time_limit(300); // 5 minutes
+        set_time_limit(300);
         ini_set('memory_limit', '512M');
 
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
@@ -622,12 +622,19 @@ class StatsController
 
         $campaignCountry = $campaign["country"];
         $campaignName = $campaign["name"];
+        $assignmentMode = $campaign["customer_assignment_mode"] ?? "automatic";
 
-        // Récupérer les représentants avec leurs stats
-        $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+        // Récupérer les représentants avec leurs stats (filtrés par campagne)
+        $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+        // FILTRER : Ne garder que les reps qui ont des clients assignés (total_clients > 0)
+        $reps = array_filter($allReps, function($rep) {
+            return ($rep["total_clients"] ?? 0) > 0;
+        });
+        $reps = array_values($reps); // Réindexer
 
         if (empty($reps)) {
-            Session::setFlash("error", "Aucun représentant trouvé pour cette campagne");
+            Session::setFlash("error", "Aucun représentant avec des clients trouvé pour cette campagne");
             header("Location: /stm/admin/stats/campaigns?campaign_id=" . $campaignId);
             exit();
         }
@@ -640,10 +647,16 @@ class StatsController
             return strcasecmp($a["name"] ?? "", $b["name"] ?? "");
         });
 
+        // En mode MANUAL, récupérer la liste des clients autorisés
+        $authorizedCustomers = [];
+        if ($assignmentMode === "manual") {
+            $authorizedCustomers = $this->getAuthorizedCustomersForCampaign($campaignId);
+        }
+
         // Créer le spreadsheet
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 
-        // Style en-têtes (réutilisé partout)
+        // Style en-têtes
         $headerStyle = [
             "font" => ["bold" => true, "color" => ["rgb" => "FFFFFF"]],
             "fill" => [
@@ -692,7 +705,7 @@ class StatsController
             $row++;
         }
 
-        // Largeurs fixes (BEAUCOUP plus rapide que autoSize)
+        // Largeurs fixes
         $sheet->getColumnDimension("A")->setWidth(12);
         $sheet->getColumnDimension("B")->setWidth(25);
         $sheet->getColumnDimension("C")->setWidth(30);
@@ -710,11 +723,11 @@ class StatsController
             // Créer une nouvelle feuille
             $repSheet = $spreadsheet->createSheet();
 
-            // Nom de la feuille (max 31 caractères, sans caractères spéciaux)
+            // Nom de la feuille (max 31 caractères)
             $cleanName = preg_replace("/[^a-zA-Z0-9\s\-]/", "", $rep["name"] ?? "Inconnu");
             $sheetName = substr("Rep - " . $cleanName, 0, 31);
 
-            // Gérer les doublons de noms de feuilles
+            // Gérer les doublons
             $originalSheetName = $sheetName;
             $counter = 1;
             while ($spreadsheet->getSheetByName($sheetName) !== null) {
@@ -723,8 +736,26 @@ class StatsController
             }
             $repSheet->setTitle($sheetName);
 
-            // Récupérer les clients du représentant
-            $repClients = $this->statsModel->getRepClients($rep["id"], $rep["country"], $campaignId);
+            // Récupérer les clients du représentant (TOUS depuis la DB externe)
+            $allRepClients = $this->statsModel->getRepClients($rep["id"], $rep["country"], $campaignId);
+
+            // FILTRER selon le mode d'attribution
+            if ($assignmentMode === "manual" && !empty($authorizedCustomers)) {
+                // Mode MANUAL : ne garder que les clients autorisés pour cette campagne
+                $repClients = array_filter($allRepClients, function($client) use ($authorizedCustomers) {
+                    return in_array($client["customer_number"], $authorizedCustomers);
+                });
+                $repClients = array_values($repClients);
+            } else {
+                // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
+                $repClients = $allRepClients;
+            }
+
+            // Si aucun client pour ce rep (après filtrage), on met une feuille vide avec message
+            if (empty($repClients)) {
+                $repSheet->setCellValue("A1", "Aucun client assigné pour ce représentant");
+                continue;
+            }
 
             // En-têtes fixes
             $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale"];
@@ -734,9 +765,9 @@ class StatsController
                 $col++;
             }
 
-            // En-têtes produits (colonnes dynamiques à partir de la colonne F)
-            $productColumns = []; // product_id => colLetter
-            $colIndex = 6; // Commence à F (colonne 6)
+            // En-têtes produits (colonnes dynamiques)
+            $productColumns = [];
+            $colIndex = 6;
             foreach ($campaignProducts as $product) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                 $productColumns[$product["id"]] = $colLetter;
@@ -806,14 +837,13 @@ class StatsController
                 $row++;
             }
 
-            // Largeurs fixes pour colonnes (BEAUCOUP plus rapide que autoSize)
+            // Largeurs fixes
             $repSheet->getColumnDimension("A")->setWidth(12);
             $repSheet->getColumnDimension("B")->setWidth(30);
             $repSheet->getColumnDimension("C")->setWidth(20);
             $repSheet->getColumnDimension("D")->setWidth(12);
             $repSheet->getColumnDimension("E")->setWidth(10);
 
-            // Largeur fixe pour colonnes produits
             foreach ($productColumns as $colLetter) {
                 $repSheet->getColumnDimension($colLetter)->setWidth(8);
             }
@@ -836,11 +866,33 @@ class StatsController
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save("php://output");
 
-        // Libérer la mémoire
         $spreadsheet->disconnectWorksheets();
         unset($spreadsheet);
 
         exit();
+    }
+
+    /**
+     * Récupère la liste des numéros clients autorisés pour une campagne (mode manual)
+     *
+     * @param int $campaignId
+     * @return array Liste des customer_number autorisés
+     * @created 2025/12/10
+     */
+    private function getAuthorizedCustomersForCampaign(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $query = "
+            SELECT customer_number
+            FROM campaign_customers
+            WHERE campaign_id = :campaign_id
+            AND is_authorized = 1
+        ";
+
+        $results = $db->query($query, [":campaign_id" => $campaignId]);
+
+        return array_column($results, "customer_number");
     }
 
     /**

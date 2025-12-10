@@ -426,7 +426,10 @@ SCHEMA;
             $log("Found rep: {$repFullName}, IDE_REP: {$ideRep}, Country: {$repCountry}");
 
             // 2. TROUVER LA CAMPAGNE DANS LE PAYS DU REP
+            // Si plusieurs campagnes matchent, prendre celle avec le plus de commandes
             $log("Searching campaign '{$campaignName}' for country {$repCountry}");
+
+            // D'abord essayer une correspondance exacte
             $campaign = $this->db->query(
                 "SELECT id, name, country, start_date, end_date FROM campaigns
                  WHERE name LIKE :name
@@ -435,22 +438,50 @@ SCHEMA;
                 [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
             );
 
-            $log("Campaign result: " . json_encode($campaign));
+            $log("Campaign results: " . json_encode($campaign));
+
+            // Si plusieurs campagnes, prendre celle avec le plus de commandes
+            if (!empty($campaign) && count($campaign) > 0) {
+                // Vérifier s'il y a plusieurs campagnes qui matchent
+                $allMatches = $this->db->query(
+                    "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
+                            (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
+                     FROM campaigns c
+                     WHERE c.name LIKE :name
+                     AND c.country = :country
+                     ORDER BY order_count DESC, c.start_date DESC
+                     LIMIT 5",
+                    [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
+                );
+
+                $log("All matching campaigns: " . json_encode($allMatches));
+
+                if (!empty($allMatches)) {
+                    $campaign = [$allMatches[0]]; // Prendre celle avec le plus de commandes
+                    $log("Selected campaign with most orders: ID={$allMatches[0]['id']}, orders={$allMatches[0]['order_count']}");
+                }
+            }
 
             if (empty($campaign)) {
                 // Fallback : chercher sans filtre pays si pas trouvé
                 $log("Fallback: searching without country filter");
-                $campaign = $this->db->query(
-                    "SELECT id, name, country, start_date, end_date FROM campaigns
-                     WHERE name LIKE :name
-                     ORDER BY start_date DESC LIMIT 1",
+                $allMatches = $this->db->query(
+                    "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
+                            (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
+                     FROM campaigns c
+                     WHERE c.name LIKE :name
+                     ORDER BY order_count DESC, c.start_date DESC
+                     LIMIT 5",
                     [':name' => '%' . $campaignName . '%']
                 );
 
-                if (empty($campaign)) {
+                if (empty($allMatches)) {
                     $log("ERROR: Campaign not found");
                     return ['error' => "Campagne '{$campaignName}' non trouvée"];
                 }
+
+                $campaign = [$allMatches[0]];
+                $log("Fallback selected: ID={$allMatches[0]['id']}, orders={$allMatches[0]['order_count']}");
             }
             $campaign = $campaign[0];
             $log("Using campaign ID: {$campaign['id']}, country: {$campaign['country']}");
