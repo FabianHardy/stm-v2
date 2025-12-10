@@ -7,7 +7,7 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Correction double inclusion layout
+ * @modified 2025/12/10 - Protection suppression superadmin
  */
 
 namespace App\Controllers;
@@ -176,6 +176,12 @@ class UserController
             exit();
         }
 
+        // Protection : un superadmin ne peut pas changer son propre rôle
+        if ($user['role'] === 'superadmin') {
+            $_POST['role'] = 'superadmin';
+            $_POST['is_active'] = 1;
+        }
+
         // Validation
         $errors = $this->validateUserData($_POST, $id);
 
@@ -225,6 +231,13 @@ class UserController
             exit();
         }
 
+        // Protection : impossible de supprimer un superadmin
+        if ($user['role'] === 'superadmin') {
+            Session::setFlash('error', 'Impossible de supprimer un compte Super Admin');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
         // Empêcher la suppression de son propre compte
         $currentUser = Session::get('user');
         if ($currentUser && $currentUser['id'] == $id) {
@@ -255,6 +268,12 @@ class UserController
 
         if (!$user) {
             echo json_encode(['success' => false, 'message' => 'Utilisateur introuvable']);
+            exit();
+        }
+
+        // Protection : impossible de désactiver un superadmin
+        if ($user['role'] === 'superadmin') {
+            echo json_encode(['success' => false, 'message' => 'Impossible de désactiver un compte Super Admin']);
             exit();
         }
 
@@ -337,11 +356,13 @@ class UserController
     {
         $errors = [];
 
-        // Email requis et valide
-        if (empty($data['email'])) {
-            $errors[] = 'L\'email est requis';
-        } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'L\'email n\'est pas valide';
+        // Email requis et valide (seulement pour création)
+        if ($excludeId === null) {
+            if (empty($data['email'])) {
+                $errors[] = 'L\'email est requis';
+            } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                $errors[] = 'L\'email n\'est pas valide';
+            }
         }
 
         // Nom requis

@@ -1,11 +1,12 @@
 <?php
 /**
  * Vue : Liste des utilisateurs
- * 
+ *
  * Affiche la liste des utilisateurs avec filtres et pagination
- * 
+ *
  * @package STM
  * @created 2025/12/10
+ * @modified 2025/12/10 - Fix heredoc syntax
  */
 
 use App\Models\User;
@@ -21,7 +22,7 @@ ob_start();
             <h1 class="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h1>
             <p class="text-gray-600 mt-1">Gérer les accès et les rôles des utilisateurs</p>
         </div>
-        <a href="/stm/admin/users/create" 
+        <a href="/stm/admin/users/create"
            class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">
             <i class="fas fa-plus"></i>
             <span>Nouvel utilisateur</span>
@@ -42,7 +43,7 @@ ob_start();
             </div>
         </div>
     </div>
-    
+
     <div class="bg-white rounded-lg shadow-sm p-4">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -54,7 +55,7 @@ ob_start();
             </div>
         </div>
     </div>
-    
+
     <div class="bg-white rounded-lg shadow-sm p-4">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
@@ -66,7 +67,7 @@ ob_start();
             </div>
         </div>
     </div>
-    
+
     <div class="bg-white rounded-lg shadow-sm p-4">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -78,7 +79,7 @@ ob_start();
             </div>
         </div>
     </div>
-    
+
     <div class="bg-white rounded-lg shadow-sm p-4">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -95,7 +96,7 @@ ob_start();
 <!-- Filtres -->
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <form method="GET" action="/stm/admin/users" class="flex flex-wrap gap-4 items-end">
-        
+
         <!-- Recherche -->
         <div class="flex-1 min-w-[200px]">
             <label class="block text-sm font-medium text-gray-700 mb-1">Rechercher</label>
@@ -106,7 +107,7 @@ ob_start();
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             </div>
         </div>
-        
+
         <!-- Filtre rôle -->
         <div class="w-48">
             <label class="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
@@ -119,7 +120,7 @@ ob_start();
                 <?php endforeach; ?>
             </select>
         </div>
-        
+
         <!-- Filtre statut -->
         <div class="w-40">
             <label class="block text-sm font-medium text-gray-700 mb-1">Statut</label>
@@ -129,7 +130,7 @@ ob_start();
                 <option value="0" <?= ($filters['status'] ?? '') === '0' ? 'selected' : '' ?>>Inactifs</option>
             </select>
         </div>
-        
+
         <!-- Boutons -->
         <div class="flex gap-2">
             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
@@ -144,7 +145,7 @@ ob_start();
 
 <!-- Tableau des utilisateurs -->
 <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-    
+
     <?php if (empty($users)): ?>
     <div class="text-center py-12">
         <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -154,7 +155,7 @@ ob_start();
         <p class="text-sm text-gray-400 mt-1">Modifiez vos filtres ou créez un nouvel utilisateur</p>
     </div>
     <?php else: ?>
-    
+
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-50 border-b border-gray-200">
@@ -169,8 +170,8 @@ ob_start();
             </thead>
             <tbody class="divide-y divide-gray-100">
                 <?php foreach ($users as $user): ?>
-                <tr class="hover:bg-gray-50 transition <?= !$user['is_active'] ? 'opacity-60' : '' ?>">
-                    
+                <tr class="hover:bg-gray-50 transition <?= !$user['is_active'] ? 'opacity-60' : '' ?>" data-user-id="<?= $user['id'] ?>">
+
                     <!-- Utilisateur -->
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-3">
@@ -185,14 +186,14 @@ ob_start();
                             </div>
                         </div>
                     </td>
-                    
+
                     <!-- Rôle -->
                     <td class="px-6 py-4">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= User::getRoleColor($user['role']) ?>">
                             <?= User::getRoleLabel($user['role']) ?>
                         </span>
                     </td>
-                    
+
                     <!-- Rep lié -->
                     <td class="px-6 py-4">
                         <?php if ($user['rep_id']): ?>
@@ -206,7 +207,7 @@ ob_start();
                         <span class="text-sm text-gray-400">-</span>
                         <?php endif; ?>
                     </td>
-                    
+
                     <!-- Statut -->
                     <td class="px-6 py-4 text-center">
                         <button onclick="toggleUser(<?= $user['id'] ?>, this)"
@@ -216,7 +217,7 @@ ob_start();
                             <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out <?= $user['is_active'] ? 'translate-x-5' : 'translate-x-0' ?>"></span>
                         </button>
                     </td>
-                    
+
                     <!-- Dernière connexion -->
                     <td class="px-6 py-4">
                         <?php if ($user['last_login_at']): ?>
@@ -227,21 +228,27 @@ ob_start();
                         <span class="text-sm text-gray-400">Jamais</span>
                         <?php endif; ?>
                     </td>
-                    
+
                     <!-- Actions -->
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="/stm/admin/users/<?= $user['id'] ?>/edit" 
+                            <a href="/stm/admin/users/<?= $user['id'] ?>/edit"
                                class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                title="Modifier">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            
+
+                            <?php if ($user['role'] !== 'superadmin'): ?>
                             <button onclick="confirmDelete(<?= $user['id'] ?>, '<?= htmlspecialchars(addslashes($user['name'])) ?>')"
                                     class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                                     title="Supprimer">
                                 <i class="fas fa-trash"></i>
                             </button>
+                            <?php else: ?>
+                            <span class="p-2 text-gray-200 cursor-not-allowed" title="Impossible de supprimer un superadmin">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <?php endif; ?>
                         </div>
                     </td>
                 </tr>
@@ -249,7 +256,7 @@ ob_start();
             </tbody>
         </table>
     </div>
-    
+
     <!-- Pagination -->
     <?php if ($pagination['total'] > 1): ?>
     <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
@@ -257,7 +264,7 @@ ob_start();
             Page <?= $pagination['current'] ?> sur <?= $pagination['total'] ?>
             (<?= $pagination['count'] ?> utilisateurs)
         </p>
-        
+
         <div class="flex gap-2">
             <?php if ($pagination['current'] > 1): ?>
             <a href="?<?= http_build_query(array_merge($filters, ['page' => $pagination['current'] - 1])) ?>"
@@ -265,14 +272,14 @@ ob_start();
                 <i class="fas fa-chevron-left"></i>
             </a>
             <?php endif; ?>
-            
+
             <?php for ($i = max(1, $pagination['current'] - 2); $i <= min($pagination['total'], $pagination['current'] + 2); $i++): ?>
             <a href="?<?= http_build_query(array_merge($filters, ['page' => $i])) ?>"
                class="px-3 py-1 border rounded text-sm <?= $i === $pagination['current'] ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 hover:bg-gray-50' ?>">
                 <?= $i ?>
             </a>
             <?php endfor; ?>
-            
+
             <?php if ($pagination['current'] < $pagination['total']): ?>
             <a href="?<?= http_build_query(array_merge($filters, ['page' => $pagination['current'] + 1])) ?>"
                class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">
@@ -282,7 +289,7 @@ ob_start();
         </div>
     </div>
     <?php endif; ?>
-    
+
     <?php endif; ?>
 </div>
 
@@ -298,11 +305,10 @@ ob_start();
                 Êtes-vous sûr de vouloir supprimer l'utilisateur <strong id="deleteUserName"></strong> ?
                 <br><span class="text-sm text-red-600">Cette action est irréversible.</span>
             </p>
-            
+
             <form id="deleteForm" method="POST" class="flex gap-3 justify-center">
                 <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                <input type="hidden" name="_method" value="DELETE">
-                
+
                 <button type="button" onclick="closeDeleteModal()"
                         class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                     Annuler
@@ -318,22 +324,22 @@ ob_start();
 
 <?php
 $content = ob_get_clean();
+?>
 
-$pageScripts = <<<SCRIPTS
 <script>
 // Toggle activation utilisateur
 async function toggleUser(userId, btn) {
     try {
-        const response = await fetch(`/stm/admin/users/\${userId}/toggle`, {
+        const response = await fetch('/stm/admin/users/' + userId + '/toggle', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             // Toggle visuel
             if (data.active) {
@@ -349,7 +355,7 @@ async function toggleUser(userId, btn) {
                 btn.querySelector('span').classList.add('translate-x-0');
                 btn.closest('tr').classList.add('opacity-60');
             }
-            
+
             // Notification
             showToast(data.message, 'success');
         } else {
@@ -363,7 +369,7 @@ async function toggleUser(userId, btn) {
 // Modal de suppression
 function confirmDelete(userId, userName) {
     document.getElementById('deleteUserName').textContent = userName;
-    document.getElementById('deleteForm').action = `/stm/admin/users/\${userId}/delete`;
+    document.getElementById('deleteForm').action = '/stm/admin/users/' + userId + '/delete';
     document.getElementById('deleteModal').classList.remove('hidden');
     document.getElementById('deleteModal').classList.add('flex');
 }
@@ -374,25 +380,29 @@ function closeDeleteModal() {
 }
 
 // Toast notification
-function showToast(message, type = 'info') {
+function showToast(message, type) {
+    type = type || 'info';
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white z-50 \${type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-indigo-600'}`;
-    toast.innerHTML = `<i class="fas fa-\${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}-circle mr-2"></i>\${message}`;
+    const bgColor = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-indigo-600';
+    const icon = type === 'success' ? 'check' : type === 'error' ? 'times' : 'info';
+    toast.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white z-50 ' + bgColor;
+    toast.innerHTML = '<i class="fas fa-' + icon + '-circle mr-2"></i>' + message;
     document.body.appendChild(toast);
-    
-    setTimeout(() => {
+
+    setTimeout(function() {
         toast.remove();
     }, 3000);
 }
 
 // Fermer modal avec Escape
-document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeDeleteModal();
     }
 });
 </script>
-SCRIPTS;
 
+<?php
+$pageScripts = '';
 require __DIR__ . '/../../layouts/admin.php';
 ?>

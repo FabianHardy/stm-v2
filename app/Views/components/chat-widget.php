@@ -221,28 +221,43 @@ function chatWidget() {
                 dotColor: 'bg-cyan-400',
                 buttonText: 'text-cyan-700',
                 avatar: `<svg viewBox="0 0 100 100" class="w-7 h-7">
-                    <rect x="20" y="25" width="60" height="50" rx="12" fill="#fff"/>
-                    <circle cx="38" cy="48" r="8" fill="#0891b2"/>
-                    <circle cx="62" cy="48" r="8" fill="#0891b2"/>
-                    <circle cx="40" cy="46" r="3" fill="#fff"/>
-                    <circle cx="64" cy="46" r="3" fill="#fff"/>
-                    <rect x="32" y="62" width="36" height="6" rx="3" fill="#22d3ee"/>
+                    <circle cx="50" cy="8" r="5" fill="#67e8f9"/>
+                    <rect x="48" y="11" width="4" height="8" fill="#67e8f9"/>
+                    <rect x="20" y="20" width="60" height="52" rx="12" fill="#fff"/>
+                    <rect x="8" y="32" width="10" height="18" rx="4" fill="#67e8f9"/>
+                    <rect x="82" y="32" width="10" height="18" rx="4" fill="#67e8f9"/>
+                    <circle cx="38" cy="44" r="8" fill="#0891b2"/>
+                    <circle cx="62" cy="44" r="8" fill="#0891b2"/>
+                    <circle cx="40" cy="42" r="3" fill="#fff"/>
+                    <circle cx="64" cy="42" r="3" fill="#fff"/>
+                    <rect x="30" y="58" width="40" height="7" rx="3" fill="#22d3ee"/>
+                    <path d="M34 61 Q50 66 66 61" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                 </svg>`,
                 miniAvatar: `<svg viewBox="0 0 100 100" class="w-5 h-5">
-                    <rect x="20" y="25" width="60" height="50" rx="12" fill="#fff"/>
-                    <circle cx="38" cy="48" r="8" fill="#0891b2"/>
-                    <circle cx="62" cy="48" r="8" fill="#0891b2"/>
-                    <rect x="32" y="62" width="36" height="6" rx="3" fill="#22d3ee"/>
+                    <circle cx="50" cy="8" r="5" fill="#67e8f9"/>
+                    <rect x="48" y="11" width="4" height="8" fill="#67e8f9"/>
+                    <rect x="20" y="20" width="60" height="52" rx="12" fill="#fff"/>
+                    <rect x="8" y="32" width="10" height="18" rx="4" fill="#67e8f9"/>
+                    <rect x="82" y="32" width="10" height="18" rx="4" fill="#67e8f9"/>
+                    <circle cx="38" cy="44" r="8" fill="#0891b2"/>
+                    <circle cx="62" cy="44" r="8" fill="#0891b2"/>
+                    <circle cx="40" cy="42" r="3" fill="#fff"/>
+                    <circle cx="64" cy="42" r="3" fill="#fff"/>
+                    <rect x="30" y="58" width="40" height="7" rx="3" fill="#22d3ee"/>
+                    <path d="M34 61 Q50 66 66 61" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                 </svg>`,
                 floatingAvatar: `<svg viewBox="0 0 100 100" class="w-9 h-9">
-                    <circle cx="50" cy="12" r="6" fill="#67e8f9"/>
-                    <rect x="48" y="16" width="4" height="8" fill="#67e8f9"/>
+                    <circle cx="50" cy="10" r="6" fill="#67e8f9"/>
+                    <rect x="48" y="14" width="4" height="10" fill="#67e8f9"/>
                     <rect x="18" y="25" width="64" height="55" rx="14" fill="#fff"/>
+                    <rect x="6" y="38" width="12" height="20" rx="5" fill="#67e8f9"/>
+                    <rect x="82" y="38" width="12" height="20" rx="5" fill="#67e8f9"/>
                     <circle cx="38" cy="50" r="10" fill="#0891b2"/>
                     <circle cx="62" cy="50" r="10" fill="#0891b2"/>
                     <circle cx="40" cy="47" r="4" fill="#fff"/>
                     <circle cx="64" cy="47" r="4" fill="#fff"/>
                     <rect x="30" y="68" width="40" height="8" rx="4" fill="#22d3ee"/>
+                    <path d="M34 72 Q50 77 66 72" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                 </svg>`,
                 largeAvatar: `<svg viewBox="0 0 100 100" class="w-14 h-14">
                     <circle cx="50" cy="10" r="7" fill="#67e8f9"/>
@@ -282,13 +297,22 @@ function chatWidget() {
                     <ellipse cx="40" cy="49" rx="2" ry="3" fill="#fff"/>
                     <ellipse cx="64" cy="49" rx="2" ry="3" fill="#fff"/>
                     <path d="M43 68 Q48 75 50 68 Q52 75 57 68" stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    <ellipse cx="24" cy="60" rx="5" ry="3" fill="#f9a8d4" opacity="0.6"/>
+                    <ellipse cx="76" cy="60" rx="5" ry="3" fill="#f9a8d4" opacity="0.6"/>
                 </svg>`,
                 miniAvatar: `<svg viewBox="0 0 100 100" class="w-5 h-5">
                     <ellipse cx="50" cy="55" rx="35" ry="32" fill="#fff"/>
                     <circle cx="28" cy="32" r="10" fill="#fff"/>
                     <circle cx="72" cy="32" r="10" fill="#fff"/>
+                    <circle cx="28" cy="32" r="6" fill="#fbcfe8"/>
+                    <circle cx="72" cy="32" r="6" fill="#fbcfe8"/>
                     <ellipse cx="38" cy="52" rx="6" ry="8" fill="#1f2937"/>
                     <ellipse cx="62" cy="52" rx="6" ry="8" fill="#1f2937"/>
+                    <ellipse cx="40" cy="49" rx="2" ry="3" fill="#fff"/>
+                    <ellipse cx="64" cy="49" rx="2" ry="3" fill="#fff"/>
+                    <path d="M43 68 Q50 76 57 68" stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    <ellipse cx="24" cy="60" rx="5" ry="3" fill="#f9a8d4" opacity="0.6"/>
+                    <ellipse cx="76" cy="60" rx="5" ry="3" fill="#f9a8d4" opacity="0.6"/>
                 </svg>`,
                 floatingAvatar: `<svg viewBox="0 0 100 100" class="w-9 h-9">
                     <ellipse cx="50" cy="55" rx="38" ry="35" fill="#fff"/>
@@ -334,21 +358,31 @@ function chatWidget() {
                 dotColor: 'bg-red-400',
                 buttonText: 'text-red-700',
                 avatar: `<svg viewBox="0 0 100 100" class="w-7 h-7">
-                    <rect x="45" y="8" width="10" height="12" rx="3" fill="#22c55e"/>
-                    <ellipse cx="50" cy="18" rx="12" ry="5" fill="#22c55e"/>
+                    <rect x="45" y="5" width="10" height="14" rx="3" fill="#22c55e"/>
+                    <ellipse cx="50" cy="17" rx="14" ry="5" fill="#22c55e"/>
                     <ellipse cx="50" cy="55" rx="30" ry="36" fill="#fff"/>
+                    <ellipse cx="38" cy="52" rx="8" ry="34" fill="#fecaca" opacity="0.2"/>
                     <circle cx="38" cy="48" r="6" fill="#1f2937"/>
                     <circle cx="62" cy="48" r="6" fill="#1f2937"/>
                     <circle cx="40" cy="46" r="2.5" fill="#fff"/>
                     <circle cx="64" cy="46" r="2.5" fill="#fff"/>
                     <path d="M35 62 Q50 80 65 62" stroke="#dc2626" stroke-width="3" fill="#fff" stroke-linecap="round"/>
+                    <ellipse cx="50" cy="72" rx="5" ry="3" fill="#f87171"/>
+                    <circle cx="26" cy="56" r="4" fill="#fca5a5" opacity="0.5"/>
+                    <circle cx="74" cy="56" r="4" fill="#fca5a5" opacity="0.5"/>
                 </svg>`,
                 miniAvatar: `<svg viewBox="0 0 100 100" class="w-5 h-5">
-                    <rect x="45" y="8" width="10" height="12" rx="3" fill="#22c55e"/>
+                    <rect x="45" y="5" width="10" height="14" rx="3" fill="#22c55e"/>
+                    <ellipse cx="50" cy="17" rx="14" ry="5" fill="#22c55e"/>
                     <ellipse cx="50" cy="55" rx="30" ry="36" fill="#fff"/>
                     <circle cx="38" cy="48" r="6" fill="#1f2937"/>
                     <circle cx="62" cy="48" r="6" fill="#1f2937"/>
-                    <path d="M35 62 Q50 78 65 62" stroke="#dc2626" stroke-width="3" fill="none"/>
+                    <circle cx="40" cy="46" r="2" fill="#fff"/>
+                    <circle cx="64" cy="46" r="2" fill="#fff"/>
+                    <path d="M35 62 Q50 78 65 62" stroke="#dc2626" stroke-width="3" fill="#fff" stroke-linecap="round"/>
+                    <ellipse cx="50" cy="70" rx="4" ry="2.5" fill="#f87171"/>
+                    <circle cx="26" cy="56" r="4" fill="#fca5a5" opacity="0.5"/>
+                    <circle cx="74" cy="56" r="4" fill="#fca5a5" opacity="0.5"/>
                 </svg>`,
                 floatingAvatar: `<svg viewBox="0 0 100 100" class="w-9 h-9">
                     <rect x="43" y="5" width="14" height="14" rx="4" fill="#22c55e"/>

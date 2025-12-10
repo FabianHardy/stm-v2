@@ -1,14 +1,17 @@
 <?php
 /**
  * Vue : Modification d'un utilisateur
- * 
+ *
  * @package STM
  * @created 2025/12/10
+ * @modified 2025/12/10 - Fix heredoc syntax + protection superadmin
  */
 
 use App\Models\User;
 
 $activeMenu = 'users';
+$isSuperadmin = $user['role'] === 'superadmin';
+
 ob_start();
 ?>
 
@@ -26,14 +29,14 @@ ob_start();
 </div>
 
 <!-- Formulaire -->
-<div class="bg-white rounded-lg shadow-sm" x-data="userForm()">
+<div class="bg-white rounded-lg shadow-sm" x-data="{ selectedRole: '<?= $user['role'] ?>', selectedCountry: '<?= $user['rep_country'] ?? '' ?>' }">
     <form method="POST" action="/stm/admin/users/<?= $user['id'] ?>" class="p-6 space-y-6">
         <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-        
+
         <!-- Informations de base -->
         <div class="border-b border-gray-200 pb-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Informations de base</h2>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Nom -->
                 <div>
@@ -44,7 +47,7 @@ ob_start();
                            value="<?= htmlspecialchars($user['name']) ?>"
                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
-                
+
                 <!-- Email (lecture seule) -->
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
@@ -59,7 +62,7 @@ ob_start();
                     </p>
                 </div>
             </div>
-            
+
             <!-- Infos Microsoft -->
             <?php if ($user['microsoft_id']): ?>
             <div class="mt-4 p-3 bg-blue-50 rounded-lg">
@@ -71,65 +74,75 @@ ob_start();
             </div>
             <?php endif; ?>
         </div>
-        
+
         <!-- Rôle et permissions -->
         <div class="border-b border-gray-200 pb-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Rôle et permissions</h2>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Rôle -->
                 <div>
                     <label for="role" class="block text-sm font-medium text-gray-700 mb-1">
                         Rôle <span class="text-red-500">*</span>
                     </label>
+                    <?php if ($isSuperadmin): ?>
+                    <input type="hidden" name="role" value="superadmin">
+                    <div class="w-full border border-gray-200 rounded-lg px-4 py-2 bg-gray-50 text-gray-500">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Super Admin
+                        </span>
+                        <span class="text-xs ml-2">(non modifiable)</span>
+                    </div>
+                    <?php else: ?>
                     <select id="role" name="role" required x-model="selectedRole"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                         <?php foreach ($roles as $value => $label): ?>
+                        <?php if ($value !== 'superadmin'): ?>
                         <option value="<?= $value ?>" <?= $user['role'] === $value ? 'selected' : '' ?>>
                             <?= htmlspecialchars($label) ?>
                         </option>
+                        <?php endif; ?>
                         <?php endforeach; ?>
                     </select>
+                    <?php endif; ?>
                 </div>
-                
+
                 <!-- Actif -->
                 <div class="flex items-center">
+                    <?php if ($isSuperadmin): ?>
+                    <input type="hidden" name="is_active" value="1">
+                    <span class="text-sm text-gray-500">
+                        <i class="fas fa-lock mr-1"></i>
+                        Un superadmin ne peut pas être désactivé
+                    </span>
+                    <?php else: ?>
                     <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="is_active" value="1" class="sr-only peer" 
+                        <input type="checkbox" name="is_active" value="1" class="sr-only peer"
                                <?= $user['is_active'] ? 'checked' : '' ?>>
                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         <span class="ml-3 text-sm font-medium text-gray-700">Compte actif</span>
                     </label>
+                    <?php endif; ?>
                 </div>
             </div>
-            
+
             <!-- Description du rôle -->
             <div class="mt-4 p-4 bg-gray-50 rounded-lg">
                 <p class="text-sm font-medium text-gray-700 mb-2">Permissions du rôle :</p>
                 <ul class="text-sm text-gray-600 space-y-1">
-                    <template x-if="selectedRole === 'superadmin'">
-                        <li><i class="fas fa-check text-green-500 mr-2"></i>Accès complet à toutes les fonctionnalités</li>
-                    </template>
-                    <template x-if="selectedRole === 'admin'">
-                        <li><i class="fas fa-check text-green-500 mr-2"></i>Gestion des campagnes, produits, clients, stats (pas de gestion utilisateurs)</li>
-                    </template>
-                    <template x-if="selectedRole === 'createur'">
-                        <li><i class="fas fa-check text-green-500 mr-2"></i>Création de campagnes, catégories, produits (modification de ses créations uniquement)</li>
-                    </template>
-                    <template x-if="selectedRole === 'manager_reps'">
-                        <li><i class="fas fa-check text-green-500 mr-2"></i>Visualisation des campagnes et stats de ses commerciaux</li>
-                    </template>
-                    <template x-if="selectedRole === 'rep'">
-                        <li><i class="fas fa-check text-green-500 mr-2"></i>Visualisation de ses propres clients, stats et commandes</li>
-                    </template>
+                    <li x-show="selectedRole === 'superadmin'"><i class="fas fa-check text-green-500 mr-2"></i>Accès complet à toutes les fonctionnalités</li>
+                    <li x-show="selectedRole === 'admin'"><i class="fas fa-check text-green-500 mr-2"></i>Gestion des campagnes, produits, clients, stats (pas de gestion utilisateurs)</li>
+                    <li x-show="selectedRole === 'createur'"><i class="fas fa-check text-green-500 mr-2"></i>Création de campagnes, catégories, produits (modification de ses créations uniquement)</li>
+                    <li x-show="selectedRole === 'manager_reps'"><i class="fas fa-check text-green-500 mr-2"></i>Visualisation des campagnes et stats de ses commerciaux</li>
+                    <li x-show="selectedRole === 'rep'"><i class="fas fa-check text-green-500 mr-2"></i>Visualisation de ses propres clients, stats et commandes</li>
                 </ul>
             </div>
         </div>
-        
+
         <!-- Liaison représentant (si rôle rep ou manager_reps) -->
         <div class="pb-6" x-show="selectedRole === 'rep' || selectedRole === 'manager_reps'">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Liaison représentant</h2>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Pays -->
                 <div>
@@ -143,7 +156,7 @@ ob_start();
                         <option value="LU" <?= $user['rep_country'] === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
                     </select>
                 </div>
-                
+
                 <!-- Représentant -->
                 <div>
                     <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">
@@ -152,35 +165,15 @@ ob_start();
                     <select id="rep_id" name="rep_id"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                         <option value="">-- Sélectionner un pays d'abord --</option>
-                        
-                        <template x-if="selectedCountry === 'BE'">
-                            <optgroup label="🇧🇪 Belgique">
-                                <?php foreach ($reps['BE'] as $rep): ?>
-                                <option value="<?= htmlspecialchars($rep['id']) ?>" <?= $user['rep_id'] === $rep['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($rep['name']) ?> (<?= htmlspecialchars($rep['id']) ?>)
-                                </option>
-                                <?php endforeach; ?>
-                            </optgroup>
-                        </template>
-                        
-                        <template x-if="selectedCountry === 'LU'">
-                            <optgroup label="🇱🇺 Luxembourg">
-                                <?php foreach ($reps['LU'] as $rep): ?>
-                                <option value="<?= htmlspecialchars($rep['id']) ?>" <?= $user['rep_id'] === $rep['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($rep['name']) ?> (<?= htmlspecialchars($rep['id']) ?>)
-                                </option>
-                                <?php endforeach; ?>
-                            </optgroup>
-                        </template>
                     </select>
                 </div>
             </div>
         </div>
-        
+
         <!-- Infos système -->
         <div class="pb-6 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Informations système</h2>
-            
+
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                     <p class="text-gray-500">ID</p>
@@ -202,20 +195,27 @@ ob_start();
                 </div>
             </div>
         </div>
-        
+
         <!-- Boutons -->
         <div class="flex items-center justify-between pt-6">
-            <button type="button" onclick="confirmDelete(<?= $user['id'] ?>, '<?= htmlspecialchars(addslashes($user['name'])) ?>')"
+            <?php if (!$isSuperadmin): ?>
+            <button type="button" onclick="confirmDelete()"
                     class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition">
                 <i class="fas fa-trash mr-2"></i>Supprimer
             </button>
-            
+            <?php else: ?>
+            <span class="text-sm text-gray-400">
+                <i class="fas fa-shield-alt mr-1"></i>
+                Les comptes superadmin ne peuvent pas être supprimés
+            </span>
+            <?php endif; ?>
+
             <div class="flex gap-4">
-                <a href="/stm/admin/users" 
+                <a href="/stm/admin/users"
                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                     Annuler
                 </a>
-                <button type="submit" 
+                <button type="submit"
                         class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                     <i class="fas fa-save mr-2"></i>Enregistrer
                 </button>
@@ -224,6 +224,7 @@ ob_start();
     </form>
 </div>
 
+<?php if (!$isSuperadmin): ?>
 <!-- Modal de suppression -->
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
@@ -236,10 +237,10 @@ ob_start();
                 Êtes-vous sûr de vouloir supprimer cet utilisateur ?
                 <br><span class="text-sm text-red-600">Cette action est irréversible.</span>
             </p>
-            
-            <form id="deleteForm" method="POST" action="/stm/admin/users/<?= $user['id'] ?>/delete" class="flex gap-3 justify-center">
+
+            <form method="POST" action="/stm/admin/users/<?= $user['id'] ?>/delete" class="flex gap-3 justify-center">
                 <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                
+
                 <button type="button" onclick="closeDeleteModal()"
                         class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                     Annuler
@@ -252,19 +253,51 @@ ob_start();
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();
+?>
 
-$pageScripts = <<<SCRIPTS
 <script>
-function userForm() {
-    return {
-        selectedRole: '<?= $user['role'] ?>',
-        selectedCountry: '<?= $user['rep_country'] ?? '' ?>'
-    }
-}
+// Liste des représentants par pays
+const repsByCountry = {
+    BE: <?= json_encode($reps['BE'] ?? []) ?>,
+    LU: <?= json_encode($reps['LU'] ?? []) ?>
+};
 
+const currentRepId = '<?= $user['rep_id'] ?? '' ?>';
+
+// Mettre à jour la liste des reps quand le pays change
+document.getElementById('rep_country').addEventListener('change', function() {
+    const country = this.value;
+    const repSelect = document.getElementById('rep_id');
+
+    // Vider la liste
+    repSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
+
+    if (country && repsByCountry[country]) {
+        repsByCountry[country].forEach(function(rep) {
+            const option = document.createElement('option');
+            option.value = rep.id;
+            option.textContent = rep.name + ' (' + rep.id + ')';
+            if (rep.id === currentRepId) {
+                option.selected = true;
+            }
+            repSelect.appendChild(option);
+        });
+    }
+});
+
+// Initialiser si pays déjà sélectionné
+document.addEventListener('DOMContentLoaded', function() {
+    const countrySelect = document.getElementById('rep_country');
+    if (countrySelect.value) {
+        countrySelect.dispatchEvent(new Event('change'));
+    }
+});
+
+<?php if (!$isSuperadmin): ?>
 function confirmDelete() {
     document.getElementById('deleteModal').classList.remove('hidden');
     document.getElementById('deleteModal').classList.add('flex');
@@ -275,11 +308,13 @@ function closeDeleteModal() {
     document.getElementById('deleteModal').classList.remove('flex');
 }
 
-document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeDeleteModal();
 });
+<?php endif; ?>
 </script>
-SCRIPTS;
 
+<?php
+$pageScripts = '';
 require __DIR__ . '/../../layouts/admin.php';
 ?>
