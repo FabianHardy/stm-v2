@@ -683,9 +683,26 @@ class StatsController
         // Style en-têtes
         $sheet->getStyle("A1:I1")->applyFromArray($headerStyle);
 
+        // Préparer les noms de feuilles pour les liens (même logique que la création)
+        $sheetNames = [];
+        $usedNames = ["Récap Représentants" => true];
+        foreach ($reps as $repIndex => $rep) {
+            $cleanName = preg_replace("/[^a-zA-Z0-9\s\-]/", "", $rep["name"] ?? "Inconnu");
+            $sheetName = substr("Rep - " . $cleanName, 0, 31);
+
+            $originalSheetName = $sheetName;
+            $counter = 1;
+            while (isset($usedNames[$sheetName])) {
+                $sheetName = substr($originalSheetName, 0, 28) . " " . $counter;
+                $counter++;
+            }
+            $usedNames[$sheetName] = true;
+            $sheetNames[$repIndex] = $sheetName;
+        }
+
         // Données
         $row = 2;
-        foreach ($reps as $rep) {
+        foreach ($reps as $repIndex => $rep) {
             $totalClients = $rep["total_clients"] ?? 0;
             $customersOrdered = $rep["stats"]["customers_ordered"] ?? 0;
             $notOrdered = $totalClients - $customersOrdered;
@@ -701,6 +718,13 @@ class StatsController
             $sheet->setCellValue("G" . $row, $notOrdered);
             $sheet->setCellValue("H" . $row, $totalQty);
             $sheet->setCellValue("I" . $row, $convRate . "%");
+
+            // Ajouter hyperlien vers la feuille du représentant (double-clic ou clic)
+            $targetSheet = $sheetNames[$repIndex];
+            $sheet->getCell("B" . $row)->getHyperlink()->setUrl("sheet://'" . $targetSheet . "'!A1");
+            $sheet->getStyle("B" . $row)->applyFromArray([
+                "font" => ["color" => ["rgb" => "0066CC"], "underline" => true]
+            ]);
 
             $row++;
         }
@@ -723,17 +747,8 @@ class StatsController
             // Créer une nouvelle feuille
             $repSheet = $spreadsheet->createSheet();
 
-            // Nom de la feuille (max 31 caractères)
-            $cleanName = preg_replace("/[^a-zA-Z0-9\s\-]/", "", $rep["name"] ?? "Inconnu");
-            $sheetName = substr("Rep - " . $cleanName, 0, 31);
-
-            // Gérer les doublons
-            $originalSheetName = $sheetName;
-            $counter = 1;
-            while ($spreadsheet->getSheetByName($sheetName) !== null) {
-                $sheetName = substr($originalSheetName, 0, 28) . " " . $counter;
-                $counter++;
-            }
+            // Utiliser le nom pré-calculé (cohérent avec les liens)
+            $sheetName = $sheetNames[$repIndex];
             $repSheet->setTitle($sheetName);
 
             // Récupérer les clients du représentant (TOUS depuis la DB externe)
@@ -850,6 +865,14 @@ class StatsController
 
             // Figer la première ligne et les 5 premières colonnes
             $repSheet->freezePane("F2");
+
+            // Ajouter lien retour vers récap (en haut à droite, après les données)
+            $lastDataRow = $row;
+            $repSheet->setCellValue("A" . ($lastDataRow + 2), "← Retour Récap");
+            $repSheet->getCell("A" . ($lastDataRow + 2))->getHyperlink()->setUrl("sheet://'Récap Représentants'!A1");
+            $repSheet->getStyle("A" . ($lastDataRow + 2))->applyFromArray([
+                "font" => ["color" => ["rgb" => "0066CC"], "underline" => true, "bold" => true]
+            ]);
         }
 
         // Activer la première feuille
