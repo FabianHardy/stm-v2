@@ -1,0 +1,396 @@
+<?php
+/**
+ * Controller : UserController
+ * 
+ * Gestion des utilisateurs (CRUD)
+ * Accessible uniquement aux superadmin
+ * 
+ * @package STM
+ * @created 2025/12/10
+ */
+
+namespace App\Controllers;
+
+use App\Models\User;
+use App\Models\Permission;
+use Core\Session;
+use Core\ExternalDatabase;
+
+class UserController
+{
+    private User $userModel;
+    
+    public function __construct()
+    {
+        $this->userModel = new User();
+    }
+    
+    /**
+     * Liste des utilisateurs
+     * GET /admin/users
+     */
+    public function index(): void
+    {
+        // Récupérer les filtres
+        $filters = [
+            'role' => $_GET['role'] ?? '',
+            'status' => $_GET['status'] ?? '',
+            'search' => $_GET['search'] ?? ''
+        ];
+        
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        
+        // Récupérer les utilisateurs
+        $result = $this->userModel->getAll($page, 20, $filters);
+        
+        // Statistiques
+        $stats = $this->userModel->getStats();
+        
+        // Liste des rôles pour le filtre
+        $roles = User::ROLE_LABELS;
+        
+        // Variables pour la vue
+        $users = $result['data'];
+        $pagination = [
+            'current' => $result['page'],
+            'total' => $result['totalPages'],
+            'count' => $result['total']
+        ];
+        
+        $title = 'Gestion des utilisateurs';
+        $activeMenu = 'users';
+        
+        // Charger la vue
+        ob_start();
+        require __DIR__ . '/../Views/admin/users/index.php';
+        $content = ob_get_clean();
+        
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+    
+    /**
+     * Formulaire de création
+     * GET /admin/users/create
+     */
+    public function create(): void
+    {
+        $roles = User::ROLE_LABELS;
+        $reps = $this->getRepsList();
+        
+        $title = 'Nouvel utilisateur';
+        $activeMenu = 'users';
+        
+        ob_start();
+        require __DIR__ . '/../Views/admin/users/create.php';
+        $content = ob_get_clean();
+        
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+    
+    /**
+     * Enregistrer un nouvel utilisateur
+     * POST /admin/users
+     */
+    public function store(): void
+    {
+        // Validation CSRF
+        if (!$this->validateCsrf()) {
+            Session::setFlash('error', 'Token CSRF invalide');
+            header('Location: /stm/admin/users/create');
+            exit();
+        }
+        
+        // Validation des données
+        $errors = $this->validateUserData($_POST);
+        
+        if (!empty($errors)) {
+            Session::setFlash('error', implode('<br>', $errors));
+            Session::set('old_input', $_POST);
+            header('Location: /stm/admin/users/create');
+            exit();
+        }
+        
+        // Vérifier si l'email existe déjà
+        if ($this->userModel->findByEmail($_POST['email'])) {
+            Session::setFlash('error', 'Cet email est déjà utilisé');
+            Session::set('old_input', $_POST);
+            header('Location: /stm/admin/users/create');
+            exit();
+        }
+        
+        // Créer l'utilisateur
+        $data = [
+            'email' => trim($_POST['email']),
+            'name' => trim($_POST['name']),
+            'role' => $_POST['role'],
+            'rep_id' => $_POST['rep_id'] ?: null,
+            'rep_country' => $_POST['rep_country'] ?: null,
+            'is_active' => isset($_POST['is_active']) ? 1 : 0,
+            'created_by' => Session::get('user')['id'] ?? null
+        ];
+        
+        $userId = $this->userModel->create($data);
+        
+        if ($userId) {
+            Session::setFlash('success', 'Utilisateur créé avec succès');
+            header('Location: /stm/admin/users');
+        } else {
+            Session::setFlash('error', 'Erreur lors de la création');
+            Session::set('old_input', $_POST);
+            header('Location: /stm/admin/users/create');
+        }
+        
+        exit();
+    }
+    
+    /**
+     * Formulaire de modification
+     * GET /admin/users/{id}/edit
+     */
+    public function edit(int $id): void
+    {
+        $user = $this->userModel->findById($id);
+        
+        if (!$user) {
+            Session::setFlash('error', 'Utilisateur introuvable');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+        
+        $roles = User::ROLE_LABELS;
+        $reps = $this->getRepsList();
+        
+        $title = 'Modifier ' . $user['name'];
+        $activeMenu = 'users';
+        
+        ob_start();
+        require __DIR__ . '/../Views/admin/users/edit.php';
+        $content = ob_get_clean();
+        
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+    
+    /**
+     * Mettre à jour un utilisateur
+     * POST /admin/users/{id}
+     */
+    public function update(int $id): void
+    {
+        // Validation CSRF
+        if (!$this->validateCsrf()) {
+            Session::setFlash('error', 'Token CSRF invalide');
+            header("Location: /stm/admin/users/{$id}/edit");
+            exit();
+        }
+        
+        $user = $this->userModel->findById($id);
+        
+        if (!$user) {
+            Session::setFlash('error', 'Utilisateur introuvable');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+        
+        // Validation
+        $errors = $this->validateUserData($_POST, $id);
+        
+        if (!empty($errors)) {
+            Session::setFlash('error', implode('<br>', $errors));
+            header("Location: /stm/admin/users/{$id}/edit");
+            exit();
+        }
+        
+        // Mise à jour
+        $data = [
+            'name' => trim($_POST['name']),
+            'role' => $_POST['role'],
+            'rep_id' => $_POST['rep_id'] ?: null,
+            'rep_country' => $_POST['rep_country'] ?: null,
+            'is_active' => isset($_POST['is_active']) ? 1 : 0
+        ];
+        
+        if ($this->userModel->update($id, $data)) {
+            Session::setFlash('success', 'Utilisateur mis à jour');
+        } else {
+            Session::setFlash('error', 'Erreur lors de la mise à jour');
+        }
+        
+        header('Location: /stm/admin/users');
+        exit();
+    }
+    
+    /**
+     * Supprimer un utilisateur
+     * DELETE /admin/users/{id}
+     */
+    public function destroy(int $id): void
+    {
+        // Validation CSRF
+        if (!$this->validateCsrf()) {
+            Session::setFlash('error', 'Token CSRF invalide');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+        
+        $user = $this->userModel->findById($id);
+        
+        if (!$user) {
+            Session::setFlash('error', 'Utilisateur introuvable');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+        
+        // Empêcher la suppression de son propre compte
+        $currentUser = Session::get('user');
+        if ($currentUser && $currentUser['id'] == $id) {
+            Session::setFlash('error', 'Vous ne pouvez pas supprimer votre propre compte');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+        
+        if ($this->userModel->delete($id)) {
+            Session::setFlash('success', 'Utilisateur supprimé');
+        } else {
+            Session::setFlash('error', 'Erreur lors de la suppression');
+        }
+        
+        header('Location: /stm/admin/users');
+        exit();
+    }
+    
+    /**
+     * Activer/Désactiver un utilisateur (AJAX)
+     * POST /admin/users/{id}/toggle
+     */
+    public function toggle(int $id): void
+    {
+        header('Content-Type: application/json');
+        
+        $user = $this->userModel->findById($id);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'message' => 'Utilisateur introuvable']);
+            exit();
+        }
+        
+        // Empêcher la désactivation de son propre compte
+        $currentUser = Session::get('user');
+        if ($currentUser && $currentUser['id'] == $id) {
+            echo json_encode(['success' => false, 'message' => 'Vous ne pouvez pas désactiver votre propre compte']);
+            exit();
+        }
+        
+        $newStatus = !$user['is_active'];
+        
+        if ($this->userModel->setActive($id, $newStatus)) {
+            echo json_encode([
+                'success' => true, 
+                'active' => $newStatus,
+                'message' => $newStatus ? 'Utilisateur activé' : 'Utilisateur désactivé'
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Erreur lors de la mise à jour']);
+        }
+        
+        exit();
+    }
+    
+    /**
+     * Récupérer la liste des représentants (DB externe)
+     * 
+     * @return array
+     */
+    private function getRepsList(): array
+    {
+        $reps = ['BE' => [], 'LU' => []];
+        
+        try {
+            $extDb = ExternalDatabase::getInstance();
+            
+            // Reps BE
+            $beReps = $extDb->query(
+                "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL 
+                 FROM BE_REP 
+                 ORDER BY REP_NOM"
+            );
+            foreach ($beReps as $rep) {
+                $reps['BE'][] = [
+                    'id' => $rep['IDE_REP'],
+                    'name' => trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']),
+                    'email' => $rep['REP_EMAIL']
+                ];
+            }
+            
+            // Reps LU
+            $luReps = $extDb->query(
+                "SELECT IDE_REP, REP_PRENOM, REP_NOM, REP_EMAIL 
+                 FROM LU_REP 
+                 ORDER BY REP_NOM"
+            );
+            foreach ($luReps as $rep) {
+                $reps['LU'][] = [
+                    'id' => $rep['IDE_REP'],
+                    'name' => trim($rep['REP_PRENOM'] . ' ' . $rep['REP_NOM']),
+                    'email' => $rep['REP_EMAIL']
+                ];
+            }
+        } catch (\Exception $e) {
+            error_log("UserController::getRepsList error: " . $e->getMessage());
+        }
+        
+        return $reps;
+    }
+    
+    /**
+     * Valider les données utilisateur
+     * 
+     * @param array $data
+     * @param int|null $excludeId ID à exclure (pour update)
+     * @return array Erreurs
+     */
+    private function validateUserData(array $data, ?int $excludeId = null): array
+    {
+        $errors = [];
+        
+        // Email requis et valide
+        if (empty($data['email'])) {
+            $errors[] = 'L\'email est requis';
+        } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'L\'email n\'est pas valide';
+        }
+        
+        // Nom requis
+        if (empty($data['name'])) {
+            $errors[] = 'Le nom est requis';
+        }
+        
+        // Rôle requis et valide
+        $validRoles = array_keys(User::ROLE_LABELS);
+        if (empty($data['role']) || !in_array($data['role'], $validRoles)) {
+            $errors[] = 'Le rôle sélectionné n\'est pas valide';
+        }
+        
+        // Si role rep ou manager_reps, rep_id et rep_country requis
+        if (in_array($data['role'] ?? '', ['rep', 'manager_reps'])) {
+            if (empty($data['rep_id'])) {
+                $errors[] = 'Le représentant doit être sélectionné pour ce rôle';
+            }
+            if (empty($data['rep_country'])) {
+                $errors[] = 'Le pays doit être sélectionné pour ce rôle';
+            }
+        }
+        
+        return $errors;
+    }
+    
+    /**
+     * Valider le token CSRF
+     * 
+     * @return bool
+     */
+    private function validateCsrf(): bool
+    {
+        $token = $_POST['_token'] ?? '';
+        return $token === Session::get('csrf_token');
+    }
+}

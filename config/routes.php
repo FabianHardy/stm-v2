@@ -729,3 +729,77 @@ $router->post('/admin/agent/delete/{session_id}', function ($session_id) {
     $controller = new \App\Controllers\AgentController();
     $controller->delete($session_id);
 });
+<?php
+/**
+ * ROUTES UTILISATEURS - À ajouter dans config/routes.php
+ *
+ * Copier ce bloc AVANT la fin du fichier
+ * @created 2025/12/10
+ */
+
+// ============================================
+// ROUTES UTILISATEURS (Admin)
+// ============================================
+
+// Liste des utilisateurs
+$router->get("/admin/users", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->index();
+});
+
+// Formulaire de création
+$router->get("/admin/users/create", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->create();
+});
+
+// Enregistrer un nouvel utilisateur (POST)
+$router->post("/admin/users", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->store();
+});
+
+// Formulaire de modification
+$router->get("/admin/users/{id}/edit", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->edit((int) $id);
+});
+
+// Mettre à jour un utilisateur (POST)
+$router->post("/admin/users/{id}", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->update((int) $id);
+});
+
+// Supprimer un utilisateur (POST)
+$router->post("/admin/users/{id}/delete", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->destroy((int) $id);
+});
+
+// Toggle activation (AJAX)
+$router->post("/admin/users/{id}/toggle", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->toggle((int) $id);
+});
