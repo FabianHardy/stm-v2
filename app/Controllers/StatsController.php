@@ -596,9 +596,14 @@ class StatsController
      *
      * @return void
      * @created 2025/12/10
+     * @modified 2025/12/10 - Optimisation performances (suppression autoSize)
      */
     public function exportRepsExcel(): void
     {
+        // Augmenter les limites pour la génération Excel
+        set_time_limit(300); // 5 minutes
+        ini_set('memory_limit', '512M');
+
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
 
         if (!$campaignId) {
@@ -656,10 +661,10 @@ class StatsController
 
         // En-têtes
         $headers = ["N° Rep", "Nom", "Email", "Cluster", "Clients assignés", "Ont commandé", "Pas commandé", "Qté totale", "% Conversion"];
-        $colIndex = 1;
+        $col = "A";
         foreach ($headers as $header) {
-            $sheet->setCellValueByColumnAndRow($colIndex, 1, $header);
-            $colIndex++;
+            $sheet->setCellValue($col . "1", $header);
+            $col++;
         }
 
         // Style en-têtes
@@ -674,29 +679,33 @@ class StatsController
             $totalQty = $rep["stats"]["total_quantity"] ?? 0;
             $convRate = $totalClients > 0 ? round(($customersOrdered / $totalClients) * 100, 1) : 0;
 
-            $sheet->setCellValueByColumnAndRow(1, $row, $rep["id"] ?? "");
-            $sheet->setCellValueByColumnAndRow(2, $row, $rep["name"] ?? "");
-            $sheet->setCellValueByColumnAndRow(3, $row, $rep["email"] ?? "");
-            $sheet->setCellValueByColumnAndRow(4, $row, $rep["cluster"] ?? "");
-            $sheet->setCellValueByColumnAndRow(5, $row, $totalClients);
-            $sheet->setCellValueByColumnAndRow(6, $row, $customersOrdered);
-            $sheet->setCellValueByColumnAndRow(7, $row, $notOrdered);
-            $sheet->setCellValueByColumnAndRow(8, $row, $totalQty);
-            $sheet->setCellValueByColumnAndRow(9, $row, $convRate . "%");
+            $sheet->setCellValue("A" . $row, $rep["id"] ?? "");
+            $sheet->setCellValue("B" . $row, $rep["name"] ?? "");
+            $sheet->setCellValue("C" . $row, $rep["email"] ?? "");
+            $sheet->setCellValue("D" . $row, $rep["cluster"] ?? "");
+            $sheet->setCellValue("E" . $row, $totalClients);
+            $sheet->setCellValue("F" . $row, $customersOrdered);
+            $sheet->setCellValue("G" . $row, $notOrdered);
+            $sheet->setCellValue("H" . $row, $totalQty);
+            $sheet->setCellValue("I" . $row, $convRate . "%");
 
             $row++;
         }
 
-        // Ajuster largeur colonnes
-        foreach (range(1, 9) as $colIdx) {
-            $sheet->getColumnDimensionByColumn($colIdx)->setAutoSize(true);
-        }
+        // Largeurs fixes (BEAUCOUP plus rapide que autoSize)
+        $sheet->getColumnDimension("A")->setWidth(12);
+        $sheet->getColumnDimension("B")->setWidth(25);
+        $sheet->getColumnDimension("C")->setWidth(30);
+        $sheet->getColumnDimension("D")->setWidth(20);
+        $sheet->getColumnDimension("E")->setWidth(15);
+        $sheet->getColumnDimension("F")->setWidth(15);
+        $sheet->getColumnDimension("G")->setWidth(15);
+        $sheet->getColumnDimension("H")->setWidth(12);
+        $sheet->getColumnDimension("I")->setWidth(12);
 
         // ============================================
         // FEUILLES PAR REPRÉSENTANT
         // ============================================
-        $fixedColCount = 5; // N° Client, Nom, Ville, A commandé, Qté totale
-
         foreach ($reps as $repIndex => $rep) {
             // Créer une nouvelle feuille
             $repSheet = $spreadsheet->createSheet();
@@ -719,24 +728,26 @@ class StatsController
 
             // En-têtes fixes
             $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale"];
-            $colIndex = 1;
+            $col = "A";
             foreach ($fixedHeaders as $header) {
-                $repSheet->setCellValueByColumnAndRow($colIndex, 1, $header);
-                $colIndex++;
+                $repSheet->setCellValue($col . "1", $header);
+                $col++;
             }
 
-            // En-têtes produits (colonnes dynamiques à partir de la colonne 6)
-            $productColumns = []; // product_id => colIndex
+            // En-têtes produits (colonnes dynamiques à partir de la colonne F)
+            $productColumns = []; // product_id => colLetter
+            $colIndex = 6; // Commence à F (colonne 6)
             foreach ($campaignProducts as $product) {
-                $productColumns[$product["id"]] = $colIndex;
-                $repSheet->setCellValueByColumnAndRow($colIndex, 1, $product["name"] ?? $product["product_code"]);
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+                $productColumns[$product["id"]] = $colLetter;
+                $repSheet->setCellValue($colLetter . "1", $product["name"] ?? $product["product_code"]);
                 $colIndex++;
             }
 
             $lastColIndex = $colIndex - 1;
+            $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIndex);
 
             // Style en-têtes
-            $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIndex);
             $repSheet->getStyle("A1:" . $lastColLetter . "1")->applyFromArray($headerStyle);
 
             // Récupérer les quantités par produit pour chaque client
@@ -759,11 +770,11 @@ class StatsController
                 $customerNumber = $client["customer_number"] ?? "";
                 $hasOrdered = $client["has_ordered"] ?? false;
 
-                $repSheet->setCellValueByColumnAndRow(1, $row, $customerNumber);
-                $repSheet->setCellValueByColumnAndRow(2, $row, $client["company_name"] ?? "-");
-                $repSheet->setCellValueByColumnAndRow(3, $row, $client["city"] ?? "-");
-                $repSheet->setCellValueByColumnAndRow(4, $row, $hasOrdered ? "Oui" : "Non");
-                $repSheet->setCellValueByColumnAndRow(5, $row, $client["total_quantity"] ?? 0);
+                $repSheet->setCellValue("A" . $row, $customerNumber);
+                $repSheet->setCellValue("B" . $row, $client["company_name"] ?? "-");
+                $repSheet->setCellValue("C" . $row, $client["city"] ?? "-");
+                $repSheet->setCellValue("D" . $row, $hasOrdered ? "Oui" : "Non");
+                $repSheet->setCellValue("E" . $row, $client["total_quantity"] ?? 0);
 
                 // Style conditionnel pour "A commandé"
                 if ($hasOrdered) {
@@ -787,17 +798,24 @@ class StatsController
                 // Quantités par produit
                 foreach ($campaignProducts as $product) {
                     $productId = $product["id"];
-                    $prodColIndex = $productColumns[$productId];
+                    $colLetter = $productColumns[$productId];
                     $qty = $clientProductQuantities[$customerNumber][$productId] ?? 0;
-                    $repSheet->setCellValueByColumnAndRow($prodColIndex, $row, $qty);
+                    $repSheet->setCellValue($colLetter . $row, $qty);
                 }
 
                 $row++;
             }
 
-            // Ajuster largeur colonnes fixes
-            foreach (range(1, $fixedColCount) as $colIdx) {
-                $repSheet->getColumnDimensionByColumn($colIdx)->setAutoSize(true);
+            // Largeurs fixes pour colonnes (BEAUCOUP plus rapide que autoSize)
+            $repSheet->getColumnDimension("A")->setWidth(12);
+            $repSheet->getColumnDimension("B")->setWidth(30);
+            $repSheet->getColumnDimension("C")->setWidth(20);
+            $repSheet->getColumnDimension("D")->setWidth(12);
+            $repSheet->getColumnDimension("E")->setWidth(10);
+
+            // Largeur fixe pour colonnes produits
+            foreach ($productColumns as $colLetter) {
+                $repSheet->getColumnDimension($colLetter)->setWidth(8);
             }
 
             // Figer la première ligne et les 5 premières colonnes

@@ -218,6 +218,11 @@ SCHEMA;
      */
     public function executeTool(string $toolName, array $arguments): array
     {
+        // DEBUG LOG vers fichier
+        $logFile = dirname(__DIR__, 2) . '/public/agent_debug.log';
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " - executeTool: {$toolName}\n", FILE_APPEND);
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " - Arguments: " . json_encode($arguments) . "\n", FILE_APPEND);
+
         try {
             switch ($toolName) {
                 case 'query_database':
@@ -354,10 +359,20 @@ SCHEMA;
      */
     private function getRepCampaignStats(array $args): array
     {
+        // DEBUG LOG vers fichier
+        $logFile = dirname(__DIR__, 2) . '/public/agent_debug.log';
+        $log = function($msg) use ($logFile) {
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - " . $msg . "\n", FILE_APPEND);
+        };
+
+        $log("=== getRepCampaignStats CALLED ===");
+        $log("Args: " . json_encode($args));
+
         $repName = $args['rep_name'] ?? '';
         $campaignName = $args['campaign_name'] ?? '';
 
         if (empty($repName) || empty($campaignName)) {
+            $log("ERROR: Missing args");
             return ['error' => 'rep_name et campaign_name sont requis'];
         }
 
@@ -365,6 +380,7 @@ SCHEMA;
             // 1. TROUVER LE REPRÉSENTANT D'ABORD (pour déterminer son pays)
             $extDb = $this->getExternalDb();
             if ($extDb === null) {
+                $log("ERROR: External DB null");
                 return ['error' => 'Impossible de se connecter à la base externe'];
             }
 
@@ -373,17 +389,21 @@ SCHEMA;
             $rep = null;
 
             // Chercher dans BE_REP
+            $log("Searching BE_REP for: {$repName}");
             $repResults = $extDb->query(
                 "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP
                  WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
                 [':name1' => $searchPattern, ':name2' => $searchPattern]
             );
 
+            $log("BE_REP results: " . json_encode($repResults));
+
             if ($repResults !== false && !empty($repResults)) {
                 $rep = $repResults[0];
                 $repCountry = 'BE';
             } else {
                 // Chercher dans LU_REP
+                $log("Searching LU_REP...");
                 $repResults = $extDb->query(
                     "SELECT IDE_REP, REP_PRENOM, REP_NOM FROM LU_REP
                      WHERE REP_NOM LIKE :name1 OR REP_PRENOM LIKE :name2 LIMIT 5",
@@ -397,13 +417,16 @@ SCHEMA;
             }
 
             if (!$rep) {
+                $log("ERROR: Rep not found");
                 return ['error' => "Représentant '{$repName}' non trouvé"];
             }
 
             $repFullName = trim(($rep['REP_PRENOM'] ?? '') . ' ' . ($rep['REP_NOM'] ?? ''));
             $ideRep = $rep['IDE_REP'];
+            $log("Found rep: {$repFullName}, IDE_REP: {$ideRep}, Country: {$repCountry}");
 
             // 2. TROUVER LA CAMPAGNE DANS LE PAYS DU REP
+            $log("Searching campaign '{$campaignName}' for country {$repCountry}");
             $campaign = $this->db->query(
                 "SELECT id, name, country, start_date, end_date FROM campaigns
                  WHERE name LIKE :name
@@ -412,8 +435,11 @@ SCHEMA;
                 [':name' => '%' . $campaignName . '%', ':country' => $repCountry]
             );
 
+            $log("Campaign result: " . json_encode($campaign));
+
             if (empty($campaign)) {
                 // Fallback : chercher sans filtre pays si pas trouvé
+                $log("Fallback: searching without country filter");
                 $campaign = $this->db->query(
                     "SELECT id, name, country, start_date, end_date FROM campaigns
                      WHERE name LIKE :name
@@ -422,10 +448,12 @@ SCHEMA;
                 );
 
                 if (empty($campaign)) {
+                    $log("ERROR: Campaign not found");
                     return ['error' => "Campagne '{$campaignName}' non trouvée"];
                 }
             }
             $campaign = $campaign[0];
+            $log("Using campaign ID: {$campaign['id']}, country: {$campaign['country']}");
 
             // 3. Compter le total de clients du rep (base externe)
             $clientTable = $repCountry === 'BE' ? 'BE_CLL' : 'LU_CLL';
@@ -434,12 +462,12 @@ SCHEMA;
                 [':ide_rep' => (string) $ideRep]
             );
             $totalClients = (int) ($totalClientsResult[0]['total'] ?? 0);
+            $log("Total clients: {$totalClients}");
 
             // 4. Stats via jointure cross-database
             $extClientTable = $repCountry === 'BE' ? 'trendyblog_sig.BE_CLL' : 'trendyblog_sig.LU_CLL';
 
-            $repStats = $this->db->query(
-                "SELECT
+            $sql = "SELECT
                     COUNT(DISTINCT o.id) as commandes,
                     COUNT(DISTINCT c.id) as clients,
                     COALESCE(SUM(ol.quantity), 0) as promos
@@ -449,13 +477,19 @@ SCHEMA;
                  JOIN {$extClientTable} ext ON ext.CLL_NCLIXX = c.customer_number
                  WHERE o.campaign_id = :campaign_id
                  AND o.status = 'validated'
-                 AND ext.IDE_REP = :rep_id",
+                 AND ext.IDE_REP = :rep_id";
+
+            $log("Executing SQL with campaign_id={$campaign['id']}, rep_id={$ideRep}");
+
+            $repStats = $this->db->query($sql,
                 [':campaign_id' => $campaign['id'], ':rep_id' => (string) $ideRep]
             );
 
+            $log("Stats result: " . json_encode($repStats));
+
             $stats = $repStats[0] ?? ['commandes' => 0, 'clients' => 0, 'promos' => 0];
 
-            return [
+            $result = [
                 'representant' => $repFullName,
                 'rep_id' => $ideRep,
                 'campagne' => $campaign['name'],
@@ -469,8 +503,11 @@ SCHEMA;
                 'promos_vendues' => (int) $stats['promos']
             ];
 
+            $log("FINAL RESULT: " . json_encode($result));
+            return $result;
+
         } catch (\Exception $e) {
-            error_log("getRepCampaignStats error: " . $e->getMessage());
+            $log("EXCEPTION: " . $e->getMessage());
             return ['error' => $e->getMessage()];
         }
     }
