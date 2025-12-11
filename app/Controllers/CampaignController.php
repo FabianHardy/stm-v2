@@ -450,6 +450,7 @@ class CampaignController
 
     /**
      * Récupère les utilisateurs NON assignés à une campagne
+     * Exclut manager et rep qui ne gèrent pas les campagnes
      */
     private function getAvailableUsers(int $campaignId): array
     {
@@ -459,6 +460,7 @@ class CampaignController
                 "SELECT u.id, u.name, u.email, u.role
                  FROM users u
                  WHERE u.is_active = 1
+                 AND u.role IN ('superadmin', 'admin')
                  AND u.id NOT IN (
                      SELECT user_id FROM campaign_assignees WHERE campaign_id = :campaign_id
                  )
@@ -502,14 +504,14 @@ class CampaignController
 
         $db = Database::getInstance();
 
-        // Vérifier que l'utilisateur existe et est actif
+        // Vérifier que l'utilisateur existe, est actif, et a le bon rôle
         $user = $db->query(
-            "SELECT id, name FROM users WHERE id = :id AND is_active = 1 LIMIT 1",
+            "SELECT id, name FROM users WHERE id = :id AND is_active = 1 AND role IN ('superadmin', 'admin') LIMIT 1",
             [':id' => $userId]
         );
 
         if (empty($user)) {
-            $this->jsonResponse(['success' => false, 'message' => 'Utilisateur introuvable'], 404);
+            $this->jsonResponse(['success' => false, 'message' => 'Utilisateur introuvable ou non autorisé'], 404);
             return;
         }
 
@@ -618,6 +620,7 @@ class CampaignController
 
     /**
      * Récupère tous les utilisateurs actifs (pour le formulaire de création)
+     * Exclut manager et rep qui ne gèrent pas les campagnes
      */
     private function getAllActiveUsers(): array
     {
@@ -626,11 +629,13 @@ class CampaignController
             $currentUser = Session::get('user');
             $currentUserId = $currentUser['id'] ?? 0;
 
-            // Exclure l'utilisateur courant (il sera owner)
+            // Exclure l'utilisateur courant (il sera owner) et les rôles manager/rep
             return $db->query(
                 "SELECT id, name, email, role
                  FROM users
-                 WHERE is_active = 1 AND id != :current_user_id
+                 WHERE is_active = 1
+                 AND id != :current_user_id
+                 AND role IN ('superadmin', 'admin')
                  ORDER BY name ASC",
                 [':current_user_id' => $currentUserId]
             );
