@@ -460,7 +460,7 @@ class CampaignController
                 "SELECT u.id, u.name, u.email, u.role
                  FROM users u
                  WHERE u.is_active = 1
-                 AND u.role IN ('superadmin', 'admin')
+                 AND u.role IN ('superadmin', 'admin', 'createur')
                  AND u.id NOT IN (
                      SELECT user_id FROM campaign_assignees WHERE campaign_id = :campaign_id
                  )
@@ -506,7 +506,7 @@ class CampaignController
 
         // Vérifier que l'utilisateur existe, est actif, et a le bon rôle
         $user = $db->query(
-            "SELECT id, name FROM users WHERE id = :id AND is_active = 1 AND role IN ('superadmin', 'admin') LIMIT 1",
+            "SELECT id, name FROM users WHERE id = :id AND is_active = 1 AND role IN ('superadmin', 'admin', 'createur') LIMIT 1",
             [':id' => $userId]
         );
 
@@ -635,7 +635,7 @@ class CampaignController
                  FROM users
                  WHERE is_active = 1
                  AND id != :current_user_id
-                 AND role IN ('superadmin', 'admin')
+                 AND role IN ('superadmin', 'admin', 'createur')
                  ORDER BY name ASC",
                 [':current_user_id' => $currentUserId]
             );

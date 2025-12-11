@@ -3,36 +3,49 @@
  * AgentController.php
  *
  * Controller pour l'agent conversationnel STM
- * Gère les échanges entre l'utilisateur et OpenAI
+ * Gère les échanges entre l'utilisateur et l'IA (OpenAI, Claude, Ollama)
  * Sauvegarde l'historique des conversations par utilisateur
  *
  * @created  2025/12/09
- * @modified 2025/12/09 - Ajout historique conversations
+ * @modified 2025/12/11 - Support multi-provider via AIServiceFactory
  * @package  STM Agent
  */
 
 namespace App\Controllers;
 
-use App\Services\OpenAIService;
+use App\Services\AIServiceFactory;
+use App\Services\AIServiceInterface;
 use App\Agent\AgentTools;
+use App\Models\AgentConfig;
 use Core\Database;
 
 class AgentController
 {
-    private OpenAIService $openai;
+    private AIServiceInterface $ai;
     private AgentTools $tools;
     private Database $db;
     private string $systemPrompt;
 
     public function __construct()
     {
-        $this->openai = new OpenAIService();
+        // Créer le service IA selon la config (OpenAI, Claude, ou Ollama)
+        $this->ai = AIServiceFactory::create();
         $this->tools = new AgentTools();
         $this->db = Database::getInstance();
-
+        
         // Récupérer le schéma DB pour le prompt
         $dbSchema = $this->tools->getDbSchema();
-
+        
+        // Charger les configurations personnalisées
+        $customPrompt = '';
+        try {
+            $agentConfig = AgentConfig::getInstance();
+            $customPrompt = $agentConfig->buildCustomPrompt();
+        } catch (\Exception $e) {
+            // Si la table n'existe pas encore, on continue sans
+            error_log("AgentConfig not available: " . $e->getMessage());
+        }
+        
         $this->systemPrompt = <<<PROMPT
 Tu es l'assistant STM, un agent intelligent pour le système de gestion de campagnes promotionnelles STM v2 de Trendy Foods.
 
@@ -84,6 +97,7 @@ Exemple :
 
 ## SCHÉMA DES BASES
 {$dbSchema}
+{$customPrompt}
 PROMPT;
     }
 
@@ -104,9 +118,9 @@ PROMPT;
         if (!$userId) return;
 
         try {
-            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content)
+            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content) 
                     VALUES (:user_id, :session_id, :title, :role, :content)";
-
+            
             $this->db->query($sql, [
                 ':user_id' => $userId,
                 ':session_id' => $sessionId,
@@ -164,7 +178,7 @@ PROMPT;
 
             // Construire l'historique des messages
             $messages = [];
-
+            
             foreach ($history as $msg) {
                 $messages[] = [
                     'role' => $msg['role'],
@@ -178,11 +192,11 @@ PROMPT;
                 'content' => $userMessage
             ];
 
-            // Appeler OpenAI avec les tools
-            $response = $this->openai->chat(
+            // Appeler l'IA avec les tools
+            $response = $this->ai->chat(
                 $messages,
-                $this->tools->getToolsDefinition(),
-                $this->systemPrompt
+                $this->systemPrompt,
+                $this->tools->getToolsDefinition()
             );
 
             // Traiter les tool calls si présents
@@ -225,7 +239,7 @@ PROMPT;
      */
     private function processResponse(array $response, array $messages): string
     {
-        $extracted = $this->openai->extractMessage($response);
+        $extracted = $this->ai->extractMessage($response);
 
         // Si pas de tool calls, retourner le contenu directement
         if (empty($extracted['tool_calls'])) {
@@ -234,7 +248,7 @@ PROMPT;
 
         // Exécuter les tool calls
         $toolResults = [];
-
+        
         foreach ($extracted['tool_calls'] as $toolCall) {
             $toolName = $toolCall['function']['name'];
             $arguments = json_decode($toolCall['function']['arguments'], true) ?? [];
@@ -265,14 +279,14 @@ PROMPT;
             ];
         }
 
-        // Appeler OpenAI à nouveau pour obtenir la réponse finale
-        $finalResponse = $this->openai->continueWithToolResult(
+        // Appeler l'IA à nouveau pour obtenir la réponse finale
+        $finalResponse = $this->ai->chat(
             $messages,
-            $this->tools->getToolsDefinition(),
-            $this->systemPrompt
+            $this->systemPrompt,
+            $this->tools->getToolsDefinition()
         );
 
-        $finalExtracted = $this->openai->extractMessage($finalResponse);
+        $finalExtracted = $this->ai->extractMessage($finalResponse);
 
         // Vérifier s'il y a encore des tool calls (récursion limitée)
         if (!empty($finalExtracted['tool_calls'])) {
@@ -290,16 +304,16 @@ PROMPT;
     public function history(): void
     {
         $userId = $this->getCurrentUserId();
-
+        
         // Récupérer les conversations groupées par session
         $conversations = $this->db->query(
-            "SELECT
+            "SELECT 
                 session_id,
                 MIN(title) as title,
                 MIN(created_at) as started_at,
                 MAX(created_at) as last_message_at,
                 COUNT(*) as message_count
-             FROM agent_conversations
+             FROM agent_conversations 
              WHERE user_id = :user_id
              GROUP BY session_id
              ORDER BY last_message_at DESC
@@ -324,11 +338,11 @@ PROMPT;
     public function conversation(string $sessionId): void
     {
         $userId = $this->getCurrentUserId();
-
+        
         // Récupérer les messages de cette conversation
         $messages = $this->db->query(
             "SELECT role, content, created_at
-             FROM agent_conversations
+             FROM agent_conversations 
              WHERE user_id = :user_id AND session_id = :session_id
              ORDER BY created_at ASC",
             [':user_id' => $userId, ':session_id' => $sessionId]
@@ -342,7 +356,7 @@ PROMPT;
         // Récupérer le titre
         $info = $this->db->query(
             "SELECT title, MIN(created_at) as started_at
-             FROM agent_conversations
+             FROM agent_conversations 
              WHERE session_id = :session_id
              GROUP BY session_id",
             [':session_id' => $sessionId]
@@ -368,12 +382,12 @@ PROMPT;
     public function load(string $sessionId): void
     {
         header('Content-Type: application/json');
-
+        
         $userId = $this->getCurrentUserId();
-
+        
         $messages = $this->db->query(
             "SELECT role, content
-             FROM agent_conversations
+             FROM agent_conversations 
              WHERE user_id = :user_id AND session_id = :session_id
              ORDER BY created_at ASC",
             [':user_id' => $userId, ':session_id' => $sessionId]
@@ -393,12 +407,12 @@ PROMPT;
     public function delete(string $sessionId): void
     {
         header('Content-Type: application/json');
-
+        
         $userId = $this->getCurrentUserId();
-
+        
         try {
             $this->db->query(
-                "DELETE FROM agent_conversations
+                "DELETE FROM agent_conversations 
                  WHERE user_id = :user_id AND session_id = :session_id",
                 [':user_id' => $userId, ':session_id' => $sessionId]
             );

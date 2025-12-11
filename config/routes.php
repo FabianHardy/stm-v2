@@ -830,3 +830,115 @@ $router->post("/admin/settings/permissions", function () {
     $controller = new \App\Controllers\SettingsController();
     $controller->savePermissions();
 });
+/**
+ * ROUTES AGENT - À ajouter dans config/routes.php
+ *
+ * Copier ce bloc dans la section des routes admin
+ */
+
+// ========================================
+// AGENT (Chatbot IA)
+// ========================================
+
+// Page d'accueil agent
+$router->get('/admin/agent', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->index();
+});
+
+// Endpoint chat (POST)
+$router->post('/admin/agent/chat', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->chat();
+});
+
+// Historique des conversations
+$router->get('/admin/agent/history', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->history();
+});
+
+// Voir une conversation spécifique
+$router->get('/admin/agent/conversation/{session_id}', function ($sessionId) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->conversation($sessionId);
+});
+
+// Charger une conversation dans le widget (AJAX)
+$router->get('/admin/agent/load/{session_id}', function ($sessionId) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->load($sessionId);
+});
+
+// Supprimer une conversation (AJAX)
+$router->post('/admin/agent/delete/{session_id}', function ($sessionId) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentController();
+    $controller->delete($sessionId);
+});
+
+// ========================================
+// CONFIGURATION AGENT
+// ========================================
+
+// Page configuration de l'agent
+$router->get('/admin/settings/agent', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->index();
+});
+
+// Sauvegarder la configuration
+$router->post('/admin/settings/agent/save', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->save();
+});
+
+// Réinitialiser la configuration
+$router->post('/admin/settings/agent/reset', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->reset();
+});
+
+// Prévisualisation du prompt (AJAX)
+$router->get('/admin/settings/agent/preview', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->preview();
+});
+
+// Test connexion IA (AJAX - Super Admin)
+$router->get('/admin/settings/agent/test', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->testConnection();
+});;
