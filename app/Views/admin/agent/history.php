@@ -71,7 +71,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <span :class="currentMascot.dotColor">•</span>
-                    "Stats de Tahir sur Black Friday 2025"
+                    "Compare Black Friday et Noël 2025"
                 </div>
                 <div class="flex items-center gap-2">
                     <span :class="currentMascot.dotColor">•</span>

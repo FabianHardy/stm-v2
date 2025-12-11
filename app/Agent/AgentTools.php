@@ -83,12 +83,12 @@ Colonnes: IDE_REP (PK), REP_PRENOM, REP_NOM, REP_EMAIL, REP_CLU (cluster), REP_S
 Structure identique à BE_REP
 
 ### EXEMPLE - Trouver un représentant par nom:
-SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP WHERE REP_NOM LIKE '%ZERAFI%' OR REP_PRENOM LIKE '%Tahir%'
+SELECT IDE_REP, REP_PRENOM, REP_NOM FROM BE_REP WHERE REP_NOM LIKE '%DUPONT%' OR REP_PRENOM LIKE '%Jean%'
 
 ### EXEMPLE - Clients d'un représentant:
 SELECT c.CLL_NCLIXX, c.CLL_NOM, c.CLL_LOCALITE
 FROM BE_CLL c
-WHERE c.IDE_REP = (SELECT IDE_REP FROM BE_REP WHERE REP_NOM LIKE '%ZERAFI%')
+WHERE c.IDE_REP = (SELECT IDE_REP FROM BE_REP WHERE REP_NOM LIKE '%DUPONT%')
 
 ### EXEMPLE - Stats complètes d'un rep sur une campagne (jointure locale + externe):
 -- D'abord trouver l'IDE_REP dans BE_REP
@@ -170,7 +170,7 @@ SCHEMA;
                         'properties' => [
                             'rep_name' => [
                                 'type' => 'string',
-                                'description' => 'Nom ou partie du nom du représentant (ex: Tahir, ZERAFI)'
+                                'description' => 'Nom ou partie du nom du représentant (ex: Dupont, Jean)'
                             ],
                             'campaign_name' => [
                                 'type' => 'string',
