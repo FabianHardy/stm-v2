@@ -63,6 +63,9 @@ class CampaignController
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
+        // Récupérer les utilisateurs disponibles pour les collaborateurs
+        $availableUsers = $this->getAllActiveUsers();
+
         require_once __DIR__ . "/../Views/admin/campaigns/create.php";
     }
 
@@ -109,6 +112,11 @@ class CampaignController
             if ($campaignId) {
                 // Assigner le créateur comme owner
                 $this->assignOwner($campaignId);
+
+                // Ajouter les collaborateurs sélectionnés
+                if (!empty($_POST['collaborators']) && is_array($_POST['collaborators'])) {
+                    $this->addInitialCollaborators($campaignId, $_POST['collaborators']);
+                }
 
                 // Gérer la liste de clients si mode manual
                 if ($data["customer_assignment_mode"] === "manual" && !empty($_POST["customer_list"])) {
@@ -185,6 +193,10 @@ class CampaignController
             $customers = $this->campaignModel->getCustomerNumbers($id);
             $campaign["customer_list"] = implode("\n", $customers);
         }
+
+        // Équipe (pour section Équipe)
+        $assignees = $this->getAssignees($id);
+        $availableUsers = $this->getAvailableUsers($id);
 
         require_once __DIR__ . "/../Views/admin/campaigns/edit.php";
     }
@@ -603,6 +615,58 @@ class CampaignController
     // =========================================================================
     // HELPERS
     // =========================================================================
+
+    /**
+     * Récupère tous les utilisateurs actifs (pour le formulaire de création)
+     */
+    private function getAllActiveUsers(): array
+    {
+        try {
+            $db = Database::getInstance();
+            $currentUser = Session::get('user');
+            $currentUserId = $currentUser['id'] ?? 0;
+
+            // Exclure l'utilisateur courant (il sera owner)
+            return $db->query(
+                "SELECT id, name, email, role
+                 FROM users
+                 WHERE is_active = 1 AND id != :current_user_id
+                 ORDER BY name ASC",
+                [':current_user_id' => $currentUserId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getAllActiveUsers: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Ajoute les collaborateurs initiaux lors de la création
+     */
+    private function addInitialCollaborators(int $campaignId, array $userIds): void
+    {
+        $db = Database::getInstance();
+        $currentUser = Session::get('user');
+        $assignedBy = $currentUser['id'] ?? null;
+
+        foreach ($userIds as $userId) {
+            $userId = (int) $userId;
+            if ($userId <= 0) continue;
+
+            try {
+                $db->getConnection()->prepare(
+                    "INSERT IGNORE INTO campaign_assignees (campaign_id, user_id, role, assigned_by)
+                     VALUES (:campaign_id, :user_id, 'collaborator', :assigned_by)"
+                )->execute([
+                    ':campaign_id' => $campaignId,
+                    ':user_id' => $userId,
+                    ':assigned_by' => $assignedBy
+                ]);
+            } catch (\PDOException $e) {
+                error_log("Erreur addInitialCollaborators: " . $e->getMessage());
+            }
+        }
+    }
 
     /**
      * Valider le token CSRF
