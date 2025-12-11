@@ -9,8 +9,8 @@
  *
  * @package    Config
  * @author     Fabian Hardy
- * @version    1.9.0
- * @modified   27/11/2025 - Ajout routes commandes admin (show)
+ * @version    2.0.0
+ * @modified   11/12/2025 - Ajout routes équipe campagne (assignees)
  */
 
 // ============================================
@@ -131,6 +131,32 @@ $router->post("/admin/campaigns", function () {
     $controller = new CampaignController();
     $controller->store();
 });
+
+// ============================================
+// ÉQUIPE CAMPAGNE (ASSIGNEES) - AVANT {id} !
+// ============================================
+
+// Ajouter un collaborateur
+$router->post("/admin/campaigns/{id}/assignees", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CampaignController();
+    $controller->addAssignee((int) $id);
+});
+
+// Retirer un collaborateur
+$router->post("/admin/campaigns/{id}/assignees/{userId}/delete", function ($id, $userId) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CampaignController();
+    $controller->removeAssignee((int) $id, (int) $userId);
+});
+
+// ============================================
+// ROUTES CAMPAGNES AVEC {id} (GÉNÉRIQUES)
+// ============================================
 
 // Détails d'une campagne
 $router->get("/admin/campaigns/{id}", function ($id) {
@@ -591,13 +617,8 @@ $router->post("/admin/stats/export", function () {
     $controller = new \App\Controllers\StatsController();
     $controller->export();
 });
+
 $router->post('/admin/stats/export-reps-excel', [App\Controllers\StatsController::class, 'exportRepsExcel']);
-/**
- * ROUTES À AJOUTER dans config/routes.php
- *
- * Copier ce bloc dans la section des routes admin
- * AVANT les routes génériques avec {id}
- */
 
 // ============================================
 // ROUTES CONFIGURATION - COMPTES INTERNES
@@ -666,12 +687,6 @@ $router->post("/admin/config/internal-customers/{id}/toggle", function ($id) {
     $controller->toggleActive((int) $id);
 });
 
-/**
- * ROUTES AGENT - À ajouter dans config/routes.php
- *
- * Copier ce bloc dans la section des routes admin
- */
-
 // ========================================
 // AGENT (Chatbot IA)
 // ========================================
@@ -729,13 +744,6 @@ $router->post('/admin/agent/delete/{session_id}', function ($session_id) {
     $controller = new \App\Controllers\AgentController();
     $controller->delete($session_id);
 });
-
-/**
- * ROUTES UTILISATEURS - À ajouter dans config/routes.php
- *
- * Copier ce bloc AVANT la fin du fichier
- * @created 2025/12/10
- */
 
 // ============================================
 // ROUTES UTILISATEURS (Admin)
@@ -804,20 +812,16 @@ $router->post("/admin/users/{id}/toggle", function ($id) {
     $controller->toggle((int) $id);
 });
 
+// ============================================
+// CONFIGURATION / SETTINGS
+// ============================================
+
 $router->get("/admin/settings", function () {
     $middleware = new \Middleware\AuthMiddleware();
     $middleware->handle();
     $controller = new \App\Controllers\SettingsController();
     $controller->index();
 });
-/**
- * Route à ajouter dans /config/routes.php
- * Pour la sauvegarde des permissions
- */
-
-// ============================================
-// CONFIGURATION / SETTINGS - Route POST
-// ============================================
 
 // Sauvegarder les permissions (AJAX)
 $router->post("/admin/settings/permissions", function () {
@@ -826,30 +830,3 @@ $router->post("/admin/settings/permissions", function () {
     $controller = new \App\Controllers\SettingsController();
     $controller->savePermissions();
 });
-/**
- * Routes à ajouter dans /config/routes.php
- * Pour la gestion des collaborateurs (équipe campagne)
- */
-
-// ============================================
-// CAMPAGNES - ÉQUIPE / ASSIGNEES
-// ============================================
-
-// Ajouter un collaborateur (POST)
-$router->post("/admin/campaigns/{id}/assignees", function ($id) {
-    $middleware = new \Middleware\AuthMiddleware();
-    $middleware->handle();
-    $controller = new \App\Controllers\CampaignController();
-    $controller->addAssignee((int) $id);
-});
-
-// Retirer un collaborateur (DELETE)
-$router->delete("/admin/campaigns/{id}/assignees/{userId}", function ($id, $userId) {
-    $middleware = new \Middleware\AuthMiddleware();
-    $middleware->handle();
-    $controller = new \App\Controllers\CampaignController();
-    $controller->removeAssignee((int) $id, (int) $userId);
-});
-
-// Note: Si ton router ne supporte pas DELETE, utilise POST avec _method:
-// $router->post("/admin/campaigns/{id}/assignees/{userId}/delete", ...);

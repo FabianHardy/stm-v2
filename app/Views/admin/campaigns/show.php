@@ -713,8 +713,8 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
 
         const csrfToken = '<?= $_SESSION['csrf_token'] ?>';
 
-        fetch('/stm/admin/campaigns/<?= $campaign['id'] ?>/assignees/' + userId, {
-            method: 'DELETE',
+        fetch('/stm/admin/campaigns/<?= $campaign['id'] ?>/assignees/' + userId + '/delete', {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken

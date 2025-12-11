@@ -5,12 +5,14 @@
  * Contrôleur pour la gestion des campagnes promotionnelles
  *
  * @created  2025/11/07 10:00
- * @modified 2025/11/14 01:00 - Sprint 5 : Ajout gestion nouveaux champs (customer_assignment_mode, order_password, order_type, deferred_delivery, delivery_date, quotas) + compteurs clients/promotions
+ * @modified 2025/12/10 - Ajout gestion équipe (assignees) pour onglet Équipe
  */
 
 namespace App\Controllers;
 
 use App\Models\Campaign;
+use App\Helpers\PermissionHelper;
+use Core\Database;
 use Core\Session;
 
 class CampaignController
@@ -24,75 +26,57 @@ class CampaignController
 
     /**
      * Afficher la liste de toutes les campagnes avec filtres
-     *
-     * @return void
      */
     public function index(): void
     {
-        // Récupérer les filtres de la requête
         $filters = [
             "search" => $_GET["search"] ?? "",
             "country" => $_GET["country"] ?? "",
             "status" => $_GET["status"] ?? "",
         ];
 
-        // Récupérer les campagnes filtrées
         $campaigns = $this->campaignModel->getAll($filters);
 
-        // 🆕 Enrichir chaque campagne avec ses statistiques
         foreach ($campaigns as &$campaign) {
             $campaign["customer_stats"] = $this->campaignModel->getCustomerStats($campaign["id"]);
             $campaign["promotion_count"] = $this->campaignModel->countPromotions($campaign["id"]);
         }
-        unset($campaign); // Libérer la référence
+        unset($campaign);
 
-        // Récupérer les statistiques
         $stats = $this->campaignModel->getStats();
-
-        // Ajouter statistiques par pays
         $stats["be"] = $this->campaignModel->countByCountry("BE");
         $stats["lu"] = $this->campaignModel->countByCountry("LU");
 
-        // Calcul pagination (variables attendues par la vue)
         $total = $this->campaignModel->count($filters);
         $perPage = 20;
         $currentPage = isset($_GET["page"]) ? (int) $_GET["page"] : 1;
         $totalPages = $total > 0 ? (int) ceil($total / $perPage) : 1;
 
-        // Charger la vue
         require_once __DIR__ . "/../Views/admin/campaigns/index.php";
     }
 
     /**
      * Afficher le formulaire de création
-     *
-     * @return void
      */
     public function create(): void
     {
-        // Préparer les variables pour la vue
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
-        // Charger la vue
         require_once __DIR__ . "/../Views/admin/campaigns/create.php";
     }
 
     /**
      * Enregistrer une nouvelle campagne (POST)
-     *
-     * @return void
      */
     public function store(): void
     {
-        // 1. Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
             header("Location: /stm/admin/campaigns/create");
             exit();
         }
 
-        // 2. Récupérer les données du formulaire
         $data = [
             "name" => $_POST["name"] ?? "",
             "country" => $_POST["country"] ?? "",
@@ -103,8 +87,6 @@ class CampaignController
             "description_fr" => $_POST["description_fr"] ?? "",
             "title_nl" => $_POST["title_nl"] ?? "",
             "description_nl" => $_POST["description_nl"] ?? "",
-
-            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             "customer_assignment_mode" => $_POST["customer_assignment_mode"] ?? "automatic",
             "order_password" => $_POST["order_password"] ?? null,
             "order_type" => $_POST["order_type"] ?? "W",
@@ -112,7 +94,6 @@ class CampaignController
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];
 
-        // 3. Valider les données
         $errors = $this->campaignModel->validate($data);
 
         if (!empty($errors)) {
@@ -122,21 +103,17 @@ class CampaignController
             exit();
         }
 
-        // 4. Créer la campagne
         try {
             $campaignId = $this->campaignModel->create($data);
 
             if ($campaignId) {
-                // Si mode MANUAL, gérer la liste de clients
+                // Assigner le créateur comme owner
+                $this->assignOwner($campaignId);
+
+                // Gérer la liste de clients si mode manual
                 if ($data["customer_assignment_mode"] === "manual" && !empty($_POST["customer_list"])) {
-                    $customerList = $_POST["customer_list"];
-
-                    // 🔧 FIX : Normaliser les fins de ligne (Excel/Windows: \r\n, Mac ancien: \r, Unix: \n)
-                    $customerList = str_replace(["\r\n", "\r"], "\n", $customerList);
-
-                    $customerNumbers = explode("\n", $customerList);
-                    $customerNumbers = array_map("trim", $customerNumbers);
-                    $customerNumbers = array_filter($customerNumbers);
+                    $customerList = str_replace(["\r\n", "\r"], "\n", $_POST["customer_list"]);
+                    $customerNumbers = array_filter(array_map("trim", explode("\n", $customerList)));
 
                     if (!empty($customerNumbers)) {
                         $added = $this->campaignModel->addCustomersToCampaign($campaignId, $customerNumbers);
@@ -163,9 +140,6 @@ class CampaignController
 
     /**
      * Afficher les détails d'une campagne
-     *
-     * @param int $id ID de la campagne
-     * @return void
      */
     public function show(int $id): void
     {
@@ -177,26 +151,22 @@ class CampaignController
             exit();
         }
 
-        // Récupérer les compteurs pour les statistiques
+        // Statistiques
         $customerCount = $this->campaignModel->countCustomers($id);
         $promotionCount = $this->campaignModel->countPromotions($id);
-
-        // 🆕 Ajouter le nombre de clients ayant commandé
         $customersWithOrders = $this->campaignModel->countCustomersWithOrders($id);
-
-        // TODO: Ajouter compteurs commandes et montant total quand module Commandes sera prêt
         $orderCount = 0;
         $totalAmount = 0;
 
-        // Charger la vue
+        // Équipe (onglet Team)
+        $assignees = $this->getAssignees($id);
+        $availableUsers = $this->getAvailableUsers($id);
+
         require_once __DIR__ . "/../Views/admin/campaigns/show.php";
     }
 
     /**
      * Afficher le formulaire de modification
-     *
-     * @param int $id ID de la campagne
-     * @return void
      */
     public function edit(int $id): void
     {
@@ -208,29 +178,22 @@ class CampaignController
             exit();
         }
 
-        // Préparer les variables pour la vue
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
-        // Si mode manual, récupérer la liste actuelle des clients
         if ($campaign["customer_assignment_mode"] === "manual") {
             $customers = $this->campaignModel->getCustomerNumbers($id);
             $campaign["customer_list"] = implode("\n", $customers);
         }
 
-        // Charger la vue
         require_once __DIR__ . "/../Views/admin/campaigns/edit.php";
     }
 
     /**
      * Mettre à jour une campagne (POST)
-     *
-     * @param int $id ID de la campagne
-     * @return void
      */
     public function update(int $id): void
     {
-        // 1. Vérifier que la campagne existe
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -239,14 +202,12 @@ class CampaignController
             exit();
         }
 
-        // 2. Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
             header("Location: /stm/admin/campaigns/" . $id . "/edit");
             exit();
         }
 
-        // 3. Récupérer les données du formulaire
         $data = [
             "name" => $_POST["name"] ?? "",
             "country" => $_POST["country"] ?? "",
@@ -257,8 +218,6 @@ class CampaignController
             "description_fr" => $_POST["description_fr"] ?? "",
             "title_nl" => $_POST["title_nl"] ?? "",
             "description_nl" => $_POST["description_nl"] ?? "",
-
-            // Champs Sprint 5 (Attribution clients + Paramètres commande)
             "customer_assignment_mode" => $_POST["customer_assignment_mode"] ?? "automatic",
             "order_password" => $_POST["order_password"] ?? null,
             "order_type" => $_POST["order_type"] ?? "W",
@@ -266,7 +225,6 @@ class CampaignController
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];
 
-        // 4. Valider les données
         $errors = $this->campaignModel->validate($data);
 
         if (!empty($errors)) {
@@ -276,35 +234,23 @@ class CampaignController
             exit();
         }
 
-        // 5. Mettre à jour la campagne
         try {
             $success = $this->campaignModel->update($id, $data);
 
             if ($success) {
-                // Gérer le changement de mode d'attribution
                 $oldMode = $campaign["customer_assignment_mode"];
                 $newMode = $data["customer_assignment_mode"];
 
-                // Si passage de manual à autre mode : supprimer les clients
                 if ($oldMode === "manual" && $newMode !== "manual") {
                     $this->campaignModel->removeAllCustomers($id);
                 }
 
-                // Si passage à manual : gérer la nouvelle liste
                 if ($newMode === "manual") {
-                    // Supprimer l'ancienne liste
                     $this->campaignModel->removeAllCustomers($id);
 
-                    // Ajouter la nouvelle liste
                     if (!empty($_POST["customer_list"])) {
-                        $customerList = $_POST["customer_list"];
-
-                        // 🔧 FIX : Normaliser les fins de ligne (Excel/Windows: \r\n, Mac ancien: \r, Unix: \n)
-                        $customerList = str_replace(["\r\n", "\r"], "\n", $customerList);
-
-                        $customerNumbers = explode("\n", $customerList);
-                        $customerNumbers = array_map("trim", $customerNumbers);
-                        $customerNumbers = array_filter($customerNumbers);
+                        $customerList = str_replace(["\r\n", "\r"], "\n", $_POST["customer_list"]);
+                        $customerNumbers = array_filter(array_map("trim", explode("\n", $customerList)));
 
                         if (!empty($customerNumbers)) {
                             $added = $this->campaignModel->addCustomersToCampaign($id, $customerNumbers);
@@ -332,13 +278,9 @@ class CampaignController
 
     /**
      * Supprimer une campagne (POST)
-     *
-     * @param int $id ID de la campagne
-     * @return void
      */
     public function destroy(int $id): void
     {
-        // Vérifier que la campagne existe
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -347,14 +289,12 @@ class CampaignController
             exit();
         }
 
-        // Vérifier le token CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
             header("Location: /stm/admin/campaigns");
             exit();
         }
 
-        // Supprimer la campagne
         try {
             $success = $this->campaignModel->delete($id);
 
@@ -374,68 +314,52 @@ class CampaignController
 
     /**
      * Afficher les campagnes actives uniquement
-     *
-     * @return void
      */
     public function active(): void
     {
         $campaigns = $this->campaignModel->getActive();
         $stats = $this->campaignModel->getStats();
 
-        // 🆕 Enrichir chaque campagne avec ses statistiques
         foreach ($campaigns as &$campaign) {
             $campaign["customer_stats"] = $this->campaignModel->getCustomerStats($campaign["id"]);
             $campaign["promotion_count"] = $this->campaignModel->countPromotions($campaign["id"]);
         }
-        unset($campaign); // Libérer la référence
+        unset($campaign);
 
-        // Préparer les filtres pour la vue
         $filters = ["status" => "active"];
-
-        // Charger la vue
         $pageTitle = "Campagnes actives";
         require_once __DIR__ . "/../Views/admin/campaigns/active.php";
     }
 
     /**
-     * Afficher les campagnes archivées (terminées + inactives)
-     *
-     * @return void
+     * Afficher les campagnes archivées
      */
     public function archives(): void
     {
         $campaigns = $this->campaignModel->getArchived();
         $stats = $this->campaignModel->getStats();
 
-        // 🆕 Enrichir chaque campagne avec ses statistiques
         foreach ($campaigns as &$campaign) {
             $campaign["customer_stats"] = $this->campaignModel->getCustomerStats($campaign["id"]);
             $campaign["promotion_count"] = $this->campaignModel->countPromotions($campaign["id"]);
         }
-        unset($campaign); // Libérer la référence
+        unset($campaign);
 
-        // Préparer les filtres pour la vue
         $filters = ["status" => "archived"];
-
-        // Charger la vue
         $pageTitle = "Campagnes archivées";
         require_once __DIR__ . "/../Views/admin/campaigns/archives.php";
     }
 
     /**
      * Activer/Désactiver une campagne (AJAX)
-     *
-     * @param int $id ID de la campagne
-     * @return void
      */
     public function toggleActive(int $id): void
     {
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
-            http_response_code(404);
-            echo json_encode(["success" => false, "message" => "Campagne introuvable"]);
-            exit();
+            $this->jsonResponse(["success" => false, "message" => "Campagne introuvable"], 404);
+            return;
         }
 
         try {
@@ -443,26 +367,260 @@ class CampaignController
             $success = $this->campaignModel->update($id, ["is_active" => $newStatus]);
 
             if ($success) {
-                echo json_encode(["success" => true, "is_active" => $newStatus]);
+                $this->jsonResponse(["success" => true, "is_active" => $newStatus]);
             } else {
-                echo json_encode(["success" => false, "message" => "Erreur mise à jour"]);
+                $this->jsonResponse(["success" => false, "message" => "Erreur mise à jour"]);
             }
         } catch (\Exception $e) {
             error_log("Erreur toggle active: " . $e->getMessage());
-            echo json_encode(["success" => false, "message" => "Erreur serveur"]);
+            $this->jsonResponse(["success" => false, "message" => "Erreur serveur"], 500);
+        }
+    }
+
+    // =========================================================================
+    // GESTION ÉQUIPE (ASSIGNEES)
+    // =========================================================================
+
+    /**
+     * Assigne le créateur comme owner lors de la création
+     */
+    private function assignOwner(int $campaignId): void
+    {
+        $currentUser = Session::get('user');
+        if (!$currentUser || !$currentUser['id']) {
+            return;
         }
 
-        exit();
+        try {
+            $db = Database::getInstance();
+            $db->getConnection()->prepare(
+                "INSERT INTO campaign_assignees (campaign_id, user_id, role, assigned_by)
+                 VALUES (:campaign_id, :user_id, 'owner', :assigned_by)"
+            )->execute([
+                ':campaign_id' => $campaignId,
+                ':user_id' => $currentUser['id'],
+                ':assigned_by' => $currentUser['id']
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur assignation owner: " . $e->getMessage());
+        }
     }
 
     /**
+     * Récupère les utilisateurs assignés à une campagne
+     */
+    private function getAssignees(int $campaignId): array
+    {
+        try {
+            $db = Database::getInstance();
+            return $db->query(
+                "SELECT
+                    ca.id,
+                    ca.campaign_id,
+                    ca.user_id,
+                    ca.role,
+                    ca.assigned_at,
+                    ca.assigned_by,
+                    u.name AS user_name,
+                    u.email AS user_email,
+                    u.role AS user_role
+                 FROM campaign_assignees ca
+                 JOIN users u ON u.id = ca.user_id
+                 WHERE ca.campaign_id = :campaign_id
+                 ORDER BY ca.role DESC, ca.assigned_at ASC",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getAssignees: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupère les utilisateurs NON assignés à une campagne
+     */
+    private function getAvailableUsers(int $campaignId): array
+    {
+        try {
+            $db = Database::getInstance();
+            return $db->query(
+                "SELECT u.id, u.name, u.email, u.role
+                 FROM users u
+                 WHERE u.is_active = 1
+                 AND u.id NOT IN (
+                     SELECT user_id FROM campaign_assignees WHERE campaign_id = :campaign_id
+                 )
+                 ORDER BY u.name ASC",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getAvailableUsers: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Ajoute un collaborateur à une campagne
+     * POST /admin/campaigns/{id}/assignees
+     */
+    public function addAssignee(int $campaignId): void
+    {
+        // Vérifier la permission
+        if (!PermissionHelper::canAssignToCampaign($campaignId)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Permission refusée'], 403);
+            return;
+        }
+
+        // Récupérer les données JSON
+        $rawData = file_get_contents('php://input');
+        $data = json_decode($rawData, true);
+
+        // Vérifier le token CSRF
+        $csrfToken = $data['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!Session::validateCsrfToken($csrfToken)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Token CSRF invalide'], 403);
+            return;
+        }
+
+        $userId = (int) ($data['user_id'] ?? 0);
+        if (!$userId) {
+            $this->jsonResponse(['success' => false, 'message' => 'Utilisateur non spécifié'], 400);
+            return;
+        }
+
+        $db = Database::getInstance();
+
+        // Vérifier que l'utilisateur existe et est actif
+        $user = $db->query(
+            "SELECT id, name FROM users WHERE id = :id AND is_active = 1 LIMIT 1",
+            [':id' => $userId]
+        );
+
+        if (empty($user)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Utilisateur introuvable'], 404);
+            return;
+        }
+
+        // Vérifier que l'utilisateur n'est pas déjà assigné
+        $existing = $db->query(
+            "SELECT id FROM campaign_assignees WHERE campaign_id = :campaign_id AND user_id = :user_id LIMIT 1",
+            [':campaign_id' => $campaignId, ':user_id' => $userId]
+        );
+
+        if (!empty($existing)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Cet utilisateur est déjà assigné'], 400);
+            return;
+        }
+
+        // Ajouter l'assignation
+        try {
+            $currentUser = Session::get('user');
+
+            $db->getConnection()->prepare(
+                "INSERT INTO campaign_assignees (campaign_id, user_id, role, assigned_by)
+                 VALUES (:campaign_id, :user_id, 'collaborator', :assigned_by)"
+            )->execute([
+                ':campaign_id' => $campaignId,
+                ':user_id' => $userId,
+                ':assigned_by' => $currentUser['id'] ?? null
+            ]);
+
+            $this->jsonResponse([
+                'success' => true,
+                'message' => $user[0]['name'] . ' a été ajouté à l\'équipe'
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur addAssignee: " . $e->getMessage());
+            $this->jsonResponse(['success' => false, 'message' => 'Erreur lors de l\'ajout'], 500);
+        }
+    }
+
+    /**
+     * Retire un collaborateur d'une campagne
+     * DELETE /admin/campaigns/{id}/assignees/{userId}
+     */
+    public function removeAssignee(int $campaignId, int $userId): void
+    {
+        // Vérifier la permission
+        if (!PermissionHelper::canAssignToCampaign($campaignId)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Permission refusée'], 403);
+            return;
+        }
+
+        // Récupérer les données JSON
+        $rawData = file_get_contents('php://input');
+        $data = json_decode($rawData, true);
+
+        // Vérifier le token CSRF
+        $csrfToken = $data['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!Session::validateCsrfToken($csrfToken)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Token CSRF invalide'], 403);
+            return;
+        }
+
+        $db = Database::getInstance();
+
+        // Vérifier que l'assignation existe
+        $assignee = $db->query(
+            "SELECT ca.id, ca.role, u.name AS user_name
+             FROM campaign_assignees ca
+             JOIN users u ON u.id = ca.user_id
+             WHERE ca.campaign_id = :campaign_id AND ca.user_id = :user_id
+             LIMIT 1",
+            [':campaign_id' => $campaignId, ':user_id' => $userId]
+        );
+
+        if (empty($assignee)) {
+            $this->jsonResponse(['success' => false, 'message' => 'Assignation introuvable'], 404);
+            return;
+        }
+
+        // Empêcher de retirer l'owner
+        if ($assignee[0]['role'] === 'owner') {
+            $this->jsonResponse(['success' => false, 'message' => 'Impossible de retirer l\'owner'], 400);
+            return;
+        }
+
+        // Supprimer l'assignation
+        try {
+            $db->getConnection()->prepare(
+                "DELETE FROM campaign_assignees WHERE campaign_id = :campaign_id AND user_id = :user_id"
+            )->execute([
+                ':campaign_id' => $campaignId,
+                ':user_id' => $userId
+            ]);
+
+            $this->jsonResponse([
+                'success' => true,
+                'message' => $assignee[0]['user_name'] . ' a été retiré de l\'équipe'
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur removeAssignee: " . $e->getMessage());
+            $this->jsonResponse(['success' => false, 'message' => 'Erreur lors de la suppression'], 500);
+        }
+    }
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+
+    /**
      * Valider le token CSRF
-     *
-     * @return bool
      */
     private function validateCSRF(): bool
     {
         $token = $_POST["_token"] ?? "";
         return !empty($token) && isset($_SESSION["csrf_token"]) && $token === $_SESSION["csrf_token"];
+    }
+
+    /**
+     * Réponse JSON
+     */
+    private function jsonResponse(array $data, int $statusCode = 200): void
+    {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit();
     }
 }
