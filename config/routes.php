@@ -810,3 +810,19 @@ $router->get("/admin/settings", function () {
     $controller = new \App\Controllers\SettingsController();
     $controller->index();
 });
+/**
+ * Route à ajouter dans /config/routes.php
+ * Pour la sauvegarde des permissions
+ */
+
+// ============================================
+// CONFIGURATION / SETTINGS - Route POST
+// ============================================
+
+// Sauvegarder les permissions (AJAX)
+$router->post("/admin/settings/permissions", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\SettingsController();
+    $controller->savePermissions();
+});

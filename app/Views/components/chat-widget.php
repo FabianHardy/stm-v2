@@ -3,12 +3,21 @@
  * Widget Chat Agent STM
  *
  * Widget flottant avec choix de mascotte (Zippy, Mochi, Pepper)
- * Suggestions contextuelles selon la page courante
+ * Suggestions contextuelles selon la page courante :
  * - Dans le message d'accueil (disparaissent après 1er message)
  * - Bouton 💡 permanent pour revoir les suggestions
  *
+ * Contextes supportés :
+ * - Dashboard, Campagnes (liste/create/active/archives/détail)
+ * - Promotions (liste/create), Catégories, Stock
+ * - Clients (liste/create/import/segmentation)
+ * - Commandes (liste/jour/attente/export)
+ * - Statistiques (global/campagne/commercial/rapports)
+ * - Paramètres (profil/utilisateurs/comptes/config)
+ * - Outils Dev (sync DB/fichiers)
+ *
  * @created  2025/12/09
- * @modified 2025/12/10 - Ajout suggestions contextuelles + bouton 💡
+ * @modified 2025/12/11 - Suggestions contextuelles complètes pour toutes les pages
  * @package  STM Agent
  */
 ?>
@@ -106,9 +115,21 @@
                     <h4 class="font-bold text-gray-900 mb-1" x-text="currentMascot.greeting"></h4>
 
                     <!-- Message contextuel -->
-                    <p class="text-sm text-gray-500 mb-1" x-show="pageContext.name">
-                        Tu es sur <strong x-text="pageContext.name" class="text-gray-700"></strong>
-                    </p>
+                    <template x-if="pageContext.type === 'generic' && pageContext.name">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">
+                                Tu es sur <strong x-text="pageContext.name" class="text-gray-700"></strong>
+                            </p>
+                            <p class="text-xs text-gray-400 mb-4">
+                                Pose-moi des questions sur les stats ou les campagnes !
+                            </p>
+                        </div>
+                    </template>
+                    <template x-if="pageContext.type !== 'generic' && pageContext.name">
+                        <p class="text-sm text-gray-500 mb-4">
+                            Tu es sur <strong x-text="pageContext.name" class="text-gray-700"></strong>
+                        </p>
+                    </template>
                     <p class="text-sm text-gray-500 mb-4" x-show="!pageContext.name">
                         Comment puis-je t'aider ?
                     </p>
@@ -266,50 +287,167 @@ function chatWidget() {
 
         // Suggestions par type de page
         suggestions: {
+            // === DASHBOARD ===
             dashboard: [
-                { icon: '📊', label: 'Campagnes en cours', action: 'Quelles sont les campagnes en cours ?' },
+                { icon: '📊', label: 'Résumé campagnes actives', action: 'Résumé des campagnes actives' },
                 { icon: '📦', label: 'Commandes du jour', action: 'Combien de commandes aujourd\'hui ?' },
-                { icon: '⚠️', label: 'Alertes quotas', action: 'Y a-t-il des produits avec quotas atteints ?' }
+                { icon: '⚠️', label: 'Alertes importantes', action: 'Y a-t-il des alertes importantes (quotas, stocks) ?' }
             ],
+
+            // === CAMPAGNES ===
             campaigns: [
-                { icon: '📋', label: 'Liste des campagnes', action: 'Liste toutes les campagnes' },
-                { icon: '🔄', label: 'Comparer 2 campagnes', action: 'Compare les stats de Black Friday et Noël 2025' },
-                { icon: '📈', label: 'Stats globales', action: 'Résumé des stats de toutes les campagnes actives' }
+                { icon: '✅', label: 'Campagnes actives', action: 'Quelles campagnes sont actives ?' },
+                { icon: '🔄', label: 'Comparer 2 campagnes', action: 'Compare Black Friday et Noël 2025' },
+                { icon: '🏆', label: 'Meilleure campagne', action: 'Quelle campagne a le plus de commandes ?' }
+            ],
+            campaigns_create: [
+                { icon: '📋', label: 'Campagnes similaires', action: 'Quelles campagnes existent déjà ?' },
+                { icon: '📅', label: 'Prochaines dates', action: 'Quelles sont les prochaines campagnes prévues ?' },
+                { icon: '💡', label: 'Bonnes pratiques', action: 'Conseils pour bien configurer une campagne' }
+            ],
+            campaigns_active: [
+                { icon: '📊', label: 'Stats en cours', action: 'Stats des campagnes en cours' },
+                { icon: '🏆', label: 'Meilleure performance', action: 'Quelle campagne active performe le mieux ?' },
+                { icon: '📦', label: 'Commandes par campagne', action: 'Nombre de commandes par campagne active' }
+            ],
+            campaigns_archives: [
+                { icon: '📊', label: 'Stats terminées', action: 'Stats des campagnes terminées' },
+                { icon: '🏆', label: 'Meilleure de l\'année', action: 'Quelle était la meilleure campagne cette année ?' },
+                { icon: '📈', label: 'Historique', action: 'Historique des performances des campagnes' }
             ],
             campaign: [
                 { icon: '📊', label: 'Stats de cette campagne', action: 'Stats de {name}' },
                 { icon: '🏆', label: 'Top 10 produits', action: 'Top 10 des produits vendus sur {name}' },
                 { icon: '👥', label: 'Meilleurs représentants', action: 'Classement des représentants sur {name}' }
             ],
+
+            // === PROMOTIONS ===
             promotions: [
                 { icon: '🏆', label: 'Produits les + vendus', action: 'Quels sont les produits les plus vendus ?' },
                 { icon: '⚠️', label: 'Quotas atteints', action: 'Quels produits ont atteint leur quota ?' },
-                { icon: '📦', label: 'Stock disponible', action: 'Produits avec stock restant faible' }
+                { icon: '😴', label: 'Jamais commandés', action: 'Quels produits n\'ont jamais été commandés ?' }
             ],
-            orders: [
-                { icon: '📦', label: 'Commandes du jour', action: 'Combien de commandes aujourd\'hui ?' },
-                { icon: '⏳', label: 'En attente', action: 'Combien de commandes en attente de validation ?' },
-                { icon: '📊', label: 'Total promos vendues', action: 'Combien de promos vendues ce mois-ci ?' }
-            ],
-            customers: [
-                { icon: '👥', label: 'Clients actifs', action: 'Combien de clients ont commandé ce mois-ci ?' },
-                { icon: '😴', label: 'Clients inactifs', action: 'Quels clients n\'ont jamais commandé ?' },
-                { icon: '🔍', label: 'Rechercher client', action: 'Infos sur le client numéro ' }
-            ],
-            reps: [
-                { icon: '🏆', label: 'Classement des reps', action: 'Classement des représentants par nombre de commandes' },
-                { icon: '📊', label: 'Stats d\'un rep', action: 'Stats de ' },
-                { icon: '😴', label: 'Reps inactifs', action: 'Représentants sans commande ce mois' }
-            ],
-            rep: [
-                { icon: '📊', label: 'Stats de ce rep', action: 'Stats de {name}' },
-                { icon: '👥', label: 'Clients de ce rep', action: 'Liste des clients de {name}' },
-                { icon: '📈', label: 'Performance', action: 'Performance de {name} sur toutes les campagnes' }
+            promotions_create: [
+                { icon: '🏆', label: 'Produits populaires', action: 'Quels sont les produits les plus populaires à ajouter ?' },
+                { icon: '📁', label: 'Catégories demandées', action: 'Quelles catégories sont les plus demandées ?' },
+                { icon: '📋', label: 'Produits existants', action: 'Liste des produits déjà en promotion' }
             ],
             categories: [
-                { icon: '📁', label: 'Stats par catégorie', action: 'Ventes par catégorie de produits' },
+                { icon: '📊', label: 'Ventes par catégorie', action: 'Ventes par catégorie de produits' },
                 { icon: '🏆', label: 'Catégorie top', action: 'Quelle catégorie se vend le mieux ?' },
-                { icon: '📊', label: 'Répartition', action: 'Répartition des ventes par catégorie' }
+                { icon: '📈', label: 'Répartition', action: 'Répartition des produits par catégorie' }
+            ],
+            stock: [
+                { icon: '⚠️', label: 'Ruptures de stock', action: 'Quels produits sont en rupture de stock ?' },
+                { icon: '📉', label: 'Stock faible', action: 'Produits avec stock restant faible' },
+                { icon: '📊', label: 'État des stocks', action: 'État général des stocks' }
+            ],
+
+            // === CLIENTS ===
+            customers: [
+                { icon: '👥', label: 'Clients actifs', action: 'Combien de clients ont commandé ce mois-ci ?' },
+                { icon: '🏆', label: 'Meilleurs clients', action: 'Quels clients ont le plus commandé ?' },
+                { icon: '🔍', label: 'Rechercher client', action: 'Infos sur le client numéro ' }
+            ],
+            customers_create: [
+                { icon: '🔍', label: 'Client existe ?', action: 'Vérifier si un client existe déjà' },
+                { icon: '👥', label: 'Clients similaires', action: 'Rechercher des clients similaires' },
+                { icon: '📋', label: 'Derniers ajouts', action: 'Derniers clients ajoutés' }
+            ],
+            customers_import: [
+                { icon: '📋', label: 'Format attendu', action: 'Quel est le format d\'import attendu ?' },
+                { icon: '📊', label: 'Derniers imports', action: 'Quels sont les derniers imports effectués ?' },
+                { icon: '⚠️', label: 'Erreurs fréquentes', action: 'Erreurs fréquentes lors de l\'import' }
+            ],
+            customers_segmentation: [
+                { icon: '🗺️', label: 'Clients par région', action: 'Répartition des clients par région' },
+                { icon: '👤', label: 'Par représentant', action: 'Clients par représentant' },
+                { icon: '😴', label: 'Clients inactifs', action: 'Clients inactifs depuis plus de 6 mois' }
+            ],
+
+            // === COMMANDES ===
+            orders: [
+                { icon: '📦', label: 'Cette semaine', action: 'Commandes de cette semaine' },
+                { icon: '📊', label: 'Par statut', action: 'Répartition des commandes par statut' },
+                { icon: '🛒', label: 'Total promos', action: 'Total des promos vendues' }
+            ],
+            orders_today: [
+                { icon: '📦', label: 'Combien aujourd\'hui ?', action: 'Combien de commandes aujourd\'hui ?' },
+                { icon: '📋', label: 'Détail du jour', action: 'Détail des commandes du jour' },
+                { icon: '📈', label: 'Vs hier', action: 'Comparaison avec hier' }
+            ],
+            orders_pending: [
+                { icon: '⏳', label: 'À valider', action: 'Combien de commandes à valider ?' },
+                { icon: '⚠️', label: 'En attente longue', action: 'Commandes en attente depuis longtemps' },
+                { icon: '📋', label: 'Liste en attente', action: 'Liste des commandes en attente' }
+            ],
+            orders_export: [
+                { icon: '📤', label: 'Export du mois', action: 'Exporter les commandes du mois' },
+                { icon: '📋', label: 'Formats dispo', action: 'Quels formats d\'export sont disponibles ?' },
+                { icon: '📊', label: 'Derniers exports', action: 'Derniers exports effectués' }
+            ],
+
+            // === STATISTIQUES ===
+            stats: [
+                { icon: '📊', label: 'Résumé global', action: 'Résumé des performances globales' },
+                { icon: '📈', label: 'Évolution', action: 'Évolution des commandes ce mois' },
+                { icon: '🎯', label: 'KPIs', action: 'Quels sont les KPIs principaux ?' }
+            ],
+            stats_campaign: [
+                { icon: '📊', label: 'Stats campagne', action: 'Stats de la campagne ' },
+                { icon: '🔄', label: 'Comparer', action: 'Comparer 2 campagnes' },
+                { icon: '🏆', label: 'Top produits', action: 'Top produits par campagne' }
+            ],
+            stats_reps: [
+                { icon: '🏆', label: 'Classement reps', action: 'Classement des représentants' },
+                { icon: '📊', label: 'Stats d\'un rep', action: 'Stats du représentant ' },
+                { icon: '🥇', label: 'Top performers', action: 'Représentants les plus performants' }
+            ],
+            stats_reports: [
+                { icon: '📄', label: 'Rapport mensuel', action: 'Générer un rapport mensuel' },
+                { icon: '🗺️', label: 'Par région', action: 'Rapport par région' },
+                { icon: '📊', label: 'Rapports dispo', action: 'Quels rapports sont disponibles ?' }
+            ],
+
+            // === PARAMÈTRES ===
+            profile: [
+                { icon: '🔐', label: 'Mon mot de passe', action: 'Comment modifier mon mot de passe ?' },
+                { icon: '📋', label: 'Mes actions', action: 'Mes dernières actions' },
+                { icon: '👤', label: 'Mon profil', action: 'Infos de mon profil' }
+            ],
+            users: [
+                { icon: '👥', label: 'Liste utilisateurs', action: 'Liste des utilisateurs' },
+                { icon: '🟢', label: 'Connectés récemment', action: 'Utilisateurs connectés récemment' },
+                { icon: '➕', label: 'Ajouter utilisateur', action: 'Comment ajouter un utilisateur ?' }
+            ],
+            internal_accounts: [
+                { icon: '👥', label: 'Comptes actifs', action: 'Quels comptes internes sont actifs ?' },
+                { icon: '🔐', label: 'Permissions', action: 'Permissions par compte' },
+                { icon: '📋', label: 'Liste comptes', action: 'Liste des comptes internes' }
+            ],
+            config: [
+                { icon: '⚙️', label: 'Paramètres actuels', action: 'Quels sont les paramètres actuels ?' },
+                { icon: '📝', label: 'Dernières modifs', action: 'Dernières modifications de configuration' },
+                { icon: '❓', label: 'Aide config', action: 'Aide sur la configuration' }
+            ],
+
+            // === OUTILS DEV ===
+            dev_sync_db: [
+                { icon: '🔄', label: 'Dernière sync', action: 'Quand était la dernière synchronisation DB ?' },
+                { icon: '✅', label: 'État base externe', action: 'État de la connexion à la base externe' },
+                { icon: '📊', label: 'Stats sync', action: 'Statistiques de synchronisation' }
+            ],
+            dev_sync_files: [
+                { icon: '📁', label: 'Fichiers en attente', action: 'Y a-t-il des fichiers en attente de sync ?' },
+                { icon: '🔄', label: 'Dernière sync', action: 'Dernière synchronisation de fichiers' },
+                { icon: '⚠️', label: 'Erreurs sync', action: 'Y a-t-il des erreurs de synchronisation ?' }
+            ],
+
+            // === PAGES NON PARAMÉTRÉES (generic) ===
+            generic: [
+                { icon: '📊', label: 'Stats globales', action: 'Résumé des statistiques globales' },
+                { icon: '📋', label: 'Campagnes actives', action: 'Quelles campagnes sont actives ?' },
+                { icon: '📦', label: 'Commandes du jour', action: 'Combien de commandes aujourd\'hui ?' }
             ]
         },
 
@@ -576,47 +714,145 @@ function chatWidget() {
                 }
             }
 
-            // Sinon, détecter via l'URL
-            if (path.includes('/admin/dashboard')) {
+            // Détection via l'URL
+
+            // === DASHBOARD ===
+            if (path.includes('/admin/dashboard') || path.endsWith('/admin') || path.endsWith('/admin/')) {
                 this.pageContext = { type: 'dashboard', id: null, name: null };
             }
-            else if (path.match(/\/admin\/campaigns\/(\d+)/)) {
-                const match = path.match(/\/admin\/campaigns\/(\d+)/);
+
+            // === CAMPAGNES ===
+            else if (path.includes('/campaigns/create')) {
+                this.pageContext = { type: 'campaigns_create', id: null, name: 'Créer une campagne' };
+            }
+            else if (path.includes('/campaigns/active')) {
+                this.pageContext = { type: 'campaigns_active', id: null, name: 'Campagnes actives' };
+            }
+            else if (path.includes('/campaigns/archives')) {
+                this.pageContext = { type: 'campaigns_archives', id: null, name: 'Archives' };
+            }
+            else if (path.match(/\/campaigns\/(\d+)/)) {
+                const match = path.match(/\/campaigns\/(\d+)/);
                 this.pageContext = { type: 'campaign', id: match[1], name: null };
-                // Essayer de récupérer le nom depuis le DOM
                 const titleEl = document.querySelector('h1, .page-title, [data-campaign-name]');
                 if (titleEl) {
-                    this.pageContext.name = titleEl.dataset.campaignName || titleEl.textContent.trim().substring(0, 50);
+                    this.pageContext.name = titleEl.dataset?.campaignName || titleEl.textContent.trim().substring(0, 50);
                 }
             }
-            else if (path.includes('/admin/campaigns')) {
-                this.pageContext = { type: 'campaigns', id: null, name: null };
+            else if (path.includes('/campaigns')) {
+                this.pageContext = { type: 'campaigns', id: null, name: 'Campagnes' };
             }
-            else if (path.includes('/admin/promotions') || path.includes('/admin/products')) {
-                this.pageContext = { type: 'promotions', id: null, name: null };
+
+            // === PROMOTIONS ===
+            else if (path.includes('/promotions/create') || path.includes('/products/create')) {
+                this.pageContext = { type: 'promotions_create', id: null, name: 'Ajouter une promotion' };
             }
-            else if (path.includes('/admin/orders')) {
-                this.pageContext = { type: 'orders', id: null, name: null };
+            else if (path.includes('/categories')) {
+                this.pageContext = { type: 'categories', id: null, name: 'Catégories' };
             }
-            else if (path.includes('/admin/customers')) {
-                this.pageContext = { type: 'customers', id: null, name: null };
+            else if (path.includes('/stock')) {
+                this.pageContext = { type: 'stock', id: null, name: 'Stock' };
             }
-            else if (path.match(/\/admin\/reps\/(\d+)/)) {
-                const match = path.match(/\/admin\/reps\/(\d+)/);
+            else if (path.includes('/promotions') || path.includes('/products')) {
+                this.pageContext = { type: 'promotions', id: null, name: 'Promotions' };
+            }
+
+            // === CLIENTS ===
+            else if (path.includes('/customers/create')) {
+                this.pageContext = { type: 'customers_create', id: null, name: 'Ajouter un client' };
+            }
+            else if (path.includes('/customers/import')) {
+                this.pageContext = { type: 'customers_import', id: null, name: 'Importer des clients' };
+            }
+            else if (path.includes('/customers/segmentation') || path.includes('/segmentation')) {
+                this.pageContext = { type: 'customers_segmentation', id: null, name: 'Segmentation' };
+            }
+            else if (path.includes('/customers')) {
+                this.pageContext = { type: 'customers', id: null, name: 'Clients' };
+            }
+
+            // === COMMANDES ===
+            else if (path.includes('/orders/today') || path.includes('/orders/jour')) {
+                this.pageContext = { type: 'orders_today', id: null, name: 'Commandes du jour' };
+            }
+            else if (path.includes('/orders/pending') || path.includes('/orders/attente')) {
+                this.pageContext = { type: 'orders_pending', id: null, name: 'Commandes en attente' };
+            }
+            else if (path.includes('/orders/export')) {
+                this.pageContext = { type: 'orders_export', id: null, name: 'Export commandes' };
+            }
+            else if (path.includes('/orders')) {
+                this.pageContext = { type: 'orders', id: null, name: 'Commandes' };
+            }
+
+            // === STATISTIQUES ===
+            else if (path.includes('/stats/campaign') || path.includes('/statistiques/campagne')) {
+                this.pageContext = { type: 'stats_campaign', id: null, name: 'Stats par campagne' };
+            }
+            else if (path.includes('/stats/reps') || path.includes('/stats/commercial') || path.includes('/statistiques/commercial')) {
+                this.pageContext = { type: 'stats_reps', id: null, name: 'Stats par commercial' };
+            }
+            else if (path.includes('/stats/reports') || path.includes('/rapports')) {
+                this.pageContext = { type: 'stats_reports', id: null, name: 'Rapports' };
+            }
+            else if (path.includes('/stats') || path.includes('/statistiques')) {
+                this.pageContext = { type: 'stats', id: null, name: 'Statistiques' };
+            }
+
+            // === PARAMÈTRES ===
+            else if (path.includes('/profile') || path.includes('/profil')) {
+                this.pageContext = { type: 'profile', id: null, name: 'Mon profil' };
+            }
+            else if (path.includes('/users') || path.includes('/utilisateurs')) {
+                this.pageContext = { type: 'users', id: null, name: 'Utilisateurs' };
+            }
+            else if (path.includes('/internal') || path.includes('/comptes-internes')) {
+                this.pageContext = { type: 'internal_accounts', id: null, name: 'Comptes internes' };
+            }
+            else if (path.includes('/config') || path.includes('/configuration')) {
+                this.pageContext = { type: 'config', id: null, name: 'Configuration' };
+            }
+
+            // === OUTILS DEV ===
+            else if (path.includes('/sync-db') || path.includes('/sync/db')) {
+                this.pageContext = { type: 'dev_sync_db', id: null, name: 'Sync Base de données' };
+            }
+            else if (path.includes('/sync-files') || path.includes('/sync/files')) {
+                this.pageContext = { type: 'dev_sync_files', id: null, name: 'Sync Fichiers' };
+            }
+
+            // === REPRÉSENTANTS (si page existe) ===
+            else if (path.match(/\/reps\/(\d+)/)) {
+                const match = path.match(/\/reps\/(\d+)/);
                 this.pageContext = { type: 'rep', id: match[1], name: null };
                 const titleEl = document.querySelector('h1, .page-title, [data-rep-name]');
                 if (titleEl) {
-                    this.pageContext.name = titleEl.dataset.repName || titleEl.textContent.trim().substring(0, 50);
+                    this.pageContext.name = titleEl.dataset?.repName || titleEl.textContent.trim().substring(0, 50);
                 }
             }
-            else if (path.includes('/admin/reps')) {
-                this.pageContext = { type: 'reps', id: null, name: null };
+            else if (path.includes('/reps')) {
+                this.pageContext = { type: 'stats_reps', id: null, name: 'Représentants' };
             }
-            else if (path.includes('/admin/categories')) {
-                this.pageContext = { type: 'categories', id: null, name: null };
+
+            // === PAGES NON PARAMÉTRÉES (generic) ===
+            else if (path.includes('/settings')) {
+                // Récupérer le nom de la page depuis le h1
+                const titleEl = document.querySelector('h1');
+                const pageName = titleEl ? titleEl.textContent.trim() : 'Paramètres';
+                this.pageContext = { type: 'generic', id: null, name: pageName };
             }
-            else {
+
+            // === DASHBOARD PAR DÉFAUT ===
+            else if (path.includes('/admin/dashboard') || path.endsWith('/admin') || path.endsWith('/admin/')) {
                 this.pageContext = { type: 'dashboard', id: null, name: null };
+            }
+
+            // === FALLBACK GENERIC ===
+            else {
+                // Pour toute page non reconnue, on affiche generic
+                const titleEl = document.querySelector('h1');
+                const pageName = titleEl ? titleEl.textContent.trim() : 'cette page';
+                this.pageContext = { type: 'generic', id: null, name: pageName };
             }
         },
 
