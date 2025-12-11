@@ -191,10 +191,14 @@ SCHEMA;
                 'type' => 'function',
                 'function' => [
                     'name' => 'list_campaigns',
-                    'description' => 'Liste rapide des campagnes disponibles.',
+                    'description' => 'Liste les campagnes disponibles. Utilise le paramètre search pour chercher par nom.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
+                            'search' => [
+                                'type' => 'string',
+                                'description' => 'Recherche par nom de campagne (ex: Black Friday, Noël)'
+                            ],
                             'country' => [
                                 'type' => 'string',
                                 'description' => 'Filtrer par pays (BE ou LU)',
@@ -667,6 +671,13 @@ SCHEMA;
         $sql = "SELECT id, name, country, status, start_date, end_date FROM campaigns WHERE 1=1";
         $params = [];
 
+        // Recherche par nom
+        if (!empty($args['search'])) {
+            $sql .= " AND name LIKE :search";
+            $params[':search'] = '%' . $args['search'] . '%';
+        }
+
+        // Filtre par pays
         if (!empty($args['country'])) {
             $sql .= " AND country = :country";
             $params[':country'] = $args['country'];
@@ -696,19 +707,46 @@ SCHEMA;
                 'cancelled' => 'Annulée'
             ];
 
+            // Compter les commandes pour cette campagne
+            $orderCount = $this->db->query(
+                "SELECT COUNT(*) as cnt FROM orders WHERE campaign_id = :id",
+                [':id' => $c['id']]
+            )[0]['cnt'] ?? 0;
+
             $result[] = [
                 'id' => $c['id'],
                 'nom' => $c['name'],
                 'pays' => $c['country'],
                 'statut' => $statusLabels[$calculatedStatus] ?? $calculatedStatus,
                 'debut' => date('d/m/Y', strtotime($c['start_date'])),
-                'fin' => date('d/m/Y', strtotime($c['end_date']))
+                'fin' => date('d/m/Y', strtotime($c['end_date'])),
+                'commandes' => (int)$orderCount
+            ];
+        }
+
+        // Si recherche et plusieurs résultats, proposer des boutons
+        if (!empty($args['search']) && count($result) > 1) {
+            $buttons = [];
+            foreach ($result as $camp) {
+                $buttons[] = [
+                    'action' => "Stats de la campagne {$camp['nom']} ({$camp['pays']})",
+                    'label' => "{$camp['nom']} {$camp['pays']} ({$camp['commandes']} cmd)"
+                ];
+            }
+
+            return [
+                'clarification_needed' => true,
+                'message' => "Plusieurs campagnes correspondent à \"{$args['search']}\"",
+                'campagnes' => $result,
+                'buttons' => $buttons,
+                'total' => count($result)
             ];
         }
 
         return [
             'campagnes' => $result,
-            'total' => count($result)
+            'total' => count($result),
+            'recherche' => $args['search'] ?? null
         ];
     }
 

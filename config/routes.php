@@ -826,3 +826,30 @@ $router->post("/admin/settings/permissions", function () {
     $controller = new \App\Controllers\SettingsController();
     $controller->savePermissions();
 });
+/**
+ * Routes à ajouter dans /config/routes.php
+ * Pour la gestion des collaborateurs (équipe campagne)
+ */
+
+// ============================================
+// CAMPAGNES - ÉQUIPE / ASSIGNEES
+// ============================================
+
+// Ajouter un collaborateur (POST)
+$router->post("/admin/campaigns/{id}/assignees", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\CampaignController();
+    $controller->addAssignee((int) $id);
+});
+
+// Retirer un collaborateur (DELETE)
+$router->delete("/admin/campaigns/{id}/assignees/{userId}", function ($id, $userId) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\CampaignController();
+    $controller->removeAssignee((int) $id, (int) $userId);
+});
+
+// Note: Si ton router ne supporte pas DELETE, utilise POST avec _method:
+// $router->post("/admin/campaigns/{id}/assignees/{userId}/delete", ...);
