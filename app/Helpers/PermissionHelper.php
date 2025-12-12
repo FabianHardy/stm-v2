@@ -9,6 +9,7 @@
  *
  * @package STM
  * @created 2025/12/10
+ * @modified 2025/12/12 - Ajout méthodes pour SettingsController
  */
 
 namespace App\Helpers;
@@ -151,7 +152,7 @@ class PermissionHelper
             'campaigns.edit' => true,
             'campaigns.edit_all' => false,
             'campaigns.delete' => false,
-            'campaigns.assign' => true, // Peut ajouter des collaborateurs sur ses campagnes
+            'campaigns.assign' => true,
 
             // Catégories
             'categories.view' => true,
@@ -299,6 +300,10 @@ class PermissionHelper
         ],
     ];
 
+    // ========================================
+    // MÉTHODES DE BASE
+    // ========================================
+
     /**
      * Vérifie si l'utilisateur courant a une permission
      *
@@ -323,8 +328,7 @@ class PermissionHelper
     }
 
     /**
-     * Vérifie si l'utilisateur ne peut PAS faire une action
-     * (inverse de can, pour la lisibilité)
+     * Vérifie si l'utilisateur n'a PAS une permission (inverse de can)
      *
      * @param string $permission
      * @return bool
@@ -354,16 +358,6 @@ class PermissionHelper
         }
 
         return self::ROLE_PERMISSIONS[$role];
-    }
-
-    /**
-     * Récupère la matrice complète des permissions (pour la page config)
-     *
-     * @return array
-     */
-    public static function getPermissionMatrix(): array
-    {
-        return self::ROLE_PERMISSIONS;
     }
 
     /**
@@ -415,78 +409,169 @@ class PermissionHelper
             // Statistiques
             'stats.view' => 'Voir les statistiques',
             'stats.view_all' => 'Voir toutes les statistiques',
-            'stats.export' => 'Exporter les statistiques',
+            'stats.export' => 'Exporter les rapports',
 
             // Administration
             'users.view' => 'Voir les utilisateurs',
             'users.manage' => 'Gérer les utilisateurs',
             'settings.view' => 'Voir la configuration',
             'settings.manage' => 'Modifier la configuration',
+            'permissions.manage' => 'Gérer les permissions',
+            'agent.view' => 'Accéder à l\'Agent STM',
+        ];
+    }
+
+    // ========================================
+    // MÉTHODES POUR SETTINGSCONTROLLER
+    // ========================================
+
+    /**
+     * Vérifie si un rôle est protégé (ne peut pas être modifié)
+     *
+     * @param string $role
+     * @return bool
+     */
+    public static function isProtectedRole(string $role): bool
+    {
+        return $role === 'superadmin';
+    }
+
+    /**
+     * Récupère la matrice des permissions pour l'affichage
+     *
+     * @return array ['roles' => [...], 'permissions' => [...], 'matrix' => [...]]
+     */
+    public static function getPermissionMatrix(): array
+    {
+        $roles = ['superadmin', 'admin', 'createur', 'manager_reps', 'rep'];
+        $labels = self::getPermissionLabels();
+        $categories = self::getCategoryMapping();
+
+        // Construire la liste des permissions avec métadonnées
+        $permissions = [];
+        foreach (self::ROLE_PERMISSIONS['superadmin'] as $permCode => $value) {
+            // Déterminer la catégorie depuis le code (ex: 'campaigns.view' -> 'campaigns')
+            $categoryKey = explode('.', $permCode)[0];
+
+            $permissions[] = [
+                'code' => $permCode,
+                'name' => $labels[$permCode] ?? $permCode,
+                'category' => $categoryKey,
+                'description' => ''
+            ];
+        }
+
+        // Trier par catégorie
+        usort($permissions, function($a, $b) use ($categories) {
+            $orderA = array_search($a['category'], array_keys($categories));
+            $orderB = array_search($b['category'], array_keys($categories));
+            if ($orderA === $orderB) {
+                return 0;
+            }
+            return ($orderA < $orderB) ? -1 : 1;
+        });
+
+        // Construire la matrice role => permissions
+        $matrix = [];
+        foreach ($roles as $role) {
+            $matrix[$role] = self::ROLE_PERMISSIONS[$role] ?? [];
+        }
+
+        return [
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'matrix' => $matrix
         ];
     }
 
     /**
-     * Récupère les catégories de permissions (pour regroupement)
+     * Récupère les catégories de permissions pour l'affichage groupé
      *
      * @return array
      */
-    public static function getPermissionCategories(): array
+    public static function getCategories(): array
+    {
+        return self::getCategoryMapping();
+    }
+
+    /**
+     * Mapping des catégories avec labels et icônes
+     *
+     * @return array
+     */
+    private static function getCategoryMapping(): array
     {
         return [
             'dashboard' => [
                 'label' => 'Dashboard',
-                'icon' => 'fa-chart-line',
-                'permissions' => ['dashboard.view', 'dashboard.stats_full']
+                'icon' => 'fa-tachometer-alt'
             ],
             'campaigns' => [
                 'label' => 'Campagnes',
-                'icon' => 'fa-bullhorn',
-                'permissions' => ['campaigns.view', 'campaigns.view_all', 'campaigns.create', 'campaigns.edit', 'campaigns.edit_all', 'campaigns.delete', 'campaigns.assign']
+                'icon' => 'fa-bullhorn'
             ],
             'categories' => [
                 'label' => 'Catégories',
-                'icon' => 'fa-folder',
-                'permissions' => ['categories.view', 'categories.create', 'categories.edit', 'categories.delete']
+                'icon' => 'fa-folder'
             ],
             'products' => [
                 'label' => 'Promotions',
-                'icon' => 'fa-box',
-                'permissions' => ['products.view', 'products.create', 'products.edit', 'products.delete']
+                'icon' => 'fa-tags'
             ],
             'customers' => [
                 'label' => 'Clients',
-                'icon' => 'fa-users',
-                'permissions' => ['customers.view', 'customers.view_all', 'customers.create', 'customers.edit', 'customers.delete', 'customers.import']
+                'icon' => 'fa-users'
             ],
             'orders' => [
                 'label' => 'Commandes',
-                'icon' => 'fa-shopping-cart',
-                'permissions' => ['orders.view', 'orders.view_all', 'orders.export']
+                'icon' => 'fa-shopping-cart'
             ],
             'stats' => [
                 'label' => 'Statistiques',
-                'icon' => 'fa-chart-bar',
-                'permissions' => ['stats.view', 'stats.view_all', 'stats.export']
+                'icon' => 'fa-chart-bar'
             ],
-            'admin' => [
-                'label' => 'Administration',
-                'icon' => 'fa-cog',
-                'permissions' => ['users.view', 'users.manage', 'settings.view', 'settings.manage']
+            'users' => [
+                'label' => 'Utilisateurs',
+                'icon' => 'fa-user-cog'
             ],
+            'settings' => [
+                'label' => 'Configuration',
+                'icon' => 'fa-cog'
+            ],
+            'permissions' => [
+                'label' => 'Permissions',
+                'icon' => 'fa-shield-alt'
+            ],
+            'agent' => [
+                'label' => 'Agent STM',
+                'icon' => 'fa-robot'
+            ]
         ];
     }
 
+    /**
+     * Sauvegarde la matrice de permissions (pour usage futur avec DB)
+     *
+     * @param array $matrix
+     * @return bool
+     */
+    public static function savePermissionMatrix(array $matrix): bool
+    {
+        // TODO: Implémenter la sauvegarde en DB quand le système sera prêt
+        return true;
+    }
+
     // ========================================
-    // SCOPE : Accès aux ressources spécifiques
+    // SCOPE : ACCÈS AUX CAMPAGNES
     // ========================================
 
     /**
-     * Vérifie si l'utilisateur peut accéder à une campagne spécifique
+     * Vérifie si l'utilisateur peut VOIR une campagne spécifique
      *
      * @param int $campaignId
      * @return bool
      */
-    public static function canAccessCampaign(int $campaignId): bool
+    public static function canViewCampaign(int $campaignId): bool
     {
         $user = self::getCurrentUser();
 
@@ -750,111 +835,5 @@ class PermissionHelper
     public static function linkUrl(string $permission, string $url): string
     {
         return self::can($permission) ? $url : '#';
-    }
-
-    /**
-     * Vérifie si l'utilisateur n'a PAS une permission (inverse de can)
-     *
-     * @param string $permission
-     * @return bool
-     */
-    public static function cannot(string $permission): bool
-    {
-        return !self::can($permission);
-    }
-
-    /**
-     * Vérifie si un rôle est protégé (ne peut pas être modifié)
-     *
-     * @param string $role
-     * @return bool
-     */
-    public static function isProtectedRole(string $role): bool
-    {
-        return $role === 'superadmin';
-    }
-
-    /**
-     * Récupère la matrice des permissions pour l'affichage
-     *
-     * @return array ['roles' => [...], 'permissions' => [...]]
-     */
-    public static function getPermissionMatrix(): array
-    {
-        $roles = ['superadmin', 'admin', 'createur', 'manager_reps', 'rep'];
-        $permissions = [];
-
-        // Récupérer toutes les permissions depuis le premier rôle (superadmin a toutes)
-        if (isset(self::ROLE_PERMISSIONS['superadmin'])) {
-            foreach (self::ROLE_PERMISSIONS['superadmin'] as $permCode => $value) {
-                $permissions[$permCode] = [];
-                foreach ($roles as $role) {
-                    $permissions[$permCode][$role] = self::ROLE_PERMISSIONS[$role][$permCode] ?? false;
-                }
-            }
-        }
-
-        return [
-            'roles' => $roles,
-            'permissions' => $permissions
-        ];
-    }
-
-    /**
-     * Récupère les catégories de permissions pour l'affichage groupé
-     *
-     * @return array
-     */
-    public static function getCategories(): array
-    {
-        return [
-            'dashboard' => [
-                'label' => 'Dashboard',
-                'permissions' => ['dashboard.view', 'dashboard.stats_full']
-            ],
-            'campaigns' => [
-                'label' => 'Campagnes',
-                'permissions' => ['campaigns.view', 'campaigns.view_all', 'campaigns.create', 'campaigns.edit', 'campaigns.edit_all', 'campaigns.delete', 'campaigns.assign']
-            ],
-            'categories' => [
-                'label' => 'Catégories',
-                'permissions' => ['categories.view', 'categories.create', 'categories.edit', 'categories.delete']
-            ],
-            'products' => [
-                'label' => 'Promotions',
-                'permissions' => ['products.view', 'products.create', 'products.edit', 'products.delete']
-            ],
-            'customers' => [
-                'label' => 'Clients',
-                'permissions' => ['customers.view', 'customers.view_all', 'customers.create', 'customers.edit', 'customers.delete', 'customers.import']
-            ],
-            'orders' => [
-                'label' => 'Commandes',
-                'permissions' => ['orders.view', 'orders.view_all', 'orders.export']
-            ],
-            'stats' => [
-                'label' => 'Statistiques',
-                'permissions' => ['stats.view', 'stats.view_all', 'stats.export']
-            ],
-            'admin' => [
-                'label' => 'Administration',
-                'permissions' => ['users.view', 'users.manage', 'settings.view', 'settings.manage', 'permissions.manage', 'agent.view']
-            ]
-        ];
-    }
-
-    /**
-     * Sauvegarde la matrice de permissions (pour usage futur avec DB)
-     * Note: Actuellement les permissions sont en constantes, cette méthode
-     * sera utilisée quand on passera en DB
-     *
-     * @param array $matrix
-     * @return bool
-     */
-    public static function savePermissionMatrix(array $matrix): bool
-    {
-        // TODO: Implémenter la sauvegarde en DB quand le système sera prêt
-        // Pour l'instant, retourner true (les permissions sont en constantes)
-        return true;
     }
 }
