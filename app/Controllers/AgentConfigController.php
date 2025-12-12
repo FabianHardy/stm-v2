@@ -7,17 +7,19 @@
  * Les configs sensibles (IA) sont réservées aux super admins
  *
  * @created  2025/12/11
- * @modified 2025/12/11 - Ajout config fournisseur IA
+ * @modified 2025/12/12 - Ajout gestion des Tools
  */
 
 namespace App\Controllers;
 
 use Core\Auth;
 use App\Models\AgentConfig;
+use App\Models\AgentTool;
 
 class AgentConfigController
 {
     private AgentConfig $config;
+    private AgentTool $tools;
     private bool $isSuperAdmin;
 
     public function __construct()
@@ -29,6 +31,7 @@ class AgentConfigController
         }
 
         $this->config = AgentConfig::getInstance();
+        $this->tools = AgentTool::getInstance();
 
         // Vérifier si super admin (role_id = 1 ou role = 'super_admin')
         $this->isSuperAdmin = $this->checkSuperAdmin();
@@ -39,11 +42,16 @@ class AgentConfigController
      */
     private function checkSuperAdmin(): bool
     {
-        // Adapter selon votre système de rôles
-        $roleId = $_SESSION['role_id'] ?? null;
-        $role = $_SESSION['role'] ?? null;
+        // Récupérer le rôle depuis $_SESSION['user']['role']
+        $role = $_SESSION['user']['role'] ?? $_SESSION['role'] ?? null;
+        $roleId = $_SESSION['user']['role_id'] ?? $_SESSION['role_id'] ?? null;
 
-        return $roleId === 1 || $role === 'super_admin' || $role === 'superadmin';
+        // Vérification souple
+        $isSuperAdmin = $roleId == 1
+            || strtolower($role ?? '') === 'super_admin'
+            || strtolower($role ?? '') === 'superadmin';
+
+        return $isSuperAdmin;
     }
 
     /**
@@ -119,6 +127,10 @@ class AgentConfigController
 
         $isSuperAdmin = $this->isSuperAdmin;
         $fields = $promptFields;
+
+        // Charger les tools
+        $agentTools = $this->tools->getAll();
+        $toolsStats = $this->tools->getStats();
 
         require __DIR__ . '/../Views/admin/settings/agent.php';
     }
@@ -389,5 +401,323 @@ class AgentConfigController
         } else {
             return ['success' => false, 'error' => $error ?: "Impossible de contacter Ollama sur {$apiUrl}"];
         }
+    }
+
+    // ============================================
+    // GESTION DES TOOLS
+    // ============================================
+
+    /**
+     * API : Lister les tools (JSON)
+     */
+    public function listTools(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $tools = $this->tools->getAll();
+            $stats = $this->tools->getStats();
+
+            echo json_encode([
+                'success' => true,
+                'tools' => $tools,
+                'stats' => $stats
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * API : Toggle (activer/désactiver) un tool
+     */
+    public function toggleTool(): void
+    {
+        header('Content-Type: application/json');
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $toolId = $data['id'] ?? null;
+        $active = $data['active'] ?? null;
+
+        if (!$toolId) {
+            echo json_encode(['success' => false, 'error' => 'ID manquant']);
+            return;
+        }
+
+        try {
+            if ($active !== null) {
+                // Définir explicitement l'état
+                if ($active) {
+                    $result = $this->tools->activate((int)$toolId);
+                } else {
+                    $result = $this->tools->deactivate((int)$toolId);
+                }
+            } else {
+                // Toggle
+                $result = $this->tools->toggle((int)$toolId);
+            }
+
+            $tool = $this->tools->getById((int)$toolId);
+
+            echo json_encode([
+                'success' => $result,
+                'tool' => $tool,
+                'message' => $result ? 'Tool mis à jour' : 'Erreur lors de la mise à jour'
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * API : Créer un tool via IA
+     */
+    public function createTool(): void
+    {
+        header('Content-Type: application/json');
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $description = $data['description'] ?? '';
+
+        if (empty($description)) {
+            echo json_encode(['success' => false, 'error' => 'Description manquante']);
+            return;
+        }
+
+        try {
+            // Générer le tool via IA
+            $generatedTool = $this->generateToolWithAI($description);
+
+            if (!$generatedTool) {
+                echo json_encode(['success' => false, 'error' => 'Impossible de générer le tool']);
+                return;
+            }
+
+            // Vérifier si le nom existe déjà
+            $existing = $this->tools->getByName($generatedTool['name']);
+            if ($existing) {
+                echo json_encode(['success' => false, 'error' => 'Un tool avec ce nom existe déjà']);
+                return;
+            }
+
+            // Créer le tool
+            $userId = $_SESSION['user']['id'] ?? null;
+            $generatedTool['created_by'] = $userId;
+            $generatedTool['is_system'] = 0;
+            $generatedTool['is_active'] = 1;
+
+            $toolId = $this->tools->create($generatedTool);
+
+            if ($toolId) {
+                $tool = $this->tools->getById($toolId);
+                echo json_encode([
+                    'success' => true,
+                    'tool' => $tool,
+                    'message' => "Tool '{$generatedTool['display_name']}' créé avec succès"
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Erreur lors de la création']);
+            }
+        } catch (\Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * API : Mettre à jour un tool
+     */
+    public function updateTool(): void
+    {
+        header('Content-Type: application/json');
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $toolId = $data['id'] ?? null;
+
+        if (!$toolId) {
+            echo json_encode(['success' => false, 'error' => 'ID manquant']);
+            return;
+        }
+
+        // Vérifier que ce n'est pas un tool système
+        $tool = $this->tools->getById((int)$toolId);
+        if (!$tool) {
+            echo json_encode(['success' => false, 'error' => 'Tool non trouvé']);
+            return;
+        }
+        if ($tool['is_system']) {
+            echo json_encode(['success' => false, 'error' => 'Impossible de modifier un tool système']);
+            return;
+        }
+
+        try {
+            $updateData = [];
+            if (isset($data['display_name'])) $updateData['display_name'] = $data['display_name'];
+            if (isset($data['description'])) $updateData['description'] = $data['description'];
+            if (isset($data['parameters'])) $updateData['parameters'] = $data['parameters'];
+
+            $result = $this->tools->update((int)$toolId, $updateData);
+            $tool = $this->tools->getById((int)$toolId);
+
+            echo json_encode([
+                'success' => $result,
+                'tool' => $tool,
+                'message' => 'Tool mis à jour'
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * API : Supprimer un tool
+     */
+    public function deleteTool(): void
+    {
+        header('Content-Type: application/json');
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $toolId = $data['id'] ?? null;
+
+        if (!$toolId) {
+            echo json_encode(['success' => false, 'error' => 'ID manquant']);
+            return;
+        }
+
+        // Vérifier que ce n'est pas un tool système
+        $tool = $this->tools->getById((int)$toolId);
+        if (!$tool) {
+            echo json_encode(['success' => false, 'error' => 'Tool non trouvé']);
+            return;
+        }
+        if ($tool['is_system']) {
+            echo json_encode(['success' => false, 'error' => 'Impossible de supprimer un tool système']);
+            return;
+        }
+
+        try {
+            $result = $this->tools->delete((int)$toolId);
+
+            echo json_encode([
+                'success' => $result,
+                'message' => 'Tool supprimé'
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Générer un tool via l'IA
+     */
+    private function generateToolWithAI(string $description): ?array
+    {
+        // Récupérer la config IA
+        $provider = $this->config->get('ai_provider', 'openai');
+        $model = $this->config->get('ai_model', 'gpt-4o');
+        $apiKey = $this->config->get('ai_api_key', '');
+
+        // Fallback sur .env si pas de clé en DB
+        if (empty($apiKey)) {
+            $apiKey = $_ENV['OPENAI_API_KEY'] ?? getenv('OPENAI_API_KEY') ?? '';
+        }
+
+        if (empty($apiKey)) {
+            return null;
+        }
+
+        $prompt = <<<PROMPT
+Tu es un expert en création de tools pour un système d'IA conversationnelle.
+Génère un tool basé sur cette description : "{$description}"
+
+Le tool doit permettre d'interagir avec une base de données de campagnes promotionnelles (STM).
+
+Réponds UNIQUEMENT avec un JSON valide (sans markdown, sans backticks) avec cette structure :
+{
+    "name": "nom_technique_snake_case",
+    "display_name": "Nom Affiché",
+    "description": "Description détaillée de ce que fait le tool pour l'IA",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "param1": {
+                "type": "string",
+                "description": "Description du paramètre"
+            }
+        },
+        "required": []
+    }
+}
+
+Règles :
+- name : snake_case, court, unique
+- display_name : Titre lisible en français
+- description : Détaillée pour l'IA (ce que le tool fait, quand l'utiliser)
+- parameters : JSON Schema valide pour les paramètres
+PROMPT;
+
+        // Appel API OpenAI
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://api.openai.com/v1/chat/completions',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ],
+            CURLOPT_POSTFIELDS => json_encode([
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'user', 'content' => $prompt]
+                ],
+                'temperature' => 0.3
+            ]),
+            CURLOPT_TIMEOUT => 30
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            error_log("generateToolWithAI: API error - HTTP {$httpCode}");
+            return null;
+        }
+
+        $data = json_decode($response, true);
+        $content = $data['choices'][0]['message']['content'] ?? '';
+
+        // Parser le JSON généré
+        $content = trim($content);
+        // Supprimer les éventuels backticks markdown
+        $content = preg_replace('/^```json\s*/i', '', $content);
+        $content = preg_replace('/\s*```$/i', '', $content);
+
+        $tool = json_decode($content, true);
+
+        if (!$tool || !isset($tool['name']) || !isset($tool['display_name'])) {
+            error_log("generateToolWithAI: Invalid JSON response");
+            return null;
+        }
+
+        // Formater les parameters en JSON string
+        $tool['parameters'] = json_encode($tool['parameters'] ?? []);
+
+        return $tool;
     }
 }

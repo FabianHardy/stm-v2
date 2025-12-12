@@ -1,397 +1,470 @@
 <?php
 /**
- * Contrôleur AgentConfigController
+ * AgentController.php
  *
- * Gestion de la configuration de l'Agent STM
- * Accessible depuis /admin/settings/agent
- * Les configs sensibles (IA) sont réservées aux super admins
+ * Controller pour l'agent conversationnel STM
+ * Gère les échanges entre l'utilisateur et l'IA (OpenAI, Claude, Ollama)
+ * Sauvegarde l'historique des conversations par utilisateur
  *
- * @created  2025/12/11
- * @modified 2025/12/11 - Ajout config fournisseur IA
+ * @created  2025/12/09
+ * @modified 2025/12/11 - Support multi-provider via AIServiceFactory
+ * @package  STM Agent
  */
 
 namespace App\Controllers;
 
-use Core\Auth;
+use App\Services\AIServiceFactory;
+use App\Services\AIServiceInterface;
+use App\Agent\AgentTools;
 use App\Models\AgentConfig;
+use Core\Database;
 
-class AgentConfigController
+class AgentController
 {
-    private AgentConfig $config;
-    private bool $isSuperAdmin;
+    private AIServiceInterface $ai;
+    private AgentTools $tools;
+    private Database $db;
+    private string $systemPrompt;
 
     public function __construct()
     {
-        // Vérifier l'authentification
-        if (!Auth::check()) {
-            header('Location: /stm/login');
-            exit;
+        // Créer le service IA selon la config (OpenAI, Claude, ou Ollama)
+        $this->ai = AIServiceFactory::create();
+        $this->tools = new AgentTools();
+        $this->db = Database::getInstance();
+
+        // Récupérer le schéma DB pour le prompt
+        $dbSchema = $this->tools->getDbSchema();
+
+        // Charger les configurations personnalisées
+        $customPrompt = '';
+        try {
+            $agentConfig = AgentConfig::getInstance();
+            $customPrompt = $agentConfig->buildCustomPrompt();
+        } catch (\Exception $e) {
+            // Si la table n'existe pas encore, on continue sans
+            error_log("AgentConfig not available: " . $e->getMessage());
         }
 
-        $this->config = AgentConfig::getInstance();
+        $this->systemPrompt = <<<PROMPT
+Tu es l'assistant STM, un agent intelligent pour le système de gestion de campagnes promotionnelles STM v2 de Trendy Foods.
 
-        // Vérifier si super admin (role_id = 1 ou role = 'super_admin')
-        $this->isSuperAdmin = $this->checkSuperAdmin();
+## TON RÔLE
+Tu aides les utilisateurs à interroger les données des campagnes promotionnelles.
+
+## ARCHITECTURE DES DONNÉES
+Il y a DEUX bases de données :
+1. **Base LOCALE** (trendyblog_stm_v2) : campaigns, orders, products, order_lines, customers
+2. **Base EXTERNE** (trendyblog_sig) : BE_CLL/LU_CLL (clients), BE_REP/LU_REP (représentants)
+
+⚠️ IMPORTANT : Les représentants et leurs clients sont dans la BASE EXTERNE !
+- Pour chercher un rep par nom → utilise `query_external_database` sur BE_REP
+- Pour les stats d'un rep sur une campagne → utilise `get_rep_campaign_stats`
+- Pour les commandes/produits → utilise `query_database` sur la base locale
+
+## RÈGLES
+1. Réponds toujours en français
+2. Sois concis et précis
+3. Choisis le bon tool selon le type de données
+4. Formate les nombres avec espaces (6 314)
+5. NE JAMAIS dire qu'une campagne n'existe pas sans avoir cherché avec `list_campaigns`
+
+## QUESTIONS COMPARATIVES OU AMBIGUËS
+Pour les questions comme "Compare X et Y" ou "Stats de X" :
+1. Utilise d'abord `list_campaigns` avec le paramètre `search` pour trouver les campagnes
+2. Si plusieurs campagnes correspondent (ex: "Black Friday BE" et "Black Friday LU"), propose des options avec des boutons
+3. Ne suppose jamais - demande toujours des précisions si c'est ambigu
+
+Exemple de question comparative "Compare Black Friday et Noël" :
+→ Utilise `list_campaigns` avec search="Black Friday" puis search="Noël"
+→ Propose les options trouvées : "Black Friday 2025 BE vs Black Friday 2025 LU", etc.
+
+## GESTION DES CLARIFICATIONS AVEC BOUTONS
+Quand plusieurs options sont possibles, propose des boutons :
+   [BTN:texte de l'action à envoyer|Label du bouton]
+
+Exemple :
+"Plusieurs campagnes Black Friday existent. Que souhaitez-vous comparer ?
+
+[BTN:Compare Black Friday 2025 BE et Black Friday 2025 LU|Black Friday BE vs LU]
+[BTN:Stats de Black Friday 2025 BE|Black Friday 2025 BE uniquement]"
+
+## TOOLS DISPONIBLES
+- `list_campaigns` : Liste les campagnes (avec filtre `search` pour chercher par nom)
+- `get_rep_campaign_stats` : Stats d'un représentant sur une campagne
+- `query_external_database` : Requêtes sur BE_CLL, LU_CLL, BE_REP, LU_REP
+- `query_database` : Requêtes sur la base locale (orders, products, etc.)
+
+## SCHÉMA DES BASES
+{$dbSchema}
+{$customPrompt}
+PROMPT;
     }
 
     /**
-     * Vérifier si l'utilisateur est super admin
+     * Obtenir l'ID de l'utilisateur connecté
      */
-    private function checkSuperAdmin(): bool
+    private function getCurrentUserId(): ?int
     {
-        // Adapter selon votre système de rôles
-        $roleId = $_SESSION['role_id'] ?? $_SESSION['user']['role_id'] ?? null;
-        $role = $_SESSION['role'] ?? $_SESSION['user']['role'] ?? null;
-
-        // Comparaison souple (== au lieu de ===) pour gérer "1" vs 1
-        return $roleId == 1
-            || strtolower($role ?? '') === 'super_admin'
-            || strtolower($role ?? '') === 'superadmin'
-            || strtolower($role ?? '') === 'admin';  // Fallback admin aussi
+        return $_SESSION['user_id'] ?? null;
     }
 
     /**
-     * Afficher la page de configuration de l'Agent
+     * Sauvegarder un message dans l'historique
      */
-    public function index(): void
+    private function saveMessage(string $sessionId, string $role, string $content, ?string $title = null): void
     {
-        // Charger les configs (avec ou sans sensibles selon le rôle)
-        $configs = $this->config->getAll($this->isSuperAdmin);
+        $userId = $this->getCurrentUserId();
+        if (!$userId) return;
 
-        // Organiser par clé pour l'affichage
-        $configsByKey = [];
-        foreach ($configs as $config) {
-            $configsByKey[$config['key']] = $config;
+        try {
+            $sql = "INSERT INTO agent_conversations (user_id, session_id, title, role, content)
+                    VALUES (:user_id, :session_id, :title, :role, :content)";
+
+            $this->db->query($sql, [
+                ':user_id' => $userId,
+                ':session_id' => $sessionId,
+                ':title' => $title,
+                ':role' => $role,
+                ':content' => $content
+            ]);
+        } catch (\Exception $e) {
+            error_log("Erreur sauvegarde message agent: " . $e->getMessage());
         }
-
-        // Labels et descriptions pour l'interface - Prompt
-        $promptFields = [
-            'general_instructions' => [
-                'label' => 'Instructions générales',
-                'description' => 'Définit le ton, le style et le comportement global de l\'assistant.',
-                'placeholder' => 'Ex: Sois toujours positif et encourage l\'utilisateur. Réponds de manière concise.',
-                'icon' => 'fa-cog',
-                'rows' => 4
-            ],
-            'business_vocabulary' => [
-                'label' => 'Vocabulaire métier',
-                'description' => 'Termes spécifiques à Trendy Foods que l\'assistant doit connaître.',
-                'placeholder' => 'Ex: Un "cluster" = groupe de clients. "V" = vente classique, "W" = prêt.',
-                'icon' => 'fa-book',
-                'rows' => 6
-            ],
-            'response_rules' => [
-                'label' => 'Règles de réponse',
-                'description' => 'Contraintes et règles que l\'assistant doit respecter dans ses réponses.',
-                'placeholder' => 'Ex: Ne jamais afficher les numéros clients. Toujours préciser le pays.',
-                'icon' => 'fa-list-check',
-                'rows' => 5
-            ],
-            'qa_examples' => [
-                'label' => 'Exemples Q/R',
-                'description' => 'Questions types et réponses attendues pour guider l\'assistant.',
-                'placeholder' => "Ex:\nQ: C'est quoi un rep ?\nR: Un représentant commercial qui gère des clients.",
-                'icon' => 'fa-comments',
-                'rows' => 8
-            ]
-        ];
-
-        // Providers IA disponibles
-        $aiProviders = [
-            'openai' => [
-                'name' => 'OpenAI',
-                'icon' => 'fa-brain',
-                'color' => 'emerald',
-                'models' => ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-                'description' => 'ChatGPT - Le plus populaire'
-            ],
-            'claude' => [
-                'name' => 'Anthropic Claude',
-                'icon' => 'fa-message',
-                'color' => 'orange',
-                'models' => ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
-                'description' => 'Claude - Très bon en raisonnement'
-            ],
-            'ollama' => [
-                'name' => 'Ollama (Local)',
-                'icon' => 'fa-server',
-                'color' => 'purple',
-                'models' => ['llama3', 'llama3.1', 'mistral', 'codellama', 'mixtral'],
-                'description' => 'IA locale - Pas de données envoyées'
-            ]
-        ];
-
-        $isSuperAdmin = $this->isSuperAdmin;
-        $fields = $promptFields;
-
-        require __DIR__ . '/../Views/admin/settings/agent.php';
     }
 
     /**
-     * Sauvegarder la configuration
+     * Générer un titre à partir du premier message
      */
-    public function save(): void
+    private function generateTitle(string $message): string
     {
-        // Vérifier le token CSRF
-        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF invalide'];
-            header('Location: /stm/admin/settings/agent');
-            exit;
+        $title = mb_substr($message, 0, 50);
+        if (mb_strlen($message) > 50) {
+            $title .= '...';
         }
-
-        // Configs prompt (accessibles à tous les admins)
-        $promptKeys = ['general_instructions', 'business_vocabulary', 'response_rules', 'qa_examples'];
-        $configs = [];
-
-        foreach ($promptKeys as $key) {
-            $configs[$key] = [
-                'value' => trim($_POST[$key] ?? ''),
-                'is_active' => isset($_POST[$key . '_active'])
-            ];
-        }
-
-        // Configs IA (super admin uniquement)
-        if ($this->isSuperAdmin) {
-            $aiKeys = ['ai_provider', 'ai_model', 'ai_api_key', 'ai_api_url', 'ai_temperature'];
-            foreach ($aiKeys as $key) {
-                // Ne pas écraser la clé API si le champ est vide (masqué)
-                if ($key === 'ai_api_key' && empty($_POST[$key])) {
-                    continue;
-                }
-                $configs[$key] = [
-                    'value' => trim($_POST[$key] ?? ''),
-                    'is_active' => true
-                ];
-            }
-        }
-
-        if ($this->config->setMultiple($configs)) {
-            $_SESSION['flash'] = [
-                'type' => 'success',
-                'message' => 'Configuration de l\'Agent sauvegardée avec succès !'
-            ];
-        } else {
-            $_SESSION['flash'] = [
-                'type' => 'error',
-                'message' => 'Erreur lors de la sauvegarde de la configuration.'
-            ];
-        }
-
-        header('Location: /stm/admin/settings/agent');
-        exit;
+        return $title;
     }
 
     /**
-     * Réinitialiser aux valeurs par défaut
+     * Endpoint principal du chat
+     * POST /stm/admin/agent/chat
      */
-    public function reset(): void
-    {
-        // Vérifier le token CSRF
-        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF invalide'];
-            header('Location: /stm/admin/settings/agent');
-            exit;
-        }
-
-        $defaults = [
-            'general_instructions' => [
-                'value' => 'Tu es un assistant professionnel et amical. Réponds de manière concise et précise.',
-                'is_active' => true
-            ],
-            'business_vocabulary' => [
-                'value' => "Vocabulaire métier Trendy Foods :\n- Rep / Représentant : Commercial qui gère un portefeuille de clients\n- Cluster : Groupe géographique de clients\n- V (Vente) : Commande classique\n- W (Prêt) : Commande en consignation\n- Quota : Limite de quantité par produit",
-                'is_active' => true
-            ],
-            'response_rules' => [
-                'value' => "Règles de réponse :\n- Ne jamais afficher les numéros clients aux utilisateurs\n- Arrondir les montants à 2 décimales\n- Toujours préciser le pays (BE/LU) quand pertinent\n- Proposer des options si la question est ambiguë",
-                'is_active' => true
-            ],
-            'qa_examples' => [
-                'value' => "Exemples de questions/réponses :\n\nQ: C'est quoi un cluster ?\nR: Un cluster est un regroupement géographique de clients gérés par un même représentant.\n\nQ: Différence entre V et W ?\nR: V = Vente classique, W = Prêt/Consignation (le client peut retourner les invendus).",
-                'is_active' => true
-            ]
-        ];
-
-        if ($this->config->setMultiple($defaults)) {
-            $_SESSION['flash'] = [
-                'type' => 'success',
-                'message' => 'Configuration réinitialisée aux valeurs par défaut.'
-            ];
-        } else {
-            $_SESSION['flash'] = [
-                'type' => 'error',
-                'message' => 'Erreur lors de la réinitialisation.'
-            ];
-        }
-
-        header('Location: /stm/admin/settings/agent');
-        exit;
-    }
-
-    /**
-     * Tester le prompt généré (API endpoint)
-     */
-    public function preview(): void
+    public function chat(): void
     {
         header('Content-Type: application/json');
 
-        $customPrompt = $this->config->buildCustomPrompt();
+        // Vérifier la méthode
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['error' => 'Méthode non autorisée']);
+            return;
+        }
 
-        echo json_encode([
-            'success' => true,
-            'prompt' => $customPrompt,
-            'length' => strlen($customPrompt),
-            'sections' => [
-                'general_instructions' => $this->config->isActive('general_instructions'),
-                'business_vocabulary' => $this->config->isActive('business_vocabulary'),
-                'response_rules' => $this->config->isActive('response_rules'),
-                'qa_examples' => $this->config->isActive('qa_examples')
-            ]
-        ]);
-        exit;
-    }
+        // Récupérer le message
+        $input = json_decode(file_get_contents('php://input'), true);
+        $userMessage = trim($input['message'] ?? '');
+        $history = $input['history'] ?? [];
+        $sessionId = $input['session_id'] ?? $this->generateSessionId();
+        $isNewSession = empty($input['session_id']);
 
-    /**
-     * Tester la connexion au fournisseur IA (super admin uniquement)
-     */
-    public function testConnection(): void
-    {
-        header('Content-Type: application/json');
-
-        if (!$this->isSuperAdmin) {
-            echo json_encode(['success' => false, 'error' => 'Accès refusé']);
-            exit;
+        if (empty($userMessage)) {
+            echo json_encode(['error' => 'Message vide']);
+            return;
         }
 
         try {
-            $aiConfig = $this->config->getAIConfig();
-            $provider = $aiConfig['provider'];
-            $model = $aiConfig['model'];
-            $apiKey = $aiConfig['api_key'];
-            $apiUrl = $aiConfig['api_url'];
+            // Sauvegarder le message utilisateur
+            $title = $isNewSession ? $this->generateTitle($userMessage) : null;
+            $this->saveMessage($sessionId, 'user', $userMessage, $title);
 
-            // Test selon le provider
-            switch ($provider) {
-                case 'openai':
-                    $result = $this->testOpenAI($apiKey, $model);
-                    break;
-                case 'claude':
-                    $result = $this->testClaude($apiKey, $model);
-                    break;
-                case 'ollama':
-                    $result = $this->testOllama($apiUrl, $model);
-                    break;
-                default:
-                    $result = ['success' => false, 'error' => 'Provider inconnu'];
-            }
+            // Construire l'historique des messages
+            $messages = [];
 
-            echo json_encode($result);
-        } catch (\Exception $e) {
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        }
-        exit;
-    }
-
-    /**
-     * Tester OpenAI
-     */
-    private function testOpenAI(string $apiKey, string $model): array
-    {
-        if (empty($apiKey)) {
-            return ['success' => false, 'error' => 'Clé API manquante'];
-        }
-
-        $ch = curl_init('https://api.openai.com/v1/models/' . $model);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $apiKey
-            ],
-            CURLOPT_TIMEOUT => 10
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode === 200) {
-            return ['success' => true, 'message' => "Connexion OpenAI OK - Modèle {$model} disponible"];
-        } else {
-            return ['success' => false, 'error' => "Erreur HTTP {$httpCode}"];
-        }
-    }
-
-    /**
-     * Tester Claude/Anthropic
-     */
-    private function testClaude(string $apiKey, string $model): array
-    {
-        if (empty($apiKey)) {
-            return ['success' => false, 'error' => 'Clé API manquante'];
-        }
-
-        $ch = curl_init('https://api.anthropic.com/v1/messages');
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'x-api-key: ' . $apiKey,
-                'anthropic-version: 2023-06-01',
-                'Content-Type: application/json'
-            ],
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => $model,
-                'max_tokens' => 10,
-                'messages' => [['role' => 'user', 'content' => 'Test']]
-            ]),
-            CURLOPT_TIMEOUT => 10
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode === 200) {
-            return ['success' => true, 'message' => "Connexion Claude OK - Modèle {$model} disponible"];
-        } else {
-            $data = json_decode($response, true);
-            $error = $data['error']['message'] ?? "Erreur HTTP {$httpCode}";
-            return ['success' => false, 'error' => $error];
-        }
-    }
-
-    /**
-     * Tester Ollama (local)
-     */
-    private function testOllama(string $apiUrl, string $model): array
-    {
-        $url = rtrim($apiUrl ?: 'http://localhost:11434', '/') . '/api/tags';
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 5
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($httpCode === 200) {
-            $data = json_decode($response, true);
-            $models = array_column($data['models'] ?? [], 'name');
-
-            if (in_array($model, $models)) {
-                return ['success' => true, 'message' => "Connexion Ollama OK - Modèle {$model} disponible"];
-            } else {
-                return [
-                    'success' => false,
-                    'error' => "Modèle {$model} non trouvé. Modèles disponibles : " . implode(', ', $models)
+            foreach ($history as $msg) {
+                $messages[] = [
+                    'role' => $msg['role'],
+                    'content' => $msg['content']
                 ];
             }
-        } else {
-            return ['success' => false, 'error' => $error ?: "Impossible de contacter Ollama sur {$apiUrl}"];
+
+            // Ajouter le nouveau message
+            $messages[] = [
+                'role' => 'user',
+                'content' => $userMessage
+            ];
+
+            // Appeler l'IA avec les tools
+            $response = $this->ai->chat(
+                $messages,
+                $this->systemPrompt,
+                $this->tools->getToolsDefinition()
+            );
+
+            // Traiter les tool calls si présents
+            $finalResponse = $this->processResponse($response, $messages);
+
+            // Sauvegarder la réponse de l'assistant
+            $this->saveMessage($sessionId, 'assistant', $finalResponse);
+
+            echo json_encode([
+                'success' => true,
+                'response' => $finalResponse,
+                'session_id' => $sessionId
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("AgentController error: " . $e->getMessage());
+            echo json_encode([
+                'error' => 'Erreur: ' . $e->getMessage()
+            ]);
         }
+    }
+
+    /**
+     * Générer un ID de session unique
+     */
+    private function generateSessionId(): string
+    {
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+    }
+
+    /**
+     * Traiter la réponse et exécuter les tools si nécessaire
+     */
+    private function processResponse(array $response, array $messages): string
+    {
+        $extracted = $this->ai->extractMessage($response);
+
+        // Si pas de tool calls, retourner le contenu directement
+        if (empty($extracted['tool_calls'])) {
+            return $extracted['content'] ?? 'Je n\'ai pas pu générer de réponse.';
+        }
+
+        // Exécuter les tool calls
+        $toolResults = [];
+
+        foreach ($extracted['tool_calls'] as $toolCall) {
+            $toolName = $toolCall['function']['name'];
+            $arguments = json_decode($toolCall['function']['arguments'], true) ?? [];
+
+            // Exécuter le tool
+            $result = $this->tools->executeTool($toolName, $arguments);
+
+            $toolResults[] = [
+                'tool_call_id' => $toolCall['id'],
+                'name' => $toolName,
+                'result' => $result
+            ];
+        }
+
+        // Ajouter l'assistant message avec les tool calls
+        $messages[] = [
+            'role' => 'assistant',
+            'content' => $extracted['content'],
+            'tool_calls' => $extracted['tool_calls']
+        ];
+
+        // Ajouter les résultats des tools
+        foreach ($toolResults as $tr) {
+            $messages[] = [
+                'role' => 'tool',
+                'tool_call_id' => $tr['tool_call_id'],
+                'content' => json_encode($tr['result'], JSON_UNESCAPED_UNICODE)
+            ];
+        }
+
+        // Appeler l'IA à nouveau pour obtenir la réponse finale
+        $finalResponse = $this->ai->chat(
+            $messages,
+            $this->systemPrompt,
+            $this->tools->getToolsDefinition()
+        );
+
+        $finalExtracted = $this->ai->extractMessage($finalResponse);
+
+        // Vérifier s'il y a encore des tool calls (récursion limitée)
+        if (!empty($finalExtracted['tool_calls'])) {
+            // Récursion une fois max pour éviter les boucles infinies
+            return $this->processResponse($finalResponse, $messages);
+        }
+
+        return $finalExtracted['content'] ?? 'Je n\'ai pas pu générer de réponse.';
+    }
+
+    /**
+     * Page historique des conversations
+     * GET /stm/admin/agent/history
+     */
+    public function history(): void
+    {
+        $userId = $this->getCurrentUserId();
+
+        // Récupérer les conversations groupées par session
+        $conversations = $this->db->query(
+            "SELECT
+                session_id,
+                MIN(title) as title,
+                MIN(created_at) as started_at,
+                MAX(created_at) as last_message_at,
+                COUNT(*) as message_count
+             FROM agent_conversations
+             WHERE user_id = :user_id
+             GROUP BY session_id
+             ORDER BY last_message_at DESC
+             LIMIT 50",
+            [':user_id' => $userId]
+        );
+
+        $title = "Historique - Agent STM";
+        $activeMenu = "agent-history";
+
+        ob_start();
+        require __DIR__ . '/../Views/admin/agent/history.php';
+        $content = ob_get_clean();
+
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+
+    /**
+     * Voir une conversation spécifique
+     * GET /stm/admin/agent/conversation/{session_id}
+     */
+    public function conversation(string $sessionId): void
+    {
+        $userId = $this->getCurrentUserId();
+
+        // Récupérer les messages de cette conversation
+        $messages = $this->db->query(
+            "SELECT role, content, created_at
+             FROM agent_conversations
+             WHERE user_id = :user_id AND session_id = :session_id
+             ORDER BY created_at ASC",
+            [':user_id' => $userId, ':session_id' => $sessionId]
+        );
+
+        if (empty($messages)) {
+            header('Location: /stm/admin/agent/history');
+            exit;
+        }
+
+        // Récupérer le titre
+        $info = $this->db->query(
+            "SELECT title, MIN(created_at) as started_at
+             FROM agent_conversations
+             WHERE session_id = :session_id
+             GROUP BY session_id",
+            [':session_id' => $sessionId]
+        );
+
+        $conversationTitle = $info[0]['title'] ?? 'Conversation';
+        $startedAt = $info[0]['started_at'] ?? null;
+
+        $title = "Conversation - Agent STM";
+        $activeMenu = "agent-history";
+
+        ob_start();
+        require __DIR__ . '/../Views/admin/agent/conversation.php';
+        $content = ob_get_clean();
+
+        require __DIR__ . '/../Views/layouts/admin.php';
+    }
+
+    /**
+     * Charger une conversation dans le widget (AJAX)
+     * GET /stm/admin/agent/load/{session_id}
+     */
+    public function load(string $sessionId): void
+    {
+        header('Content-Type: application/json');
+
+        $userId = $this->getCurrentUserId();
+
+        $messages = $this->db->query(
+            "SELECT role, content
+             FROM agent_conversations
+             WHERE user_id = :user_id AND session_id = :session_id
+             ORDER BY created_at ASC",
+            [':user_id' => $userId, ':session_id' => $sessionId]
+        );
+
+        echo json_encode([
+            'success' => true,
+            'session_id' => $sessionId,
+            'messages' => $messages
+        ]);
+    }
+
+    /**
+     * Supprimer une conversation
+     * POST /stm/admin/agent/delete/{session_id}
+     */
+    public function delete(string $sessionId): void
+    {
+        header('Content-Type: application/json');
+
+        $userId = $this->getCurrentUserId();
+
+        try {
+            $this->db->query(
+                "DELETE FROM agent_conversations
+                 WHERE user_id = :user_id AND session_id = :session_id",
+                [':user_id' => $userId, ':session_id' => $sessionId]
+            );
+
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Page de test de l'agent (GET)
+     */
+    public function index(): void
+    {
+        $title = "Agent STM";
+        $activeMenu = "agent";
+
+        ob_start();
+        ?>
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h1 class="text-2xl font-bold text-gray-900 mb-4">🤖 Agent STM</h1>
+                <p class="text-gray-600 mb-6">
+                    Posez des questions sur vos campagnes, statistiques, produits et représentants.
+                </p>
+
+                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Exemples de questions :</p>
+                    <ul class="text-sm text-gray-600 space-y-1">
+                        <li>• "Quelles sont les campagnes en cours ?"</li>
+                        <li>• "Combien de commandes pour Black Friday 2025 ?"</li>
+                        <li>• "Quel est le top 5 des produits de la campagne Noël ?"</li>
+                        <li>• "Compare Black Friday et la campagne Anniversaire"</li>
+                    </ul>
+                </div>
+
+                <div class="flex gap-4">
+                    <a href="/stm/admin/agent/history" class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                        <i class="fas fa-history mr-2"></i>
+                        Voir l'historique
+                    </a>
+                </div>
+
+                <p class="text-sm text-gray-500 mt-4">
+                    💡 Utilisez le widget en bas à droite pour discuter avec l'agent.
+                </p>
+            </div>
+        </div>
+        <?php
+        $content = ob_get_clean();
+
+        require __DIR__ . '/../Views/layouts/admin.php';
     }
 }
