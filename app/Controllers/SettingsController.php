@@ -7,6 +7,7 @@
  * @package STM
  * @created 2025/12/10
  * @modified 2025/12/10 - Ajout gestion permissions éditable
+ * @modified 2025/12/12 - Sécurisation : vérification hiérarchique des permissions
  */
 
 namespace App\Controllers;
@@ -40,6 +41,9 @@ class SettingsController
         // Peut modifier les permissions ?
         $canEditPermissions = PermissionHelper::can('permissions.manage');
 
+        // Rôles que l'utilisateur peut gérer (pour griser les autres)
+        $manageableRoles = PermissionHelper::getManageableRoles();
+
         // Labels des rôles
         $roleLabels = [
             'superadmin' => 'Super Admin',
@@ -57,10 +61,15 @@ class SettingsController
     /**
      * Sauvegarde les permissions
      * POST /admin/settings/permissions
+     *
+     * Règles de sécurité :
+     * - Ne peut pas modifier un rôle de niveau égal ou supérieur
+     * - Ne peut accorder que les permissions qu'on possède
+     * - Ne peut retirer que les permissions qu'on possède
      */
     public function savePermissions(): void
     {
-        // Vérifier la permission
+        // Vérifier la permission de base
         if (PermissionHelper::cannot('permissions.manage')) {
             $this->jsonResponse(['success' => false, 'message' => 'Permission refusée'], 403);
             return;
@@ -87,19 +96,31 @@ class SettingsController
             return;
         }
 
-        // Construire la matrice
-        $matrix = [];
-        foreach ($data['permissions'] as $role => $permissions) {
-            // Ignorer superadmin (protégé)
-            if (PermissionHelper::isProtectedRole($role)) {
-                continue;
-            }
+        // ==========================================
+        // SÉCURITÉ : Filtrer les modifications autorisées
+        // ==========================================
+        $filterResult = PermissionHelper::filterAllowedPermissionChanges($data['permissions']);
 
+        $allowedChanges = $filterResult['allowed'];
+        $deniedChanges = $filterResult['denied'];
+        $errors = $filterResult['errors'];
+
+        // Si rien n'est autorisé
+        if (empty($allowedChanges)) {
+            $this->jsonResponse([
+                'success' => false,
+                'message' => 'Aucune modification autorisée',
+                'errors' => $errors
+            ], 403);
+            return;
+        }
+
+        // Construire la matrice finale (uniquement les modifications autorisées)
+        $matrix = [];
+        foreach ($allowedChanges as $role => $permissions) {
             $matrix[$role] = [];
-            if (is_array($permissions)) {
-                foreach ($permissions as $permCode => $value) {
-                    $matrix[$role][$permCode] = (bool) $value;
-                }
+            foreach ($permissions as $permCode => $value) {
+                $matrix[$role][$permCode] = (bool) $value;
             }
         }
 
@@ -107,9 +128,22 @@ class SettingsController
         $success = PermissionHelper::savePermissionMatrix($matrix);
 
         if ($success) {
+            // Construire le message de retour
+            $message = 'Permissions enregistrées avec succès';
+
+            // Avertir si certaines modifications ont été refusées
+            if (!empty($deniedChanges)) {
+                $deniedCount = 0;
+                foreach ($deniedChanges as $role => $perms) {
+                    $deniedCount += count($perms);
+                }
+                $message .= " ($deniedCount modification(s) ignorée(s) - permissions insuffisantes)";
+            }
+
             $this->jsonResponse([
                 'success' => true,
-                'message' => 'Permissions enregistrées avec succès'
+                'message' => $message,
+                'warnings' => $errors
             ]);
         } else {
             $this->jsonResponse([
