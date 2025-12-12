@@ -31,6 +31,10 @@ $isDev = $appEnv === "development";
 if (!function_exists('isActive')) {
     function isActive(string $route, string $currentRoute): bool
     {
+        // Cas spécial : /settings ne doit pas matcher /settings/agent
+        if ($route === '/stm/admin/settings' && str_starts_with($currentRoute, '/stm/admin/settings/')) {
+            return false;
+        }
         return str_starts_with($currentRoute, $route);
     }
 }
@@ -169,9 +173,9 @@ $settingsItems = [
         "permission" => "settings.view",
     ],
     [
-    'label' => 'Agent STM',
-    'icon' => 'fa-robot',
-    'route' => '/stm/admin/settings/agent',
+        "label" => "Agent STM",
+        "icon" => "fa-robot",
+        "route" => "/stm/admin/settings/agent",
     ],
     [
         "label" => "Configuration",

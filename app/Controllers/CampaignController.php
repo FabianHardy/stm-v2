@@ -3,15 +3,18 @@
  * CampaignController
  *
  * Contrôleur pour la gestion des campagnes promotionnelles
+ * Intègre le système de permissions (Phase 5)
  *
  * @created  2025/11/07 10:00
  * @modified 2025/12/10 - Ajout gestion équipe (assignees) pour onglet Équipe
+ * @modified 2025/12/12 - Intégration PermissionMiddleware (Phase 5)
  */
 
 namespace App\Controllers;
 
 use App\Models\Campaign;
 use App\Helpers\PermissionHelper;
+use App\Middleware\PermissionMiddleware;
 use Core\Database;
 use Core\Session;
 
@@ -29,11 +32,20 @@ class CampaignController
      */
     public function index(): void
     {
+        // ✅ Permission requise : voir les campagnes
+        PermissionMiddleware::require('campaigns.view');
+
         $filters = [
             "search" => $_GET["search"] ?? "",
             "country" => $_GET["country"] ?? "",
             "status" => $_GET["status"] ?? "",
         ];
+
+        // Filtrer par scope selon le rôle
+        if (!PermissionHelper::can('campaigns.view_all')) {
+            // Créateur : seulement ses campagnes assignées
+            $filters['campaign_ids'] = PermissionHelper::getAccessibleCampaignIds();
+        }
 
         $campaigns = $this->campaignModel->getAll($filters);
 
@@ -60,6 +72,9 @@ class CampaignController
      */
     public function create(): void
     {
+        // ✅ Permission requise : créer des campagnes
+        PermissionMiddleware::require('campaigns.create');
+
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
@@ -74,6 +89,9 @@ class CampaignController
      */
     public function store(): void
     {
+        // ✅ Permission requise : créer des campagnes
+        PermissionMiddleware::require('campaigns.create');
+
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
             header("Location: /stm/admin/campaigns/create");
@@ -151,6 +169,9 @@ class CampaignController
      */
     public function show(int $id): void
     {
+        // ✅ Permission requise : voir cette campagne spécifique (vérifie le scope)
+        PermissionMiddleware::requireCampaignAccess($id, 'view');
+
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -178,6 +199,9 @@ class CampaignController
      */
     public function edit(int $id): void
     {
+        // ✅ Permission requise : modifier cette campagne spécifique
+        PermissionMiddleware::requireCampaignAccess($id, 'edit');
+
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -206,6 +230,9 @@ class CampaignController
      */
     public function update(int $id): void
     {
+        // ✅ Permission requise : modifier cette campagne spécifique
+        PermissionMiddleware::requireCampaignAccess($id, 'edit');
+
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -293,6 +320,10 @@ class CampaignController
      */
     public function destroy(int $id): void
     {
+        // ✅ Permission requise : supprimer + pouvoir modifier cette campagne
+        PermissionMiddleware::require('campaigns.delete');
+        PermissionMiddleware::requireCampaignAccess($id, 'edit', '/stm/admin/campaigns');
+
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -329,7 +360,19 @@ class CampaignController
      */
     public function active(): void
     {
+        // ✅ Permission requise : voir les campagnes
+        PermissionMiddleware::require('campaigns.view');
+
         $campaigns = $this->campaignModel->getActive();
+
+        // Filtrer par scope si nécessaire
+        if (!PermissionHelper::can('campaigns.view_all')) {
+            $accessibleIds = PermissionHelper::getAccessibleCampaignIds();
+            $campaigns = array_filter($campaigns, function($c) use ($accessibleIds) {
+                return in_array($c['id'], $accessibleIds);
+            });
+        }
+
         $stats = $this->campaignModel->getStats();
 
         foreach ($campaigns as &$campaign) {
@@ -348,7 +391,19 @@ class CampaignController
      */
     public function archives(): void
     {
+        // ✅ Permission requise : voir les campagnes
+        PermissionMiddleware::require('campaigns.view');
+
         $campaigns = $this->campaignModel->getArchived();
+
+        // Filtrer par scope si nécessaire
+        if (!PermissionHelper::can('campaigns.view_all')) {
+            $accessibleIds = PermissionHelper::getAccessibleCampaignIds();
+            $campaigns = array_filter($campaigns, function($c) use ($accessibleIds) {
+                return in_array($c['id'], $accessibleIds);
+            });
+        }
+
         $stats = $this->campaignModel->getStats();
 
         foreach ($campaigns as &$campaign) {
@@ -367,6 +422,12 @@ class CampaignController
      */
     public function toggleActive(int $id): void
     {
+        // ✅ Permission requise : modifier cette campagne
+        if (!PermissionHelper::canEditCampaign($id)) {
+            $this->jsonResponse(["success" => false, "message" => "Permission refusée"], 403);
+            return;
+        }
+
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
@@ -479,7 +540,7 @@ class CampaignController
      */
     public function addAssignee(int $campaignId): void
     {
-        // Vérifier la permission
+        // ✅ Vérifier la permission d'assigner sur cette campagne
         if (!PermissionHelper::canAssignToCampaign($campaignId)) {
             $this->jsonResponse(['success' => false, 'message' => 'Permission refusée'], 403);
             return;
@@ -551,11 +612,11 @@ class CampaignController
 
     /**
      * Retire un collaborateur d'une campagne
-     * DELETE /admin/campaigns/{id}/assignees/{userId}
+     * POST /admin/campaigns/{id}/assignees/{userId}/delete
      */
     public function removeAssignee(int $campaignId, int $userId): void
     {
-        // Vérifier la permission
+        // ✅ Vérifier la permission d'assigner sur cette campagne
         if (!PermissionHelper::canAssignToCampaign($campaignId)) {
             $this->jsonResponse(['success' => false, 'message' => 'Permission refusée'], 403);
             return;

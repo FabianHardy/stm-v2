@@ -22,7 +22,7 @@ ob_start();
         </div>
         <div class="flex items-center gap-3">
             <!-- Bouton prévisualisation -->
-            <button type="button" 
+            <button type="button"
                     onclick="previewPrompt()"
                     class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition flex items-center gap-2">
                 <i class="fas fa-eye"></i>
@@ -31,23 +31,8 @@ ob_start();
         </div>
     </div>
 
-    <!-- Navigation onglets settings -->
-    <div class="border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8">
-            <a href="/stm/admin/settings" 
-               class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                <i class="fas fa-shield-halved mr-2"></i>Permissions
-            </a>
-            <a href="/stm/admin/settings?tab=general" 
-               class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                <i class="fas fa-cog mr-2"></i>Général
-            </a>
-            <a href="/stm/admin/settings/agent" 
-               class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                <i class="fas fa-robot mr-2"></i>Agent STM
-            </a>
-        </nav>
-    </div>
+    <!-- Navigation onglets settings - RETIRÉE car page autonome -->
+    <!-- L'accès se fait uniquement via le menu sidebar "Agent STM" -->
 
     <!-- Formulaire -->
     <form action="/stm/admin/settings/agent/save" method="POST" class="space-y-8">
@@ -72,16 +57,16 @@ ob_start();
                     </span>
                 </div>
             </div>
-            
+
             <div class="p-6 space-y-6">
                 <!-- Sélection du provider -->
                 <div class="grid grid-cols-3 gap-4">
-                    <?php foreach ($aiProviders as $providerId => $provider): 
+                    <?php foreach ($aiProviders as $providerId => $provider):
                         $isSelected = ($configsByKey['ai_provider']['value'] ?? 'openai') === $providerId;
                     ?>
                     <label class="relative cursor-pointer">
-                        <input type="radio" 
-                               name="ai_provider" 
+                        <input type="radio"
+                               name="ai_provider"
                                value="<?= $providerId ?>"
                                class="peer sr-only"
                                <?= $isSelected ? 'checked' : '' ?>
@@ -113,17 +98,17 @@ ob_start();
                         <label class="block text-sm font-medium text-gray-700 mb-2">
                             <i class="fas fa-cube mr-1 text-gray-400"></i> Modèle
                         </label>
-                        <select name="ai_model" 
+                        <select name="ai_model"
                                 id="ai_model"
                                 class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
-                            <?php 
+                            <?php
                             $currentProvider = $configsByKey['ai_provider']['value'] ?? 'openai';
                             $currentModel = $configsByKey['ai_model']['value'] ?? 'gpt-4o';
-                            foreach ($aiProviders as $providerId => $provider): 
+                            foreach ($aiProviders as $providerId => $provider):
                                 foreach ($provider['models'] as $model):
                                     $hidden = $providerId !== $currentProvider ? 'hidden' : '';
                             ?>
-                            <option value="<?= $model ?>" 
+                            <option value="<?= $model ?>"
                                     data-provider="<?= $providerId ?>"
                                     class="model-option <?= $hidden ?>"
                                     <?= $model === $currentModel ? 'selected' : '' ?>>
@@ -140,8 +125,8 @@ ob_start();
                             <span class="text-gray-400 font-normal">(créativité)</span>
                         </label>
                         <div class="flex items-center gap-4">
-                            <input type="range" 
-                                   name="ai_temperature" 
+                            <input type="range"
+                                   name="ai_temperature"
                                    id="ai_temperature"
                                    min="0" max="1" step="0.1"
                                    value="<?= htmlspecialchars($configsByKey['ai_temperature']['value'] ?? '0.7') ?>"
@@ -161,13 +146,13 @@ ob_start();
                         <i class="fas fa-key mr-1 text-gray-400"></i> Clé API
                     </label>
                     <div class="relative">
-                        <input type="password" 
-                               name="ai_api_key" 
+                        <input type="password"
+                               name="ai_api_key"
                                id="ai_api_key"
                                value="<?= htmlspecialchars($configsByKey['ai_api_key']['value'] ?? '') ?>"
                                placeholder="sk-... ou sk-ant-..."
                                class="w-full px-4 py-2.5 pr-24 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 font-mono text-sm">
-                        <button type="button" 
+                        <button type="button"
                                 onclick="toggleApiKey()"
                                 class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-sm text-gray-500 hover:text-gray-700">
                             <i id="api_key_icon" class="fas fa-eye"></i>
@@ -182,8 +167,8 @@ ob_start();
                     <label class="block text-sm font-medium text-gray-700 mb-2">
                         <i class="fas fa-link mr-1 text-gray-400"></i> URL de l'API Ollama
                     </label>
-                    <input type="text" 
-                           name="ai_api_url" 
+                    <input type="text"
+                           name="ai_api_url"
                            id="ai_api_url"
                            value="<?= htmlspecialchars($configsByKey['ai_api_url']['value'] ?? 'http://localhost:11434') ?>"
                            placeholder="http://localhost:11434"
@@ -192,7 +177,7 @@ ob_start();
 
                 <!-- Bouton test connexion -->
                 <div class="flex items-center gap-4 pt-2">
-                    <button type="button" 
+                    <button type="button"
                             onclick="testConnection()"
                             class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition flex items-center gap-2">
                         <i class="fas fa-plug"></i>
@@ -226,14 +211,14 @@ ob_start();
                 <div>
                     <h4 class="font-medium text-blue-900">Comment ça marche ?</h4>
                     <p class="text-sm text-blue-700 mt-1">
-                        Ces instructions sont ajoutées au prompt système de l'Agent. Vous pouvez activer/désactiver chaque section 
+                        Ces instructions sont ajoutées au prompt système de l'Agent. Vous pouvez activer/désactiver chaque section
                         individuellement. Les modifications sont appliquées immédiatement à toutes les nouvelles conversations.
                     </p>
                 </div>
             </div>
 
             <div class="space-y-6">
-                <?php foreach ($fields as $key => $field): 
+                <?php foreach ($fields as $key => $field):
                     $config = $configsByKey[$key] ?? ['value' => '', 'is_active' => 1];
                     $isActive = (bool)($config['is_active'] ?? true);
                     $value = htmlspecialchars($config['value'] ?? '');
@@ -250,11 +235,11 @@ ob_start();
                                 <p class="text-sm text-gray-500"><?= $field['description'] ?></p>
                             </div>
                         </div>
-                        
+
                         <!-- Toggle actif/inactif -->
                         <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" 
-                                   name="<?= $key ?>_active" 
+                            <input type="checkbox"
+                                   name="<?= $key ?>_active"
                                    class="sr-only peer"
                                    <?= $isActive ? 'checked' : '' ?>
                                    onchange="toggleSection('<?= $key ?>', this.checked)">
@@ -264,7 +249,7 @@ ob_start();
                             </span>
                         </label>
                     </div>
-                    
+
                     <!-- Contenu -->
                     <div class="p-6" id="<?= $key ?>_content" style="<?= $isActive ? '' : 'opacity: 0.5;' ?>">
                         <textarea name="<?= $key ?>"
@@ -273,7 +258,7 @@ ob_start();
                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm resize-y"
                                   placeholder="<?= htmlspecialchars($field['placeholder']) ?>"
                                   <?= $isActive ? '' : 'disabled' ?>><?= $value ?></textarea>
-                        
+
                         <!-- Compteur de caractères -->
                         <div class="mt-2 flex justify-between items-center text-xs text-gray-400">
                             <span>Utilisez des retours à la ligne pour structurer vos instructions</span>
@@ -293,9 +278,9 @@ ob_start();
                 <i class="fas fa-rotate-left"></i>
                 Réinitialiser par défaut
             </button>
-            
+
             <div class="flex items-center gap-3">
-                <a href="/stm/admin/settings" 
+                <a href="/stm/admin/dashboard"
                    class="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
                     Annuler
                 </a>
@@ -326,7 +311,7 @@ ob_start();
         </div>
         <div class="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
             <span id="previewStats" class="text-sm text-gray-500"></span>
-            <button onclick="closePreview()" 
+            <button onclick="closePreview()"
                     class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
                 Fermer
             </button>
@@ -343,12 +328,12 @@ ob_start();
             </div>
             <h3 class="text-lg font-semibold text-gray-900 text-center mb-2">Réinitialiser la configuration ?</h3>
             <p class="text-gray-500 text-center text-sm">
-                Cette action remplacera toutes vos personnalisations du prompt par les valeurs par défaut. 
+                Cette action remplacera toutes vos personnalisations du prompt par les valeurs par défaut.
                 La configuration IA ne sera pas modifiée.
             </p>
         </div>
         <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-            <button onclick="closeReset()" 
+            <button onclick="closeReset()"
                     class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
                 Annuler
             </button>
@@ -374,7 +359,7 @@ function toggleSection(key, isActive) {
     const content = document.getElementById(key + '_content');
     const textarea = document.getElementById(key);
     const status = document.getElementById(key + '_status');
-    
+
     if (isActive) {
         content.style.opacity = '1';
         textarea.disabled = false;
@@ -443,7 +428,7 @@ function toggleApiKey() {
     const input = document.getElementById('ai_api_key');
     const icon = document.getElementById('api_key_icon');
     const text = document.getElementById('api_key_text');
-    
+
     if (input.type === 'password') {
         input.type = 'text';
         icon.className = 'fas fa-eye-slash';
@@ -462,23 +447,23 @@ function updateProviderUI(provider) {
     if (urlSection) {
         urlSection.classList.toggle('hidden', provider !== 'ollama');
     }
-    
+
     // Mettre à jour les modèles disponibles
     const modelSelect = document.getElementById('ai_model');
     if (modelSelect) {
         const options = modelSelect.querySelectorAll('option');
         let firstVisible = null;
-        
+
         options.forEach(opt => {
             const isForProvider = opt.dataset.provider === provider;
             opt.classList.toggle('hidden', !isForProvider);
             opt.disabled = !isForProvider;
-            
+
             if (isForProvider && !firstVisible) {
                 firstVisible = opt;
             }
         });
-        
+
         // Sélectionner le premier modèle visible
         if (firstVisible) {
             modelSelect.value = firstVisible.value;
@@ -491,7 +476,7 @@ function testConnection() {
     const statusEl = document.getElementById('connection_status');
     statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Test en cours...';
     statusEl.className = 'text-sm text-gray-500';
-    
+
     fetch('/stm/admin/settings/agent/test')
         .then(res => res.json())
         .then(data => {
