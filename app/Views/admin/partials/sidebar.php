@@ -137,6 +137,11 @@ $settingsItems = [
         "route" => "/stm/admin/config/internal-customers",
     ],
     [
+    'label' => 'Agent STM',
+    'icon' => 'fa-robot',
+    'route' => '/stm/admin/settings/agent',
+    ],
+    [
         "label" => "Configuration",
         "icon" => "fa-cog",
         "route" => "/stm/admin/settings",

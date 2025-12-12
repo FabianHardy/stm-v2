@@ -12,7 +12,7 @@
 
 namespace App\Controllers;
 
-use App\Core\Auth;
+use Core\Auth;
 use App\Models\AgentConfig;
 
 class AgentConfigController
@@ -29,7 +29,7 @@ class AgentConfigController
         }
 
         $this->config = AgentConfig::getInstance();
-        
+
         // Vérifier si super admin (role_id = 1 ou role = 'super_admin')
         $this->isSuperAdmin = $this->checkSuperAdmin();
     }
@@ -42,7 +42,7 @@ class AgentConfigController
         // Adapter selon votre système de rôles
         $roleId = $_SESSION['role_id'] ?? null;
         $role = $_SESSION['role'] ?? null;
-        
+
         return $roleId === 1 || $role === 'super_admin' || $role === 'superadmin';
     }
 
@@ -53,7 +53,7 @@ class AgentConfigController
     {
         // Charger les configs (avec ou sans sensibles selon le rôle)
         $configs = $this->config->getAll($this->isSuperAdmin);
-        
+
         // Organiser par clé pour l'affichage
         $configsByKey = [];
         foreach ($configs as $config) {
@@ -230,9 +230,9 @@ class AgentConfigController
     public function preview(): void
     {
         header('Content-Type: application/json');
-        
+
         $customPrompt = $this->config->buildCustomPrompt();
-        
+
         echo json_encode([
             'success' => true,
             'prompt' => $customPrompt,
@@ -377,12 +377,12 @@ class AgentConfigController
         if ($httpCode === 200) {
             $data = json_decode($response, true);
             $models = array_column($data['models'] ?? [], 'name');
-            
+
             if (in_array($model, $models)) {
                 return ['success' => true, 'message' => "Connexion Ollama OK - Modèle {$model} disponible"];
             } else {
                 return [
-                    'success' => false, 
+                    'success' => false,
                     'error' => "Modèle {$model} non trouvé. Modèles disponibles : " . implode(', ', $models)
                 ];
             }
