@@ -942,3 +942,51 @@ $router->get('/admin/settings/agent/test', function () {
     $controller = new \App\Controllers\AgentConfigController();
     $controller->testConnection();
 });;
+// ========================================
+// TOOLS AGENT (Gestion des outils IA)
+// ========================================
+
+// Liste des tools (AJAX)
+$router->get('/admin/settings/agent/tools', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->listTools();
+});
+
+// Toggle activer/désactiver un tool (AJAX)
+$router->post('/admin/settings/agent/tools/toggle', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->toggleTool();
+});
+
+// Créer un tool via IA (AJAX)
+$router->post('/admin/settings/agent/tools/create', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->createTool();
+});
+
+// Mettre à jour un tool (AJAX)
+$router->post('/admin/settings/agent/tools/update', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->updateTool();
+});
+
+// Supprimer un tool (AJAX)
+$router->post('/admin/settings/agent/tools/delete', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\AgentConfigController();
+    $controller->deleteTool();
+});
