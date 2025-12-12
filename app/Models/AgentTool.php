@@ -42,7 +42,8 @@ class AgentTool
             }
             $sql .= " ORDER BY is_system DESC, display_name ASC";
 
-            return $this->db->query($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            $results = $this->db->query($sql);
+            return is_array($results) ? $results : [];
         } catch (\PDOException $e) {
             error_log("AgentTool::getAll error: " . $e->getMessage());
             return [];
@@ -56,8 +57,8 @@ class AgentTool
     {
         try {
             $sql = "SELECT * FROM agent_tools WHERE id = :id";
-            $result = $this->db->query($sql, [':id' => $id])->fetch(\PDO::FETCH_ASSOC);
-            return $result ?: null;
+            $results = $this->db->query($sql, [':id' => $id]);
+            return (!empty($results) && is_array($results)) ? $results[0] : null;
         } catch (\PDOException $e) {
             error_log("AgentTool::getById error: " . $e->getMessage());
             return null;
@@ -71,8 +72,8 @@ class AgentTool
     {
         try {
             $sql = "SELECT * FROM agent_tools WHERE name = :name";
-            $result = $this->db->query($sql, [':name' => $name])->fetch(\PDO::FETCH_ASSOC);
-            return $result ?: null;
+            $results = $this->db->query($sql, [':name' => $name]);
+            return (!empty($results) && is_array($results)) ? $results[0] : null;
         } catch (\PDOException $e) {
             error_log("AgentTool::getByName error: " . $e->getMessage());
             return null;
@@ -253,7 +254,8 @@ class AgentTool
                         SUM(usage_count) as total_usage
                     FROM agent_tools";
 
-            return $this->db->query($sql)->fetch(\PDO::FETCH_ASSOC) ?: [];
+            $results = $this->db->query($sql);
+            return (!empty($results) && is_array($results)) ? $results[0] : [];
         } catch (\PDOException $e) {
             error_log("AgentTool::getStats error: " . $e->getMessage());
             return [];
