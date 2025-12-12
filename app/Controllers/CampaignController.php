@@ -13,8 +13,8 @@
 namespace App\Controllers;
 
 use App\Models\Campaign;
-use Helpers\PermissionHelper;
-use Middleware\PermissionMiddleware;
+use App\Helpers\PermissionHelper;
+use App\Middleware\PermissionMiddleware;
 use Core\Database;
 use Core\Session;
 

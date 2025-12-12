@@ -11,7 +11,7 @@
  * @created 2025/12/10
  */
 
-namespace Helpers;
+namespace App\Helpers;
 
 use Core\Database;
 use Core\Session;

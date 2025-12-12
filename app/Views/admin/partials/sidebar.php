@@ -17,7 +17,7 @@
  * @modified 12/12/2025 - Intégration système permissions (masquage menus selon rôle)
  */
 
-use Helpers\PermissionHelper;
+use App\Helpers\PermissionHelper;
 
 $currentRoute = $_SERVER["REQUEST_URI"] ?? "";
 

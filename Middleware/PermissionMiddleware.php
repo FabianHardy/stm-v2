@@ -9,9 +9,9 @@
  * @created 2025/12/12
  */
 
-namespace Middleware;
+namespace App\Middleware;
 
-use Helpers\PermissionHelper;
+use App\Helpers\PermissionHelper;
 use Core\Session;
 
 class PermissionMiddleware
