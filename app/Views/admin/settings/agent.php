@@ -315,7 +315,11 @@ if (!in_array($activeTab, $validTabs)) {
                     </div>
                     <div>
                         <h2 class="font-bold text-gray-900">Tools de l'Agent</h2>
-                        <p class="text-sm text-gray-500">Capacités et actions disponibles pour le chatbot</p>
+                        <p class="text-sm text-gray-500">
+                            <?= count($agentTools ?? []) ?> tools •
+                            <?= $toolsStats['active'] ?? 0 ?> actifs •
+                            <?= $toolsStats['total_usage'] ?? 0 ?> utilisations
+                        </p>
                     </div>
                 </div>
                 <button type="button" onclick="openCreateToolModal()"
@@ -326,11 +330,133 @@ if (!in_array($activeTab, $validTabs)) {
             </div>
 
             <div class="p-6">
-                <div class="text-center py-12 text-gray-500">
-                    <i class="fas fa-wrench text-6xl text-gray-300 mb-4"></i>
-                    <p class="text-lg font-medium">Chargement des tools...</p>
-                    <p class="text-sm">Cette section sera disponible après validation de l'étape 1</p>
+                <!-- Info box -->
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 mb-6">
+                    <i class="fas fa-info-circle text-amber-500 text-lg flex-shrink-0 mt-0.5"></i>
+                    <div class="text-sm text-amber-700">
+                        <p class="font-medium mb-1">Comment ça marche ?</p>
+                        <p>Les tools sont des capacités que l'Agent peut utiliser pour répondre aux questions. Activez/désactivez les tools selon vos besoins. Les tools système ne peuvent pas être supprimés.</p>
+                    </div>
                 </div>
+
+                <!-- Liste des tools -->
+                <div class="space-y-4">
+                    <?php if (!empty($agentTools)): ?>
+                        <?php foreach ($agentTools as $tool): ?>
+                        <div class="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition"
+                             id="tool-<?= $tool['id'] ?>">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex items-start gap-3 flex-1">
+                                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 <?= $tool['is_system'] ? 'bg-indigo-100' : 'bg-gray-100' ?>">
+                                        <i class="fas <?= $tool['is_system'] ? 'fa-cube text-indigo-600' : 'fa-puzzle-piece text-gray-600' ?>"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <h3 class="font-semibold text-gray-900"><?= htmlspecialchars($tool['display_name']) ?></h3>
+                                            <?php if ($tool['is_system']): ?>
+                                            <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-medium rounded-full">
+                                                Système
+                                            </span>
+                                            <?php endif; ?>
+                                            <span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-mono rounded">
+                                                <?= htmlspecialchars($tool['name']) ?>
+                                            </span>
+                                        </div>
+                                        <p class="text-sm text-gray-600 mb-2"><?= htmlspecialchars($tool['description']) ?></p>
+                                        <div class="flex items-center gap-4 text-xs text-gray-400">
+                                            <span><i class="fas fa-chart-bar mr-1"></i><?= $tool['usage_count'] ?> utilisations</span>
+                                            <?php if ($tool['created_at']): ?>
+                                            <span><i class="fas fa-calendar mr-1"></i><?= date('d/m/Y', strtotime($tool['created_at'])) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-3">
+                                    <!-- Toggle actif/inactif -->
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" class="sr-only peer tool-toggle"
+                                               data-tool-id="<?= $tool['id'] ?>"
+                                               <?= $tool['is_active'] ? 'checked' : '' ?>
+                                               onchange="toggleTool(<?= $tool['id'] ?>, this.checked)">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                    </label>
+
+                                    <?php if (!$tool['is_system']): ?>
+                                    <!-- Menu actions -->
+                                    <div class="relative" x-data="{ open: false }">
+                                        <button @click="open = !open" class="p-2 hover:bg-gray-100 rounded-lg transition">
+                                            <i class="fas fa-ellipsis-v text-gray-400"></i>
+                                        </button>
+                                        <div x-show="open" @click.outside="open = false" x-transition
+                                             class="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                                            <button onclick="editTool(<?= $tool['id'] ?>)"
+                                                    class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
+                                                <i class="fas fa-edit mr-2 text-gray-400"></i>Modifier
+                                            </button>
+                                            <button onclick="deleteTool(<?= $tool['id'] ?>, '<?= htmlspecialchars($tool['display_name'], ENT_QUOTES) ?>')"
+                                                    class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+                                                <i class="fas fa-trash mr-2"></i>Supprimer
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-center py-12 text-gray-500">
+                            <i class="fas fa-wrench text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-lg font-medium">Aucun tool configuré</p>
+                            <p class="text-sm">Créez votre premier tool via IA</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal création de tool -->
+    <div id="createToolModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">
+                    <i class="fas fa-wand-magic-sparkles mr-2 text-amber-500"></i>
+                    Créer un Tool via IA
+                </h3>
+                <button onclick="closeCreateToolModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">
+                    Décrivez ce que vous voulez que le tool fasse. L'IA générera automatiquement la configuration.
+                </p>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description du tool</label>
+                    <textarea id="toolDescription" rows="4"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                              placeholder="Ex: Un tool qui calcule le chiffre d'affaires total d'un représentant sur une période donnée"></textarea>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4 text-xs text-gray-500">
+                    <p class="font-medium mb-1">💡 Exemples de descriptions :</p>
+                    <ul class="space-y-1">
+                        <li>• "Calculer le CA total d'un représentant sur une période"</li>
+                        <li>• "Lister les clients qui n'ont pas commandé depuis 30 jours"</li>
+                        <li>• "Comparer les ventes entre deux campagnes"</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button onclick="closeCreateToolModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                    Annuler
+                </button>
+                <button onclick="submitCreateTool()" id="createToolBtn"
+                        class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-2">
+                    <i class="fas fa-magic"></i>
+                    Générer le Tool
+                </button>
             </div>
         </div>
     </div>
@@ -574,7 +700,99 @@ function testConnection() {
 
 // Placeholders pour les futurs onglets
 function openCreateToolModal() {
-    alert('🔧 Création de Tool via IA - À venir dans l\'étape 3');
+    document.getElementById('createToolModal').classList.remove('hidden');
+    document.getElementById('createToolModal').classList.add('flex');
+    document.getElementById('toolDescription').focus();
+}
+
+function closeCreateToolModal() {
+    document.getElementById('createToolModal').classList.add('hidden');
+    document.getElementById('createToolModal').classList.remove('flex');
+    document.getElementById('toolDescription').value = '';
+}
+
+function submitCreateTool() {
+    const description = document.getElementById('toolDescription').value.trim();
+    if (!description) {
+        alert('Veuillez décrire le tool à créer');
+        return;
+    }
+
+    const btn = document.getElementById('createToolBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Génération...';
+
+    fetch('/stm/admin/settings/agent/tools/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: description })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            closeCreateToolModal();
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || 'Erreur lors de la création'));
+        }
+    })
+    .catch(err => {
+        alert('❌ Erreur de connexion');
+        console.error(err);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magic"></i> Générer le Tool';
+    });
+}
+
+function toggleTool(toolId, active) {
+    fetch('/stm/admin/settings/agent/tools/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: toolId, active: active })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            alert('❌ ' + (data.error || 'Erreur'));
+            // Remettre l'état précédent
+            const checkbox = document.querySelector(`input[data-tool-id="${toolId}"]`);
+            if (checkbox) checkbox.checked = !active;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        const checkbox = document.querySelector(`input[data-tool-id="${toolId}"]`);
+        if (checkbox) checkbox.checked = !active;
+    });
+}
+
+function editTool(toolId) {
+    alert('📝 Édition du tool #' + toolId + ' - À venir');
+}
+
+function deleteTool(toolId, toolName) {
+    if (!confirm(`Supprimer le tool "${toolName}" ?`)) return;
+
+    fetch('/stm/admin/settings/agent/tools/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: toolId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('tool-' + toolId)?.remove();
+        } else {
+            alert('❌ ' + (data.error || 'Erreur'));
+        }
+    })
+    .catch(err => {
+        alert('❌ Erreur de connexion');
+        console.error(err);
+    });
 }
 
 function openCustomizeViaAI() {
