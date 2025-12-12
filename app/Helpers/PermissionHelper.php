@@ -30,6 +30,18 @@ class PermissionHelper
     private static ?array $campaignsCache = null;
 
     /**
+     * Hiérarchie des rôles (1 = plus haut niveau)
+     * Un utilisateur ne peut gérer que les rôles de niveau SUPÉRIEUR au sien
+     */
+    private const ROLE_HIERARCHY = [
+        'superadmin' => 1,
+        'admin' => 2,
+        'createur' => 3,
+        'manager_reps' => 4,
+        'rep' => 5,
+    ];
+
+    /**
      * Matrice des permissions par rôle
      * true = permission accordée
      */
@@ -559,6 +571,149 @@ class PermissionHelper
     {
         // TODO: Implémenter la sauvegarde en DB quand le système sera prêt
         return true;
+    }
+
+    // ========================================
+    // GESTION HIÉRARCHIQUE DES PERMISSIONS
+    // ========================================
+
+    /**
+     * Récupère le niveau hiérarchique d'un rôle
+     * Plus le nombre est bas, plus le rôle est élevé
+     *
+     * @param string $role
+     * @return int (1-5, ou 99 si rôle inconnu)
+     */
+    public static function getRoleLevel(string $role): int
+    {
+        return self::ROLE_HIERARCHY[$role] ?? 99;
+    }
+
+    /**
+     * Vérifie si l'utilisateur courant peut gérer un rôle cible
+     * Règle : On ne peut gérer que les rôles de niveau INFÉRIEUR au sien
+     *
+     * @param string $targetRole Le rôle à modifier
+     * @return bool
+     */
+    public static function canManageRole(string $targetRole): bool
+    {
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return false;
+        }
+
+        $userLevel = self::getRoleLevel($user['role']);
+        $targetLevel = self::getRoleLevel($targetRole);
+
+        // On peut gérer uniquement les rôles de niveau SUPÉRIEUR (nombre plus grand)
+        return $targetLevel > $userLevel;
+    }
+
+    /**
+     * Vérifie si l'utilisateur courant peut accorder une permission spécifique
+     * Règle : On ne peut accorder QUE les permissions qu'on possède soi-même
+     *
+     * @param string $permission La permission à accorder
+     * @return bool
+     */
+    public static function canGrantPermission(string $permission): bool
+    {
+        return self::can($permission);
+    }
+
+    /**
+     * Filtre une matrice de permissions pour ne garder que les modifications autorisées
+     * Utilisé par SettingsController::savePermissions()
+     *
+     * @param array $requestedChanges Les modifications demandées ['role' => ['perm' => bool, ...], ...]
+     * @return array ['allowed' => [...], 'denied' => [...], 'errors' => [...]]
+     */
+    public static function filterAllowedPermissionChanges(array $requestedChanges): array
+    {
+        $user = self::getCurrentUser();
+        $allowed = [];
+        $denied = [];
+        $errors = [];
+
+        if (!$user) {
+            return [
+                'allowed' => [],
+                'denied' => $requestedChanges,
+                'errors' => ['Utilisateur non connecté']
+            ];
+        }
+
+        foreach ($requestedChanges as $role => $permissions) {
+            // Vérification 1 : Rôle protégé (superadmin)
+            if (self::isProtectedRole($role)) {
+                $denied[$role] = $permissions;
+                $errors[] = "Le rôle '$role' est protégé et ne peut pas être modifié";
+                continue;
+            }
+
+            // Vérification 2 : Peut-on gérer ce rôle ?
+            if (!self::canManageRole($role)) {
+                $denied[$role] = $permissions;
+                $errors[] = "Vous ne pouvez pas modifier le rôle '$role' (niveau égal ou supérieur au vôtre)";
+                continue;
+            }
+
+            // Vérification 3 : Pour chaque permission, peut-on l'accorder ?
+            $allowed[$role] = [];
+            foreach ($permissions as $permCode => $value) {
+                $wantsToGrant = (bool) $value;
+
+                // Si on veut accorder la permission, on doit la posséder
+                if ($wantsToGrant && !self::canGrantPermission($permCode)) {
+                    $denied[$role][$permCode] = $value;
+                    $errors[] = "Vous ne pouvez pas accorder '$permCode' car vous ne la possédez pas";
+                    continue;
+                }
+
+                // Si on veut retirer la permission, on doit aussi la posséder
+                // (pour éviter qu'un niveau inférieur ne "bloque" des permissions qu'il ne comprend pas)
+                if (!$wantsToGrant && !self::canGrantPermission($permCode)) {
+                    $denied[$role][$permCode] = $value;
+                    $errors[] = "Vous ne pouvez pas retirer '$permCode' car vous ne la possédez pas";
+                    continue;
+                }
+
+                $allowed[$role][$permCode] = $wantsToGrant;
+            }
+        }
+
+        return [
+            'allowed' => $allowed,
+            'denied' => $denied,
+            'errors' => $errors
+        ];
+    }
+
+    /**
+     * Récupère les rôles que l'utilisateur courant peut gérer
+     *
+     * @return array Liste des rôles gérables
+     */
+    public static function getManageableRoles(): array
+    {
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return [];
+        }
+
+        $userLevel = self::getRoleLevel($user['role']);
+        $manageableRoles = [];
+
+        foreach (self::ROLE_HIERARCHY as $role => $level) {
+            if ($level > $userLevel) {
+                $manageableRoles[] = $role;
+            }
+        }
+
+        return $manageableRoles;
     }
 
     // ========================================
