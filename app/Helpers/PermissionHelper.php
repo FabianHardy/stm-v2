@@ -82,6 +82,7 @@ class PermissionHelper
             'users.manage' => true,
             'settings.view' => true,
             'settings.manage' => true,
+            'permissions.manage' => true,
             'agent.view' => true,
         ],
 
@@ -134,6 +135,7 @@ class PermissionHelper
             'users.manage' => false,
             'settings.view' => true,
             'settings.manage' => false,
+            'permissions.manage' => false,
             'agent.view' => true,
         ],
 
@@ -186,6 +188,7 @@ class PermissionHelper
             'users.manage' => false,
             'settings.view' => false,
             'settings.manage' => false,
+            'permissions.manage' => false,
             'agent.view' => false,
         ],
 
@@ -238,6 +241,7 @@ class PermissionHelper
             'users.manage' => false,
             'settings.view' => false,
             'settings.manage' => false,
+            'permissions.manage' => false,
             'agent.view' => false,
         ],
 
@@ -290,6 +294,7 @@ class PermissionHelper
             'users.manage' => false,
             'settings.view' => false,
             'settings.manage' => false,
+            'permissions.manage' => false,
             'agent.view' => false,
         ],
     ];
@@ -745,5 +750,111 @@ class PermissionHelper
     public static function linkUrl(string $permission, string $url): string
     {
         return self::can($permission) ? $url : '#';
+    }
+
+    /**
+     * Vérifie si l'utilisateur n'a PAS une permission (inverse de can)
+     *
+     * @param string $permission
+     * @return bool
+     */
+    public static function cannot(string $permission): bool
+    {
+        return !self::can($permission);
+    }
+
+    /**
+     * Vérifie si un rôle est protégé (ne peut pas être modifié)
+     *
+     * @param string $role
+     * @return bool
+     */
+    public static function isProtectedRole(string $role): bool
+    {
+        return $role === 'superadmin';
+    }
+
+    /**
+     * Récupère la matrice des permissions pour l'affichage
+     *
+     * @return array ['roles' => [...], 'permissions' => [...]]
+     */
+    public static function getPermissionMatrix(): array
+    {
+        $roles = ['superadmin', 'admin', 'createur', 'manager_reps', 'rep'];
+        $permissions = [];
+
+        // Récupérer toutes les permissions depuis le premier rôle (superadmin a toutes)
+        if (isset(self::ROLE_PERMISSIONS['superadmin'])) {
+            foreach (self::ROLE_PERMISSIONS['superadmin'] as $permCode => $value) {
+                $permissions[$permCode] = [];
+                foreach ($roles as $role) {
+                    $permissions[$permCode][$role] = self::ROLE_PERMISSIONS[$role][$permCode] ?? false;
+                }
+            }
+        }
+
+        return [
+            'roles' => $roles,
+            'permissions' => $permissions
+        ];
+    }
+
+    /**
+     * Récupère les catégories de permissions pour l'affichage groupé
+     *
+     * @return array
+     */
+    public static function getCategories(): array
+    {
+        return [
+            'dashboard' => [
+                'label' => 'Dashboard',
+                'permissions' => ['dashboard.view', 'dashboard.stats_full']
+            ],
+            'campaigns' => [
+                'label' => 'Campagnes',
+                'permissions' => ['campaigns.view', 'campaigns.view_all', 'campaigns.create', 'campaigns.edit', 'campaigns.edit_all', 'campaigns.delete', 'campaigns.assign']
+            ],
+            'categories' => [
+                'label' => 'Catégories',
+                'permissions' => ['categories.view', 'categories.create', 'categories.edit', 'categories.delete']
+            ],
+            'products' => [
+                'label' => 'Promotions',
+                'permissions' => ['products.view', 'products.create', 'products.edit', 'products.delete']
+            ],
+            'customers' => [
+                'label' => 'Clients',
+                'permissions' => ['customers.view', 'customers.view_all', 'customers.create', 'customers.edit', 'customers.delete', 'customers.import']
+            ],
+            'orders' => [
+                'label' => 'Commandes',
+                'permissions' => ['orders.view', 'orders.view_all', 'orders.export']
+            ],
+            'stats' => [
+                'label' => 'Statistiques',
+                'permissions' => ['stats.view', 'stats.view_all', 'stats.export']
+            ],
+            'admin' => [
+                'label' => 'Administration',
+                'permissions' => ['users.view', 'users.manage', 'settings.view', 'settings.manage', 'permissions.manage', 'agent.view']
+            ]
+        ];
+    }
+
+    /**
+     * Sauvegarde la matrice de permissions (pour usage futur avec DB)
+     * Note: Actuellement les permissions sont en constantes, cette méthode
+     * sera utilisée quand on passera en DB
+     *
+     * @param array $matrix
+     * @return bool
+     */
+    public static function savePermissionMatrix(array $matrix): bool
+    {
+        // TODO: Implémenter la sauvegarde en DB quand le système sera prêt
+        // Pour l'instant, retourner true (les permissions sont en constantes)
+        return true;
     }
 }
