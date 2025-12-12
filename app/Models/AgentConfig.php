@@ -12,7 +12,7 @@
 
 namespace App\Models;
 
-use App\Core\Database;
+use Core\Database;
 
 class AgentConfig
 {
@@ -49,7 +49,7 @@ class AgentConfig
             $results = $this->db->query(
                 "SELECT `key`, `value`, `is_active`, `is_sensitive` FROM agent_config"
             );
-            
+
             foreach ($results as $row) {
                 $this->cache[$row['key']] = [
                     'value' => $row['value'],
@@ -75,12 +75,12 @@ class AgentConfig
         if (!isset($this->cache[$key])) {
             return $default;
         }
-        
+
         // Retourner vide si désactivé
         if (!$this->cache[$key]['is_active']) {
             return '';
         }
-        
+
         return $this->cache[$key]['value'] ?? $default;
     }
 
@@ -118,10 +118,10 @@ class AgentConfig
     {
         try {
             $this->db->query(
-                "INSERT INTO agent_config (`key`, `value`, `is_active`) 
+                "INSERT INTO agent_config (`key`, `value`, `is_active`)
                  VALUES (:key, :value, :active)
-                 ON DUPLICATE KEY UPDATE 
-                 `value` = VALUES(`value`), 
+                 ON DUPLICATE KEY UPDATE
+                 `value` = VALUES(`value`),
                  `is_active` = VALUES(`is_active`)",
                 [
                     ':key' => $key,
@@ -129,14 +129,14 @@ class AgentConfig
                     ':active' => $isActive ? 1 : 0
                 ]
             );
-            
+
             // Mettre à jour le cache
             $this->cache[$key] = [
                 'value' => $value,
                 'is_active' => $isActive,
                 'is_sensitive' => $this->cache[$key]['is_sensitive'] ?? false
             ];
-            
+
             return true;
         } catch (\PDOException $e) {
             error_log("AgentConfig::set error: " . $e->getMessage());
@@ -179,7 +179,7 @@ class AgentConfig
                 $sql .= " WHERE is_sensitive = 0";
             }
             $sql .= " ORDER BY id";
-            
+
             return $this->db->query($sql);
         } catch (\PDOException $e) {
             error_log("AgentConfig::getAll error: " . $e->getMessage());
@@ -189,7 +189,7 @@ class AgentConfig
 
     /**
      * Générer le prompt personnalisé complet
-     * 
+     *
      * Combine toutes les sections actives en un seul prompt
      *
      * @return string
@@ -197,35 +197,35 @@ class AgentConfig
     public function buildCustomPrompt(): string
     {
         $sections = [];
-        
+
         // Instructions générales
         $general = $this->get('general_instructions');
         if (!empty($general)) {
             $sections[] = "## INSTRUCTIONS PERSONNALISÉES\n{$general}";
         }
-        
+
         // Vocabulaire métier
         $vocab = $this->get('business_vocabulary');
         if (!empty($vocab)) {
             $sections[] = "## VOCABULAIRE MÉTIER\n{$vocab}";
         }
-        
+
         // Règles de réponse
         $rules = $this->get('response_rules');
         if (!empty($rules)) {
             $sections[] = "## RÈGLES DE RÉPONSE\n{$rules}";
         }
-        
+
         // Exemples Q/R
         $examples = $this->get('qa_examples');
         if (!empty($examples)) {
             $sections[] = "## EXEMPLES DE QUESTIONS/RÉPONSES\n{$examples}";
         }
-        
+
         if (empty($sections)) {
             return '';
         }
-        
+
         return "\n\n" . implode("\n\n", $sections);
     }
 
