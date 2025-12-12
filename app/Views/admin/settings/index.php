@@ -9,6 +9,7 @@
  * @package STM
  * @created 2025/12/10
  * @modified 2025/12/10 - Matrice permissions éditable avec toasts
+ * @modified 2025/12/12 - Gestion hiérarchique : grise les rôles non gérables
  */
 
 $activeMenu = 'settings';
@@ -56,6 +57,11 @@ ob_start();
                     <p class="text-sm text-gray-500 mt-1">
                         <?php if ($canEditPermissions): ?>
                             Cochez les permissions pour chaque rôle
+                            <?php if (!empty($manageableRoles) && count($manageableRoles) < 5): ?>
+                                <span class="text-amber-600">
+                                    (vous pouvez modifier : <?= implode(', ', array_map(function($r) use ($roleLabels) { return $roleLabels[$r] ?? $r; }, $manageableRoles)) ?>)
+                                </span>
+                            <?php endif; ?>
                         <?php else: ?>
                             Permissions accordées par rôle (lecture seule)
                         <?php endif; ?>
@@ -84,6 +90,7 @@ ob_start();
                         <?php foreach ($matrixData['roles'] as $roleKey): ?>
                         <?php
                             $isProtected = \App\Helpers\PermissionHelper::isProtectedRole($roleKey);
+                            $canManage = in_array($roleKey, $manageableRoles ?? []);
                             $roleColorClass = '';
                             switch ($roleKey) {
                                 case 'superadmin': $roleColorClass = 'bg-red-50 text-red-700'; break;
@@ -97,6 +104,8 @@ ob_start();
                             <?= htmlspecialchars($roleLabels[$roleKey] ?? $roleKey) ?>
                             <?php if ($isProtected): ?>
                                 <i class="fas fa-lock text-xs ml-1" title="Rôle protégé"></i>
+                            <?php elseif (!$canManage && $canEditPermissions): ?>
+                                <i class="fas fa-ban text-xs ml-1 text-gray-400" title="Niveau égal ou supérieur au vôtre"></i>
                             <?php endif; ?>
                         </th>
                         <?php endforeach; ?>
@@ -115,8 +124,8 @@ ob_start();
                     <tr class="bg-gray-50">
                         <td colspan="<?= count($matrixData['roles']) + 1 ?>" class="px-6 py-3">
                             <div class="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                                <i class="fas <?= $catInfo['icon'] ?> text-gray-500"></i>
-                                <?= htmlspecialchars($catInfo['label']) ?>
+                                <i class="fas <?= $catInfo['icon'] ?? 'fa-circle' ?> text-gray-500"></i>
+                                <?= htmlspecialchars($catInfo['label'] ?? $currentCategory) ?>
                             </div>
                         </td>
                     </tr>
@@ -125,7 +134,7 @@ ob_start();
                     <tr class="hover:bg-gray-50 transition">
                         <td class="px-6 py-3 text-sm text-gray-700 pl-10">
                             <div>
-                                <?= htmlspecialchars($perm['name']) ?>
+                                <?= htmlspecialchars($perm['name'] ?? $perm['code']) ?>
                                 <span class="text-xs text-gray-400 ml-1">(<?= htmlspecialchars($perm['code']) ?>)</span>
                             </div>
                             <?php if (!empty($perm['description'])): ?>
@@ -137,13 +146,17 @@ ob_start();
                         <?php
                             $hasPermission = $matrixData['matrix'][$roleKey][$perm['code']] ?? false;
                             $isProtected = \App\Helpers\PermissionHelper::isProtectedRole($roleKey);
-                            $isDisabled = !$canEditPermissions || $isProtected;
+                            $canManage = in_array($roleKey, $manageableRoles ?? []);
+                            $canGrantThis = \App\Helpers\PermissionHelper::can($perm['code']);
+
+                            // Désactivé si : pas de permission d'édition, OU rôle protégé, OU ne peut pas gérer ce rôle, OU ne possède pas cette permission
+                            $isDisabled = !$canEditPermissions || $isProtected || !$canManage || !$canGrantThis;
                         ?>
                         <td class="px-4 py-3 text-center">
                             <?php if ($isDisabled): ?>
                                 <!-- Affichage lecture seule -->
                                 <?php if ($hasPermission): ?>
-                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-green-100 rounded-full">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-green-100 rounded-full" title="<?= !$canGrantThis && $canEditPermissions ? 'Vous ne possédez pas cette permission' : '' ?>">
                                         <i class="fas fa-check text-green-600 text-xs"></i>
                                     </span>
                                 <?php else: ?>
@@ -175,10 +188,14 @@ ob_start();
                 <p class="text-xs text-gray-500">
                     <i class="fas fa-lock mr-1"></i>
                     Le rôle <strong>Super Admin</strong> a toujours toutes les permissions et ne peut pas être modifié.
+                    <?php if ($canEditPermissions && !empty($manageableRoles) && count($manageableRoles) < 4): ?>
+                        <br><i class="fas fa-info-circle mr-1 text-amber-500"></i>
+                        <span class="text-amber-600">Vous ne pouvez modifier que les rôles de niveau inférieur au vôtre et accorder uniquement les permissions que vous possédez.</span>
+                    <?php endif; ?>
                 </p>
                 <?php if ($canEditPermissions): ?>
                     <button type="button" id="btn-save-permissions-bottom"
-                            class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+                            class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fas fa-save mr-2"></i>
                         Enregistrer les modifications
                     </button>
@@ -188,46 +205,42 @@ ob_start();
     </div>
 </form>
 
-<!-- Légende des scopes -->
-<div class="mt-6 bg-white rounded-lg shadow-sm p-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">Scope des données par rôle</h3>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="p-4 bg-red-50 rounded-lg border border-red-100">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Super Admin</span>
-                <i class="fas fa-lock text-red-400 text-xs"></i>
-            </div>
-            <p class="text-sm text-gray-600">Accès complet à toutes les données. Permissions non modifiables.</p>
+<!-- Légende des rôles -->
+<div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="p-4 bg-red-50 rounded-lg border border-red-100">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Super Admin</span>
+            <i class="fas fa-lock text-red-400 text-xs"></i>
         </div>
+        <p class="text-sm text-gray-600">Accès total. Toutes les permissions, toujours. <strong>Non modifiable.</strong></p>
+    </div>
 
-        <div class="p-4 bg-purple-50 rounded-lg border border-purple-100">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">Administrateur</span>
-            </div>
-            <p class="text-sm text-gray-600">Accès à toutes les données métier, sans gestion des utilisateurs par défaut.</p>
+    <div class="p-4 bg-purple-50 rounded-lg border border-purple-100">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">Administrateur</span>
         </div>
+        <p class="text-sm text-gray-600">Gestion complète sauf les utilisateurs internes. Accès à toutes les campagnes.</p>
+    </div>
 
-        <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Créateur</span>
-            </div>
-            <p class="text-sm text-gray-600">Accès aux campagnes où il est <strong>assigné</strong> (owner ou collaborateur).</p>
+    <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Créateur</span>
         </div>
+        <p class="text-sm text-gray-600">Crée et gère ses propres campagnes. Accès limité aux campagnes où il est assigné.</p>
+    </div>
 
-        <div class="p-4 bg-orange-50 rounded-lg border border-orange-100">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Manager Reps</span>
-            </div>
-            <p class="text-sm text-gray-600">Lecture seule. Voit les données de <strong>ses commerciaux</strong> (hiérarchie Microsoft).</p>
+    <div class="p-4 bg-orange-50 rounded-lg border border-orange-100">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Manager Reps</span>
         </div>
+        <p class="text-sm text-gray-600">Supervise une équipe de commerciaux. Lecture seule sur les campagnes.</p>
+    </div>
 
-        <div class="p-4 bg-green-50 rounded-lg border border-green-100">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Commercial</span>
-            </div>
-            <p class="text-sm text-gray-600">Lecture seule. Voit uniquement <strong>ses propres clients</strong> et commandes.</p>
+    <div class="p-4 bg-green-50 rounded-lg border border-green-100">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Commercial</span>
         </div>
+        <p class="text-sm text-gray-600">Lecture seule. Voit uniquement <strong>ses propres clients</strong> et commandes.</p>
     </div>
 </div>
 
@@ -368,8 +381,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (result.success) {
                 showToast('success', result.message);
+
+                // Afficher les warnings s'il y en a
+                if (result.warnings && result.warnings.length > 0) {
+                    setTimeout(function() {
+                        result.warnings.forEach(function(warning) {
+                            showToast('warning', warning);
+                        });
+                    }, 500);
+                }
             } else {
                 showToast('error', result.message);
+
+                // Afficher les erreurs détaillées
+                if (result.errors && result.errors.length > 0) {
+                    setTimeout(function() {
+                        result.errors.slice(0, 3).forEach(function(error) {
+                            showToast('warning', error);
+                        });
+                    }, 500);
+                }
             }
 
         } catch (error) {
