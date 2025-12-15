@@ -16,6 +16,7 @@
  * @modified 10/12/2025 - Protection function_exists pour éviter redéclaration
  * @modified 12/12/2025 - Intégration système permissions (masquage menus selon rôle)
  * @modified 15/12/2025 - Ajout permission agent.view pour Agent STM
+ * @modified 15/12/2025 - Correction logique filtrage : menu parent affiché si sous-menu accessible
  */
 
 use App\Helpers\PermissionHelper;
@@ -23,7 +24,7 @@ use App\Helpers\PermissionHelper;
 $currentRoute = $_SERVER["REQUEST_URI"] ?? "";
 
 // Détection de l'environnement
-$appEnv = $_ENV["APP_ENV"] ?? getenv("APP_ENV") ?: "production";
+$appEnv = $_ENV["APP_ENV"] ?? $_SERVER["APP_ENV"] ?? getenv("APP_ENV") ?: "production";
 $isDev = $appEnv === "development";
 
 /**
@@ -73,6 +74,36 @@ if (!function_exists('canAccessMenuItem')) {
     }
 }
 
+/**
+ * Vérifie si un menu parent avec sous-menus doit être affiché
+ * Le menu parent s'affiche si :
+ * - L'utilisateur a la permission du parent OU
+ * - L'utilisateur a la permission d'au moins un sous-menu
+ *
+ * @param array $item Menu parent avec potentiellement des sous-menus
+ * @return bool
+ */
+if (!function_exists('canAccessMenuWithSubmenu')) {
+    function canAccessMenuWithSubmenu(array $item): bool
+    {
+        // Si l'utilisateur a la permission du parent, c'est OK
+        if (canAccessMenuItem($item)) {
+            return true;
+        }
+
+        // Sinon, vérifier si au moins un sous-menu est accessible
+        if (isset($item['submenu']) && is_array($item['submenu'])) {
+            foreach ($item['submenu'] as $subItem) {
+                if (canAccessMenuItem($subItem)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
 // ============================================================
 // DÉFINITION DES MENUS AVEC PERMISSIONS
 // ============================================================
@@ -105,7 +136,7 @@ $menuItems = [
         "icon" => "fa-box",
         "route" => "/stm/admin/products",
         "badge" => null,
-        "permission" => "products.view",
+        "permission" => "products.view", // Permission du parent
         "submenu" => [
             ["label" => "Toutes les Promotions", "route" => "/stm/admin/products", "permission" => "products.view"],
             ["label" => "Ajouter une promotion", "route" => "/stm/admin/products/create", "permission" => "products.create"],
@@ -203,17 +234,26 @@ $devToolsItems = [
     ],
 ];
 
-// Filtrer les menus selon les permissions
-$filteredMenuItems = array_filter($menuItems, 'canAccessMenuItem');
-$filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
+// ============================================================
+// FILTRAGE DES MENUS (LOGIQUE AMÉLIORÉE)
+// ============================================================
 
-// Filtrer aussi les sous-menus
+// Filtrer les menus avec logique pour sous-menus
+// Un menu parent s'affiche si :
+// - L'utilisateur a la permission du parent OU
+// - L'utilisateur a la permission d'au moins un sous-menu
+$filteredMenuItems = array_filter($menuItems, 'canAccessMenuWithSubmenu');
+
+// Filtrer les sous-menus
 foreach ($filteredMenuItems as &$item) {
     if (isset($item['submenu'])) {
         $item['submenu'] = array_filter($item['submenu'], 'canAccessMenuItem');
     }
 }
 unset($item);
+
+// Filtrer les paramètres (pas de sous-menus, logique simple)
+$filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
 ?>
 
 <!-- Sidebar Desktop -->
