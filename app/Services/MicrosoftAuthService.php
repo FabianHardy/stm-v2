@@ -28,48 +28,14 @@ class MicrosoftAuthService
 
     public function __construct()
     {
-        // DEBUG: Afficher les variables disponibles
-        error_log("MICROSOFT_CLIENT_ID from _ENV: " . ($_ENV['MICROSOFT_CLIENT_ID'] ?? 'NOT SET'));
-        error_log("MICROSOFT_CLIENT_ID from getenv: " . (getenv('MICROSOFT_CLIENT_ID') ?: 'NOT SET'));
-
-        // Utiliser $_ENV directement (Dotenv::createImmutable charge dans $_ENV)
-        $this->tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
-        $this->clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
-        $this->clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? '';
-        $this->redirectUri = $_ENV['MICROSOFT_REDIRECT_URI'] ?? '';
-
-        // DEBUG
-        error_log("Service configured: tenant={$this->tenantId}, client={$this->clientId}");
+        // Dotenv charge dans $_ENV et $_SERVER
+        $this->tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? $_SERVER['MICROSOFT_TENANT_ID'] ?? '';
+        $this->clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? $_SERVER['MICROSOFT_CLIENT_ID'] ?? '';
+        $this->clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? $_SERVER['MICROSOFT_CLIENT_SECRET'] ?? '';
+        $this->redirectUri = $_ENV['MICROSOFT_REDIRECT_URI'] ?? $_SERVER['MICROSOFT_REDIRECT_URI'] ?? '';
 
         $this->authorizeUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/authorize";
         $this->tokenUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/token";
-    }
-
-    /**
-     * Récupère une variable d'environnement (compatible avec plusieurs méthodes)
-     */
-    private function getEnvVar(string $key): string
-    {
-        // Méthode 1 : $_ENV (phpdotenv avec putenv désactivé)
-        if (!empty($_ENV[$key])) {
-            return $_ENV[$key];
-        }
-
-        // Méthode 2 : getenv() (phpdotenv avec putenv activé)
-        $value = getenv($key);
-        if ($value !== false && !empty($value)) {
-            return $value;
-        }
-
-        // Méthode 3 : fonction env() custom
-        if (function_exists('env')) {
-            $value = env($key);
-            if (!empty($value)) {
-                return $value;
-            }
-        }
-
-        return '';
     }
 
     /**
