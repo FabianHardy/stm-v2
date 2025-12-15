@@ -28,11 +28,18 @@ class MicrosoftAuthService
 
     public function __construct()
     {
-        // Compatible avec différentes méthodes de chargement .env
-        $this->tenantId = $this->getEnvVar('MICROSOFT_TENANT_ID');
-        $this->clientId = $this->getEnvVar('MICROSOFT_CLIENT_ID');
-        $this->clientSecret = $this->getEnvVar('MICROSOFT_CLIENT_SECRET');
-        $this->redirectUri = $this->getEnvVar('MICROSOFT_REDIRECT_URI');
+        // DEBUG: Afficher les variables disponibles
+        error_log("MICROSOFT_CLIENT_ID from _ENV: " . ($_ENV['MICROSOFT_CLIENT_ID'] ?? 'NOT SET'));
+        error_log("MICROSOFT_CLIENT_ID from getenv: " . (getenv('MICROSOFT_CLIENT_ID') ?: 'NOT SET'));
+
+        // Utiliser $_ENV directement (Dotenv::createImmutable charge dans $_ENV)
+        $this->tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
+        $this->clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
+        $this->clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? '';
+        $this->redirectUri = $_ENV['MICROSOFT_REDIRECT_URI'] ?? '';
+
+        // DEBUG
+        error_log("Service configured: tenant={$this->tenantId}, client={$this->clientId}");
 
         $this->authorizeUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/authorize";
         $this->tokenUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/token";
