@@ -5,8 +5,7 @@
  * Layout : layouts/admin.php
  *
  * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours + Lien détail commande
- * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits
- * @modified 2025/12/15 - Fix grille adaptive pour graphiques (évite espaces vides)
+ * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits (structure originale conservée)
  */
 
 use Core\Database;
@@ -27,7 +26,6 @@ $canViewProducts = PermissionHelper::can('products.view');
 $canViewCustomers = PermissionHelper::can('customers.view');
 $canViewOrders = PermissionHelper::can('orders.view');
 $canViewStats = PermissionHelper::can('stats.view');
-$canViewStatsAll = PermissionHelper::can('stats.view_all');
 
 // Initialisation des variables par défaut
 $stats = [
@@ -205,7 +203,7 @@ if ($canViewStats && $canViewOrders) {
     }
 }
 
-// Préparation des données pour Chart.js (seulement si données)
+// Préparation des données pour Chart.js
 $chart_campaign_labels = json_encode(
     array_map(function ($c) {
         return $c["campaign_name"] . " (" . $c["country"] . ")";
@@ -255,14 +253,6 @@ $quickActionsGridClass = match(true) {
     $quickActionsCount === 2 => 'lg:grid-cols-2',
     default => 'lg:grid-cols-1',
 };
-
-// Compter les graphiques affichés pour la grille adaptive
-$hasCampaignChart = !empty($campaign_stats);
-$hasCategoryChart = !empty($product_categories) && array_sum(array_column($product_categories, "quantity_sold")) > 0;
-$chartsCount = (int)$hasCampaignChart + (int)$hasCategoryChart;
-
-// Si un seul graphique, prendre toute la largeur
-$chartsGridClass = ($chartsCount === 1) ? 'lg:grid-cols-1' : 'lg:grid-cols-2';
 ?>
 
 <!-- En-tête de page -->
@@ -407,137 +397,140 @@ $chartsGridClass = ($chartsCount === 1) ? 'lg:grid-cols-1' : 'lg:grid-cols-2';
 <?php endif; ?>
 
 <!-- Graphiques (seulement si permission stats) -->
-<?php if ($canViewStats && $chartsCount > 0): ?>
-<div class="grid grid-cols-1 <?= $chartsGridClass ?> gap-6 mb-8">
-
-    <?php if ($hasCampaignChart): ?>
-    <!-- Graphique Campagnes -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-bullhorn text-indigo-500 mr-2"></i>
-            Performance par campagne
-        </h3>
-        <div class="h-64">
-            <canvas id="campaignChart"></canvas>
+<?php if ($canViewStats): ?>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Graphique par campagne -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Promos vendues par campagne active</h3>
+        <?php if (empty($campaign_stats)): ?>
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-chart-bar text-4xl text-gray-300 mb-3"></i>
+            <p>Aucune campagne active</p>
         </div>
+        <?php else: ?>
+        <canvas id="campaignChart" height="200"></canvas>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 
-    <?php if ($hasCategoryChart): ?>
-    <!-- Graphique Catégories -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-tags text-purple-500 mr-2"></i>
-            Répartition par catégorie
-        </h3>
-        <div class="h-64">
-            <canvas id="categoryChart"></canvas>
+    <!-- Graphique par catégorie -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par catégorie</h3>
+        <?php if (empty($product_categories) || array_sum(array_column($product_categories, "quantity_sold")) == 0): ?>
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-chart-pie text-4xl text-gray-300 mb-3"></i>
+            <p>Aucune donnée de vente</p>
         </div>
+        <?php else: ?>
+        <canvas id="categoryChart" height="200"></canvas>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
-
 </div>
 
-<?php if (!empty($daily_orders)): ?>
-<!-- Graphique quotidien -->
-<div class="bg-white rounded-lg shadow p-6 mb-8">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        <i class="fas fa-chart-line text-blue-500 mr-2"></i>
-        Activité des 7 derniers jours
-    </h3>
-    <div class="h-64">
-        <canvas id="dailyChart"></canvas>
+<!-- Évolution quotidienne (7 derniers jours) -->
+<div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes (7 derniers jours)</h3>
+    <?php if (empty($daily_orders)): ?>
+    <div class="text-center py-8 text-gray-500">
+        <i class="fas fa-chart-line text-4xl text-gray-300 mb-3"></i>
+        <p>Aucune donnée sur les 7 derniers jours</p>
     </div>
+    <?php else: ?>
+    <canvas id="dailyChart" height="80"></canvas>
+    <?php endif; ?>
 </div>
-<?php endif; ?>
 <?php endif; ?>
 
 <!-- Dernières commandes (seulement si permission orders.view) -->
-<?php if ($canViewOrders && !empty($recent_orders)): ?>
-<div class="bg-white rounded-lg shadow overflow-hidden mb-8">
-    <div class="px-6 py-4 border-b border-gray-200">
-        <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900">
-                <i class="fas fa-clock text-blue-500 mr-2"></i>
-                Dernières commandes
-            </h3>
-            <a href="/stm/admin/orders" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-                Voir tout <i class="fas fa-arrow-right ml-1"></i>
-            </a>
-        </div>
+<?php if ($canViewOrders): ?>
+<div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="text-lg font-medium text-gray-900">Dernières commandes</h3>
+        <a href="/stm/admin/orders" class="text-sm text-indigo-600 hover:text-indigo-800">
+            Voir tout <i class="fas fa-arrow-right ml-1"></i>
+        </a>
     </div>
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N° Commande</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campagne</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pays</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Articles</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantité</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-                <?php foreach ($recent_orders as $order): ?>
-                <?php
-                    $orderId = $order["id"] ?? 0;
-                    $orderNumber = htmlspecialchars($order["order_number"] ?? "N/A");
-                    $campaignName = htmlspecialchars($order["campaign_name"] ?? "N/A");
-                    $companyName = htmlspecialchars($order["company_name"] ?? "N/A");
-                    $country = htmlspecialchars($order["country"] ?? "");
-                    $status = $order["status"] ?? "pending";
-                    $itemsCount = (int) ($order["items_count"] ?? 0);
-                    $createdAt = $order["created_at"] ?? date("Y-m-d H:i:s");
+                <?php if (empty($recent_orders)): ?>
+                    <tr>
+                        <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
+                            <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
+                            <p>Aucune commande pour le moment</p>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($recent_orders as $order): ?>
+                    <?php
+                        $orderId = $order["id"] ?? 0;
+                        $orderNumber = htmlspecialchars($order["order_number"] ?? "N/A");
+                        $campaignName = htmlspecialchars($order["campaign_name"] ?? "N/A");
+                        $companyName = htmlspecialchars($order["company_name"] ?? "N/A");
+                        $country = htmlspecialchars($order["country"] ?? "");
+                        $status = $order["status"] ?? "pending";
+                        $itemsCount = (int) ($order["items_count"] ?? 0);
+                        $createdAt = $order["created_at"] ?? date("Y-m-d H:i:s");
 
-                    $statusColors = [
-                        "pending" => "bg-yellow-100 text-yellow-800",
-                        "validated" => "bg-green-100 text-green-800",
-                        "cancelled" => "bg-red-100 text-red-800",
-                        "exported" => "bg-blue-100 text-blue-800",
-                    ];
-                    $statusLabels = [
-                        "pending" => "En attente",
-                        "validated" => "Validée",
-                        "cancelled" => "Annulée",
-                        "exported" => "Exportée",
-                    ];
-                ?>
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="text-sm font-medium text-indigo-600">#<?= $orderNumber ?></span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <?= $campaignName ?>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900"><?= $companyName ?></div>
-                        <?php if ($country): ?>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                            <?= $country ?>
-                        </span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $statusColors[$status] ?? 'bg-gray-100 text-gray-800' ?>">
-                            <?= $statusLabels[$status] ?? ucfirst($status) ?>
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
-                        <?= number_format($itemsCount, 0, ",", " ") ?> promo<?= $itemsCount > 1 ? "s" : "" ?>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <?= date("d/m/Y H:i", strtotime($createdAt)) ?>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <a href="/stm/admin/orders/<?= $orderId ?>" class="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 transition-colors">
-                            <i class="fas fa-eye mr-1"></i>
-                            Voir
-                        </a>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
+                        $statusColors = [
+                            "pending" => "bg-yellow-100 text-yellow-800",
+                            "validated" => "bg-green-100 text-green-800",
+                            "cancelled" => "bg-red-100 text-red-800",
+                            "exported" => "bg-blue-100 text-blue-800",
+                        ];
+                        $statusLabels = [
+                            "pending" => "En attente",
+                            "validated" => "Validée",
+                            "cancelled" => "Annulée",
+                            "exported" => "Exportée",
+                        ];
+                    ?>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-medium text-gray-900"><?= $campaignName ?></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm text-gray-900"><?= $companyName ?></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if ($country): ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    <?= $country ?>
+                                </span>
+                                <?php else: ?>
+                                <span class="text-gray-400">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $statusColors[$status] ?? 'bg-gray-100 text-gray-800' ?>">
+                                    <?= $statusLabels[$status] ?? ucfirst($status) ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
+                                <?= number_format($itemsCount, 0, ",", " ") ?> promo<?= $itemsCount > 1 ? "s" : "" ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <?= date("d/m/Y H:i", strtotime($createdAt)) ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                <a href="/stm/admin/orders/<?= $orderId ?>" class="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 transition-colors">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    Voir
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
