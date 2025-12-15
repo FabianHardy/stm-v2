@@ -8,6 +8,7 @@
  *
  * @created  2025/11/14 02:00
  * @modified 2025/12/10 - Ajout onglet Équipe pour gestion des collaborateurs
+ * @modified 2025/12/15 - Masquage conditionnel boutons selon permissions (Phase 5)
  */
 
 use App\Helpers\PermissionHelper;
@@ -33,8 +34,12 @@ if ($now < $start) {
     $statusText = "✅ En cours";
 }
 
-// Vérifier si l'utilisateur peut assigner des collaborateurs
+// Vérification des permissions pour l'affichage conditionnel
+$canEdit = PermissionHelper::can('campaigns.edit');
+$canDelete = PermissionHelper::can('campaigns.delete');
 $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
+$canViewProducts = PermissionHelper::can('products.view');
+$canViewOrders = PermissionHelper::can('orders.view');
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -63,6 +68,7 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                 </p>
             </div>
             <div class="flex items-center space-x-3">
+                <?php if ($canEdit): ?>
                 <a href="/stm/admin/campaigns/<?= $campaign["id"] ?>/edit"
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,6 +76,7 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                     </svg>
                     Modifier
                 </a>
+                <?php endif; ?>
                 <a href="/stm/admin/campaigns"
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,6 +113,7 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                    class="py-3 px-1 border-b-2 font-medium text-sm transition <?= $activeTab === 'details' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' ?>">
                     <i class="fas fa-info-circle mr-2"></i>Détails
                 </a>
+                <?php if ($canAssign): ?>
                 <a href="?tab=team"
                    class="py-3 px-1 border-b-2 font-medium text-sm transition <?= $activeTab === 'team' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' ?>">
                     <i class="fas fa-users mr-2"></i>Équipe
@@ -115,6 +123,7 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                         </span>
                     <?php endif; ?>
                 </a>
+                <?php endif; ?>
             </nav>
         </div>
     </div>
@@ -132,7 +141,7 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                 <div class="flex items-center space-x-3">
                     <div class="flex-1 bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
                         <code id="campaign-url" class="text-white font-mono text-sm break-all">
-                            <?= $_ENV["APP_URL"] ?? "https://actions.trendyfoods.com/stm" ?>/c/<?= htmlspecialchars($campaign["unique_url"]) ?>
+                            <?= $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm" ?>/c/<?= htmlspecialchars($campaign["unique_url"]) ?>
                         </code>
                     </div>
                     <button type="button"
@@ -446,12 +455,14 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
     </div>
 
     <!-- Actions rapides -->
+    <?php if ($canEdit || $canDelete || $canViewProducts || $canViewOrders): ?>
     <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
         <div class="px-6 py-5 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">⚡ Actions rapides</h2>
         </div>
         <div class="px-6 py-6">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <?php if ($canEdit): ?>
                 <a href="/stm/admin/campaigns/<?= $campaign["id"] ?>/edit"
                    class="inline-flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
                     <svg class="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -459,7 +470,9 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                     </svg>
                     Modifier
                 </a>
+                <?php endif; ?>
 
+                <?php if ($canViewProducts): ?>
                 <a href="/stm/admin/promotions?campaign=<?= $campaign["id"] ?>"
                    class="inline-flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition">
                     <svg class="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -467,7 +480,9 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                     </svg>
                     Promotions
                 </a>
+                <?php endif; ?>
 
+                <?php if ($canViewOrders): ?>
                 <a href="/stm/admin/orders?campaign=<?= $campaign["id"] ?>"
                    class="inline-flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition">
                     <svg class="w-5 h-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -475,7 +490,9 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                     </svg>
                     Commandes
                 </a>
+                <?php endif; ?>
 
+                <?php if ($canDelete): ?>
                 <button type="button"
                         onclick="if(confirm('Êtes-vous sûr de vouloir supprimer cette campagne ?')) { document.getElementById('delete-form').submit(); }"
                         class="inline-flex items-center justify-center px-4 py-3 border border-red-300 rounded-lg shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition">
@@ -489,11 +506,13 @@ $canAssign = PermissionHelper::canAssignToCampaign($campaign['id']);
                     <input type="hidden" name="_token" value="<?= $_SESSION["csrf_token"] ?>">
                     <input type="hidden" name="_method" value="DELETE">
                 </form>
+                <?php endif; ?>
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
-<?php elseif ($activeTab === 'team'): ?>
+<?php elseif ($activeTab === 'team' && $canAssign): ?>
     <!-- ==================== ONGLET ÉQUIPE ==================== -->
 
     <div class="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-lg">
