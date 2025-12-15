@@ -41,14 +41,14 @@ if (empty($flashMessages)) {
     return;
 }
 
-// Encoder en JSON propre pour JavaScript
-$flashMessagesJson = json_encode($flashMessages, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
+// Encoder en JSON - les apostrophes sont échappées en \u0027
+$flashMessagesJson = json_encode($flashMessages, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE);
 ?>
 
 <!-- Container des toasts - Position fixe bas-droite -->
 <div id="toast-container"
      class="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-sm"
-     x-data="{ toasts: <?= $flashMessagesJson ?> }"
+     x-data='{ toasts: <?= $flashMessagesJson ?> }'
      x-init="
         // Auto-dismiss après 5 secondes
         setTimeout(() => {
