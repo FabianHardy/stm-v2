@@ -28,11 +28,22 @@ class MicrosoftAuthService
 
     public function __construct()
     {
-        // Dotenv charge dans $_ENV et $_SERVER
-        $this->tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? $_SERVER['MICROSOFT_TENANT_ID'] ?? '';
-        $this->clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? $_SERVER['MICROSOFT_CLIENT_ID'] ?? '';
-        $this->clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? $_SERVER['MICROSOFT_CLIENT_SECRET'] ?? '';
-        $this->redirectUri = $_ENV['MICROSOFT_REDIRECT_URI'] ?? $_SERVER['MICROSOFT_REDIRECT_URI'] ?? '';
+        // Charger la configuration depuis le fichier config/microsoft.php
+        $configFile = BASE_PATH . '/config/microsoft.php';
+
+        if (file_exists($configFile)) {
+            $config = require $configFile;
+            $this->tenantId = $config['tenant_id'] ?? '';
+            $this->clientId = $config['client_id'] ?? '';
+            $this->clientSecret = $config['client_secret'] ?? '';
+            $this->redirectUri = $config['redirect_uri'] ?? '';
+        } else {
+            // Fallback sur $_ENV / $_SERVER
+            $this->tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? $_SERVER['MICROSOFT_TENANT_ID'] ?? '';
+            $this->clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? $_SERVER['MICROSOFT_CLIENT_ID'] ?? '';
+            $this->clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? $_SERVER['MICROSOFT_CLIENT_SECRET'] ?? '';
+            $this->redirectUri = $_ENV['MICROSOFT_REDIRECT_URI'] ?? $_SERVER['MICROSOFT_REDIRECT_URI'] ?? '';
+        }
 
         $this->authorizeUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/authorize";
         $this->tokenUrl = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/token";

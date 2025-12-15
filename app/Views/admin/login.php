@@ -19,12 +19,15 @@ $old = Session::get("old", []);
 Session::remove("errors");
 Session::remove("old");
 
-// Vérifier si Microsoft est configuré (compatible avec différentes méthodes de chargement .env)
-// DEBUG: Forcer à true temporairement pour tester l'affichage
-$microsoftConfigured = true;
-// $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID'])
-//     || !empty(getenv('MICROSOFT_CLIENT_ID'))
-//     || (function_exists('env') && !empty(env('MICROSOFT_CLIENT_ID')));
+// Vérifier si Microsoft est configuré (via fichier config ou .env)
+$microsoftConfigured = false;
+$configFile = dirname(__DIR__, 3) . '/config/microsoft.php';
+if (file_exists($configFile)) {
+    $msConfig = require $configFile;
+    $microsoftConfigured = !empty($msConfig['client_id'] ?? '');
+} else {
+    $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID'] ?? $_SERVER['MICROSOFT_CLIENT_ID'] ?? '');
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
