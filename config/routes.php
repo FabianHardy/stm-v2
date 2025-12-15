@@ -32,6 +32,7 @@ use App\Controllers\ProductController;
 use App\Controllers\CustomerController;
 use App\Controllers\PublicCampaignController;
 use App\Controllers\OrderController;
+use App\Controllers\AuthEntraController;
 
 // ============================================
 // ROUTES PUBLIQUES
@@ -63,7 +64,21 @@ $router->get("/admin/logout", function () {
     $controller = new AuthController();
     $controller->logout();
 });
+// ============================================
+// ROUTES MICROSOFT ENTRA (SSO)
+// ============================================
 
+// Redirection vers Microsoft pour authentification
+$router->get("/auth/microsoft", function () {
+    $controller = new AuthEntraController();
+    $controller->redirectToMicrosoft();
+});
+
+// Callback après authentification Microsoft
+$router->get("/auth/callback", function () {
+    $controller = new AuthEntraController();
+    $controller->handleCallback();
+});
 // ============================================
 // ROUTES ADMIN PROTÉGÉES (AVEC MIDDLEWARE)
 // ============================================
@@ -989,20 +1004,4 @@ $router->post('/admin/settings/agent/tools/delete', function () {
 
     $controller = new \App\Controllers\AgentConfigController();
     $controller->deleteTool();
-});
-
-// ============================================
-// ROUTES MICROSOFT ENTRA (SSO)
-// ============================================
-
-// Redirection vers Microsoft pour authentification
-$router->get("/auth/microsoft", function () {
-    $controller = new AuthEntraController();
-    $controller->redirectToMicrosoft();
-});
-
-// Callback après authentification Microsoft
-$router->get("/auth/callback", function () {
-    $controller = new AuthEntraController();
-    $controller->handleCallback();
 });

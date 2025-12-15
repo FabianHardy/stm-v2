@@ -19,8 +19,12 @@ $old = Session::get("old", []);
 Session::remove("errors");
 Session::remove("old");
 
-// Vérifier si Microsoft est configuré
-$microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
+// Vérifier si Microsoft est configuré (compatible avec différentes méthodes de chargement .env)
+// DEBUG: Forcer à true temporairement pour tester l'affichage
+$microsoftConfigured = true;
+// $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID'])
+//     || !empty(getenv('MICROSOFT_CLIENT_ID'))
+//     || (function_exists('env') && !empty(env('MICROSOFT_CLIENT_ID')));
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -29,10 +33,10 @@ $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connexion - STM v2 Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Alpine.js pour les interactions -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
+
     <style>
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -65,7 +69,7 @@ $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
             <!-- ========================================== -->
             <!-- BOUTON MICROSOFT (Principal) -->
             <!-- ========================================== -->
-            <a href="/stm/auth/microsoft" 
+            <a href="/stm/auth/microsoft"
                class="w-full flex justify-center items-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium transition-all duration-150 mb-4">
                 <!-- Logo Microsoft -->
                 <svg class="w-5 h-5 mr-3" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
@@ -83,12 +87,12 @@ $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
                     <div class="w-full border-t border-gray-200"></div>
                 </div>
                 <div class="relative flex justify-center text-sm">
-                    <button type="button" 
+                    <button type="button"
                             @click="showClassicLogin = !showClassicLogin"
                             class="px-4 bg-white text-gray-500 hover:text-gray-700 cursor-pointer">
                         <span x-show="!showClassicLogin">Connexion administrateur</span>
                         <span x-show="showClassicLogin">Masquer</span>
-                        <svg class="inline-block w-4 h-4 ml-1 transition-transform duration-200" 
+                        <svg class="inline-block w-4 h-4 ml-1 transition-transform duration-200"
                              :class="{ 'rotate-180': showClassicLogin }"
                              fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -101,10 +105,15 @@ $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
             <!-- ========================================== -->
             <!-- FORMULAIRE CLASSIQUE (Masqué par défaut) -->
             <!-- ========================================== -->
-            <div x-show="showClassicLogin || !<?= $microsoftConfigured ? 'true' : 'false' ?>" 
-                 x-collapse
+            <div x-show="showClassicLogin"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 transform -translate-y-2"
+                 x-transition:enter-end="opacity-100 transform translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 transform translate-y-0"
+                 x-transition:leave-end="opacity-0 transform -translate-y-2"
                  x-cloak>
-                
+
                 <form method="POST" action="/stm/admin/login" class="space-y-6">
                     <!-- Token CSRF -->
                     <input type="hidden" name="csrf_token" value="<?= Session::getCsrfToken() ?>">
@@ -192,23 +201,6 @@ $microsoftConfigured = !empty($_ENV['MICROSOFT_CLIENT_ID']);
         </div>
     </div>
 
-    <!-- Alpine.js Collapse Plugin -->
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.directive('collapse', (el) => {
-                // Simple collapse animation
-                el.style.overflow = 'hidden';
-                el.style.transition = 'max-height 0.3s ease-out';
-                
-                if (el._x_isShown === false) {
-                    el.style.maxHeight = '0px';
-                } else {
-                    el.style.maxHeight = el.scrollHeight + 'px';
-                }
-            });
-        });
-    </script>
-    
     <style>
         [x-cloak] { display: none !important; }
     </style>
