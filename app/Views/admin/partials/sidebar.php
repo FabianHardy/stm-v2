@@ -15,6 +15,7 @@
  * @modified 25/11/2025 - Ajout section Outils Dev (visible uniquement en mode development)
  * @modified 10/12/2025 - Protection function_exists pour éviter redéclaration
  * @modified 12/12/2025 - Intégration système permissions (masquage menus selon rôle)
+ * @modified 15/12/2025 - Ajout permission agent.view pour Agent STM
  */
 
 use App\Helpers\PermissionHelper;
@@ -83,7 +84,7 @@ $menuItems = [
         "icon" => "fa-chart-line",
         "route" => "/stm/admin/dashboard",
         "badge" => null,
-        "permission" => "dashboard.view", // Tout le monde
+        "permission" => "dashboard.view",
     ],
     [
         "label" => "Campagnes",
@@ -127,7 +128,7 @@ $menuItems = [
         "label" => "Commandes",
         "icon" => "fa-shopping-cart",
         "route" => "/stm/admin/orders",
-        "badge" => null, // Sera dynamique plus tard
+        "badge" => null,
         "badgeColor" => "bg-green-100 text-green-700",
         "permission" => "orders.view",
         "submenu" => [
@@ -176,6 +177,7 @@ $settingsItems = [
         "label" => "Agent STM",
         "icon" => "fa-robot",
         "route" => "/stm/admin/settings/agent",
+        "permission" => "agent.view", // Permission ajoutée
     ],
     [
         "label" => "Configuration",
