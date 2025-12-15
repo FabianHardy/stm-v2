@@ -7,9 +7,10 @@
  *
  * @package STM
  * @created 2025/12/12
+ * @modified 2025/12/15 - Correction namespace (Middleware au lieu de App\Middleware)
  */
 
-namespace App\Middleware;
+namespace Middleware;
 
 use App\Helpers\PermissionHelper;
 use Core\Session;
@@ -40,9 +41,9 @@ class PermissionMiddleware
     }
 
     /**
-     * Vérifie si l'utilisateur a une des permissions
+     * Vérifie si l'utilisateur a une des permissions (OR)
      *
-     * @param array $permissions Liste de permissions (OR)
+     * @param array $permissions Liste de permissions
      * @param string|null $redirectUrl
      * @return bool
      */
@@ -62,9 +63,9 @@ class PermissionMiddleware
     }
 
     /**
-     * Vérifie si l'utilisateur a toutes les permissions
+     * Vérifie si l'utilisateur a toutes les permissions (AND)
      *
-     * @param array $permissions Liste de permissions (AND)
+     * @param array $permissions Liste de permissions
      * @param string|null $redirectUrl
      * @return bool
      */
