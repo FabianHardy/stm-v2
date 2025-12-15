@@ -1,9 +1,4 @@
 <?php
-
-error_log("=== DEBUG FLASH ===");
-error_log("Session ID: " . session_id());
-error_log("Session data: " . print_r($_SESSION, true));
-
 /**
  * Messages Flash - Toast Notifications
  *
@@ -17,76 +12,44 @@ error_log("Session data: " . print_r($_SESSION, true));
  * Ne décale pas le contenu de la page
  *
  * @package STM
- * @version 2.1
+ * @version 2.2
  * @modified 03/12/2025 - Toast notifications en bas à droite
+ * @modified 15/12/2025 - Fix encodage JSON pour apostrophes
  */
 
 use Core\Session;
 
 $flashTypes = ["success", "error", "warning", "info"];
-$hasFlash = false;
+$flashMessages = [];
 
+// Récupérer tous les messages flash
 foreach ($flashTypes as $type) {
     if (Session::has("flash_$type")) {
-        $hasFlash = true;
-        break;
+        $message = Session::get("flash_$type");
+        unset($_SESSION["flash_$type"]);
+        $flashMessages[] = [
+            'id' => uniqid("toast_"),
+            'type' => $type,
+            'message' => $message,
+            'visible' => true
+        ];
     }
 }
 
-if (!$hasFlash) {
+// Si aucun message, ne rien afficher
+if (empty($flashMessages)) {
     return;
 }
 
-// Configuration des types de messages
-$flashConfig = [
-    "success" => [
-        "icon" => "fa-check-circle",
-        "bgColor" => "bg-green-600",
-        "textColor" => "text-white",
-        "iconColor" => "text-green-100",
-    ],
-    "error" => [
-        "icon" => "fa-exclamation-circle",
-        "bgColor" => "bg-red-600",
-        "textColor" => "text-white",
-        "iconColor" => "text-red-100",
-    ],
-    "warning" => [
-        "icon" => "fa-exclamation-triangle",
-        "bgColor" => "bg-yellow-500",
-        "textColor" => "text-white",
-        "iconColor" => "text-yellow-100",
-    ],
-    "info" => [
-        "icon" => "fa-info-circle",
-        "bgColor" => "bg-blue-600",
-        "textColor" => "text-white",
-        "iconColor" => "text-blue-100",
-    ],
-];
+// Encoder en JSON propre pour JavaScript
+$flashMessagesJson = json_encode($flashMessages, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
 ?>
 
 <!-- Container des toasts - Position fixe bas-droite -->
 <div id="toast-container"
      class="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-sm"
-     x-data="{ toasts: [] }"
+     x-data="{ toasts: <?= $flashMessagesJson ?> }"
      x-init="
-        // Initialiser les toasts depuis PHP
-        <?php foreach ($flashTypes as $type): ?>
-            <?php if (Session::has("flash_$type")): ?>
-                <?php
-                $message = Session::get("flash_$type");
-                unset($_SESSION["flash_$type"]);
-                ?>
-                toasts.push({
-                    id: '<?= uniqid("toast_") ?>',
-                    type: '<?= $type ?>',
-                    message: '<?= addslashes(htmlspecialchars($message)) ?>',
-                    visible: true
-                });
-            <?php endif; ?>
-        <?php endforeach; ?>
-
         // Auto-dismiss après 5 secondes
         setTimeout(() => {
             toasts.forEach((toast, index) => {
