@@ -6,6 +6,7 @@
  *
  * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours + Lien détail commande
  * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits
+ * @modified 2025/12/15 - Fix grille adaptive pour graphiques (évite espaces vides)
  */
 
 use Core\Database;
@@ -254,6 +255,14 @@ $quickActionsGridClass = match(true) {
     $quickActionsCount === 2 => 'lg:grid-cols-2',
     default => 'lg:grid-cols-1',
 };
+
+// Compter les graphiques affichés pour la grille adaptive
+$hasCampaignChart = !empty($campaign_stats);
+$hasCategoryChart = !empty($product_categories) && array_sum(array_column($product_categories, "quantity_sold")) > 0;
+$chartsCount = (int)$hasCampaignChart + (int)$hasCategoryChart;
+
+// Si un seul graphique, prendre toute la largeur
+$chartsGridClass = ($chartsCount === 1) ? 'lg:grid-cols-1' : 'lg:grid-cols-2';
 ?>
 
 <!-- En-tête de page -->
@@ -398,10 +407,10 @@ $quickActionsGridClass = match(true) {
 <?php endif; ?>
 
 <!-- Graphiques (seulement si permission stats) -->
-<?php if ($canViewStats): ?>
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+<?php if ($canViewStats && $chartsCount > 0): ?>
+<div class="grid grid-cols-1 <?= $chartsGridClass ?> gap-6 mb-8">
 
-    <?php if (!empty($campaign_stats)): ?>
+    <?php if ($hasCampaignChart): ?>
     <!-- Graphique Campagnes -->
     <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
@@ -414,7 +423,7 @@ $quickActionsGridClass = match(true) {
     </div>
     <?php endif; ?>
 
-    <?php if (!empty($product_categories) && array_sum(array_column($product_categories, "quantity_sold")) > 0): ?>
+    <?php if ($hasCategoryChart): ?>
     <!-- Graphique Catégories -->
     <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
