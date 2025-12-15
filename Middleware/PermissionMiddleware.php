@@ -31,8 +31,11 @@ class PermissionMiddleware
             return true;
         }
 
-        // Message d'erreur (utiliser setFlash, pas flash)
+        // Message d'erreur
         Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
+
+        // Forcer la sauvegarde de la session avant redirection
+        session_write_close();
 
         // Redirection
         $url = $redirectUrl ?? '/stm/admin/dashboard';
@@ -57,6 +60,8 @@ class PermissionMiddleware
 
         Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
 
+        session_write_close();
+
         $url = $redirectUrl ?? '/stm/admin/dashboard';
         header('Location: ' . $url);
         exit;
@@ -74,6 +79,8 @@ class PermissionMiddleware
         foreach ($permissions as $permission) {
             if (!PermissionHelper::can($permission)) {
                 Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
+
+                session_write_close();
 
                 $url = $redirectUrl ?? '/stm/admin/dashboard';
                 header('Location: ' . $url);
@@ -116,6 +123,8 @@ class PermissionMiddleware
 
         Session::setFlash('error', 'Vous n\'avez pas accès à cette campagne.');
 
+        session_write_close();
+
         $url = $redirectUrl ?? '/stm/admin/campaigns';
         header('Location: ' . $url);
         exit;
@@ -135,6 +144,8 @@ class PermissionMiddleware
         }
 
         Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
+
+        session_write_close();
 
         $url = $redirectUrl ?? '/stm/admin/dashboard';
         header('Location: ' . $url);

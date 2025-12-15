@@ -1,4 +1,9 @@
 <?php
+
+error_log("=== DEBUG FLASH ===");
+error_log("Session ID: " . session_id());
+error_log("Session data: " . print_r($_SESSION, true));
+
 /**
  * Messages Flash - Toast Notifications
  *
