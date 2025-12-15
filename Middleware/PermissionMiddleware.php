@@ -7,7 +7,7 @@
  *
  * @package STM
  * @created 2025/12/12
- * @modified 2025/12/15 - Correction namespace (Middleware au lieu de App\Middleware)
+ * @modified 2025/12/15 - Correction namespace + Session::setFlash
  */
 
 namespace Middleware;
@@ -31,8 +31,8 @@ class PermissionMiddleware
             return true;
         }
 
-        // Message d'erreur
-        Session::flash('error', 'Vous n\'avez pas la permission d\'effectuer cette action.');
+        // Message d'erreur (utiliser setFlash, pas flash)
+        Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
 
         // Redirection
         $url = $redirectUrl ?? '/stm/admin/dashboard';
@@ -55,7 +55,7 @@ class PermissionMiddleware
             }
         }
 
-        Session::flash('error', 'Vous n\'avez pas la permission d\'effectuer cette action.');
+        Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
 
         $url = $redirectUrl ?? '/stm/admin/dashboard';
         header('Location: ' . $url);
@@ -73,7 +73,7 @@ class PermissionMiddleware
     {
         foreach ($permissions as $permission) {
             if (!PermissionHelper::can($permission)) {
-                Session::flash('error', 'Vous n\'avez pas la permission d\'effectuer cette action.');
+                Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
 
                 $url = $redirectUrl ?? '/stm/admin/dashboard';
                 header('Location: ' . $url);
@@ -114,7 +114,7 @@ class PermissionMiddleware
             return true;
         }
 
-        Session::flash('error', 'Vous n\'avez pas accès à cette campagne.');
+        Session::setFlash('error', 'Vous n\'avez pas accès à cette campagne.');
 
         $url = $redirectUrl ?? '/stm/admin/campaigns';
         header('Location: ' . $url);
@@ -134,7 +134,7 @@ class PermissionMiddleware
             return true;
         }
 
-        Session::flash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
+        Session::setFlash('error', 'Vous n\'avez pas la permission d\'accéder à cette page.');
 
         $url = $redirectUrl ?? '/stm/admin/dashboard';
         header('Location: ' . $url);
