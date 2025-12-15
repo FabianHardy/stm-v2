@@ -4,12 +4,14 @@
  *
  * Gestion centralisée des permissions et du scope d'accès
  *
- * Niveau 1 : Permissions (par rôle) - ce que l'utilisateur peut FAIRE
- * Niveau 2 : Scope (par assignation) - sur QUOI il peut agir
+ * Structure normalisée :
+ * - Table `permissions` : liste des permissions disponibles (code, name, description, category)
+ * - Table `role_permissions` : liaison role <-> permission_id avec granted (0/1)
+ * - Table `permission_audit_log` : historique des modifications
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/12 - Ajout méthodes pour SettingsController
+ * @modified 2025/12/12 - Permissions dynamiques en base de données (structure normalisée)
  */
 
 namespace App\Helpers;
@@ -20,7 +22,8 @@ use Core\Session;
 class PermissionHelper
 {
     /**
-     * Cache des permissions de l'utilisateur courant
+     * Cache des permissions chargées depuis la DB
+     * Structure: ['role' => ['permission.code' => bool, ...], ...]
      */
     private static ?array $permissionsCache = null;
 
@@ -39,277 +42,6 @@ class PermissionHelper
         'createur' => 3,
         'manager_reps' => 4,
         'rep' => 5,
-    ];
-
-    /**
-     * Matrice des permissions par rôle
-     * true = permission accordée
-     */
-    private const ROLE_PERMISSIONS = [
-        'superadmin' => [
-            // Dashboard
-            'dashboard.view' => true,
-            'dashboard.stats_full' => true,
-
-            // Campagnes
-            'campaigns.view' => true,
-            'campaigns.view_all' => true,
-            'campaigns.create' => true,
-            'campaigns.edit' => true,
-            'campaigns.edit_all' => true,
-            'campaigns.delete' => true,
-            'campaigns.assign' => true,
-
-            // Catégories
-            'categories.view' => true,
-            'categories.create' => true,
-            'categories.edit' => true,
-            'categories.delete' => true,
-
-            // Produits/Promotions
-            'products.view' => true,
-            'products.create' => true,
-            'products.edit' => true,
-            'products.delete' => true,
-
-            // Clients
-            'customers.view' => true,
-            'customers.view_all' => true,
-            'customers.create' => true,
-            'customers.edit' => true,
-            'customers.delete' => true,
-            'customers.import' => true,
-
-            // Commandes
-            'orders.view' => true,
-            'orders.view_all' => true,
-            'orders.export' => true,
-
-            // Statistiques
-            'stats.view' => true,
-            'stats.view_all' => true,
-            'stats.export' => true,
-
-            // Administration
-            'users.view' => true,
-            'users.manage' => true,
-            'settings.view' => true,
-            'settings.manage' => true,
-            'permissions.manage' => true,
-            'agent.view' => true,
-        ],
-
-        'admin' => [
-            // Dashboard
-            'dashboard.view' => true,
-            'dashboard.stats_full' => true,
-
-            // Campagnes
-            'campaigns.view' => true,
-            'campaigns.view_all' => true,
-            'campaigns.create' => true,
-            'campaigns.edit' => true,
-            'campaigns.edit_all' => true,
-            'campaigns.delete' => true,
-            'campaigns.assign' => true,
-
-            // Catégories
-            'categories.view' => true,
-            'categories.create' => true,
-            'categories.edit' => true,
-            'categories.delete' => true,
-
-            // Produits/Promotions
-            'products.view' => true,
-            'products.create' => true,
-            'products.edit' => true,
-            'products.delete' => true,
-
-            // Clients
-            'customers.view' => true,
-            'customers.view_all' => true,
-            'customers.create' => true,
-            'customers.edit' => true,
-            'customers.delete' => true,
-            'customers.import' => true,
-
-            // Commandes
-            'orders.view' => true,
-            'orders.view_all' => true,
-            'orders.export' => true,
-
-            // Statistiques
-            'stats.view' => true,
-            'stats.view_all' => true,
-            'stats.export' => true,
-
-            // Administration (limité)
-            'users.view' => false,
-            'users.manage' => false,
-            'settings.view' => true,
-            'settings.manage' => false,
-            'permissions.manage' => false,
-            'agent.view' => true,
-        ],
-
-        'createur' => [
-            // Dashboard
-            'dashboard.view' => true,
-            'dashboard.stats_full' => false,
-
-            // Campagnes (ses assignations uniquement)
-            'campaigns.view' => true,
-            'campaigns.view_all' => false,
-            'campaigns.create' => true,
-            'campaigns.edit' => true,
-            'campaigns.edit_all' => false,
-            'campaigns.delete' => false,
-            'campaigns.assign' => true,
-
-            // Catégories
-            'categories.view' => true,
-            'categories.create' => true,
-            'categories.edit' => true,
-            'categories.delete' => false,
-
-            // Produits/Promotions
-            'products.view' => true,
-            'products.create' => true,
-            'products.edit' => true,
-            'products.delete' => false,
-
-            // Clients (lecture seule)
-            'customers.view' => true,
-            'customers.view_all' => false,
-            'customers.create' => false,
-            'customers.edit' => false,
-            'customers.delete' => false,
-            'customers.import' => false,
-
-            // Commandes (lecture seule sur ses campagnes)
-            'orders.view' => true,
-            'orders.view_all' => false,
-            'orders.export' => true,
-
-            // Statistiques (ses campagnes)
-            'stats.view' => true,
-            'stats.view_all' => false,
-            'stats.export' => true,
-
-            // Administration
-            'users.view' => false,
-            'users.manage' => false,
-            'settings.view' => false,
-            'settings.manage' => false,
-            'permissions.manage' => false,
-            'agent.view' => false,
-        ],
-
-        'manager_reps' => [
-            // Dashboard
-            'dashboard.view' => true,
-            'dashboard.stats_full' => false,
-
-            // Campagnes (lecture seule)
-            'campaigns.view' => true,
-            'campaigns.view_all' => false,
-            'campaigns.create' => false,
-            'campaigns.edit' => false,
-            'campaigns.edit_all' => false,
-            'campaigns.delete' => false,
-            'campaigns.assign' => false,
-
-            // Catégories (lecture seule)
-            'categories.view' => true,
-            'categories.create' => false,
-            'categories.edit' => false,
-            'categories.delete' => false,
-
-            // Produits (lecture seule)
-            'products.view' => true,
-            'products.create' => false,
-            'products.edit' => false,
-            'products.delete' => false,
-
-            // Clients (ses reps uniquement)
-            'customers.view' => true,
-            'customers.view_all' => false,
-            'customers.create' => false,
-            'customers.edit' => false,
-            'customers.delete' => false,
-            'customers.import' => false,
-
-            // Commandes (ses reps)
-            'orders.view' => true,
-            'orders.view_all' => false,
-            'orders.export' => true,
-
-            // Statistiques (ses reps)
-            'stats.view' => true,
-            'stats.view_all' => false,
-            'stats.export' => true,
-
-            // Administration
-            'users.view' => false,
-            'users.manage' => false,
-            'settings.view' => false,
-            'settings.manage' => false,
-            'permissions.manage' => false,
-            'agent.view' => false,
-        ],
-
-        'rep' => [
-            // Dashboard
-            'dashboard.view' => true,
-            'dashboard.stats_full' => false,
-
-            // Campagnes (lecture seule)
-            'campaigns.view' => true,
-            'campaigns.view_all' => false,
-            'campaigns.create' => false,
-            'campaigns.edit' => false,
-            'campaigns.edit_all' => false,
-            'campaigns.delete' => false,
-            'campaigns.assign' => false,
-
-            // Catégories (lecture seule)
-            'categories.view' => true,
-            'categories.create' => false,
-            'categories.edit' => false,
-            'categories.delete' => false,
-
-            // Produits (lecture seule)
-            'products.view' => true,
-            'products.create' => false,
-            'products.edit' => false,
-            'products.delete' => false,
-
-            // Clients (les siens uniquement)
-            'customers.view' => true,
-            'customers.view_all' => false,
-            'customers.create' => false,
-            'customers.edit' => false,
-            'customers.delete' => false,
-            'customers.import' => false,
-
-            // Commandes (les siennes)
-            'orders.view' => true,
-            'orders.view_all' => false,
-            'orders.export' => false,
-
-            // Statistiques (les siennes)
-            'stats.view' => true,
-            'stats.view_all' => false,
-            'stats.export' => false,
-
-            // Administration
-            'users.view' => false,
-            'users.manage' => false,
-            'settings.view' => false,
-            'settings.manage' => false,
-            'permissions.manage' => false,
-            'agent.view' => false,
-        ],
     ];
 
     // ========================================
@@ -332,11 +64,19 @@ class PermissionHelper
 
         $role = $user['role'] ?? null;
 
-        if (!$role || !isset(self::ROLE_PERMISSIONS[$role])) {
+        if (!$role) {
             return false;
         }
 
-        return self::ROLE_PERMISSIONS[$role][$permission] ?? false;
+        // Superadmin a TOUJOURS toutes les permissions (protection absolue)
+        if ($role === 'superadmin') {
+            return true;
+        }
+
+        // Charger les permissions depuis le cache ou la DB
+        $permissions = self::loadPermissionsFromDB();
+
+        return $permissions[$role][$permission] ?? false;
     }
 
     /**
@@ -348,6 +88,50 @@ class PermissionHelper
     public static function cannot(string $permission): bool
     {
         return !self::can($permission);
+    }
+
+    /**
+     * Charge les permissions depuis la base de données
+     * Utilise un cache pour éviter les requêtes multiples
+     *
+     * @return array
+     */
+    private static function loadPermissionsFromDB(): array
+    {
+        if (self::$permissionsCache !== null) {
+            return self::$permissionsCache;
+        }
+
+        try {
+            $db = Database::getInstance();
+
+            // JOIN entre role_permissions et permissions pour récupérer le code
+            $results = $db->query(
+                "SELECT rp.role, p.code, rp.granted
+                 FROM role_permissions rp
+                 INNER JOIN permissions p ON rp.permission_id = p.id"
+            );
+
+            self::$permissionsCache = [];
+
+            foreach ($results as $row) {
+                $role = $row['role'];
+                $code = $row['code'];
+                $granted = (bool) $row['granted'];
+
+                if (!isset(self::$permissionsCache[$role])) {
+                    self::$permissionsCache[$role] = [];
+                }
+
+                self::$permissionsCache[$role][$code] = $granted;
+            }
+
+            return self::$permissionsCache;
+
+        } catch (\PDOException $e) {
+            error_log("PermissionHelper::loadPermissionsFromDB - Erreur : " . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -365,72 +149,60 @@ class PermissionHelper
 
         $role = $user['role'] ?? null;
 
-        if (!$role || !isset(self::ROLE_PERMISSIONS[$role])) {
+        if (!$role) {
             return [];
         }
 
-        return self::ROLE_PERMISSIONS[$role];
+        // Superadmin : toutes les permissions
+        if ($role === 'superadmin') {
+            return self::getAllPermissionCodes(true);
+        }
+
+        $permissions = self::loadPermissionsFromDB();
+        return $permissions[$role] ?? [];
     }
 
     /**
-     * Récupère les labels des permissions (pour affichage)
+     * Récupère tous les codes de permissions depuis la DB
      *
+     * @param bool $allGranted Si true, retourne tous les codes avec granted=true
      * @return array
+     */
+    private static function getAllPermissionCodes(bool $allGranted = false): array
+    {
+        try {
+            $db = Database::getInstance();
+            $results = $db->query("SELECT code FROM permissions ORDER BY sort_order");
+
+            $perms = [];
+            foreach ($results as $row) {
+                $perms[$row['code']] = $allGranted ? true : false;
+            }
+            return $perms;
+        } catch (\PDOException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Récupère les labels des permissions depuis la DB
+     *
+     * @return array ['code' => 'name', ...]
      */
     public static function getPermissionLabels(): array
     {
-        return [
-            // Dashboard
-            'dashboard.view' => 'Voir le dashboard',
-            'dashboard.stats_full' => 'Statistiques complètes',
+        try {
+            $db = Database::getInstance();
+            $results = $db->query("SELECT code, name FROM permissions ORDER BY sort_order");
 
-            // Campagnes
-            'campaigns.view' => 'Voir les campagnes',
-            'campaigns.view_all' => 'Voir toutes les campagnes',
-            'campaigns.create' => 'Créer des campagnes',
-            'campaigns.edit' => 'Modifier ses campagnes',
-            'campaigns.edit_all' => 'Modifier toutes les campagnes',
-            'campaigns.delete' => 'Supprimer des campagnes',
-            'campaigns.assign' => 'Assigner des collaborateurs',
-
-            // Catégories
-            'categories.view' => 'Voir les catégories',
-            'categories.create' => 'Créer des catégories',
-            'categories.edit' => 'Modifier des catégories',
-            'categories.delete' => 'Supprimer des catégories',
-
-            // Produits
-            'products.view' => 'Voir les promotions',
-            'products.create' => 'Créer des promotions',
-            'products.edit' => 'Modifier des promotions',
-            'products.delete' => 'Supprimer des promotions',
-
-            // Clients
-            'customers.view' => 'Voir les clients',
-            'customers.view_all' => 'Voir tous les clients',
-            'customers.create' => 'Créer des clients',
-            'customers.edit' => 'Modifier des clients',
-            'customers.delete' => 'Supprimer des clients',
-            'customers.import' => 'Importer des clients',
-
-            // Commandes
-            'orders.view' => 'Voir les commandes',
-            'orders.view_all' => 'Voir toutes les commandes',
-            'orders.export' => 'Exporter les commandes',
-
-            // Statistiques
-            'stats.view' => 'Voir les statistiques',
-            'stats.view_all' => 'Voir toutes les statistiques',
-            'stats.export' => 'Exporter les rapports',
-
-            // Administration
-            'users.view' => 'Voir les utilisateurs',
-            'users.manage' => 'Gérer les utilisateurs',
-            'settings.view' => 'Voir la configuration',
-            'settings.manage' => 'Modifier la configuration',
-            'permissions.manage' => 'Gérer les permissions',
-            'agent.view' => 'Accéder à l\'Agent STM',
-        ];
+            $labels = [];
+            foreach ($results as $row) {
+                $labels[$row['code']] = $row['name'];
+            }
+            return $labels;
+        } catch (\PDOException $e) {
+            return [];
+        }
     }
 
     // ========================================
@@ -456,44 +228,65 @@ class PermissionHelper
     public static function getPermissionMatrix(): array
     {
         $roles = ['superadmin', 'admin', 'createur', 'manager_reps', 'rep'];
-        $labels = self::getPermissionLabels();
         $categories = self::getCategoryMapping();
 
-        // Construire la liste des permissions avec métadonnées
-        $permissions = [];
-        foreach (self::ROLE_PERMISSIONS['superadmin'] as $permCode => $value) {
-            // Déterminer la catégorie depuis le code (ex: 'campaigns.view' -> 'campaigns')
-            $categoryKey = explode('.', $permCode)[0];
+        try {
+            $db = Database::getInstance();
 
-            $permissions[] = [
-                'code' => $permCode,
-                'name' => $labels[$permCode] ?? $permCode,
-                'category' => $categoryKey,
-                'description' => ''
+            // Récupérer toutes les permissions avec leurs métadonnées
+            $permResults = $db->query(
+                "SELECT id, code, name, description, category, sort_order
+                 FROM permissions
+                 ORDER BY sort_order"
+            );
+
+            // Construire la liste des permissions
+            $permissions = [];
+            $permissionIds = []; // code => id mapping
+            foreach ($permResults as $row) {
+                $permissions[] = [
+                    'id' => $row['id'],
+                    'code' => $row['code'],
+                    'name' => $row['name'],
+                    'description' => $row['description'],
+                    'category' => $row['category']
+                ];
+                $permissionIds[$row['code']] = $row['id'];
+            }
+
+            // Charger les permissions par rôle
+            $dbPermissions = self::loadPermissionsFromDB();
+
+            // Construire la matrice role => permissions
+            $matrix = [];
+            foreach ($roles as $role) {
+                $matrix[$role] = [];
+                foreach ($permissions as $perm) {
+                    // Superadmin a toujours tout
+                    if ($role === 'superadmin') {
+                        $matrix[$role][$perm['code']] = true;
+                    } else {
+                        $matrix[$role][$perm['code']] = $dbPermissions[$role][$perm['code']] ?? false;
+                    }
+                }
+            }
+
+            return [
+                'roles' => $roles,
+                'permissions' => $permissions,
+                'matrix' => $matrix,
+                'permission_ids' => $permissionIds
+            ];
+
+        } catch (\PDOException $e) {
+            error_log("PermissionHelper::getPermissionMatrix - Erreur : " . $e->getMessage());
+            return [
+                'roles' => $roles,
+                'permissions' => [],
+                'matrix' => [],
+                'permission_ids' => []
             ];
         }
-
-        // Trier par catégorie
-        usort($permissions, function($a, $b) use ($categories) {
-            $orderA = array_search($a['category'], array_keys($categories));
-            $orderB = array_search($b['category'], array_keys($categories));
-            if ($orderA === $orderB) {
-                return 0;
-            }
-            return ($orderA < $orderB) ? -1 : 1;
-        });
-
-        // Construire la matrice role => permissions
-        $matrix = [];
-        foreach ($roles as $role) {
-            $matrix[$role] = self::ROLE_PERMISSIONS[$role] ?? [];
-        }
-
-        return [
-            'roles' => $roles,
-            'permissions' => $permissions,
-            'matrix' => $matrix
-        ];
     }
 
     /**
@@ -542,35 +335,105 @@ class PermissionHelper
                 'label' => 'Statistiques',
                 'icon' => 'fa-chart-bar'
             ],
-            'users' => [
-                'label' => 'Utilisateurs',
+            'admin' => [
+                'label' => 'Administration',
                 'icon' => 'fa-user-cog'
-            ],
-            'settings' => [
-                'label' => 'Configuration',
-                'icon' => 'fa-cog'
-            ],
-            'permissions' => [
-                'label' => 'Permissions',
-                'icon' => 'fa-shield-alt'
-            ],
-            'agent' => [
-                'label' => 'Agent STM',
-                'icon' => 'fa-robot'
             ]
         ];
     }
 
     /**
-     * Sauvegarde la matrice de permissions (pour usage futur avec DB)
+     * Sauvegarde la matrice de permissions en base de données
+     * Avec journalisation dans la table d'audit
      *
-     * @param array $matrix
+     * @param array $matrix ['role' => ['permission_code' => bool, ...], ...]
      * @return bool
      */
     public static function savePermissionMatrix(array $matrix): bool
     {
-        // TODO: Implémenter la sauvegarde en DB quand le système sera prêt
-        return true;
+        $user = self::getCurrentUser();
+        $userId = $user['id'] ?? null;
+        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+
+        try {
+            $db = Database::getInstance();
+
+            // Récupérer le mapping code => id des permissions
+            $permissionIds = [];
+            $results = $db->query("SELECT id, code FROM permissions");
+            foreach ($results as $row) {
+                $permissionIds[$row['code']] = $row['id'];
+            }
+
+            // Charger les valeurs actuelles pour comparaison (audit)
+            $currentPermissions = self::loadPermissionsFromDB();
+
+            foreach ($matrix as $role => $permissions) {
+                // Ne pas modifier superadmin
+                if (self::isProtectedRole($role)) {
+                    continue;
+                }
+
+                foreach ($permissions as $permCode => $granted) {
+                    // Vérifier que la permission existe
+                    if (!isset($permissionIds[$permCode])) {
+                        continue;
+                    }
+
+                    $permissionId = $permissionIds[$permCode];
+                    $grantedValue = $granted ? 1 : 0;
+                    $oldValue = isset($currentPermissions[$role][$permCode])
+                        ? ($currentPermissions[$role][$permCode] ? 1 : 0)
+                        : null;
+
+                    // Ne rien faire si la valeur n'a pas changé
+                    if ($oldValue === $grantedValue) {
+                        continue;
+                    }
+
+                    // Mettre à jour ou insérer la permission
+                    $db->query(
+                        "INSERT INTO role_permissions (role, permission_id, granted, updated_by, updated_at)
+                         VALUES (:role, :permission_id, :granted, :updated_by, NOW())
+                         ON DUPLICATE KEY UPDATE
+                            granted = VALUES(granted),
+                            updated_by = VALUES(updated_by),
+                            updated_at = NOW()",
+                        [
+                            ':role' => $role,
+                            ':permission_id' => $permissionId,
+                            ':granted' => $grantedValue,
+                            ':updated_by' => $userId
+                        ]
+                    );
+
+                    // Enregistrer dans l'audit log
+                    $db->query(
+                        "INSERT INTO permission_audit_log
+                            (role, permission_code, old_value, new_value, changed_by, changed_at, ip_address)
+                         VALUES
+                            (:role, :permission_code, :old_value, :new_value, :changed_by, NOW(), :ip_address)",
+                        [
+                            ':role' => $role,
+                            ':permission_code' => $permCode,
+                            ':old_value' => $oldValue,
+                            ':new_value' => $grantedValue,
+                            ':changed_by' => $userId,
+                            ':ip_address' => $ipAddress
+                        ]
+                    );
+                }
+            }
+
+            // Vider le cache pour forcer le rechargement
+            self::clearCache();
+
+            return true;
+
+        } catch (\PDOException $e) {
+            error_log("PermissionHelper::savePermissionMatrix - Erreur : " . $e->getMessage());
+            return false;
+        }
     }
 
     // ========================================
@@ -579,10 +442,9 @@ class PermissionHelper
 
     /**
      * Récupère le niveau hiérarchique d'un rôle
-     * Plus le nombre est bas, plus le rôle est élevé
      *
      * @param string $role
-     * @return int (1-5, ou 99 si rôle inconnu)
+     * @return int
      */
     public static function getRoleLevel(string $role): int
     {
@@ -591,9 +453,8 @@ class PermissionHelper
 
     /**
      * Vérifie si l'utilisateur courant peut gérer un rôle cible
-     * Règle : On ne peut gérer que les rôles de niveau INFÉRIEUR au sien
      *
-     * @param string $targetRole Le rôle à modifier
+     * @param string $targetRole
      * @return bool
      */
     public static function canManageRole(string $targetRole): bool
@@ -607,15 +468,13 @@ class PermissionHelper
         $userLevel = self::getRoleLevel($user['role']);
         $targetLevel = self::getRoleLevel($targetRole);
 
-        // On peut gérer uniquement les rôles de niveau SUPÉRIEUR (nombre plus grand)
         return $targetLevel > $userLevel;
     }
 
     /**
-     * Vérifie si l'utilisateur courant peut accorder une permission spécifique
-     * Règle : On ne peut accorder QUE les permissions qu'on possède soi-même
+     * Vérifie si l'utilisateur peut accorder une permission
      *
-     * @param string $permission La permission à accorder
+     * @param string $permission
      * @return bool
      */
     public static function canGrantPermission(string $permission): bool
@@ -624,11 +483,10 @@ class PermissionHelper
     }
 
     /**
-     * Filtre une matrice de permissions pour ne garder que les modifications autorisées
-     * Utilisé par SettingsController::savePermissions()
+     * Filtre les modifications de permissions autorisées
      *
-     * @param array $requestedChanges Les modifications demandées ['role' => ['perm' => bool, ...], ...]
-     * @return array ['allowed' => [...], 'denied' => [...], 'errors' => [...]]
+     * @param array $requestedChanges
+     * @return array
      */
     public static function filterAllowedPermissionChanges(array $requestedChanges): array
     {
@@ -646,37 +504,31 @@ class PermissionHelper
         }
 
         foreach ($requestedChanges as $role => $permissions) {
-            // Vérification 1 : Rôle protégé (superadmin)
             if (self::isProtectedRole($role)) {
                 $denied[$role] = $permissions;
-                $errors[] = "Le rôle '$role' est protégé et ne peut pas être modifié";
+                $errors[] = "Le rôle '$role' est protégé";
                 continue;
             }
 
-            // Vérification 2 : Peut-on gérer ce rôle ?
             if (!self::canManageRole($role)) {
                 $denied[$role] = $permissions;
-                $errors[] = "Vous ne pouvez pas modifier le rôle '$role' (niveau égal ou supérieur au vôtre)";
+                $errors[] = "Vous ne pouvez pas modifier le rôle '$role'";
                 continue;
             }
 
-            // Vérification 3 : Pour chaque permission, peut-on l'accorder ?
             $allowed[$role] = [];
             foreach ($permissions as $permCode => $value) {
                 $wantsToGrant = (bool) $value;
 
-                // Si on veut accorder la permission, on doit la posséder
                 if ($wantsToGrant && !self::canGrantPermission($permCode)) {
                     $denied[$role][$permCode] = $value;
-                    $errors[] = "Vous ne pouvez pas accorder '$permCode' car vous ne la possédez pas";
+                    $errors[] = "Vous ne pouvez pas accorder '$permCode'";
                     continue;
                 }
 
-                // Si on veut retirer la permission, on doit aussi la posséder
-                // (pour éviter qu'un niveau inférieur ne "bloque" des permissions qu'il ne comprend pas)
                 if (!$wantsToGrant && !self::canGrantPermission($permCode)) {
                     $denied[$role][$permCode] = $value;
-                    $errors[] = "Vous ne pouvez pas retirer '$permCode' car vous ne la possédez pas";
+                    $errors[] = "Vous ne pouvez pas retirer '$permCode'";
                     continue;
                 }
 
@@ -692,9 +544,9 @@ class PermissionHelper
     }
 
     /**
-     * Récupère les rôles que l'utilisateur courant peut gérer
+     * Récupère les rôles gérables par l'utilisateur courant
      *
-     * @return array Liste des rôles gérables
+     * @return array
      */
     public static function getManageableRoles(): array
     {
@@ -721,7 +573,7 @@ class PermissionHelper
     // ========================================
 
     /**
-     * Vérifie si l'utilisateur peut VOIR une campagne spécifique
+     * Vérifie si l'utilisateur peut voir une campagne
      *
      * @param int $campaignId
      * @return bool
@@ -734,17 +586,14 @@ class PermissionHelper
             return false;
         }
 
-        // Superadmin et Admin peuvent tout voir
         if (in_array($user['role'], ['superadmin', 'admin'])) {
             return true;
         }
 
-        // Créateur : vérifie s'il est assigné
         if ($user['role'] === 'createur') {
             return self::isAssignedToCampaign($user['id'], $campaignId);
         }
 
-        // Manager et Rep : accès aux campagnes actives (lecture seule)
         if (in_array($user['role'], ['manager_reps', 'rep'])) {
             return self::isCampaignActive($campaignId);
         }
@@ -753,7 +602,7 @@ class PermissionHelper
     }
 
     /**
-     * Vérifie si l'utilisateur peut MODIFIER une campagne spécifique
+     * Vérifie si l'utilisateur peut modifier une campagne
      *
      * @param int $campaignId
      * @return bool
@@ -766,22 +615,19 @@ class PermissionHelper
             return false;
         }
 
-        // Permission de base requise
         if (!self::can('campaigns.edit')) {
             return false;
         }
 
-        // Peut modifier toutes les campagnes
         if (self::can('campaigns.edit_all')) {
             return true;
         }
 
-        // Sinon, vérifie l'assignation
         return self::isAssignedToCampaign($user['id'], $campaignId);
     }
 
     /**
-     * Vérifie si l'utilisateur peut assigner des collaborateurs à une campagne
+     * Vérifie si l'utilisateur peut assigner sur une campagne
      *
      * @param int $campaignId
      * @return bool
@@ -794,17 +640,14 @@ class PermissionHelper
             return false;
         }
 
-        // Permission de base requise
         if (!self::can('campaigns.assign')) {
             return false;
         }
 
-        // Superadmin et Admin peuvent assigner sur toutes les campagnes
         if (in_array($user['role'], ['superadmin', 'admin'])) {
             return true;
         }
 
-        // Créateur : peut assigner seulement s'il est owner
         if ($user['role'] === 'createur') {
             return self::isOwnerOfCampaign($user['id'], $campaignId);
         }
@@ -813,7 +656,7 @@ class PermissionHelper
     }
 
     /**
-     * Récupère les IDs des campagnes accessibles à l'utilisateur
+     * Récupère les IDs des campagnes accessibles
      *
      * @return array
      */
@@ -829,17 +672,15 @@ class PermissionHelper
             return [];
         }
 
-        // Superadmin et Admin : toutes les campagnes
+        $db = Database::getInstance();
+
         if (in_array($user['role'], ['superadmin', 'admin'])) {
-            $db = Database::getInstance();
             $campaigns = $db->query("SELECT id FROM campaigns");
             self::$campaignsCache = array_column($campaigns, 'id');
             return self::$campaignsCache;
         }
 
-        // Créateur : ses campagnes assignées
         if ($user['role'] === 'createur') {
-            $db = Database::getInstance();
             $campaigns = $db->query(
                 "SELECT campaign_id FROM campaign_assignees WHERE user_id = :user_id",
                 [':user_id' => $user['id']]
@@ -848,12 +689,8 @@ class PermissionHelper
             return self::$campaignsCache;
         }
 
-        // Manager et Rep : campagnes actives
         if (in_array($user['role'], ['manager_reps', 'rep'])) {
-            $db = Database::getInstance();
-            $campaigns = $db->query(
-                "SELECT id FROM campaigns WHERE status = 'active'"
-            );
+            $campaigns = $db->query("SELECT id FROM campaigns WHERE status = 'active'");
             self::$campaignsCache = array_column($campaigns, 'id');
             return self::$campaignsCache;
         }
@@ -863,61 +700,40 @@ class PermissionHelper
 
     /**
      * Vérifie si l'utilisateur est assigné à une campagne
-     *
-     * @param int $userId
-     * @param int $campaignId
-     * @return bool
      */
     public static function isAssignedToCampaign(int $userId, int $campaignId): bool
     {
         $db = Database::getInstance();
-
         $result = $db->query(
-            "SELECT id FROM campaign_assignees
-             WHERE user_id = :user_id AND campaign_id = :campaign_id
-             LIMIT 1",
+            "SELECT id FROM campaign_assignees WHERE user_id = :user_id AND campaign_id = :campaign_id LIMIT 1",
             [':user_id' => $userId, ':campaign_id' => $campaignId]
         );
-
         return !empty($result);
     }
 
     /**
      * Vérifie si l'utilisateur est owner d'une campagne
-     *
-     * @param int $userId
-     * @param int $campaignId
-     * @return bool
      */
     public static function isOwnerOfCampaign(int $userId, int $campaignId): bool
     {
         $db = Database::getInstance();
-
         $result = $db->query(
-            "SELECT id FROM campaign_assignees
-             WHERE user_id = :user_id AND campaign_id = :campaign_id AND role = 'owner'
-             LIMIT 1",
+            "SELECT id FROM campaign_assignees WHERE user_id = :user_id AND campaign_id = :campaign_id AND role = 'owner' LIMIT 1",
             [':user_id' => $userId, ':campaign_id' => $campaignId]
         );
-
         return !empty($result);
     }
 
     /**
      * Vérifie si une campagne est active
-     *
-     * @param int $campaignId
-     * @return bool
      */
     private static function isCampaignActive(int $campaignId): bool
     {
         $db = Database::getInstance();
-
         $result = $db->query(
             "SELECT id FROM campaigns WHERE id = :id AND status = 'active' LIMIT 1",
             [':id' => $campaignId]
         );
-
         return !empty($result);
     }
 
@@ -925,68 +741,34 @@ class PermissionHelper
     // HELPERS INTERNES
     // ========================================
 
-    /**
-     * Récupère l'utilisateur courant depuis la session
-     *
-     * @return array|null
-     */
     private static function getCurrentUser(): ?array
     {
         return Session::get('user');
     }
 
-    /**
-     * Réinitialise les caches (utile après changement de session)
-     */
     public static function clearCache(): void
     {
         self::$permissionsCache = null;
         self::$campaignsCache = null;
     }
 
-    /**
-     * Récupère le rôle de l'utilisateur courant
-     *
-     * @return string|null
-     */
     public static function getCurrentRole(): ?string
     {
         $user = self::getCurrentUser();
         return $user['role'] ?? null;
     }
 
-    /**
-     * Vérifie si l'utilisateur a un des rôles spécifiés
-     *
-     * @param array $roles
-     * @return bool
-     */
     public static function hasRole(array $roles): bool
     {
         $currentRole = self::getCurrentRole();
         return $currentRole && in_array($currentRole, $roles);
     }
 
-    /**
-     * Génère les classes CSS pour un lien en fonction de la permission
-     *
-     * @param string $permission
-     * @param string $enabledClasses Classes si permission OK
-     * @param string $disabledClasses Classes si permission NOK
-     * @return string
-     */
     public static function linkClasses(string $permission, string $enabledClasses = '', string $disabledClasses = 'opacity-50 cursor-not-allowed pointer-events-none'): string
     {
         return self::can($permission) ? $enabledClasses : $disabledClasses;
     }
 
-    /**
-     * Génère l'URL ou '#' selon la permission
-     *
-     * @param string $permission
-     * @param string $url
-     * @return string
-     */
     public static function linkUrl(string $permission, string $url): string
     {
         return self::can($permission) ? $url : '#';
