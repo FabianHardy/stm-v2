@@ -10,10 +10,15 @@
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.0.2
+ * @version    1.0.3
  * @created    2025/11/27
- * @modified   2025/11/27 - Titre avec n° client + campagne, export TXT, tri catégorie
+ * @modified   2025/12/16 - Ajout filtrage permissions sur bouton export
  */
+
+use App\Helpers\PermissionHelper;
+
+// Permissions pour les boutons
+$canExport = PermissionHelper::can('orders.export');
 
 ob_start();
 
@@ -60,12 +65,14 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
             </div>
         </div>
         <div class="flex items-center gap-3">
+            <?php if ($canExport): ?>
             <!-- Bouton Export TXT -->
             <a href="/stm/admin/orders/<?php echo (int) $order["id"]; ?>/export-txt"
                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                 <i class="fas fa-file-export mr-2"></i>
                 Exporter TXT
             </a>
+            <?php endif; ?>
             <!-- Statut -->
             <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium <?php echo $currentStatus[
                 "class"
@@ -168,9 +175,8 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
                 </dd>
             </div>
             <div class="pt-2">
-                <a href="/stm/admin/campaigns/<?php echo (int) $order[
-                    "campaign_id"
-                ]; ?>" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800">
+                <a href="/stm/admin/campaigns/<?php echo (int) $order["campaign_id"]; ?>"
+                   class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800">
                     <i class="fas fa-external-link-alt mr-1"></i>
                     Voir la campagne
                 </a>
@@ -179,7 +185,7 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
         </dl>
     </div>
 
-    <!-- Résumé commande -->
+    <!-- Résumé Commande -->
     <div class="bg-white rounded-lg shadow-sm p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <i class="fas fa-shopping-cart text-green-500 mr-2"></i>
@@ -187,7 +193,7 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
         </h3>
         <dl class="space-y-3">
             <div class="flex justify-between items-center">
-                <dt class="text-sm text-gray-500">Produits différents</dt>
+                <dt class="text-sm text-gray-500">Lignes</dt>
                 <dd class="text-lg font-bold text-gray-900"><?php echo count($orderLines); ?></dd>
             </div>
             <div class="flex justify-between items-center">
