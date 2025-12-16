@@ -6,12 +6,19 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Fix heredoc syntax
+ * @modified 2025/12/16 - Ajout bouton "Se connecter en tant que"
  */
 
 use App\Models\User;
+use Core\Session;
 
 $activeMenu = 'users';
+
+// Vérifier si l'utilisateur courant est superadmin (pour le bouton impersonate)
+$currentUser = Session::get('user');
+$isSuperAdmin = ($currentUser['role'] ?? '') === 'superadmin';
+$isImpersonating = Session::get('impersonate_original_user') !== null;
+
 ob_start();
 ?>
 
@@ -189,40 +196,57 @@ ob_start();
 
                     <!-- Rôle -->
                     <td class="px-6 py-4">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= User::getRoleColor($user['role']) ?>">
-                            <?= User::getRoleLabel($user['role']) ?>
+                        <?php
+                        $roleColors = [
+                            'superadmin' => 'bg-red-100 text-red-800',
+                            'admin' => 'bg-purple-100 text-purple-800',
+                            'createur' => 'bg-blue-100 text-blue-800',
+                            'manager_reps' => 'bg-orange-100 text-orange-800',
+                            'rep' => 'bg-green-100 text-green-800'
+                        ];
+                        $roleColor = $roleColors[$user['role']] ?? 'bg-gray-100 text-gray-800';
+                        $roleLabel = User::ROLE_LABELS[$user['role']] ?? $user['role'];
+                        ?>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $roleColor ?>">
+                            <?= htmlspecialchars($roleLabel) ?>
                         </span>
                     </td>
 
                     <!-- Rep lié -->
                     <td class="px-6 py-4">
-                        <?php if ($user['rep_id']): ?>
-                        <span class="text-sm text-gray-700">
+                        <?php if (!empty($user['rep_id'])): ?>
+                        <span class="text-sm text-gray-900">
                             <?= htmlspecialchars($user['rep_id']) ?>
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs <?= $user['rep_country'] === 'BE' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700' ?>">
-                                <?= $user['rep_country'] ?>
-                            </span>
+                            <?php if (!empty($user['rep_country'])): ?>
+                            <span class="text-gray-400">(<?= $user['rep_country'] ?>)</span>
+                            <?php endif; ?>
                         </span>
                         <?php else: ?>
-                        <span class="text-sm text-gray-400">-</span>
+                        <span class="text-sm text-gray-400">—</span>
                         <?php endif; ?>
                     </td>
 
                     <!-- Statut -->
                     <td class="px-6 py-4 text-center">
+                        <?php if ($user['role'] !== 'superadmin'): ?>
                         <button onclick="toggleUser(<?= $user['id'] ?>, this)"
-                                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 <?= $user['is_active'] ? 'bg-indigo-600' : 'bg-gray-200' ?>"
-                                role="switch"
-                                aria-checked="<?= $user['is_active'] ? 'true' : 'false' ?>">
-                            <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out <?= $user['is_active'] ? 'translate-x-5' : 'translate-x-0' ?>"></span>
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                                       <?= $user['is_active'] ? 'bg-indigo-600' : 'bg-gray-200' ?>">
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform
+                                         <?= $user['is_active'] ? 'translate-x-5' : 'translate-x-1' ?>"></span>
                         </button>
+                        <?php else: ?>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Toujours actif
+                        </span>
+                        <?php endif; ?>
                     </td>
 
                     <!-- Dernière connexion -->
                     <td class="px-6 py-4">
-                        <?php if ($user['last_login_at']): ?>
-                        <span class="text-sm text-gray-700">
-                            <?= date('d/m/Y H:i', strtotime($user['last_login_at'])) ?>
+                        <?php if (!empty($user['last_login'])): ?>
+                        <span class="text-sm text-gray-600">
+                            <?= date('d/m/Y H:i', strtotime($user['last_login'])) ?>
                         </span>
                         <?php else: ?>
                         <span class="text-sm text-gray-400">Jamais</span>
@@ -232,6 +256,25 @@ ob_start();
                     <!-- Actions -->
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
+                            
+                            <?php 
+                            // Bouton "Se connecter en tant que" - seulement pour superadmin, 
+                            // pas sur les superadmins, pas si déjà en mode impersonate,
+                            // et seulement sur les utilisateurs actifs
+                            $canImpersonate = $isSuperAdmin 
+                                && !$isImpersonating 
+                                && $user['role'] !== 'superadmin' 
+                                && $user['is_active'];
+                            ?>
+                            <?php if ($canImpersonate): ?>
+                            <a href="/stm/admin/users/<?= $user['id'] ?>/impersonate"
+                               class="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                               title="Se connecter en tant que <?= htmlspecialchars($user['name']) ?>"
+                               onclick="return confirm('Vous allez vous connecter en tant que <?= htmlspecialchars(addslashes($user['name'])) ?>.\n\nVous pourrez revenir à votre compte à tout moment.\n\nContinuer ?')">
+                                <i class="fas fa-user-secret"></i>
+                            </a>
+                            <?php endif; ?>
+
                             <a href="/stm/admin/users/<?= $user['id'] ?>/edit"
                                class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                title="Modifier">

@@ -828,6 +828,28 @@ $router->post("/admin/users/{id}/toggle", function ($id) {
 });
 
 // ============================================
+// ROUTES IMPERSONATE (Se connecter en tant que)
+// ============================================
+
+// Se connecter en tant qu'un autre utilisateur (superadmin uniquement)
+$router->get("/admin/users/{id}/impersonate", function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->impersonate((int) $id);
+});
+
+// Revenir à son compte original
+$router->get("/admin/impersonate/stop", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\UserController();
+    $controller->stopImpersonate();
+});
+
+// ============================================
 // CONFIGURATION / SETTINGS
 // ============================================
 

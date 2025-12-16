@@ -3,6 +3,7 @@
  * Header Admin / Topbar
  *
  * Barre supérieure avec :
+ * - Bandeau d'impersonation (si actif)
  * - Bouton hamburger (mobile)
  * - Fil d'Ariane
  * - Zone de recherche
@@ -10,8 +11,8 @@
  * - Menu utilisateur
  *
  * @package STM
- * @version 2.0
- * @modified 15/12/2025 - Ajout filtrage permissions dans menu utilisateur
+ * @version 2.1
+ * @modified 16/12/2025 - Ajout bandeau "Se connecter en tant que"
  */
 
 use Core\Session;
@@ -21,6 +22,10 @@ $currentUser = Session::get('user');
 $userName = $currentUser['username'] ?? 'Admin';
 $userRole = $currentUser['role'] ?? 'admin';
 
+// Vérifier si on est en mode impersonate
+$isImpersonating = Session::get('impersonate_original_user') !== null;
+$originalUser = Session::get('impersonate_original_user');
+
 // Permissions pour le menu utilisateur
 $canViewSettings = PermissionHelper::can('settings.view');
 
@@ -28,7 +33,27 @@ $canViewSettings = PermissionHelper::can('settings.view');
 $unreadNotifications = 3;
 ?>
 
-<header class="sticky top-0 z-30 bg-white shadow-sm border-b border-gray-200">
+<?php if ($isImpersonating): ?>
+<!-- Bandeau d'impersonation -->
+<div class="bg-orange-500 text-white py-2 px-4 shadow-md relative z-50">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-user-secret text-lg"></i>
+            <span class="font-medium">
+                Vous êtes connecté en tant que <strong><?= htmlspecialchars($userName) ?></strong>
+                <span class="text-orange-200">(<?= ucfirst($userRole) ?>)</span>
+            </span>
+        </div>
+        <a href="/stm/admin/impersonate/stop" 
+           class="inline-flex items-center gap-2 px-4 py-1.5 bg-white text-orange-600 rounded-lg hover:bg-orange-100 transition font-medium text-sm shadow-sm">
+            <i class="fas fa-sign-out-alt"></i>
+            Revenir à mon compte (<?= htmlspecialchars($originalUser['username'] ?? 'Admin') ?>)
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
+<header class="sticky top-0 z-30 bg-white shadow-sm border-b border-gray-200 <?= $isImpersonating ? 'border-t-4 border-t-orange-500' : '' ?>">
     <div class="px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 items-center justify-between">
 
@@ -191,13 +216,20 @@ $unreadNotifications = 3;
                 <div class="relative" x-data="{ userMenuOpen: false }">
                     <button @click="userMenuOpen = !userMenuOpen"
                             type="button"
-                            class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                        <div class="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold text-sm">
-                            <?= strtoupper(substr($userName, 0, 2)) ?>
+                            class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors <?= $isImpersonating ? 'ring-2 ring-orange-400' : '' ?>">
+                        <div class="h-8 w-8 rounded-full <?= $isImpersonating ? 'bg-orange-500' : 'bg-primary-600' ?> flex items-center justify-center text-white font-semibold text-sm">
+                            <?php if ($isImpersonating): ?>
+                                <i class="fas fa-user-secret text-xs"></i>
+                            <?php else: ?>
+                                <?= strtoupper(substr($userName, 0, 2)) ?>
+                            <?php endif; ?>
                         </div>
                         <div class="hidden md:block text-left">
                             <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($userName) ?></p>
-                            <p class="text-xs text-gray-500"><?= ucfirst($userRole) ?></p>
+                            <p class="text-xs <?= $isImpersonating ? 'text-orange-600 font-medium' : 'text-gray-500' ?>">
+                                <?= ucfirst($userRole) ?>
+                                <?= $isImpersonating ? ' (simulé)' : '' ?>
+                            </p>
                         </div>
                         <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
                     </button>
@@ -210,13 +242,27 @@ $unreadNotifications = 3;
                          style="display: none;">
 
                         <!-- User info -->
-                        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                        <div class="px-4 py-3 <?= $isImpersonating ? 'bg-orange-50 border-b border-orange-200' : 'bg-gray-50 border-b border-gray-200' ?>">
                             <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($userName) ?></p>
                             <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($currentUser['email'] ?? '') ?></p>
+                            <?php if ($isImpersonating): ?>
+                            <p class="text-xs text-orange-600 mt-1 font-medium">
+                                <i class="fas fa-user-secret mr-1"></i>Mode simulation
+                            </p>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Menu items -->
                         <div class="py-1">
+                            <?php if ($isImpersonating): ?>
+                            <!-- Revenir à mon compte -->
+                            <a href="/stm/admin/impersonate/stop" class="flex items-center gap-3 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 font-medium">
+                                <i class="fas fa-sign-out-alt w-4"></i>
+                                Revenir à mon compte
+                            </a>
+                            <div class="border-t border-gray-200 my-1"></div>
+                            <?php endif; ?>
+
                             <!-- Mon profil - accessible à tous -->
                             <a href="/stm/admin/profile" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                 <i class="fas fa-user w-4"></i>
@@ -224,7 +270,7 @@ $unreadNotifications = 3;
                             </a>
 
                             <!-- Paramètres - seulement si permission settings.view -->
-                            <?php if ($canViewSettings): ?>
+                            <?php if ($canViewSettings && !$isImpersonating): ?>
                             <a href="/stm/admin/settings" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                 <i class="fas fa-cog w-4"></i>
                                 Paramètres
@@ -239,12 +285,14 @@ $unreadNotifications = 3;
                         </div>
 
                         <!-- Déconnexion -->
+                        <?php if (!$isImpersonating): ?>
                         <div class="border-t border-gray-200">
                             <a href="/stm/admin/logout" class="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                                 <i class="fas fa-sign-out-alt w-4"></i>
                                 Déconnexion
                             </a>
                         </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
