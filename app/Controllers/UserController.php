@@ -7,7 +7,7 @@
  *
  * @package STM
  * @created 2025/12/10
- * @modified 2025/12/10 - Suppression liaison rep (auto via Microsoft)
+ * @modified 2025/12/16 - Ajout fonctionnalité "Se connecter en tant que"
  */
 
 namespace App\Controllers;
@@ -174,11 +174,6 @@ class UserController
             $_POST['is_active'] = 1;
         }
 
-        // Protection : un rep ne peut pas changer son rôle (auto-créé)
-        if ($user['role'] === 'rep') {
-            $_POST['role'] = 'rep';
-        }
-
         // Validation
         $errors = $this->validateUserData($_POST, $id);
 
@@ -291,6 +286,97 @@ class UserController
             echo json_encode(['success' => false, 'message' => 'Erreur lors de la mise à jour']);
         }
 
+        exit();
+    }
+
+    /**
+     * Se connecter en tant qu'un autre utilisateur
+     * GET /admin/users/{id}/impersonate
+     * 
+     * Permet au superadmin de voir l'interface comme un autre utilisateur
+     * sans modifier son mot de passe.
+     */
+    public function impersonate(int $id): void
+    {
+        $currentUser = Session::get('user');
+
+        // Vérifier que l'utilisateur actuel est superadmin
+        if (!$currentUser || $currentUser['role'] !== 'superadmin') {
+            Session::setFlash('error', 'Accès non autorisé');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
+        // Vérifier qu'on n'est pas déjà en mode impersonate
+        if (Session::get('impersonate_original_user')) {
+            Session::setFlash('error', 'Vous êtes déjà en mode "Se connecter en tant que". Revenez d\'abord à votre compte.');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
+        $targetUser = $this->userModel->findById($id);
+
+        if (!$targetUser) {
+            Session::setFlash('error', 'Utilisateur introuvable');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
+        // Protection : impossible d'impersonate un superadmin
+        if ($targetUser['role'] === 'superadmin') {
+            Session::setFlash('error', 'Impossible de se connecter en tant qu\'un Super Admin');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
+        // Vérifier que l'utilisateur cible est actif
+        if (!$targetUser['is_active']) {
+            Session::setFlash('error', 'Impossible de se connecter en tant qu\'un utilisateur inactif');
+            header('Location: /stm/admin/users');
+            exit();
+        }
+
+        // Sauvegarder l'utilisateur original
+        Session::set('impersonate_original_user', $currentUser);
+
+        // Créer la nouvelle session avec l'utilisateur cible
+        $impersonatedUser = [
+            'id' => $targetUser['id'],
+            'username' => $targetUser['name'],
+            'email' => $targetUser['email'],
+            'role' => $targetUser['role'],
+            'rep_id' => $targetUser['rep_id'] ?? null,
+            'rep_country' => $targetUser['rep_country'] ?? null,
+            'manager_id' => $targetUser['manager_id'] ?? null
+        ];
+
+        Session::set('user', $impersonatedUser);
+
+        Session::setFlash('success', 'Vous êtes maintenant connecté en tant que ' . $targetUser['name']);
+        header('Location: /stm/admin/dashboard');
+        exit();
+    }
+
+    /**
+     * Revenir à son compte original
+     * GET /admin/impersonate/stop
+     */
+    public function stopImpersonate(): void
+    {
+        $originalUser = Session::get('impersonate_original_user');
+
+        if (!$originalUser) {
+            Session::setFlash('error', 'Vous n\'êtes pas en mode "Se connecter en tant que"');
+            header('Location: /stm/admin/dashboard');
+            exit();
+        }
+
+        // Restaurer la session originale
+        Session::set('user', $originalUser);
+        Session::delete('impersonate_original_user');
+
+        Session::setFlash('success', 'Vous êtes revenu à votre compte ' . $originalUser['username']);
+        header('Location: /stm/admin/users');
         exit();
     }
 
