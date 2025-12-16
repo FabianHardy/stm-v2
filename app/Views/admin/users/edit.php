@@ -5,6 +5,7 @@
  * @package STM
  * @created 2025/12/10
  * @modified 2025/12/10 - Suppression édition liaison rep (lecture seule si existe)
+ * @modified 2025/12/15 - Permettre modification du rôle même pour les reps auto-créés
  */
 
 use App\Models\User;
@@ -12,14 +13,15 @@ use App\Models\User;
 $activeMenu = 'users';
 $isSuperadmin = $user['role'] === 'superadmin';
 $isRep = $user['role'] === 'rep';
+$hasMicrosoftId = !empty($user['microsoft_id']);
 
-// Rôles disponibles (pas rep en création manuelle)
+// Rôles disponibles
 $availableRoles = [
     'superadmin' => 'Super Admin',
     'admin' => 'Administrateur',
     'createur' => 'Créateur',
     'manager_reps' => 'Manager Reps',
-    'rep' => 'Commercial' // Affiché seulement si déjà rep
+    'rep' => 'Commercial'
 ];
 
 ob_start();
@@ -58,11 +60,12 @@ ob_start();
                            class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
 
-                <!-- Email (lecture seule) -->
+                <!-- Email -->
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
                         Email Microsoft
                     </label>
+                    <?php if ($hasMicrosoftId): ?>
                     <input type="email" id="email" disabled
                            value="<?= htmlspecialchars($user['email']) ?>"
                            class="w-full border border-gray-200 rounded-lg px-4 py-2 bg-gray-50 text-gray-500 cursor-not-allowed">
@@ -70,11 +73,16 @@ ob_start();
                         <i class="fas fa-lock mr-1"></i>
                         L'email ne peut pas être modifié (lié à Microsoft)
                     </p>
+                    <?php else: ?>
+                    <input type="email" id="email" name="email" required
+                           value="<?= htmlspecialchars($user['email']) ?>"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <?php endif; ?>
                 </div>
             </div>
 
             <!-- Infos Microsoft -->
-            <?php if ($user['microsoft_id']): ?>
+            <?php if ($hasMicrosoftId): ?>
             <div class="mt-4 p-3 bg-blue-50 rounded-lg">
                 <p class="text-sm text-blue-700">
                     <i class="fab fa-microsoft mr-2"></i>
@@ -96,6 +104,7 @@ ob_start();
                         Rôle <span class="text-red-500">*</span>
                     </label>
                     <?php if ($isSuperadmin): ?>
+                    <!-- Superadmin : rôle non modifiable -->
                     <input type="hidden" name="role" value="superadmin">
                     <div class="w-full border border-gray-200 rounded-lg px-4 py-2 bg-gray-50 text-gray-500">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -103,25 +112,24 @@ ob_start();
                         </span>
                         <span class="text-xs ml-2">(non modifiable)</span>
                     </div>
-                    <?php elseif ($isRep): ?>
-                    <input type="hidden" name="role" value="rep">
-                    <div class="w-full border border-gray-200 rounded-lg px-4 py-2 bg-gray-50 text-gray-500">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Commercial
-                        </span>
-                        <span class="text-xs ml-2">(compte auto-créé)</span>
-                    </div>
                     <?php else: ?>
+                    <!-- Tous les autres rôles : modifiables -->
                     <select id="role" name="role" required x-model="selectedRole"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                         <?php foreach ($availableRoles as $value => $label): ?>
-                        <?php if ($value !== 'superadmin' && $value !== 'rep'): ?>
+                        <?php if ($value !== 'superadmin'): ?>
                         <option value="<?= $value ?>" <?= $user['role'] === $value ? 'selected' : '' ?>>
                             <?= htmlspecialchars($label) ?>
                         </option>
                         <?php endif; ?>
                         <?php endforeach; ?>
                     </select>
+                    <?php if ($isRep && $hasMicrosoftId): ?>
+                    <p class="text-xs text-amber-600 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Ce compte a été créé automatiquement comme Commercial. Vous pouvez changer son rôle si nécessaire.
+                    </p>
+                    <?php endif; ?>
                     <?php endif; ?>
                 </div>
 
