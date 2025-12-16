@@ -1,14 +1,19 @@
 <?php
 /**
  * Vue : Détails d'une Promotion
- * 
+ *
  * Affichage complet des informations d'une Promotion
- * 
+ *
  * @created 11/11/2025 22:50
- * @modified 12/11/2025 16:50 - Ajout affichage des quotas
+ * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
  */
 
 use Core\Session;
+use App\Helpers\PermissionHelper;
+
+// Permissions pour les boutons
+$canEdit = PermissionHelper::can('products.edit');
+$canDelete = PermissionHelper::can('products.delete');
 
 // Démarrer la capture du contenu pour le layout
 ob_start();
@@ -26,14 +31,16 @@ ob_start();
             </p>
         </div>
         <div class="flex gap-2">
-            <a href="/stm/admin/products" 
+            <a href="/stm/admin/products"
                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 ← Retour à la liste
             </a>
-            <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit" 
+            <?php if ($canEdit): ?>
+            <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                 ✏️ Modifier
             </a>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -69,14 +76,14 @@ ob_start();
     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium <?php echo $product['is_active'] ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
         <?php echo $product['is_active'] ? '✓ Actif' : '✗ Inactif'; ?>
     </span>
-    
+
     <!-- Badge catégorie -->
     <?php if (!empty($product['category_name'])): ?>
         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
             📁 <?php echo htmlspecialchars($product['category_name']); ?>
         </span>
     <?php endif; ?>
-    
+
     <!-- Badge ordre d'affichage -->
     <?php if ($product['display_order'] > 0): ?>
         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
@@ -86,10 +93,10 @@ ob_start();
 </div>
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-    
+
     <!-- Colonne gauche -->
     <div class="space-y-6">
-        
+
         <!-- Section : Informations de base -->
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
@@ -105,7 +112,7 @@ ob_start();
                             <?php echo htmlspecialchars($product['product_code']); ?>
                         </dd>
                     </div>
-                    
+
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Catégorie</dt>
                         <dd class="mt-1 text-sm text-gray-900">
@@ -129,7 +136,7 @@ ob_start();
                     <div>
                         <p class="text-sm font-medium text-gray-700 mb-2">🇫🇷 Français</p>
                         <?php if (!empty($product['image_fr'])): ?>
-                            <img src="<?php echo htmlspecialchars($product['image_fr']); ?>" 
+                            <img src="<?php echo htmlspecialchars($product['image_fr']); ?>"
                                  alt="Image FR"
                                  class="w-full h-48 object-cover rounded-lg border-2 border-gray-200 shadow-sm">
                         <?php else: ?>
@@ -138,12 +145,12 @@ ob_start();
                             </div>
                         <?php endif; ?>
                     </div>
-                    
+
                     <!-- Image NL -->
                     <div>
                         <p class="text-sm font-medium text-gray-700 mb-2">🇳🇱 Nederlands</p>
                         <?php if (!empty($product['image_nl'])): ?>
-                            <img src="<?php echo htmlspecialchars($product['image_nl']); ?>" 
+                            <img src="<?php echo htmlspecialchars($product['image_nl']); ?>"
                                  alt="Image NL"
                                  class="w-full h-48 object-cover rounded-lg border-2 border-gray-200 shadow-sm">
                         <?php else: ?>
@@ -160,7 +167,7 @@ ob_start();
 
     <!-- Colonne droite -->
     <div class="space-y-6">
-        
+
         <!-- Section : Contenu français -->
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
@@ -171,20 +178,24 @@ ob_start();
             <div class="px-4 py-5 sm:p-6">
                 <dl class="space-y-4">
                     <div>
-                        <dt class="text-sm font-medium text-gray-500">Nom de la Promotion</dt>
+                        <dt class="text-sm font-medium text-gray-500">Nom du Promotion</dt>
                         <dd class="mt-1 text-base text-gray-900 font-medium">
                             <?php echo htmlspecialchars($product['name_fr']); ?>
                         </dd>
                     </div>
-                    
-                    <?php if (!empty($product['description_fr'])): ?>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Description</dt>
-                            <dd class="mt-1 text-sm text-gray-900 whitespace-pre-line">
-                                <?php echo htmlspecialchars($product['description_fr']); ?>
-                            </dd>
-                        </div>
-                    <?php endif; ?>
+
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Description</dt>
+                        <dd class="mt-1 text-sm text-gray-900 whitespace-pre-line">
+                            <?php
+                            if (!empty($product['description_fr'])) {
+                                echo htmlspecialchars($product['description_fr']);
+                            } else {
+                                echo '<span class="text-gray-400 italic">Aucune description</span>';
+                            }
+                            ?>
+                        </dd>
+                    </div>
                 </dl>
             </div>
         </div>
@@ -201,7 +212,7 @@ ob_start();
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Productnaam</dt>
                         <dd class="mt-1 text-base text-gray-900">
-                            <?php 
+                            <?php
                             if (!empty($product['name_nl'])) {
                                 echo htmlspecialchars($product['name_nl']);
                             } else {
@@ -210,11 +221,11 @@ ob_start();
                             ?>
                         </dd>
                     </div>
-                    
+
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Beschrijving</dt>
                         <dd class="mt-1 text-sm text-gray-900 whitespace-pre-line">
-                            <?php 
+                            <?php
                             if (!empty($product['description_nl'])) {
                                 echo htmlspecialchars($product['description_nl']);
                             } else {
@@ -244,7 +255,7 @@ ob_start();
                             </span>
                         </dd>
                     </div>
-                    
+
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Ordre d'affichage</dt>
                         <dd class="mt-1 text-sm text-gray-900">
@@ -269,7 +280,7 @@ ob_start();
                                             <p class="text-xs text-gray-500 mt-1">Stock total limité (tous clients confondus)</p>
                                         </div>
                                     <?php endif; ?>
-                                    
+
                                     <?php if (!empty($product['max_per_customer'])): ?>
                                         <div>
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -293,24 +304,24 @@ ob_start();
                             </dd>
                         </div>
                     <?php endif; ?>
-                    
+
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Date de création</dt>
                         <dd class="mt-1 text-sm text-gray-900">
-                            <?php 
+                            <?php
                             $date = new DateTime($product['created_at']);
-                            echo $date->format('d/m/Y à H:i'); 
+                            echo $date->format('d/m/Y à H:i');
                             ?>
                         </dd>
                     </div>
-                    
+
                     <?php if ($product['updated_at'] !== $product['created_at']): ?>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Dernière modification</dt>
                             <dd class="mt-1 text-sm text-gray-900">
-                                <?php 
+                                <?php
                                 $date = new DateTime($product['updated_at']);
-                                echo $date->format('d/m/Y à H:i'); 
+                                echo $date->format('d/m/Y à H:i');
                                 ?>
                             </dd>
                         </div>
@@ -323,31 +334,37 @@ ob_start();
 </div>
 
 <!-- Section : Actions -->
+<?php if ($canEdit || $canDelete): ?>
 <div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-6">
     <h3 class="text-lg font-medium text-gray-900 mb-4">⚡ Actions rapides</h3>
     <div class="flex flex-wrap gap-3">
-        <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit" 
+        <?php if ($canEdit): ?>
+        <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
             ✏️ Modifier la Promotion
         </a>
-        
-        <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
+        <?php endif; ?>
+
+        <?php if ($canDelete): ?>
+        <form method="POST" action="/stm/admin/products/<?php echo $product['id']; ?>/delete"
               onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette Promotion ?');"
               class="inline">
             <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
             <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" 
+            <button type="submit"
                     class="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50">
                 🗑️ Supprimer
             </button>
         </form>
-        
-        <a href="/stm/admin/products" 
+        <?php endif; ?>
+
+        <a href="/stm/admin/products"
            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
             ← Retour à la liste
         </a>
     </div>
 </div>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();

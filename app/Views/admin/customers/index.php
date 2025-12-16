@@ -1,13 +1,21 @@
 <?php
 /**
  * Vue : Liste des clients
- * 
+ *
  * Affiche la liste de tous les clients avec filtres et statistiques
- * 
+ *
  * @package STM/Views/Admin/Customers
- * @version 2.0
+ * @version 2.1
  * @created 12/11/2025 19:30
+ * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
  */
+
+use App\Helpers\PermissionHelper;
+
+// Permissions pour les boutons
+$canCreate = PermissionHelper::can('customers.create');
+$canEdit = PermissionHelper::can('customers.edit');
+$canDelete = PermissionHelper::can('customers.delete');
 
 $pageTitle = 'Clients';
 ob_start();
@@ -21,15 +29,16 @@ ob_start();
             <?= count($customers) ?> client<?= count($customers) > 1 ? 's' : '' ?> trouvé<?= count($customers) > 1 ? 's' : '' ?>
         </p>
     </div>
+    <?php if ($canCreate): ?>
     <div class="mt-4 sm:mt-0 flex gap-3">
-        <a href="/stm/admin/customers/import" 
+        <a href="/stm/admin/customers/import"
            class="inline-flex items-center gap-x-2 rounded-md bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
             <svg class="-ml-0.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
             Importer depuis DB
         </a>
-        <a href="/stm/admin/customers/create" 
+        <a href="/stm/admin/customers/create"
            class="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
             <svg class="-ml-0.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -37,6 +46,7 @@ ob_start();
             Nouveau client
         </a>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Statistiques rapides -->
@@ -124,9 +134,9 @@ ob_start();
         <!-- Recherche -->
         <div>
             <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-            <input type="text" 
-                   id="search" 
-                   name="search" 
+            <input type="text"
+                   id="search"
+                   name="search"
                    value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
                    placeholder="Numéro, nom, email..."
                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -135,44 +145,37 @@ ob_start();
         <!-- Pays -->
         <div>
             <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-            <select id="country" 
+            <select id="country"
                     name="country"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 <option value="">Tous les pays</option>
-                <option value="BE" <?= ($filters['country'] ?? '') === 'BE' ? 'selected' : '' ?>>Belgique</option>
-                <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>Luxembourg</option>
+                <option value="BE" <?= ($filters['country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
             </select>
         </div>
 
-        <!-- Représentant -->
+        <!-- Statut -->
         <div>
-            <label for="representative" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
-            <select id="representative" 
-                    name="representative"
+            <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+            <select id="status"
+                    name="status"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="">Tous les représentants</option>
-                <?php foreach ($representatives['BE'] ?? [] as $rep): ?>
-                    <option value="<?= htmlspecialchars($rep) ?>" 
-                            <?= ($filters['representative'] ?? '') === $rep ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($rep) ?> (BE)
-                    </option>
-                <?php endforeach; ?>
-                <?php foreach ($representatives['LU'] ?? [] as $rep): ?>
-                    <option value="<?= htmlspecialchars($rep) ?>" 
-                            <?= ($filters['representative'] ?? '') === $rep ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($rep) ?> (LU)
-                    </option>
-                <?php endforeach; ?>
+                <option value="">Tous les statuts</option>
+                <option value="1" <?= ($filters['status'] ?? '') === '1' ? 'selected' : '' ?>>✓ Actifs</option>
+                <option value="0" <?= ($filters['status'] ?? '') === '0' ? 'selected' : '' ?>>○ Inactifs</option>
             </select>
         </div>
 
         <!-- Boutons -->
-        <div class="sm:col-span-3 flex gap-2">
-            <button type="submit" 
+        <div class="sm:col-span-3 flex justify-end gap-3">
+            <button type="submit"
                     class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
                 Filtrer
             </button>
-            <a href="/stm/admin/customers" 
+            <a href="/stm/admin/customers"
                class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 Réinitialiser
             </a>
@@ -260,7 +263,7 @@ ob_start();
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex justify-end gap-2">
                                     <!-- Voir -->
-                                    <a href="/stm/admin/customers/<?= $customer['id'] ?>" 
+                                    <a href="/stm/admin/customers/<?= $customer['id'] ?>"
                                        class="text-indigo-600 hover:text-indigo-900"
                                        title="Voir les détails">
                                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -268,23 +271,26 @@ ob_start();
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                         </svg>
                                     </a>
-                                    
+
+                                    <?php if ($canEdit): ?>
                                     <!-- Modifier -->
-                                    <a href="/stm/admin/customers/<?= $customer['id'] ?>/edit" 
+                                    <a href="/stm/admin/customers/<?= $customer['id'] ?>/edit"
                                        class="text-gray-600 hover:text-gray-900"
                                        title="Modifier">
                                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                         </svg>
                                     </a>
-                                    
+                                    <?php endif; ?>
+
+                                    <?php if ($canDelete): ?>
                                     <!-- Supprimer -->
-                                    <form method="POST" 
-                                          action="/stm/admin/customers/<?= $customer['id'] ?>/delete" 
+                                    <form method="POST"
+                                          action="/stm/admin/customers/<?= $customer['id'] ?>/delete"
                                           class="inline"
                                           onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce client ?');">
                                         <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                                        <button type="submit" 
+                                        <button type="submit"
                                                 class="text-red-600 hover:text-red-900"
                                                 title="Supprimer">
                                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -292,6 +298,7 @@ ob_start();
                                             </svg>
                                         </button>
                                     </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
