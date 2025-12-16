@@ -292,7 +292,7 @@ class UserController
     /**
      * Se connecter en tant qu'un autre utilisateur
      * GET /admin/users/{id}/impersonate
-     * 
+     *
      * Permet au superadmin de voir l'interface comme un autre utilisateur
      * sans modifier son mot de passe.
      */
@@ -373,7 +373,7 @@ class UserController
 
         // Restaurer la session originale
         Session::set('user', $originalUser);
-        Session::delete('impersonate_original_user');
+        unset($_SESSION['impersonate_original_user']);
 
         Session::setFlash('success', 'Vous êtes revenu à votre compte ' . $originalUser['username']);
         header('Location: /stm/admin/users');
