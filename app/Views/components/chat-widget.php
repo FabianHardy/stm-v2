@@ -19,7 +19,15 @@
  * @created  2025/12/09
  * @modified 2025/12/11 - Suggestions contextuelles complètes pour toutes les pages
  * @package  STM Agent
+ * @modified 2025/12/16 - Ajout vérification permission agent.use
  */
+
+use App\Helpers\PermissionHelper;
+
+// Ne pas afficher le widget si l'utilisateur n'a pas la permission agent.use
+if (!PermissionHelper::can('agent.use')) {
+    return;
+}
 ?>
 
 <!-- Chat Widget Container -->
