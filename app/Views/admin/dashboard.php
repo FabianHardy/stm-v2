@@ -6,10 +6,12 @@
  *
  * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours + Lien détail commande
  * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits (structure originale conservée)
+ * @modified 2025/12/16 - Ajout filtrage hiérarchique stats selon rôle (createur, manager_reps)
  */
 
 use Core\Database;
 use App\Helpers\PermissionHelper;
+use App\Helpers\StatsAccessHelper;
 
 // Démarrer le buffering de sortie pour capturer le contenu
 ob_start();
@@ -26,6 +28,12 @@ $canViewProducts = PermissionHelper::can('products.view');
 $canViewCustomers = PermissionHelper::can('customers.view');
 $canViewOrders = PermissionHelper::can('orders.view');
 $canViewStats = PermissionHelper::can('stats.view');
+
+// ============================================================
+// FILTRAGE HIÉRARCHIQUE SELON LE RÔLE
+// ============================================================
+$accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+$hasFullAccess = StatsAccessHelper::hasFullAccess();
 
 // Initialisation des variables par défaut
 $stats = [
@@ -45,12 +53,28 @@ $daily_orders = [];
 // KPI 1: Campagnes totales et actives (seulement si permission)
 if ($canViewCampaigns) {
     try {
-        $results = $db->query("
-            SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN CURDATE() BETWEEN start_date AND end_date THEN 1 ELSE 0 END) as active
-            FROM campaigns
-        ");
+        // Filtrer selon les campagnes accessibles
+        if ($accessibleCampaignIds === null) {
+            // Accès complet
+            $results = $db->query("
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN CURDATE() BETWEEN start_date AND end_date THEN 1 ELSE 0 END) as active
+                FROM campaigns
+            ");
+        } elseif (!empty($accessibleCampaignIds)) {
+            // Filtrer par IDs accessibles
+            $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+            $results = $db->query("
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN CURDATE() BETWEEN start_date AND end_date THEN 1 ELSE 0 END) as active
+                FROM campaigns
+                WHERE id IN ({$placeholders})
+            ", $accessibleCampaignIds);
+        } else {
+            $results = [["total" => 0, "active" => 0]];
+        }
 
         if (!empty($results)) {
             $stats["total_campaigns"] = (int) ($results[0]["total"] ?? 0);
@@ -76,6 +100,23 @@ if ($canViewCustomers) {
 // KPI 3: Commandes validées et quantités totales (seulement si permission)
 if ($canViewOrders) {
     try {
+        // Construire le filtre campagnes
+        $orderParams = [];
+        $campaignFilter = "";
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $campaignFilter = " AND o.campaign_id IN ({$placeholders})";
+                $orderParams = $accessibleCampaignIds;
+            } else {
+                // Aucun accès
+                $results = [["total_orders" => 0, "total_quantity" => 0]];
+                $stats["total_orders"] = 0;
+                $stats["total_quantity"] = 0;
+                goto skip_orders_kpi;
+            }
+        }
+
         $results = $db->query("
             SELECT
                 COUNT(DISTINCT o.id) as total_orders,
@@ -83,7 +124,8 @@ if ($canViewOrders) {
             FROM orders o
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
-        ");
+            {$campaignFilter}
+        ", $orderParams);
         if (!empty($results)) {
             $stats["total_orders"] = (int) ($results[0]["total_orders"] ?? 0);
             $stats["total_quantity"] = (int) ($results[0]["total_quantity"] ?? 0);
@@ -91,6 +133,7 @@ if ($canViewOrders) {
     } catch (\PDOException $e) {
         error_log("Erreur récupération stats commandes: " . $e->getMessage());
     }
+    skip_orders_kpi:
 }
 
 // KPI 4: Promotions actives (seulement si permission)
@@ -112,6 +155,20 @@ if ($canViewProducts) {
 // Dernières commandes (seulement si permission orders.view)
 if ($canViewOrders) {
     try {
+        // Construire le filtre campagnes
+        $recentOrderParams = [];
+        $campaignFilterRecent = "";
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $campaignFilterRecent = " AND o.campaign_id IN ({$placeholders})";
+                $recentOrderParams = $accessibleCampaignIds;
+            } else {
+                $recent_orders = [];
+                goto skip_recent_orders;
+            }
+        }
+
         $recent_orders = $db->query("
             SELECT
                 o.id,
@@ -126,19 +183,36 @@ if ($canViewOrders) {
             LEFT JOIN campaigns c ON o.campaign_id = c.id
             LEFT JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE 1=1
+            {$campaignFilterRecent}
             GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at
             ORDER BY o.created_at DESC
             LIMIT 10
-        ");
+        ", $recentOrderParams);
     } catch (\PDOException $e) {
         error_log("Erreur récupération dernières commandes: " . $e->getMessage());
         $recent_orders = [];
     }
+    skip_recent_orders:
 }
 
 // Stats par campagne pour le graphique (seulement si permission stats)
 if ($canViewStats && $canViewCampaigns) {
     try {
+        // Construire le filtre campagnes
+        $campaignStatsParams = [];
+        $campaignStatsFilter = "";
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $campaignStatsFilter = " AND c.id IN ({$placeholders})";
+                $campaignStatsParams = $accessibleCampaignIds;
+            } else {
+                $campaign_stats = [];
+                goto skip_campaign_stats;
+            }
+        }
+
         $campaign_stats = $db->query("
             SELECT
                 c.name as campaign_name,
@@ -149,14 +223,16 @@ if ($canViewStats && $canViewCampaigns) {
             LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated'
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE CURDATE() BETWEEN c.start_date AND c.end_date
+            {$campaignStatsFilter}
             GROUP BY c.id, c.name, c.country
             ORDER BY quantity_count DESC
             LIMIT 5
-        ");
+        ", $campaignStatsParams);
     } catch (\PDOException $e) {
         error_log("Erreur récupération stats campagnes: " . $e->getMessage());
         $campaign_stats = [];
     }
+    skip_campaign_stats:
 }
 
 // Répartition par catégorie de Promotions (seulement si permission stats)
@@ -184,6 +260,20 @@ if ($canViewStats && $canViewProducts) {
 // Commandes des 7 derniers jours (seulement si permission stats)
 if ($canViewStats && $canViewOrders) {
     try {
+        // Construire le filtre campagnes
+        $dailyParams = [];
+        $dailyCampaignFilter = "";
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $dailyCampaignFilter = " AND o.campaign_id IN ({$placeholders})";
+                $dailyParams = $accessibleCampaignIds;
+            } else {
+                $daily_orders = [];
+                goto skip_daily_orders;
+            }
+        }
+
         $daily_orders = $db->query("
             SELECT
                 DATE(o.created_at) as day,
@@ -194,13 +284,15 @@ if ($canViewStats && $canViewOrders) {
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
             AND o.status = 'validated'
+            {$dailyCampaignFilter}
             GROUP BY DATE(o.created_at), DATE_FORMAT(o.created_at, '%a %d/%m')
             ORDER BY day ASC
-        ");
+        ", $dailyParams);
     } catch (\PDOException $e) {
         error_log("Erreur récupération commandes quotidiennes: " . $e->getMessage());
         $daily_orders = [];
     }
+    skip_daily_orders:
 }
 
 // Préparation des données pour Chart.js

@@ -7,6 +7,7 @@
  *
  * @package STM
  * @created 2025/11/25
+ * @modified 2025/12/16 - Ajout filtrage hiérarchique par accessibleCampaignIds
  */
 
 namespace App\Models;
@@ -34,6 +35,42 @@ class Stats
         }
     }
 
+    /**
+     * Génère la clause SQL IN pour filtrer par campagnes accessibles
+     *
+     * @param string $columnName Nom de la colonne (ex: "o.campaign_id")
+     * @param array|null $accessibleCampaignIds Liste des IDs ou null si pas de filtre
+     * @param array &$params Référence vers les paramètres de la requête
+     * @param string $prefix Préfixe pour les placeholders (éviter les conflits)
+     * @return string Clause SQL vide si pas de filtre, ou "AND column IN (...)"
+     */
+    private function buildCampaignAccessFilter(
+        string $columnName,
+        ?array $accessibleCampaignIds,
+        array &$params,
+        string $prefix = "acc"
+    ): string {
+        // null = accès à tout, pas de filtre
+        if ($accessibleCampaignIds === null) {
+            return "";
+        }
+
+        // Aucune campagne accessible = bloquer tout
+        if (empty($accessibleCampaignIds)) {
+            return " AND 1 = 0"; // Retourne toujours faux
+        }
+
+        // Générer la clause IN
+        $placeholders = [];
+        foreach ($accessibleCampaignIds as $i => $id) {
+            $key = ":{$prefix}_{$i}";
+            $placeholders[] = $key;
+            $params[$key] = $id;
+        }
+
+        return " AND {$columnName} IN (" . implode(",", $placeholders) . ")";
+    }
+
     // ========================================
     // STATISTIQUES GLOBALES
     // ========================================
@@ -45,6 +82,7 @@ class Stats
      * @param string $dateTo Date fin (Y-m-d)
      * @param int|null $campaignId Filtrer par campagne
      * @param string|null $country Filtrer par pays (BE, LU)
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
     public function getGlobalKPIs(
@@ -52,6 +90,7 @@ class Stats
         string $dateTo,
         ?int $campaignId = null,
         ?string $country = null,
+        ?array $accessibleCampaignIds = null,
     ): array {
         $params = [
             ":date_from" => $dateFrom . " 00:00:00",
@@ -60,6 +99,7 @@ class Stats
 
         $campaignFilter = "";
         $countryFilter = "";
+        $accessFilter = "";
 
         if ($campaignId) {
             $campaignFilter = " AND o.campaign_id = :campaign_id";
@@ -70,6 +110,9 @@ class Stats
             $countryFilter = " AND cu.country = :country";
             $params[":country"] = $country;
         }
+
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "kpi_acc");
 
         // Total commandes
         $queryOrders = "
@@ -82,6 +125,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
         ";
 
         $resultOrders = $this->db->query($queryOrders, $params);
@@ -96,11 +140,27 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
         ";
 
         $resultQuantity = $this->db->query($queryQuantity, $params);
 
         // Répartition BE/LU
+        // Reconstruire les params pour cette requête (sans country filter)
+        $paramsCountry = [
+            ":date_from" => $dateFrom . " 00:00:00",
+            ":date_to" => $dateTo . " 23:59:59",
+        ];
+
+        $campaignFilterCountry = "";
+        if ($campaignId) {
+            $campaignFilterCountry = " AND o.campaign_id = :campaign_id";
+            $paramsCountry[":campaign_id"] = $campaignId;
+        }
+
+        // Ajouter le filtre d'accès pour cette requête aussi
+        $accessFilterCountry = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $paramsCountry, "kpi_country_acc");
+
         $queryCountry = "
             SELECT cu.country,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -111,18 +171,10 @@ class Stats
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
             AND o.created_at BETWEEN :date_from AND :date_to
-            {$campaignFilter}
+            {$campaignFilterCountry}
+            {$accessFilterCountry}
             GROUP BY cu.country
         ";
-
-        // Params sans country filter pour cette requête
-        $paramsCountry = [
-            ":date_from" => $dateFrom . " 00:00:00",
-            ":date_to" => $dateTo . " 23:59:59",
-        ];
-        if ($campaignId) {
-            $paramsCountry[":campaign_id"] = $campaignId;
-        }
 
         $resultCountry = $this->db->query($queryCountry, $paramsCountry);
 
@@ -152,10 +204,15 @@ class Stats
      * @param string $dateFrom
      * @param string $dateTo
      * @param int|null $campaignId
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
-    public function getDailyEvolution(string $dateFrom, string $dateTo, ?int $campaignId = null): array
-    {
+    public function getDailyEvolution(
+        string $dateFrom,
+        string $dateTo,
+        ?int $campaignId = null,
+        ?array $accessibleCampaignIds = null
+    ): array {
         $params = [
             ":date_from" => $dateFrom,
             ":date_to" => $dateTo,
@@ -167,6 +224,9 @@ class Stats
             $params[":campaign_id"] = $campaignId;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "daily_acc");
+
         $query = "
             SELECT DATE(o.created_at) as day,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -176,6 +236,7 @@ class Stats
             WHERE o.status = 'validated'
             AND DATE(o.created_at) BETWEEN :date_from AND :date_to
             {$campaignFilter}
+            {$accessFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY day ASC
         ";
@@ -189,7 +250,9 @@ class Stats
      * @param string $dateFrom
      * @param string $dateTo
      * @param int|null $campaignId
+     * @param string|null $country
      * @param int $limit
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
     public function getTopProducts(
@@ -198,6 +261,7 @@ class Stats
         ?int $campaignId = null,
         ?string $country = null,
         int $limit = 10,
+        ?array $accessibleCampaignIds = null,
     ): array {
         $params = [
             ":date_from" => $dateFrom . " 00:00:00",
@@ -217,6 +281,9 @@ class Stats
             $params[":country"] = $country;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "top_acc");
+
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
                    camp.name as campaign_name, camp.country as campaign_country,
@@ -230,6 +297,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
             GROUP BY p.id, camp.id
             ORDER BY total_quantity DESC
             LIMIT {$limit}
@@ -250,6 +318,7 @@ class Stats
      * @param string $dateTo
      * @param int|null $campaignId
      * @param string|null $country Filtre par pays (BE, LU)
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array ['cluster_name' => ['quantity' => X, 'customers' => Y], ...]
      */
     public function getStatsByCluster(
@@ -257,6 +326,7 @@ class Stats
         string $dateTo,
         ?int $campaignId = null,
         ?string $country = null,
+        ?array $accessibleCampaignIds = null,
     ): array {
         // Si pas de connexion externe, retourner vide
         if (!$this->extDb) {
@@ -281,6 +351,9 @@ class Stats
             $params[":country"] = $country;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "cluster_acc");
+
         // Étape 1 : Récupérer les stats par customer_number et country depuis la DB locale
         $query = "
             SELECT cu.customer_number, cu.country,
@@ -294,6 +367,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
             GROUP BY cu.customer_number, cu.country
         ";
 
