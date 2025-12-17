@@ -116,13 +116,23 @@ class StatsController
      * Vue globale des statistiques
      *
      * @return void
+     * @modified 2025/12/17 - Ajout filtrage automatique par pays
      */
     public function index(): void
     {
+        // Récupérer les pays accessibles et le pays par défaut
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        $defaultCountry = StatsAccessHelper::getDefaultCountry();
+
         // Récupérer les filtres
         $period = $_GET["period"] ?? "7"; // 7 jours par défaut
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
-        $country = !empty($_GET["country"]) ? $_GET["country"] : null;
+        $country = !empty($_GET["country"]) ? $_GET["country"] : $defaultCountry;
+
+        // Vérifier que le pays sélectionné est accessible
+        if ($country && !StatsAccessHelper::canAccessCountry($country)) {
+            $country = $defaultCountry;
+        }
 
         // Vérifier l'accès à la campagne sélectionnée
         if ($campaignId && !$this->canAccessCampaign($campaignId)) {
@@ -405,14 +415,24 @@ class StatsController
      *
      * @return void
      * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
+     * @modified 2025/12/17 - Ajout filtrage automatique par pays
      */
     public function sales(): void
     {
+        // Récupérer les pays accessibles et le pays par défaut
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        $defaultCountry = StatsAccessHelper::getDefaultCountry();
+
         // Récupérer les filtres
-        $country = !empty($_GET["country"]) ? $_GET["country"] : null;
+        $country = !empty($_GET["country"]) ? $_GET["country"] : $defaultCountry;
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
         $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
         $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
+
+        // Vérifier que le pays sélectionné est accessible
+        if ($country && !StatsAccessHelper::canAccessCountry($country)) {
+            $country = $defaultCountry;
+        }
 
         // Vérifier l'accès à la campagne sélectionnée
         if ($campaignId && !$this->canAccessCampaign($campaignId)) {

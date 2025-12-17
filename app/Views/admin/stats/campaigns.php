@@ -11,10 +11,17 @@
  * @modified 2025/12/08 - Légende colonnes représentants
  * @modified 2025/12/09 - Système d'onglets (Produits/Reps/Fournisseurs)
  * @modified 2025/12/09 - Ajout fournisseur dans Produits, accordion dans Fournisseurs, tri par colonnes
+ * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
  */
+
+use App\Helpers\StatsAccessHelper;
 
 // Variable pour le menu actif
 $activeMenu = "stats-campaigns";
+
+// Récupérer les pays accessibles selon le rôle
+$accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+$defaultCountry = StatsAccessHelper::getDefaultCountry();
 
 ob_start();
 
@@ -27,9 +34,14 @@ foreach ($campaigns as $c) {
 $campaignsJson = json_encode($campaignsByCountry);
 
 // Récupérer le pays sélectionné
-$selectedCountry = $_GET["country"] ?? "";
+$selectedCountry = $_GET["country"] ?? $defaultCountry ?? "";
 if (!$selectedCountry && $campaignStats) {
     $selectedCountry = $campaignStats["campaign"]["country"] ?? "";
+}
+
+// Si un seul pays accessible, forcer ce pays
+if ($accessibleCountries !== null && count($accessibleCountries) === 1) {
+    $selectedCountry = $accessibleCountries[0];
 }
 
 // Encoder les stats fournisseurs en JSON pour le tri Alpine.js
@@ -60,16 +72,37 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
         <!-- Partie gauche : Sélecteur -->
         <form method="GET" action="/stm/admin/stats/campaigns" class="flex flex-wrap gap-4 items-end <?= $campaignStats ? 'flex-shrink-0' : 'flex-1' ?>" id="campaign-form">
 
-            <!-- Pays -->
+            <!-- Pays - Masqué si un seul pays accessible -->
+            <?php if ($accessibleCountries === null || count($accessibleCountries) > 1): ?>
             <div class="w-40">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                 <select name="country" x-model="selectedCountry" @change="filterCampaigns()"
                         class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <?php if ($accessibleCountries === null): ?>
                     <option value="">Tous</option>
                     <option value="BE">🇧🇪 Belgique</option>
                     <option value="LU">🇱🇺 Luxembourg</option>
+                    <?php else: ?>
+                    <option value="">Tous</option>
+                    <?php if (in_array("BE", $accessibleCountries)): ?>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <?php endif; ?>
+                    <?php if (in_array("LU", $accessibleCountries)): ?>
+                    <option value="LU">🇱🇺 Luxembourg</option>
+                    <?php endif; ?>
+                    <?php endif; ?>
                 </select>
             </div>
+            <?php else: ?>
+            <!-- Pays unique - Champ caché -->
+            <input type="hidden" name="country" value="<?= $selectedCountry ?>">
+            <div class="w-40">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                <div class="px-4 py-2 bg-gray-100 rounded-lg text-gray-700">
+                    <?= $selectedCountry === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Campagne -->
             <div class="<?= $campaignStats ? 'w-64' : 'flex-1 min-w-[300px]' ?>">

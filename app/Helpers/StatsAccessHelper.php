@@ -60,54 +60,83 @@ class StatsAccessHelper
                 return []; // Aucun rep géré = aucune campagne
             }
 
-            $campaignIds = [];
-
-            try {
-                $externalDb = \Core\ExternalDatabase::getInstance();
-
-                foreach ($managedReps as $rep) {
-                    $repId = $rep["rep_id"];
-                    $repCountry = $rep["rep_country"];
-                    $table = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
-
-                    // Récupérer les numéros clients de ce rep (depuis DB externe)
-                    $clientsQuery = "SELECT CLL_NCLIXX FROM {$table} WHERE IDE_REP = :rep_id";
-                    $clients = $externalDb->query($clientsQuery, [":rep_id" => $repId]);
-                    $customerNumbers = array_column($clients, "CLL_NCLIXX");
-
-                    if (!empty($customerNumbers)) {
-                        // Campagnes en mode manual avec ces clients
-                        $placeholders = implode(",", array_fill(0, count($customerNumbers), "?"));
-                        $manualQuery = "
-                            SELECT DISTINCT cc.campaign_id
-                            FROM campaign_customers cc
-                            INNER JOIN campaigns c ON cc.campaign_id = c.id
-                            WHERE cc.customer_number IN ({$placeholders})
-                            AND cc.country = ?
-                        ";
-                        $params = array_merge($customerNumbers, [$repCountry]);
-                        $manualCampaigns = $db->query($manualQuery, $params);
-                        $campaignIds = array_merge($campaignIds, array_column($manualCampaigns, "campaign_id"));
-
-                        // Campagnes en mode automatic/protected pour ce pays
-                        $autoQuery = "
-                            SELECT id FROM campaigns
-                            WHERE customer_assignment_mode IN ('automatic', 'protected')
-                            AND (country = ? OR country = 'BOTH')
-                        ";
-                        $autoCampaigns = $db->query($autoQuery, [$repCountry]);
-                        $campaignIds = array_merge($campaignIds, array_column($autoCampaigns, "id"));
-                    }
-                }
-            } catch (\Exception $e) {
-                error_log("StatsAccessHelper::getAccessibleCampaignIds error: " . $e->getMessage());
-            }
-
-            return array_unique($campaignIds);
+            return self::getCampaignIdsForReps($managedReps);
         }
 
-        // Rep : aucune campagne (pas d'accès aux stats)
+        // Rep : campagnes où SES clients sont assignés
+        if ($role === "rep") {
+            $repId = $user["rep_id"] ?? null;
+            $repCountry = $user["rep_country"] ?? null;
+
+            if (!$repId || !$repCountry) {
+                return []; // Pas de rep_id configuré
+            }
+
+            return self::getCampaignIdsForReps([
+                ["rep_id" => $repId, "rep_country" => $repCountry]
+            ]);
+        }
+
         return [];
+    }
+
+    /**
+     * Récupère les IDs des campagnes pour une liste de reps
+     *
+     * @param array $reps Liste des [rep_id, rep_country]
+     * @return array Liste des campaign IDs
+     */
+    private static function getCampaignIdsForReps(array $reps): array
+    {
+        if (empty($reps)) {
+            return [];
+        }
+
+        $db = Database::getInstance();
+        $campaignIds = [];
+
+        try {
+            $externalDb = \Core\ExternalDatabase::getInstance();
+
+            foreach ($reps as $rep) {
+                $repId = $rep["rep_id"];
+                $repCountry = $rep["rep_country"];
+                $table = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
+
+                // Récupérer les numéros clients de ce rep (depuis DB externe)
+                $clientsQuery = "SELECT CLL_NCLIXX FROM {$table} WHERE IDE_REP = :rep_id";
+                $clients = $externalDb->query($clientsQuery, [":rep_id" => $repId]);
+                $customerNumbers = array_column($clients, "CLL_NCLIXX");
+
+                if (!empty($customerNumbers)) {
+                    // Campagnes en mode manual avec ces clients
+                    $placeholders = implode(",", array_fill(0, count($customerNumbers), "?"));
+                    $manualQuery = "
+                        SELECT DISTINCT cc.campaign_id
+                        FROM campaign_customers cc
+                        INNER JOIN campaigns c ON cc.campaign_id = c.id
+                        WHERE cc.customer_number IN ({$placeholders})
+                        AND cc.country = ?
+                    ";
+                    $params = array_merge($customerNumbers, [$repCountry]);
+                    $manualCampaigns = $db->query($manualQuery, $params);
+                    $campaignIds = array_merge($campaignIds, array_column($manualCampaigns, "campaign_id"));
+                }
+
+                // Campagnes en mode automatic/protected pour ce pays (toujours accessible)
+                $autoQuery = "
+                    SELECT id FROM campaigns
+                    WHERE customer_assignment_mode IN ('automatic', 'protected')
+                    AND (country = ? OR country = 'BOTH')
+                ";
+                $autoCampaigns = $db->query($autoQuery, [$repCountry]);
+                $campaignIds = array_merge($campaignIds, array_column($autoCampaigns, "id"));
+            }
+        } catch (\Exception $e) {
+            error_log("StatsAccessHelper::getCampaignIdsForReps error: " . $e->getMessage());
+        }
+
+        return array_unique($campaignIds);
     }
 
     /**
@@ -201,7 +230,87 @@ class StatsAccessHelper
             }));
         }
 
+        // Rep : uniquement lui-même
+        if ($role === "rep") {
+            $repId = $user["rep_id"] ?? null;
+            $repCountry = $user["rep_country"] ?? null;
+
+            if (!$repId || !$repCountry) {
+                return [];
+            }
+
+            return array_values(array_filter($reps, function ($rep) use ($repId, $repCountry) {
+                return $rep["id"] === $repId && $rep["country"] === $repCountry;
+            }));
+        }
+
         return [];
+    }
+
+    /**
+     * Récupère les pays accessibles selon le rôle de l'utilisateur
+     *
+     * @return array|null Liste des pays ['BE'], ['LU'], ['BE', 'LU'] ou null si tout
+     */
+    public static function getAccessibleCountries(): ?array
+    {
+        $user = Session::get("user");
+        $role = $user["role"] ?? "rep";
+
+        // Superadmin, admin, createur : tous les pays
+        if (in_array($role, ["superadmin", "admin", "createur"])) {
+            return null; // null = pas de filtre
+        }
+
+        // Manager_reps : pays de ses reps gérés
+        if ($role === "manager_reps") {
+            $managedReps = self::getManagedRepIds();
+            $countries = array_unique(array_column($managedReps, "rep_country"));
+            return !empty($countries) ? array_values($countries) : [];
+        }
+
+        // Rep : son propre pays
+        if ($role === "rep") {
+            $repCountry = $user["rep_country"] ?? null;
+            return $repCountry ? [$repCountry] : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Récupère le pays par défaut à présélectionner
+     *
+     * @return string|null Pays par défaut ou null si pas de présélection
+     */
+    public static function getDefaultCountry(): ?string
+    {
+        $countries = self::getAccessibleCountries();
+
+        // Si un seul pays accessible, le présélectionner
+        if ($countries !== null && count($countries) === 1) {
+            return $countries[0];
+        }
+
+        return null;
+    }
+
+    /**
+     * Vérifie si l'utilisateur peut voir un pays spécifique
+     *
+     * @param string $country Pays à vérifier (BE, LU)
+     * @return bool
+     */
+    public static function canAccessCountry(string $country): bool
+    {
+        $countries = self::getAccessibleCountries();
+
+        // null = accès à tout
+        if ($countries === null) {
+            return true;
+        }
+
+        return in_array($country, $countries);
     }
 
     /**
@@ -250,17 +359,34 @@ class StatsAccessHelper
     }
 
     /**
-     * Vérifie si l'utilisateur peut voir des stats (pas un simple rep)
+     * Vérifie si l'utilisateur peut voir des stats
+     * Tous les rôles sauf les utilisateurs sans rep_id configuré peuvent voir des stats
      *
      * @return bool
      */
     public static function canViewStats(): bool
     {
         $user = Session::get("user");
-        $role = $user["role"] ?? "rep";
+        $role = $user["role"] ?? "";
 
-        // Rep n'a pas accès aux stats
-        return $role !== "rep";
+        // Admin/superadmin/createur : toujours accès
+        if (in_array($role, ["superadmin", "admin", "createur"])) {
+            return true;
+        }
+
+        // Manager_reps : accès si a des reps gérés
+        if ($role === "manager_reps") {
+            $managedReps = self::getManagedRepIds();
+            return !empty($managedReps);
+        }
+
+        // Rep : accès si rep_id est configuré
+        if ($role === "rep") {
+            $repId = $user["rep_id"] ?? null;
+            return !empty($repId);
+        }
+
+        return false;
     }
 
     /**
