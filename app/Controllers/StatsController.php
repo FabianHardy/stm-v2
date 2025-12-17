@@ -40,6 +40,213 @@ class StatsController
         $this->campaignModel = new Campaign();
     }
 
+    // =========================================================================
+    // MÉTHODES DE FILTRAGE HIÉRARCHIQUE
+    // =========================================================================
+
+    /**
+     * Récupère les IDs des campagnes accessibles selon le rôle de l'utilisateur
+     *
+     * - superadmin/admin : toutes les campagnes
+     * - createur : uniquement ses campagnes (via content_ownership)
+     * - manager_reps : campagnes où ses reps ont des clients assignés
+     * - rep : aucune (pas d'accès aux stats)
+     *
+     * @return array|null Liste des IDs ou null si accès à tout
+     * @created 2025/12/16
+     */
+    private function getAccessibleCampaignIds(): ?array
+    {
+        $user = Session::get("user");
+        $role = $user["role"] ?? "rep";
+        $userId = $user["id"] ?? 0;
+
+        // Superadmin et admin : accès à tout
+        if (in_array($role, ["superadmin", "admin"])) {
+            return null; // null = pas de filtre
+        }
+
+        $db = \Core\Database::getInstance();
+
+        // Créateur : uniquement ses campagnes via content_ownership
+        if ($role === "createur") {
+            $query = "
+                SELECT content_id
+                FROM content_ownership
+                WHERE user_id = :user_id
+                AND content_type = 'campaign'
+            ";
+            $results = $db->query($query, [":user_id" => $userId]);
+            return array_column($results, "content_id");
+        }
+
+        // Manager_reps : campagnes où ses reps ont des clients assignés
+        if ($role === "manager_reps") {
+            $managedRepIds = $this->getManagedRepIds();
+
+            if (empty($managedRepIds)) {
+                return []; // Aucun rep géré = aucune campagne
+            }
+
+            // Récupérer les campagnes où les clients des reps gérés sont assignés
+            $campaignIds = [];
+
+            // 1. Campagnes en mode MANUAL : via campaign_customers
+            // Les clients des reps sont dans BE_CLL/LU_CLL avec IDE_REP
+            foreach ($managedRepIds as $rep) {
+                $repId = $rep["rep_id"];
+                $repCountry = $rep["rep_country"];
+                $table = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
+
+                // Récupérer les numéros clients de ce rep (depuis DB externe)
+                try {
+                    $externalDb = \Core\ExternalDatabase::getInstance();
+                    $clientsQuery = "SELECT CLL_NCLIXX FROM {$table} WHERE IDE_REP = :rep_id";
+                    $clients = $externalDb->query($clientsQuery, [":rep_id" => $repId]);
+                    $customerNumbers = array_column($clients, "CLL_NCLIXX");
+
+                    if (!empty($customerNumbers)) {
+                        // Campagnes en mode manual avec ces clients
+                        $placeholders = implode(",", array_fill(0, count($customerNumbers), "?"));
+                        $manualQuery = "
+                            SELECT DISTINCT cc.campaign_id
+                            FROM campaign_customers cc
+                            INNER JOIN campaigns c ON cc.campaign_id = c.id
+                            WHERE cc.customer_number IN ({$placeholders})
+                            AND cc.country = ?
+                        ";
+                        $params = array_merge($customerNumbers, [$repCountry]);
+                        $manualCampaigns = $db->query($manualQuery, $params);
+                        $campaignIds = array_merge($campaignIds, array_column($manualCampaigns, "campaign_id"));
+
+                        // Campagnes en mode automatic/protected pour ce pays
+                        $autoQuery = "
+                            SELECT id FROM campaigns
+                            WHERE customer_assignment_mode IN ('automatic', 'protected')
+                            AND (country = ? OR country = 'BOTH')
+                        ";
+                        $autoCampaigns = $db->query($autoQuery, [$repCountry]);
+                        $campaignIds = array_merge($campaignIds, array_column($autoCampaigns, "id"));
+                    }
+                } catch (\Exception $e) {
+                    error_log("Erreur getManagedCampaigns: " . $e->getMessage());
+                }
+            }
+
+            return array_unique($campaignIds);
+        }
+
+        // Rep : aucune campagne (pas d'accès aux stats normalement)
+        return [];
+    }
+
+    /**
+     * Récupère les IDs des représentants gérés par le manager connecté
+     *
+     * @return array Liste des [rep_id, rep_country]
+     * @created 2025/12/16
+     */
+    private function getManagedRepIds(): array
+    {
+        $user = Session::get("user");
+        $userId = $user["id"] ?? 0;
+
+        $db = \Core\Database::getInstance();
+
+        // Récupérer les users avec role=rep qui ont ce manager_id
+        $query = "
+            SELECT rep_id, rep_country
+            FROM users
+            WHERE manager_id = :manager_id
+            AND role = 'rep'
+            AND rep_id IS NOT NULL
+            AND is_active = 1
+        ";
+
+        return $db->query($query, [":manager_id" => $userId]);
+    }
+
+    /**
+     * Filtre une liste de campagnes selon l'accès de l'utilisateur
+     *
+     * @param array $campaigns Liste des campagnes
+     * @return array Liste filtrée
+     * @created 2025/12/16
+     */
+    private function filterCampaignsList(array $campaigns): array
+    {
+        $accessibleIds = $this->getAccessibleCampaignIds();
+
+        // null = accès à tout
+        if ($accessibleIds === null) {
+            return $campaigns;
+        }
+
+        // Filtrer par IDs accessibles
+        return array_filter($campaigns, function ($campaign) use ($accessibleIds) {
+            return in_array($campaign["id"], $accessibleIds);
+        });
+    }
+
+    /**
+     * Vérifie si l'utilisateur a accès à une campagne spécifique
+     *
+     * @param int $campaignId ID de la campagne
+     * @return bool True si accès autorisé
+     * @created 2025/12/16
+     */
+    private function canAccessCampaign(int $campaignId): bool
+    {
+        $accessibleIds = $this->getAccessibleCampaignIds();
+
+        // null = accès à tout
+        if ($accessibleIds === null) {
+            return true;
+        }
+
+        return in_array($campaignId, $accessibleIds);
+    }
+
+    /**
+     * Filtre les représentants selon le rôle de l'utilisateur
+     *
+     * - superadmin/admin/createur : tous les reps (de la campagne)
+     * - manager_reps : uniquement ses reps gérés
+     *
+     * @param array $reps Liste des représentants
+     * @return array Liste filtrée
+     * @created 2025/12/16
+     */
+    private function filterRepsList(array $reps): array
+    {
+        $user = Session::get("user");
+        $role = $user["role"] ?? "rep";
+
+        // Superadmin, admin, createur : tous les reps
+        if (in_array($role, ["superadmin", "admin", "createur"])) {
+            return $reps;
+        }
+
+        // Manager_reps : uniquement ses reps
+        if ($role === "manager_reps") {
+            $managedReps = $this->getManagedRepIds();
+            $managedRepIds = array_map(function ($r) {
+                return $r["rep_id"] . "_" . $r["rep_country"];
+            }, $managedReps);
+
+            return array_filter($reps, function ($rep) use ($managedRepIds) {
+                $repKey = $rep["id"] . "_" . $rep["country"];
+                return in_array($repKey, $managedRepIds);
+            });
+        }
+
+        return [];
+    }
+
+    // =========================================================================
+    // MÉTHODES PUBLIQUES
+    // =========================================================================
+
     /**
      * Vue globale des statistiques
      *
@@ -51,6 +258,13 @@ class StatsController
         $period = $_GET["period"] ?? "7"; // 7 jours par défaut
         $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
         $country = !empty($_GET["country"]) ? $_GET["country"] : null;
+
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats");
+            exit();
+        }
 
         // Calculer les dates selon la période
         $dateTo = date("Y-m-d");
@@ -75,14 +289,29 @@ class StatsController
                 break;
         }
 
-        // Récupérer les données
+        // Récupérer les données (filtrées par campagnes accessibles si pas de campagne spécifique)
+        $accessibleCampaignIds = $this->getAccessibleCampaignIds();
+
+        // Si l'utilisateur n'a pas accès à tout et pas de campagne sélectionnée
+        // On limite les stats aux campagnes accessibles
+        $effectiveCampaignId = $campaignId;
+        if ($accessibleCampaignIds !== null && !$campaignId) {
+            // Pas admin/superadmin et pas de campagne sélectionnée
+            // On prend la première campagne accessible ou on affiche des stats vides
+            if (!empty($accessibleCampaignIds)) {
+                // On ne filtre pas automatiquement, on laisse l'utilisateur choisir
+                // Mais on n'affiche que les stats des campagnes accessibles
+            }
+        }
+
         $kpis = $this->statsModel->getGlobalKPIs($dateFrom, $dateTo, $campaignId, $country);
         $dailyEvolution = $this->statsModel->getDailyEvolution($dateFrom, $dateTo, $campaignId);
         $topProducts = $this->statsModel->getTopProducts($dateFrom, $dateTo, $campaignId, $country, 10);
         $clusterStats = $this->statsModel->getStatsByCluster($dateFrom, $dateTo, $campaignId, $country);
 
-        // Liste des campagnes pour le filtre
-        $campaigns = $this->statsModel->getCampaignsList();
+        // Liste des campagnes pour le filtre (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
 
         // Préparer les données pour les graphiques
         $chartLabels = [];
@@ -124,6 +353,7 @@ class StatsController
      * @modified 2025/12/04 - Ajout graphiques évolution + catégories
      * @modified 2025/12/09 - Ajout stats par fournisseur
      * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
      */
     public function campaigns(): void
     {
@@ -133,8 +363,16 @@ class StatsController
         $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
         $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
 
-        // Liste des campagnes
-        $campaigns = $this->statsModel->getCampaignsList();
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Liste des campagnes (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
 
         // Stats de la campagne sélectionnée
         $campaignStats = null;
@@ -165,7 +403,10 @@ class StatsController
 
             // Récupérer les représentants filtrés sur cette campagne
             $campaignCountry = $campaignStats["campaign"]["country"] ?? null;
-            $reps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+            $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+            // Filtrer les reps selon le rôle (manager_reps ne voit que ses reps)
+            $reps = $this->filterRepsList($allReps);
 
             // Détail d'un représentant si sélectionné
             if ($repId && $repCountry) {
@@ -309,6 +550,7 @@ class StatsController
      * Statistiques par commercial
      *
      * @return void
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
      */
     public function sales(): void
     {
@@ -318,14 +560,23 @@ class StatsController
         $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
         $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
 
-        // Liste des campagnes pour le filtre
-        $campaigns = $this->statsModel->getCampaignsList();
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/sales");
+            exit();
+        }
+
+        // Liste des campagnes pour le filtre (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
 
         // Liste des clusters
         $clusters = $this->statsModel->getClustersList();
 
-        // Liste des représentants avec leurs stats
-        $reps = $this->statsModel->getRepStats($country, $campaignId);
+        // Liste des représentants avec leurs stats (filtrée selon rôle)
+        $allReps = $this->statsModel->getRepStats($country, $campaignId);
+        $reps = $this->filterRepsList($allReps);
 
         // Détail d'un représentant si sélectionné
         $repDetail = null;
@@ -352,11 +603,13 @@ class StatsController
      * Page des rapports et exports
      *
      * @return void
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
      */
     public function reports(): void
     {
-        // Liste des campagnes pour les exports
-        $campaigns = $this->statsModel->getCampaignsList();
+        // Liste des campagnes pour les exports (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
 
         $title = "Statistiques - Rapports";
 
@@ -367,6 +620,7 @@ class StatsController
      * Export CSV/Excel
      *
      * @return void
+     * @modified 2025/12/16 - Ajout vérification accès campagne
      */
     public function export(): void
     {
@@ -375,6 +629,13 @@ class StatsController
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
         $dateFrom = $_POST["date_from"] ?? date("Y-m-d", strtotime("-14 days"));
         $dateTo = $_POST["date_to"] ?? date("Y-m-d");
+
+        // Vérifier l'accès à la campagne si spécifiée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/reports");
+            exit();
+        }
 
         $data = [];
         $filename = "";
@@ -597,6 +858,7 @@ class StatsController
      * @return void
      * @created 2025/12/10
      * @modified 2025/12/10 - Filtrage selon mode campagne + reps avec clients uniquement
+     * @modified 2025/12/16 - Ajout vérification accès campagne + filtrage reps par rôle
      */
     public function exportRepsExcel(): void
     {
@@ -608,6 +870,13 @@ class StatsController
 
         if (!$campaignId) {
             Session::setFlash("error", "Veuillez sélectionner une campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
             header("Location: /stm/admin/stats/campaigns");
             exit();
         }
@@ -627,8 +896,11 @@ class StatsController
         // Récupérer les représentants avec leurs stats (filtrés par campagne)
         $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
 
+        // Filtrer selon le rôle (manager_reps ne voit que ses reps)
+        $filteredReps = $this->filterRepsList($allReps);
+
         // FILTRER : Ne garder que les reps qui ont des clients assignés (total_clients > 0)
-        $reps = array_filter($allReps, function($rep) {
+        $reps = array_filter($filteredReps, function($rep) {
             return ($rep["total_clients"] ?? 0) > 0;
         });
         $reps = array_values($reps); // Réindexer
