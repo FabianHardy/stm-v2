@@ -314,6 +314,175 @@ class StatsAccessHelper
     }
 
     /**
+     * Récupère les numéros clients accessibles selon le rôle de l'utilisateur
+     *
+     * @return array|null Liste des [customer_number, country] ou null si accès à tout
+     */
+    public static function getAccessibleCustomerNumbers(): ?array
+    {
+        $user = Session::get("user");
+        $role = $user["role"] ?? "rep";
+
+        // Superadmin, admin, createur : accès à tous les clients
+        if (in_array($role, ["superadmin", "admin", "createur"])) {
+            return null; // null = pas de filtre
+        }
+
+        // Manager_reps : clients de ses reps gérés
+        if ($role === "manager_reps") {
+            $managedReps = self::getManagedRepIds();
+
+            if (empty($managedReps)) {
+                return []; // Aucun rep géré = aucun client
+            }
+
+            return self::getCustomerNumbersForReps($managedReps);
+        }
+
+        // Rep : ses propres clients
+        if ($role === "rep") {
+            $repId = $user["rep_id"] ?? null;
+            $repCountry = $user["rep_country"] ?? null;
+
+            if (!$repId || !$repCountry) {
+                return []; // Pas de rep_id configuré
+            }
+
+            return self::getCustomerNumbersForReps([
+                ["rep_id" => $repId, "rep_country" => $repCountry]
+            ]);
+        }
+
+        return [];
+    }
+
+    /**
+     * Récupère les numéros clients pour une liste de reps
+     *
+     * @param array $reps Liste des [rep_id, rep_country]
+     * @return array Liste des [customer_number, country]
+     */
+    private static function getCustomerNumbersForReps(array $reps): array
+    {
+        if (empty($reps)) {
+            return [];
+        }
+
+        $customers = [];
+
+        try {
+            $externalDb = \Core\ExternalDatabase::getInstance();
+
+            foreach ($reps as $rep) {
+                $repId = $rep["rep_id"];
+                $repCountry = $rep["rep_country"];
+                $table = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
+
+                // Récupérer les numéros clients de ce rep (depuis DB externe)
+                $clientsQuery = "SELECT CLL_NCLIXX as customer_number FROM {$table} WHERE IDE_REP = :rep_id";
+                $clients = $externalDb->query($clientsQuery, [":rep_id" => $repId]);
+
+                foreach ($clients as $client) {
+                    $customers[] = [
+                        "customer_number" => $client["customer_number"],
+                        "country" => $repCountry
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("StatsAccessHelper::getCustomerNumbersForReps error: " . $e->getMessage());
+        }
+
+        return $customers;
+    }
+
+    /**
+     * Récupère uniquement les numéros clients (sans pays) pour le filtrage SQL
+     *
+     * @return array|null Liste des numéros clients ou null si accès à tout
+     */
+    public static function getAccessibleCustomerNumbersOnly(): ?array
+    {
+        $customers = self::getAccessibleCustomerNumbers();
+
+        if ($customers === null) {
+            return null;
+        }
+
+        return array_unique(array_column($customers, "customer_number"));
+    }
+
+    /**
+     * Récupère les rep_id accessibles selon le rôle de l'utilisateur
+     *
+     * @return array|null Liste des [rep_id, rep_country] ou null si accès à tout
+     */
+    public static function getAccessibleRepIds(): ?array
+    {
+        $user = Session::get("user");
+        $role = $user["role"] ?? "rep";
+
+        // Superadmin, admin, createur : accès à tous les reps
+        if (in_array($role, ["superadmin", "admin", "createur"])) {
+            return null; // null = pas de filtre
+        }
+
+        // Manager_reps : ses reps gérés
+        if ($role === "manager_reps") {
+            return self::getManagedRepIds();
+        }
+
+        // Rep : uniquement lui-même
+        if ($role === "rep") {
+            $repId = $user["rep_id"] ?? null;
+            $repCountry = $user["rep_country"] ?? null;
+
+            if (!$repId || !$repCountry) {
+                return [];
+            }
+
+            return [
+                ["rep_id" => $repId, "rep_country" => $repCountry]
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * Génère la clause SQL IN pour filtrer par numéros clients accessibles
+     *
+     * @param string $columnName Nom de la colonne (ex: "cu.customer_number")
+     * @param array &$params Référence vers les paramètres de la requête
+     * @param string $prefix Préfixe pour les placeholders
+     * @return string Clause SQL vide si accès à tout, ou "AND column IN (...)"
+     */
+    public static function getCustomerFilterSQL(string $columnName, array &$params, string $prefix = "cust"): string
+    {
+        $customerNumbers = self::getAccessibleCustomerNumbersOnly();
+
+        // null = accès à tout, pas de filtre
+        if ($customerNumbers === null) {
+            return "";
+        }
+
+        // Aucun client accessible = bloquer tout
+        if (empty($customerNumbers)) {
+            return " AND 1 = 0";
+        }
+
+        // Générer la clause IN
+        $placeholders = [];
+        foreach ($customerNumbers as $i => $num) {
+            $key = ":{$prefix}_{$i}";
+            $placeholders[] = $key;
+            $params[$key] = $num;
+        }
+
+        return " AND {$columnName} IN (" . implode(",", $placeholders) . ")";
+    }
+
+    /**
      * Génère la clause SQL IN pour filtrer par campagnes accessibles
      *
      * @param string $columnName Nom de la colonne (ex: "o.campaign_id", "c.id")

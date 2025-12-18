@@ -218,6 +218,7 @@ class StatsController
      * @modified 2025/12/09 - Ajout stats par fournisseur
      * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
      * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
+     * @modified 2025/12/17 - Ajout filtrage par clients accessibles
      */
     public function campaigns(): void
     {
@@ -233,6 +234,9 @@ class StatsController
             header("Location: /stm/admin/stats/campaigns");
             exit();
         }
+
+        // Récupérer les clients accessibles selon le rôle
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
 
         // Liste des campagnes (filtrée selon accès)
         $allCampaigns = $this->statsModel->getCampaignsList();
@@ -262,8 +266,9 @@ class StatsController
         $productSuppliers = [];
 
         if ($campaignId) {
-            $campaignStats = $this->statsModel->getCampaignStats($campaignId);
-            $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
+            // Passer le filtre clients aux méthodes de stats
+            $campaignStats = $this->statsModel->getCampaignStats($campaignId, $accessibleCustomerNumbers);
+            $campaignProducts = $this->statsModel->getCampaignProducts($campaignId, $accessibleCustomerNumbers);
 
             // Récupérer les représentants filtrés sur cette campagne
             $campaignCountry = $campaignStats["campaign"]["country"] ?? null;

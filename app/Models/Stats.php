@@ -493,9 +493,10 @@ class Stats
      * Stats détaillées pour une campagne
      *
      * @param int $campaignId
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
      */
-    public function getCampaignStats(int $campaignId): array
+    public function getCampaignStats(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
         // Infos campagne
         $campaign = $this->db->query("SELECT * FROM campaigns WHERE id = :id", [":id" => $campaignId]);
@@ -521,20 +522,52 @@ class Stats
             }
         }
 
-        // Stats commandes
+        // Construire le filtre clients si nécessaire
+        $customerFilter = "";
+        $params = [":campaign_id" => $campaignId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = stats vides
+                return [
+                    "campaign" => $campaign,
+                    "total_orders" => 0,
+                    "customers_ordered" => 0,
+                    "total_quantity" => 0,
+                    "eligible_customers" => 0,
+                    "participation_rate" => 0,
+                    "by_country" => [
+                        "BE" => ["orders" => 0, "customers" => 0, "quantity" => 0],
+                        "LU" => ["orders" => 0, "customers" => 0, "quantity" => 0],
+                    ],
+                ];
+            }
+
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Stats commandes (filtrées par clients accessibles)
         $queryOrders = "
             SELECT COUNT(DISTINCT o.id) as total_orders,
                    COUNT(DISTINCT o.customer_id) as customers_ordered,
                    COALESCE(SUM(ol.quantity), 0) as total_quantity
             FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'validated'
+            {$customerFilter}
         ";
 
-        $ordersStats = $this->db->query($queryOrders, [":campaign_id" => $campaignId]);
+        $ordersStats = $this->db->query($queryOrders, $params);
 
-        // Stats par pays
+        // Stats par pays (filtrées par clients accessibles)
         $queryCountry = "
             SELECT cu.country,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -545,10 +578,11 @@ class Stats
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'validated'
+            {$customerFilter}
             GROUP BY cu.country
         ";
 
-        $countryStats = $this->db->query($queryCountry, [":campaign_id" => $campaignId]);
+        $countryStats = $this->db->query($queryCountry, $params);
 
         // Formater par pays
         $byCountry = [
@@ -563,8 +597,8 @@ class Stats
             ];
         }
 
-        // Clients éligibles
-        $eligibleCustomers = $this->getEligibleCustomersCount($campaignId, $campaign);
+        // Clients éligibles (filtrés par clients accessibles)
+        $eligibleCustomers = $this->getEligibleCustomersCount($campaignId, $campaign, $accessibleCustomerNumbers);
 
         return [
             "campaign" => $campaign,
@@ -585,28 +619,76 @@ class Stats
      *
      * @param int $campaignId
      * @param array $campaign
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return int|string
      */
-    private function getEligibleCustomersCount(int $campaignId, array $campaign)
+    private function getEligibleCustomersCount(int $campaignId, array $campaign, ?array $accessibleCustomerNumbers = null)
     {
         $mode = $campaign["customer_assignment_mode"] ?? "automatic";
         $country = $campaign["country"] ?? "BE";
 
         if ($mode === "manual") {
             // Compter dans campaign_customers
+            $params = [":id" => $campaignId];
+            $customerFilter = "";
+
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+                $placeholders = [];
+                foreach ($accessibleCustomerNumbers as $i => $num) {
+                    $key = ":cust_{$i}";
+                    $placeholders[] = $key;
+                    $params[$key] = $num;
+                }
+                $customerFilter = " AND customer_number IN (" . implode(",", $placeholders) . ")";
+            }
+
             $result = $this->db->query(
-                "SELECT COUNT(*) as total FROM campaign_customers WHERE campaign_id = :id AND is_authorized = 1",
-                [":id" => $campaignId],
+                "SELECT COUNT(*) as total FROM campaign_customers WHERE campaign_id = :id AND is_authorized = 1 {$customerFilter}",
+                $params,
             );
             return (int) ($result[0]["total"] ?? 0);
         }
 
-        // Mode automatic ou protected : tous les clients du/des pays
+        // Mode automatic ou protected : clients du/des pays
         if (!$this->extDb) {
             return "N/A";
         }
 
         try {
+            // Si filtre par clients accessibles, compter uniquement ceux-là
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+
+                // Compter les clients accessibles qui sont dans le bon pays
+                $total = 0;
+
+                if ($country === "BE" || $country === "BOTH") {
+                    $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                    $result = $this->extDb->query(
+                        "SELECT COUNT(*) as total FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                        $accessibleCustomerNumbers
+                    );
+                    $total += (int) ($result[0]["total"] ?? 0);
+                }
+
+                if ($country === "LU" || $country === "BOTH") {
+                    $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                    $result = $this->extDb->query(
+                        "SELECT COUNT(*) as total FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                        $accessibleCustomerNumbers
+                    );
+                    $total += (int) ($result[0]["total"] ?? 0);
+                }
+
+                return $total;
+            }
+
+            // Pas de filtre : compter tous les clients
             $total = 0;
 
             if ($country === "BE" || $country === "BOTH") {
@@ -630,10 +712,27 @@ class Stats
      * Produits vendus pour une campagne
      *
      * @param int $campaignId
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
      */
-    public function getCampaignProducts(int $campaignId): array
+    public function getCampaignProducts(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
+        $params = [":campaign_id" => $campaignId];
+        $customerFilter = "";
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
                    COALESCE(SUM(ol.quantity), 0) as quantity_sold,
@@ -642,13 +741,15 @@ class Stats
             FROM products p
             LEFT JOIN order_lines ol ON p.id = ol.product_id
             LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            LEFT JOIN customers cu ON o.customer_id = cu.id
             WHERE p.campaign_id = :campaign_id
             AND p.is_active = 1
+            {$customerFilter}
             GROUP BY p.id
             ORDER BY quantity_sold DESC
         ";
 
-        return $this->db->query($query, [":campaign_id" => $campaignId]);
+        return $this->db->query($query, $params);
     }
 
     /**

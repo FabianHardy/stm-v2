@@ -33,6 +33,7 @@ $canViewStats = PermissionHelper::can('stats.view');
 // FILTRAGE HIÉRARCHIQUE SELON LE RÔLE
 // ============================================================
 $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+$accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
 $hasFullAccess = StatsAccessHelper::hasFullAccess();
 
 // Initialisation des variables par défaut
@@ -88,29 +89,75 @@ if ($canViewCampaigns) {
 // KPI 2: Clients totaux (seulement si permission)
 if ($canViewCustomers) {
     try {
-        $results = $db->query("SELECT COUNT(DISTINCT customer_id) as total FROM orders WHERE status = 'validated'");
+        // Construire le filtre clients
+        $clientParams = [];
+        $customerFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $customerFilter = " AND cu.customer_number IN ({$placeholders})";
+                $clientParams = $accessibleCustomerNumbers;
+            } else {
+                $stats["total_customers"] = 0;
+                goto skip_customers_kpi;
+            }
+        }
+
+        // Construire le filtre campagnes
+        $campaignFilterClients = "";
+        if ($accessibleCampaignIds !== null && !empty($accessibleCampaignIds)) {
+            $placeholders2 = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+            $campaignFilterClients = " AND o.campaign_id IN ({$placeholders2})";
+            $clientParams = array_merge($clientParams, $accessibleCampaignIds);
+        }
+
+        $results = $db->query("
+            SELECT COUNT(DISTINCT o.customer_id) as total
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.status = 'validated'
+            {$customerFilter}
+            {$campaignFilterClients}
+        ", $clientParams);
         if (!empty($results)) {
             $stats["total_customers"] = (int) ($results[0]["total"] ?? 0);
         }
     } catch (\PDOException $e) {
         error_log("Erreur récupération stats clients: " . $e->getMessage());
     }
+    skip_customers_kpi:
 }
 
 // KPI 3: Commandes validées et quantités totales (seulement si permission)
 if ($canViewOrders) {
     try {
-        // Construire le filtre campagnes
+        // Construire les filtres
         $orderParams = [];
         $campaignFilter = "";
+        $customerFilterOrders = "";
+
+        // Filtre par campagnes accessibles
         if ($accessibleCampaignIds !== null) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignFilter = " AND o.campaign_id IN ({$placeholders})";
                 $orderParams = $accessibleCampaignIds;
             } else {
-                // Aucun accès
-                $results = [["total_orders" => 0, "total_quantity" => 0]];
+                // Aucun accès aux campagnes
+                $stats["total_orders"] = 0;
+                $stats["total_quantity"] = 0;
+                goto skip_orders_kpi;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $customerFilterOrders = " AND cu.customer_number IN ({$placeholders2})";
+                $orderParams = array_merge($orderParams, $accessibleCustomerNumbers);
+            } else {
+                // Aucun client accessible
                 $stats["total_orders"] = 0;
                 $stats["total_quantity"] = 0;
                 goto skip_orders_kpi;
@@ -122,9 +169,11 @@ if ($canViewOrders) {
                 COUNT(DISTINCT o.id) as total_orders,
                 COALESCE(SUM(ol.quantity), 0) as total_quantity
             FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
             {$campaignFilter}
+            {$customerFilterOrders}
         ", $orderParams);
         if (!empty($results)) {
             $stats["total_orders"] = (int) ($results[0]["total_orders"] ?? 0);
@@ -155,14 +204,29 @@ if ($canViewProducts) {
 // Dernières commandes (seulement si permission orders.view)
 if ($canViewOrders) {
     try {
-        // Construire le filtre campagnes
+        // Construire les filtres
         $recentOrderParams = [];
         $campaignFilterRecent = "";
+        $customerFilterRecent = "";
+
+        // Filtre par campagnes accessibles
         if ($accessibleCampaignIds !== null) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignFilterRecent = " AND o.campaign_id IN ({$placeholders})";
                 $recentOrderParams = $accessibleCampaignIds;
+            } else {
+                $recent_orders = [];
+                goto skip_recent_orders;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $customerFilterRecent = " AND cu.customer_number IN ({$placeholders2})";
+                $recentOrderParams = array_merge($recentOrderParams, $accessibleCustomerNumbers);
             } else {
                 $recent_orders = [];
                 goto skip_recent_orders;
@@ -181,10 +245,11 @@ if ($canViewOrders) {
                 COALESCE(SUM(ol.quantity), 0) as items_count
             FROM orders o
             LEFT JOIN campaigns c ON o.campaign_id = c.id
-            LEFT JOIN customers cu ON o.customer_id = cu.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE 1=1
             {$campaignFilterRecent}
+            {$customerFilterRecent}
             GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at
             ORDER BY o.created_at DESC
             LIMIT 10
@@ -199,14 +264,29 @@ if ($canViewOrders) {
 // Stats par campagne pour le graphique (seulement si permission stats)
 if ($canViewStats && $canViewCampaigns) {
     try {
-        // Construire le filtre campagnes
+        // Construire les filtres
         $campaignStatsParams = [];
         $campaignStatsFilter = "";
+        $customerStatsFilter = "";
+
+        // Filtre par campagnes accessibles
         if ($accessibleCampaignIds !== null) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignStatsFilter = " AND c.id IN ({$placeholders})";
                 $campaignStatsParams = $accessibleCampaignIds;
+            } else {
+                $campaign_stats = [];
+                goto skip_campaign_stats;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $customerStatsFilter = " AND cu.customer_number IN ({$placeholders2})";
+                $campaignStatsParams = array_merge($campaignStatsParams, $accessibleCustomerNumbers);
             } else {
                 $campaign_stats = [];
                 goto skip_campaign_stats;
@@ -221,9 +301,11 @@ if ($canViewStats && $canViewCampaigns) {
                 COALESCE(SUM(ol.quantity), 0) as quantity_count
             FROM campaigns c
             LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated'
+            LEFT JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE CURDATE() BETWEEN c.start_date AND c.end_date
             {$campaignStatsFilter}
+            {$customerStatsFilter}
             GROUP BY c.id, c.name, c.country
             ORDER BY quantity_count DESC
             LIMIT 5
@@ -260,14 +342,29 @@ if ($canViewStats && $canViewProducts) {
 // Commandes des 7 derniers jours (seulement si permission stats)
 if ($canViewStats && $canViewOrders) {
     try {
-        // Construire le filtre campagnes
+        // Construire les filtres
         $dailyParams = [];
         $dailyCampaignFilter = "";
+        $dailyCustomerFilter = "";
+
+        // Filtre par campagnes accessibles
         if ($accessibleCampaignIds !== null) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $dailyCampaignFilter = " AND o.campaign_id IN ({$placeholders})";
                 $dailyParams = $accessibleCampaignIds;
+            } else {
+                $daily_orders = [];
+                goto skip_daily_orders;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $dailyCustomerFilter = " AND cu.customer_number IN ({$placeholders2})";
+                $dailyParams = array_merge($dailyParams, $accessibleCustomerNumbers);
             } else {
                 $daily_orders = [];
                 goto skip_daily_orders;
@@ -281,10 +378,12 @@ if ($canViewStats && $canViewOrders) {
                 COUNT(DISTINCT o.id) as orders_count,
                 COALESCE(SUM(ol.quantity), 0) as quantity_count
             FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
             AND o.status = 'validated'
             {$dailyCampaignFilter}
+            {$dailyCustomerFilter}
             GROUP BY DATE(o.created_at), DATE_FORMAT(o.created_at, '%a %d/%m')
             ORDER BY day ASC
         ", $dailyParams);
