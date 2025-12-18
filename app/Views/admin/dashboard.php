@@ -320,6 +320,35 @@ if ($canViewStats && $canViewCampaigns) {
 // Répartition par catégorie de Promotions (seulement si permission stats)
 if ($canViewStats && $canViewProducts) {
     try {
+        // Construire les filtres
+        $catParams = [];
+        $catCampaignFilter = "";
+        $catCustomerFilter = "";
+
+        // Filtre par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $catCampaignFilter = " AND p.campaign_id IN ({$placeholders})";
+                $catParams = $accessibleCampaignIds;
+            } else {
+                $product_categories = [];
+                goto skip_categories;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $catCustomerFilter = " AND cu.customer_number IN ({$placeholders2})";
+                $catParams = array_merge($catParams, $accessibleCustomerNumbers);
+            } else {
+                $product_categories = [];
+                goto skip_categories;
+            }
+        }
+
         $product_categories = $db->query("
             SELECT
                 cat.name_fr as category_name,
@@ -330,13 +359,18 @@ if ($canViewStats && $canViewProducts) {
             LEFT JOIN products p ON cat.id = p.category_id AND p.is_active = 1
             LEFT JOIN order_lines ol ON p.id = ol.product_id
             LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            LEFT JOIN customers cu ON o.customer_id = cu.id
+            WHERE 1=1
+            {$catCampaignFilter}
+            {$catCustomerFilter}
             GROUP BY cat.id, cat.name_fr, cat.color
             ORDER BY quantity_sold DESC
-        ");
+        ", $catParams);
     } catch (\PDOException $e) {
         error_log("Erreur récupération catégories: " . $e->getMessage());
         $product_categories = [];
     }
+    skip_categories:
 }
 
 // Commandes des 7 derniers jours (seulement si permission stats)
