@@ -230,11 +230,11 @@ if ($canViewProducts) {
     skip_promos_kpi:
 }
 
-// Dernières commandes (seulement si permission orders.view)
+// Dernières commandes (14 derniers jours)
 if ($canViewOrders) {
     try {
-        // Construire les filtres
-        $recentOrderParams = [];
+        // Construire les filtres - commencer avec les dates
+        $recentOrderParams = [$dateFrom, $dateTo];
         $campaignFilterRecent = "";
         $customerFilterRecent = "";
 
@@ -243,7 +243,7 @@ if ($canViewOrders) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignFilterRecent = " AND o.campaign_id IN ({$placeholders})";
-                $recentOrderParams = $accessibleCampaignIds;
+                $recentOrderParams = array_merge($recentOrderParams, $accessibleCampaignIds);
             } else {
                 $recent_orders = [];
                 goto skip_recent_orders;
@@ -276,7 +276,7 @@ if ($canViewOrders) {
             LEFT JOIN campaigns c ON o.campaign_id = c.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE 1=1
+            WHERE DATE(o.created_at) BETWEEN ? AND ?
             {$campaignFilterRecent}
             {$customerFilterRecent}
             GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at
@@ -695,11 +695,11 @@ $quickActionsGridClass = match(true) {
 </div>
 <?php endif; ?>
 
-<!-- Dernières commandes (seulement si permission orders.view) -->
+<!-- Dernières commandes (14 derniers jours) -->
 <?php if ($canViewOrders): ?>
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 class="text-lg font-medium text-gray-900">Dernières commandes</h3>
+        <h3 class="text-lg font-medium text-gray-900">Dernières commandes <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
         <a href="/stm/admin/orders" class="text-sm text-indigo-600 hover:text-indigo-800">
             Voir tout <i class="fas fa-arrow-right ml-1"></i>
         </a>
