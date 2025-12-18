@@ -8,7 +8,7 @@
  * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits (structure originale conservée)
  * @modified 2025/12/16 - Ajout filtrage hiérarchique stats selon rôle (createur, manager_reps)
  */
-echo "<!-- Dashboard v2 avec filtrage complet -->";
+
 use Core\Database;
 use App\Helpers\PermissionHelper;
 use App\Helpers\StatsAccessHelper;
@@ -35,6 +35,14 @@ $canViewStats = PermissionHelper::can('stats.view');
 $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
 $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
 $hasFullAccess = StatsAccessHelper::hasFullAccess();
+
+// ============================================================
+// PÉRIODE DE RÉFÉRENCE : 14 DERNIERS JOURS
+// ============================================================
+$periodDays = 14;
+$dateFrom = date("Y-m-d", strtotime("-{$periodDays} days"));
+$dateTo = date("Y-m-d");
+$periodLabel = "14 derniers jours";
 
 // Initialisation des variables par défaut
 $stats = [
@@ -86,17 +94,17 @@ if ($canViewCampaigns) {
     }
 }
 
-// KPI 2: Clients totaux (seulement si permission)
+// KPI 2: Clients ayant commandé (14 derniers jours)
 if ($canViewCustomers) {
     try {
         // Construire le filtre clients
-        $clientParams = [];
+        $clientParams = [$dateFrom, $dateTo];
         $customerFilter = "";
         if ($accessibleCustomerNumbers !== null) {
             if (!empty($accessibleCustomerNumbers)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
                 $customerFilter = " AND cu.customer_number IN ({$placeholders})";
-                $clientParams = $accessibleCustomerNumbers;
+                $clientParams = array_merge($clientParams, $accessibleCustomerNumbers);
             } else {
                 $stats["total_customers"] = 0;
                 goto skip_customers_kpi;
@@ -116,6 +124,7 @@ if ($canViewCustomers) {
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE o.status = 'validated'
+            AND DATE(o.created_at) BETWEEN ? AND ?
             {$customerFilter}
             {$campaignFilterClients}
         ", $clientParams);
@@ -128,11 +137,11 @@ if ($canViewCustomers) {
     skip_customers_kpi:
 }
 
-// KPI 3: Commandes validées et quantités totales (seulement si permission)
+// KPI 3: Commandes validées et quantités totales (14 derniers jours)
 if ($canViewOrders) {
     try {
         // Construire les filtres
-        $orderParams = [];
+        $orderParams = [$dateFrom, $dateTo];
         $campaignFilter = "";
         $customerFilterOrders = "";
 
@@ -141,7 +150,7 @@ if ($canViewOrders) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignFilter = " AND o.campaign_id IN ({$placeholders})";
-                $orderParams = $accessibleCampaignIds;
+                $orderParams = array_merge($orderParams, $accessibleCampaignIds);
             } else {
                 // Aucun accès aux campagnes
                 $stats["total_orders"] = 0;
@@ -172,6 +181,7 @@ if ($canViewOrders) {
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
+            AND DATE(o.created_at) BETWEEN ? AND ?
             {$campaignFilter}
             {$customerFilterOrders}
         ", $orderParams);
@@ -185,7 +195,7 @@ if ($canViewOrders) {
     skip_orders_kpi:
 }
 
-// KPI 4: Promotions actives (seulement si permission) - filtrées par campagnes accessibles
+// KPI 4: Promotions des campagnes actives uniquement
 if ($canViewProducts) {
     try {
         $promoParams = [];
@@ -194,7 +204,7 @@ if ($canViewProducts) {
         if ($accessibleCampaignIds !== null) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
-                $promoCampaignFilter = " AND campaign_id IN ({$placeholders})";
+                $promoCampaignFilter = " AND p.campaign_id IN ({$placeholders})";
                 $promoParams = $accessibleCampaignIds;
             } else {
                 $stats["total_promos"] = 0;
@@ -202,10 +212,13 @@ if ($canViewProducts) {
             }
         }
 
+        // Compter uniquement les promos des campagnes actives (entre start_date et end_date)
         $results = $db->query("
             SELECT COUNT(*) as total
-            FROM products
-            WHERE is_active = 1
+            FROM products p
+            INNER JOIN campaigns c ON p.campaign_id = c.id
+            WHERE p.is_active = 1
+            AND CURDATE() BETWEEN c.start_date AND c.end_date
             {$promoCampaignFilter}
         ", $promoParams);
         if (!empty($results)) {
@@ -277,11 +290,11 @@ if ($canViewOrders) {
     skip_recent_orders:
 }
 
-// Stats par campagne pour le graphique (seulement si permission stats)
+// Stats par campagne active (14 derniers jours)
 if ($canViewStats && $canViewCampaigns) {
     try {
-        // Construire les filtres
-        $campaignStatsParams = [];
+        // Construire les filtres - commencer avec les dates
+        $campaignStatsParams = [$dateFrom, $dateTo];
         $campaignStatsFilter = "";
         $customerStatsFilter = "";
 
@@ -290,7 +303,7 @@ if ($canViewStats && $canViewCampaigns) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $campaignStatsFilter = " AND c.id IN ({$placeholders})";
-                $campaignStatsParams = $accessibleCampaignIds;
+                $campaignStatsParams = array_merge($campaignStatsParams, $accessibleCampaignIds);
             } else {
                 $campaign_stats = [];
                 goto skip_campaign_stats;
@@ -316,7 +329,7 @@ if ($canViewStats && $canViewCampaigns) {
                 COUNT(DISTINCT o.id) as orders_count,
                 COALESCE(SUM(ol.quantity), 0) as quantity_count
             FROM campaigns c
-            LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated'
+            LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
             LEFT JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE CURDATE() BETWEEN c.start_date AND c.end_date
@@ -333,11 +346,11 @@ if ($canViewStats && $canViewCampaigns) {
     skip_campaign_stats:
 }
 
-// Répartition par catégorie de Promotions (seulement si permission stats)
+// Répartition par catégorie (14 derniers jours)
 if ($canViewStats && $canViewProducts) {
     try {
-        // Construire les filtres
-        $catParams = [];
+        // Construire les filtres - commencer avec les dates
+        $catParams = [$dateFrom, $dateTo];
         $catCampaignFilter = "";
         $catCustomerFilter = "";
 
@@ -346,7 +359,7 @@ if ($canViewStats && $canViewProducts) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $catCampaignFilter = " AND p.campaign_id IN ({$placeholders})";
-                $catParams = $accessibleCampaignIds;
+                $catParams = array_merge($catParams, $accessibleCampaignIds);
             } else {
                 $product_categories = [];
                 goto skip_categories;
@@ -374,12 +387,13 @@ if ($canViewStats && $canViewProducts) {
             FROM categories cat
             LEFT JOIN products p ON cat.id = p.category_id AND p.is_active = 1
             LEFT JOIN order_lines ol ON p.id = ol.product_id
-            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
             LEFT JOIN customers cu ON o.customer_id = cu.id
             WHERE 1=1
             {$catCampaignFilter}
             {$catCustomerFilter}
             GROUP BY cat.id, cat.name_fr, cat.color
+            HAVING quantity_sold > 0
             ORDER BY quantity_sold DESC
         ", $catParams);
     } catch (\PDOException $e) {
@@ -389,11 +403,11 @@ if ($canViewStats && $canViewProducts) {
     skip_categories:
 }
 
-// Commandes des 7 derniers jours (seulement si permission stats)
+// Évolution des ventes (14 derniers jours)
 if ($canViewStats && $canViewOrders) {
     try {
-        // Construire les filtres
-        $dailyParams = [];
+        // Construire les filtres - commencer avec les dates
+        $dailyParams = [$dateFrom, $dateTo];
         $dailyCampaignFilter = "";
         $dailyCustomerFilter = "";
 
@@ -402,7 +416,7 @@ if ($canViewStats && $canViewOrders) {
             if (!empty($accessibleCampaignIds)) {
                 $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
                 $dailyCampaignFilter = " AND o.campaign_id IN ({$placeholders})";
-                $dailyParams = $accessibleCampaignIds;
+                $dailyParams = array_merge($dailyParams, $accessibleCampaignIds);
             } else {
                 $daily_orders = [];
                 goto skip_daily_orders;
@@ -430,7 +444,7 @@ if ($canViewStats && $canViewOrders) {
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            WHERE DATE(o.created_at) BETWEEN ? AND ?
             AND o.status = 'validated'
             {$dailyCampaignFilter}
             {$dailyCustomerFilter}
@@ -504,7 +518,7 @@ $quickActionsGridClass = match(true) {
                 Dashboard
             </h2>
             <p class="mt-1 text-sm text-gray-500">
-                Vue d'ensemble de vos campagnes et statistiques
+                Vue d'ensemble de vos campagnes et statistiques <span class="text-indigo-600 font-medium">(<?= $periodLabel ?>)</span>
             </p>
         </div>
         <div class="mt-4 flex md:ml-4 md:mt-0">
@@ -642,7 +656,7 @@ $quickActionsGridClass = match(true) {
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <!-- Graphique par campagne -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Promos vendues par campagne active</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Promos vendues par campagne active <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
         <?php if (empty($campaign_stats)): ?>
         <div class="text-center py-8 text-gray-500">
             <i class="fas fa-chart-bar text-4xl text-gray-300 mb-3"></i>
@@ -655,7 +669,7 @@ $quickActionsGridClass = match(true) {
 
     <!-- Graphique par catégorie -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par catégorie</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par catégorie <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
         <?php if (empty($product_categories) || array_sum(array_column($product_categories, "quantity_sold")) == 0): ?>
         <div class="text-center py-8 text-gray-500">
             <i class="fas fa-chart-pie text-4xl text-gray-300 mb-3"></i>
@@ -667,13 +681,13 @@ $quickActionsGridClass = match(true) {
     </div>
 </div>
 
-<!-- Évolution quotidienne (7 derniers jours) -->
+<!-- Évolution des ventes -->
 <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes (7 derniers jours)</h3>
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Évolution des ventes <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
     <?php if (empty($daily_orders)): ?>
     <div class="text-center py-8 text-gray-500">
         <i class="fas fa-chart-line text-4xl text-gray-300 mb-3"></i>
-        <p>Aucune donnée sur les 7 derniers jours</p>
+        <p>Aucune donnée sur la période</p>
     </div>
     <?php else: ?>
     <canvas id="dailyChart" height="80"></canvas>
@@ -915,7 +929,7 @@ if (ctxCategory) {
     // Graphique quotidien (seulement si données)
     if (!empty($daily_orders)) {
         $pageScripts .= "
-// Graphique quotidien (Ligne) - 7 derniers jours
+// Graphique quotidien (Ligne) - 14 derniers jours
 const ctxDaily = document.getElementById('dailyChart');
 if (ctxDaily) {
     new Chart(ctxDaily.getContext('2d'), {
