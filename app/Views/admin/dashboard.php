@@ -8,7 +8,7 @@
  * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits (structure originale conservée)
  * @modified 2025/12/16 - Ajout filtrage hiérarchique stats selon rôle (createur, manager_reps)
  */
-
+echo "<!-- Dashboard v2 avec filtrage complet -->";
 use Core\Database;
 use App\Helpers\PermissionHelper;
 use App\Helpers\StatsAccessHelper;
