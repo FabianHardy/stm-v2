@@ -185,20 +185,36 @@ if ($canViewOrders) {
     skip_orders_kpi:
 }
 
-// KPI 4: Promotions actives (seulement si permission)
+// KPI 4: Promotions actives (seulement si permission) - filtrées par campagnes accessibles
 if ($canViewProducts) {
     try {
+        $promoParams = [];
+        $promoCampaignFilter = "";
+
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $promoCampaignFilter = " AND campaign_id IN ({$placeholders})";
+                $promoParams = $accessibleCampaignIds;
+            } else {
+                $stats["total_promos"] = 0;
+                goto skip_promos_kpi;
+            }
+        }
+
         $results = $db->query("
             SELECT COUNT(*) as total
             FROM products
             WHERE is_active = 1
-        ");
+            {$promoCampaignFilter}
+        ", $promoParams);
         if (!empty($results)) {
             $stats["total_promos"] = (int) ($results[0]["total"] ?? 0);
         }
     } catch (\PDOException $e) {
         error_log("Erreur récupération stats Promotions: " . $e->getMessage());
     }
+    skip_promos_kpi:
 }
 
 // Dernières commandes (seulement si permission orders.view)
