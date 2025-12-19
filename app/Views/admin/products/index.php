@@ -126,40 +126,42 @@ ob_start();
 </div>
 
 <!-- Filtres et recherche -->
-<div class="bg-white shadow rounded-lg mb-6">
+<?php
+// Préparer les données des campagnes pour Alpine.js
+$campaignsJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name'],
+        'country' => $c['country'],
+        'status' => $c['computed_status']
+    ];
+}, $campaigns), JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<div class="bg-white shadow rounded-lg mb-6"
+     x-data='{
+         campaignStatus: "<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active', ENT_QUOTES); ?>",
+         country: "<?php echo htmlspecialchars($_GET['country'] ?? '', ENT_QUOTES); ?>",
+         campaignId: "<?php echo htmlspecialchars($_GET['campaign_id'] ?? '', ENT_QUOTES); ?>",
+         campaigns: <?php echo $campaignsJson; ?>,
+         get filteredCampaigns() {
+             return this.campaigns.filter(c => {
+                 if (this.campaignStatus && this.campaignStatus !== "all") {
+                     if (c.status !== this.campaignStatus) return false;
+                 }
+                 if (this.country && c.country !== this.country) return false;
+                 return true;
+             });
+         },
+         resetCampaignIfInvalid() {
+             const validIds = this.filteredCampaigns.map(c => String(c.id));
+             if (this.campaignId && !validIds.includes(this.campaignId)) {
+                 this.campaignId = "";
+             }
+         }
+     }'
+     x-init="$watch('campaignStatus', () => resetCampaignIfInvalid()); $watch('country', () => resetCampaignIfInvalid());">
     <div class="px-4 py-5 sm:p-6">
-        <form method="GET" action="/stm/admin/products" class="space-y-4"
-              x-data="{
-                  campaignStatus: '<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active'); ?>',
-                  country: '<?php echo htmlspecialchars($_GET['country'] ?? ''); ?>',
-                  campaignId: '<?php echo htmlspecialchars($_GET['campaign_id'] ?? ''); ?>',
-                  campaigns: <?php echo json_encode(array_map(function($c) {
-                      return [
-                          'id' => $c['id'],
-                          'name' => $c['name'],
-                          'country' => $c['country'],
-                          'status' => $c['computed_status']
-                      ];
-                  }, $campaigns)); ?>,
-                  get filteredCampaigns() {
-                      return this.campaigns.filter(c => {
-                          // Filtre par statut
-                          if (this.campaignStatus && this.campaignStatus !== 'all') {
-                              if (c.status !== this.campaignStatus) return false;
-                          }
-                          // Filtre par pays
-                          if (this.country && c.country !== this.country) return false;
-                          return true;
-                      });
-                  },
-                  resetCampaignIfInvalid() {
-                      const validIds = this.filteredCampaigns.map(c => String(c.id));
-                      if (this.campaignId && !validIds.includes(this.campaignId)) {
-                          this.campaignId = '';
-                      }
-                  }
-              }"
-              x-init="$watch('campaignStatus', () => resetCampaignIfInvalid()); $watch('country', () => resetCampaignIfInvalid());">
+        <form method="GET" action="/stm/admin/products" class="space-y-4">
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
 
