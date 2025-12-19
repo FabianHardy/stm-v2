@@ -6,21 +6,33 @@
  * - Bandeau d'impersonation (si actif)
  * - Bouton hamburger (mobile)
  * - Fil d'Ariane
- * - Zone de recherche
+ * - Zone de recherche (désactivée temporairement)
  * - Notifications
  * - Menu utilisateur
  *
  * @package STM
- * @version 2.1
+ * @version 2.2
  * @modified 16/12/2025 - Ajout bandeau "Se connecter en tant que"
+ * @modified 19/12/2025 - Correction nom utilisateur (name au lieu de username), recherche grisée
  */
 
 use Core\Session;
 use App\Helpers\PermissionHelper;
 
 $currentUser = Session::get('user');
-$userName = $currentUser['username'] ?? 'Admin';
+$userName = $currentUser['name'] ?? 'Utilisateur';
 $userRole = $currentUser['role'] ?? 'admin';
+
+// Générer les initiales (première lettre de chaque mot, max 2)
+$nameParts = explode(' ', $userName);
+$initials = '';
+foreach ($nameParts as $part) {
+    if (!empty($part)) {
+        $initials .= strtoupper(substr($part, 0, 1));
+        if (strlen($initials) >= 2) break;
+    }
+}
+$userInitials = $initials ?: 'U';
 
 // Vérifier si on est en mode impersonate
 $isImpersonating = Session::get('impersonate_original_user') !== null;
@@ -29,8 +41,8 @@ $originalUser = Session::get('impersonate_original_user');
 // Permissions pour le menu utilisateur
 $canViewSettings = PermissionHelper::can('settings.view');
 
-// Nombre de notifications non lues (à implémenter)
-$unreadNotifications = 3;
+// Nombre de notifications non lues (TODO: implémenter)
+$unreadNotifications = 0;
 ?>
 
 <?php if ($isImpersonating): ?>
@@ -44,7 +56,7 @@ $unreadNotifications = 3;
                 <span class="text-orange-200">(<?= ucfirst($userRole) ?>)</span>
             </span>
         </div>
-        <a href="/stm/admin/impersonate/stop" 
+        <a href="/stm/admin/impersonate/stop"
            class="inline-flex items-center gap-2 px-4 py-1.5 bg-white text-orange-600 rounded-lg hover:bg-orange-100 transition font-medium text-sm shadow-sm">
             <i class="fas fa-sign-out-alt"></i>
             Revenir à mon compte (<?= htmlspecialchars($originalUser['username'] ?? 'Admin') ?>)
@@ -92,32 +104,18 @@ $unreadNotifications = 3;
             <!-- Partie droite : Recherche + Notifications + User Menu -->
             <div class="flex items-center gap-3">
 
-                <!-- Barre de recherche (desktop uniquement) -->
+                <!-- Barre de recherche (désactivée temporairement) -->
                 <div class="hidden md:block" x-data="{ searchOpen: false }">
                     <div class="relative">
-                        <button @click="searchOpen = !searchOpen"
-                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <button disabled
+                                title="Recherche bientôt disponible"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 bg-gray-100 rounded-lg cursor-not-allowed opacity-60">
                             <i class="fas fa-search"></i>
                             <span class="hidden lg:inline">Rechercher...</span>
-                            <kbd class="hidden lg:inline px-2 py-1 text-xs font-semibold text-gray-800 bg-white border border-gray-200 rounded">
+                            <kbd class="hidden lg:inline px-2 py-1 text-xs font-semibold text-gray-400 bg-gray-200 border border-gray-300 rounded">
                                 Ctrl+K
                             </kbd>
                         </button>
-
-                        <!-- Modal de recherche -->
-                        <div x-show="searchOpen"
-                             x-transition
-                             @click.away="searchOpen = false"
-                             class="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 p-4"
-                             style="display: none;">
-                            <input type="text"
-                                   placeholder="Rechercher campagnes, produits, clients..."
-                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                   autofocus>
-                            <div class="mt-3 text-xs text-gray-500">
-                                <p>Appuyez sur <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">↵</kbd> pour rechercher</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -145,69 +143,24 @@ $unreadNotifications = 3;
                          style="display: none;">
 
                         <!-- Header -->
-                        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
                             <h3 class="text-sm font-semibold text-gray-900">Notifications</h3>
-                            <button class="text-xs text-primary-600 hover:text-primary-700">
-                                Tout marquer comme lu
-                            </button>
                         </div>
 
                         <!-- Liste des notifications -->
                         <div class="max-h-96 overflow-y-auto">
-                            <!-- Notification 1 -->
-                            <a href="#" class="block px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100">
-                                <div class="flex gap-3">
-                                    <div class="flex-shrink-0">
-                                        <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                                            <i class="fas fa-shopping-cart text-primary-600"></i>
-                                        </div>
+                            <?php if ($unreadNotifications > 0): ?>
+                                <!-- TODO: Boucle sur les vraies notifications -->
+                            <?php else: ?>
+                                <!-- Aucune notification -->
+                                <div class="px-4 py-8 text-center">
+                                    <div class="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                                        <i class="fas fa-bell-slash text-gray-400 text-xl"></i>
                                     </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm text-gray-900 font-medium">Nouvelle commande</p>
-                                        <p class="text-xs text-gray-600 mt-1">Client ABC a passé une commande</p>
-                                        <p class="text-xs text-gray-400 mt-1">Il y a 5 minutes</p>
-                                    </div>
+                                    <p class="text-sm text-gray-500">Aucune notification</p>
+                                    <p class="text-xs text-gray-400 mt-1">Vous êtes à jour !</p>
                                 </div>
-                            </a>
-
-                            <!-- Notification 2 -->
-                            <a href="#" class="block px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100">
-                                <div class="flex gap-3">
-                                    <div class="flex-shrink-0">
-                                        <div class="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                                            <i class="fas fa-check text-green-600"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm text-gray-900 font-medium">Campagne activée</p>
-                                        <p class="text-xs text-gray-600 mt-1">La campagne "Printemps 2025" est maintenant active</p>
-                                        <p class="text-xs text-gray-400 mt-1">Il y a 1 heure</p>
-                                    </div>
-                                </div>
-                            </a>
-
-                            <!-- Notification 3 -->
-                            <a href="#" class="block px-4 py-3 hover:bg-gray-50 transition-colors">
-                                <div class="flex gap-3">
-                                    <div class="flex-shrink-0">
-                                        <div class="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                                            <i class="fas fa-exclamation-triangle text-yellow-600"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm text-gray-900 font-medium">Stock faible</p>
-                                        <p class="text-xs text-gray-600 mt-1">3 produits ont un stock inférieur à 10</p>
-                                        <p class="text-xs text-gray-400 mt-1">Il y a 2 heures</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-
-                        <!-- Footer -->
-                        <div class="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                            <a href="#" class="text-sm text-primary-600 hover:text-primary-700 font-medium">
-                                Voir toutes les notifications →
-                            </a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -221,7 +174,7 @@ $unreadNotifications = 3;
                             <?php if ($isImpersonating): ?>
                                 <i class="fas fa-user-secret text-xs"></i>
                             <?php else: ?>
-                                <?= strtoupper(substr($userName, 0, 2)) ?>
+                                <?= $userInitials ?>
                             <?php endif; ?>
                         </div>
                         <div class="hidden md:block text-left">
@@ -301,12 +254,13 @@ $unreadNotifications = 3;
     </div>
 </header>
 
-<!-- Raccourci clavier pour la recherche -->
+<!-- Raccourci clavier pour la recherche (désactivé temporairement)
 <script>
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
             e.preventDefault();
-            document.querySelector('[x-data*="searchOpen"]').__x.$data.searchOpen = true;
+            // TODO: Activer quand la recherche sera implémentée
         }
     });
 </script>
+-->

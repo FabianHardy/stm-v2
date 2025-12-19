@@ -2,11 +2,12 @@
 /**
  * Model Product (renommé en Promotion dans l'interface)
  * Gestion des promotions par campagne
- * 
+ *
  * @package STM/Models
- * @version 2.3.0
+ * @version 2.4.0
  * @created 11/11/2025
  * @modified 17/11/2025 - Ajout méthode hasOrders() pour vérification avant suppression
+ * @modified 18/12/2025 - Ajout filtre campaign_ids pour filtrage par rôle (rep, manager_reps)
  */
 
 namespace App\Models;
@@ -24,45 +25,59 @@ class Product
 
     /**
      * Récupérer toutes les promotions avec filtres
-     * 
-     * @param array $filters Filtres optionnels
+     *
+     * @param array $filters Filtres optionnels (campaign_ids, campaign_id, category, search, is_active, status)
      * @return array
+     * @modified 18/12/2025 - Ajout filtre campaign_ids pour filtrage par rôle
      */
     public function getAll(array $filters = []): array
     {
-        $sql = "SELECT p.*, 
-                       c.name as campaign_name, 
+        $sql = "SELECT p.*,
+                       c.name as campaign_name,
                        c.country as campaign_country,
                        cat.name_fr as category_name
                 FROM products p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
                 LEFT JOIN categories cat ON p.category_id = cat.id
                 WHERE 1=1";
-        
+
         $params = [];
 
-        // Filtre par campagne
+        // Filtre par liste d'IDs de campagnes (pour rôles limités)
+        if (isset($filters['campaign_ids'])) {
+            if (empty($filters['campaign_ids'])) {
+                return []; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($filters['campaign_ids']), "?"));
+            $sql .= " AND p.campaign_id IN ({$placeholders})";
+            $params = array_merge($params, $filters['campaign_ids']);
+        }
+
+        // Filtre par campagne unique
         if (!empty($filters['campaign_id'])) {
-            $sql .= " AND p.campaign_id = :campaign_id";
-            $params[':campaign_id'] = $filters['campaign_id'];
+            $sql .= " AND p.campaign_id = ?";
+            $params[] = $filters['campaign_id'];
         }
 
         // Filtre par catégorie
         if (!empty($filters['category'])) {
-            $sql .= " AND p.category_id = :category";
-            $params[':category'] = $filters['category'];
+            $sql .= " AND p.category_id = ?";
+            $params[] = $filters['category'];
         }
 
         // Filtre par recherche
         if (!empty($filters['search'])) {
-            $sql .= " AND (p.product_code LIKE :search OR p.name_fr LIKE :search OR p.name_nl LIKE :search)";
-            $params[':search'] = '%' . $filters['search'] . '%';
+            $sql .= " AND (p.product_code LIKE ? OR p.name_fr LIKE ? OR p.name_nl LIKE ?)";
+            $searchTerm = '%' . $filters['search'] . '%';
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
         }
 
         // Filtre par statut
         if (isset($filters['is_active'])) {
-            $sql .= " AND p.is_active = :is_active";
-            $params[':is_active'] = $filters['is_active'];
+            $sql .= " AND p.is_active = ?";
+            $params[] = $filters['is_active'];
         }
 
         // Filtre par statut textuel
@@ -81,29 +96,29 @@ class Product
 
     /**
      * Récupérer une promotion par son ID
-     * 
+     *
      * @param int $id ID de la promotion
      * @return array|false
      */
     public function findById(int $id): array|false
     {
-        $sql = "SELECT p.*, 
-                       c.name as campaign_name, 
+        $sql = "SELECT p.*,
+                       c.name as campaign_name,
                        c.country as campaign_country,
                        cat.name_fr as category_name
                 FROM products p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
                 LEFT JOIN categories cat ON p.category_id = cat.id
                 WHERE p.id = :id";
-        
+
         $result = $this->db->queryOne($sql, [':id' => $id]);
-        
+
         return $result ?: false;
     }
 
     /**
      * ALIAS : find() → findById() pour compatibilité
-     * 
+     *
      * @param int $id ID de la promotion
      * @return array|false
      */
@@ -114,7 +129,7 @@ class Product
 
     /**
      * Récupérer une promotion par son code produit
-     * 
+     *
      * @param string $code Code produit
      * @return array|false
      */
@@ -122,13 +137,13 @@ class Product
     {
         $sql = "SELECT * FROM products WHERE product_code = :code";
         $result = $this->db->queryOne($sql, [':code' => $code]);
-        
+
         return $result ?: false;
     }
 
     /**
      * Créer une nouvelle promotion
-     * 
+     *
      * @param array $data Données de la promotion
      * @return int|false ID de la promotion créée ou false
      * @modified 12/11/2025 17:30 - Ajout max_total et max_per_customer
@@ -138,8 +153,8 @@ class Product
         $sql = "INSERT INTO products (
                     campaign_id,
                     category_id,
-                    product_code, 
-                    name_fr, 
+                    product_code,
+                    name_fr,
                     name_nl,
                     description_fr,
                     description_nl,
@@ -194,7 +209,7 @@ class Product
 
     /**
      * Mettre à jour une promotion
-     * 
+     *
      * @param int $id ID de la promotion
      * @param array $data Nouvelles données
      * @return bool
@@ -245,40 +260,40 @@ class Product
 
     /**
      * Supprimer une promotion
-     * 
+     *
      * @param int $id ID de la promotion
      * @return bool
      */
     public function delete(int $id): bool
     {
         $sql = "DELETE FROM products WHERE id = :id";
-        
+
         return $this->db->execute($sql, [':id' => $id]);
     }
 
     /**
      * Vérifier si une promotion a des commandes associées
-     * 
+     *
      * @param int $id ID de la promotion
      * @return bool True si des commandes existent, False sinon
      * @created 17/11/2025
      */
     public function hasOrders(int $id): bool
     {
-        $sql = "SELECT COUNT(*) as count 
-                FROM order_lines 
+        $sql = "SELECT COUNT(*) as count
+                FROM order_lines
                 WHERE product_id = :product_id";
-        
+
         try {
             $result = $this->db->query($sql, [':product_id' => $id]);
-            
+
             if (!is_array($result) || empty($result)) {
                 return false;
             }
-            
+
             $count = isset($result[0]['count']) ? (int)$result[0]['count'] : 0;
             return $count > 0;
-            
+
         } catch (\PDOException $e) {
             error_log("Product::hasOrders() - Erreur SQL: " . $e->getMessage());
             // En cas d'erreur SQL, on bloque la suppression par sécurité
@@ -288,7 +303,7 @@ class Product
 
     /**
      * Récupérer les promotions actives
-     * 
+     *
      * @return array
      */
     public function getActive(): array
@@ -298,28 +313,28 @@ class Product
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
                 WHERE p.is_active = 1
                 ORDER BY p.created_at DESC";
-        
+
         return $this->db->query($sql);
     }
 
     /**
      * Récupérer les promotions d'une campagne
-     * 
+     *
      * @param int $campaignId ID de la campagne
      * @return array
      */
     public function getByCampaign(int $campaignId): array
     {
-        $sql = "SELECT * FROM products 
-                WHERE campaign_id = :campaign_id 
+        $sql = "SELECT * FROM products
+                WHERE campaign_id = :campaign_id
                 ORDER BY display_order ASC, created_at DESC";
-        
+
         return $this->db->query($sql, [':campaign_id' => $campaignId]);
     }
 
     /**
      * Compter les promotions
-     * 
+     *
      * @param array $filters Filtres optionnels
      * @return int
      */
@@ -339,13 +354,13 @@ class Product
         }
 
         $result = $this->db->query($sql, $params);
-        
+
         return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
     }
 
     /**
      * Valider les données d'une promotion
-     * 
+     *
      * @param array $data Données à valider
      * @return array Tableau des erreurs (vide si OK)
      * @modified 12/11/2025 17:30 - Ajout validation quotas
@@ -360,23 +375,23 @@ class Product
         } else {
             // ⭐ NOUVEAU : Vérifier l'unicité (product_code + campaign_id)
             // Permet le même code dans différentes campagnes
-            $sql = "SELECT id FROM products 
-                    WHERE product_code = :product_code 
+            $sql = "SELECT id FROM products
+                    WHERE product_code = :product_code
                     AND campaign_id = :campaign_id";
-            
+
             $params = [
                 ':product_code' => $data['product_code'],
                 ':campaign_id' => $data['campaign_id']
             ];
-            
+
             // Si c'est un UPDATE, exclure l'ID actuel
             if (isset($data['id'])) {
                 $sql .= " AND id != :id";
                 $params[':id'] = $data['id'];
             }
-            
+
             $existing = $this->db->queryOne($sql, $params);
-            
+
             if ($existing) {
                 $errors['product_code'] = 'Ce code produit existe déjà dans cette campagne';
             }
@@ -389,7 +404,7 @@ class Product
             // Vérifier que la campagne existe
             $campaignModel = new \App\Models\Campaign();
             $campaign = $campaignModel->findById((int) $data['campaign_id']);
-            
+
             if (!$campaign) {
                 $errors['campaign_id'] = 'La campagne sélectionnée n\'existe pas';
             }
@@ -420,10 +435,12 @@ class Product
 
     /**
      * Récupérer les statistiques des promotions
-     * 
+     *
+     * @param array|null $campaignIds Liste des IDs de campagnes accessibles (null = toutes)
      * @return array
+     * @modified 18/12/2025 - Ajout paramètre campaignIds pour filtrage par rôle
      */
-    public function getStats(): array
+    public function getStats(?array $campaignIds = null): array
     {
         $stats = [
             'total' => 0,
@@ -431,19 +448,34 @@ class Product
             'inactive' => 0,
         ];
 
+        // Construire le filtre campagne
+        $campaignFilter = "";
+        $params = [];
+
+        if ($campaignIds !== null) {
+            if (empty($campaignIds)) {
+                return $stats; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($campaignIds), "?"));
+            $campaignFilter = " WHERE campaign_id IN ({$placeholders})";
+            $params = $campaignIds;
+        }
+
         // Total
-        $sql = "SELECT COUNT(*) as count FROM products";
-        $result = $this->db->query($sql);
+        $sql = "SELECT COUNT(*) as count FROM products" . $campaignFilter;
+        $result = $this->db->query($sql, $params);
         $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         // Actives
-        $sql = "SELECT COUNT(*) as count FROM products WHERE is_active = 1";
-        $result = $this->db->query($sql);
+        $sql = "SELECT COUNT(*) as count FROM products" .
+               ($campaignFilter ? $campaignFilter . " AND is_active = 1" : " WHERE is_active = 1");
+        $result = $this->db->query($sql, $params);
         $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         // Inactives
-        $sql = "SELECT COUNT(*) as count FROM products WHERE is_active = 0";
-        $result = $this->db->query($sql);
+        $sql = "SELECT COUNT(*) as count FROM products" .
+               ($campaignFilter ? $campaignFilter . " AND is_active = 0" : " WHERE is_active = 0");
+        $result = $this->db->query($sql, $params);
         $stats['inactive'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
         return $stats;

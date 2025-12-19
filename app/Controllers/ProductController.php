@@ -4,6 +4,7 @@
  *
  * @created 11/11/2025
  * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
+ * @modified 18/12/2025 - Filtrage par campagnes accessibles selon le rôle
  */
 
 namespace App\Controllers;
@@ -11,6 +12,7 @@ namespace App\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Campaign;
+use App\Helpers\StatsAccessHelper;
 use Core\Session;
 
 class ProductController
@@ -27,6 +29,9 @@ class ProductController
      */
     public function index(): void
     {
+        // Récupérer les campagnes accessibles selon le rôle
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+
         // Récupérer les filtres
         $filters = [
             "search" => $_GET["search"] ?? "",
@@ -34,11 +39,16 @@ class ProductController
             "status" => $_GET["status"] ?? "",
         ];
 
-        // Récupérer les Promotions filtrés
+        // Ajouter le filtre par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            $filters["campaign_ids"] = $accessibleCampaignIds;
+        }
+
+        // Récupérer les Promotions filtrées
         $products = $this->productModel->getAll($filters);
 
-        // Récupérer les statistiques
-        $stats = $this->productModel->getStats();
+        // Récupérer les statistiques (filtrées)
+        $stats = $this->productModel->getStats($accessibleCampaignIds);
 
         // Récupérer les catégories pour le filtre
         $categoryModel = new Category();
@@ -52,6 +62,7 @@ class ProductController
      * Afficher le formulaire de création
      *
      * @modified 12/11/2025 15:45 - FIX : Utilisation categories
+     * @modified 18/12/2025 - Filtrage campagnes par rôle
      */
     public function create(): void
     {
@@ -59,15 +70,28 @@ class ProductController
         $db = \Core\Database::getInstance();
         $categories = $db->query("SELECT * FROM categories ORDER BY display_order ASC");
 
+        // Récupérer les campagnes accessibles selon le rôle
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
 
         if (method_exists($campaignModel, "getActiveOrFuture")) {
-            $campaigns = $campaignModel->getActiveOrFuture();
+            $allCampaigns = $campaignModel->getActiveOrFuture();
         } elseif (method_exists($campaignModel, "getActive")) {
-            $campaigns = $campaignModel->getActive();
+            $allCampaigns = $campaignModel->getActive();
         } else {
-            $campaigns = $campaignModel->getAll();
+            $allCampaigns = $campaignModel->getAll();
+        }
+
+        // Filtrer par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            $campaigns = array_filter($allCampaigns, function($c) use ($accessibleCampaignIds) {
+                return in_array($c['id'], $accessibleCampaignIds);
+            });
+            $campaigns = array_values($campaigns); // Réindexer
+        } else {
+            $campaigns = $allCampaigns;
         }
 
         // Debug: vérifier si on a des campagnes
@@ -167,6 +191,7 @@ class ProductController
 
     /**
      * Afficher les détails d'un Promotion
+     * @modified 18/12/2025 - Vérification accès campagne
      */
     public function show(int $id): void
     {
@@ -179,12 +204,20 @@ class ProductController
             exit();
         }
 
+        // Vérifier l'accès à la campagne du produit
+        if (!$this->canAccessProduct($product)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
+            header("Location: /stm/admin/products");
+            exit();
+        }
+
         // Charger la vue
         require_once __DIR__ . "/../Views/admin/products/show.php";
     }
 
     /**
      * Afficher le formulaire d'édition
+     * @modified 18/12/2025 - Vérification accès + filtrage campagnes
      */
     public function edit(int $id): void
     {
@@ -197,19 +230,39 @@ class ProductController
             exit();
         }
 
+        // Vérifier l'accès à la campagne du produit
+        if (!$this->canAccessProduct($product)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
+            header("Location: /stm/admin/products");
+            exit();
+        }
+
         // Récupérer les catégories
         $categoryModel = new Category();
         $categories = $categoryModel->getAll();
+
+        // Récupérer les campagnes accessibles selon le rôle
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
 
         // Récupérer les campagnes ACTIVES OU FUTURES (pas les passées)
         $campaignModel = new Campaign();
 
         if (method_exists($campaignModel, "getActiveOrFuture")) {
-            $campaigns = $campaignModel->getActiveOrFuture();
+            $allCampaigns = $campaignModel->getActiveOrFuture();
         } elseif (method_exists($campaignModel, "getActive")) {
-            $campaigns = $campaignModel->getActive();
+            $allCampaigns = $campaignModel->getActive();
         } else {
-            $campaigns = $campaignModel->getAll();
+            $allCampaigns = $campaignModel->getAll();
+        }
+
+        // Filtrer par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            $campaigns = array_filter($allCampaigns, function($c) use ($accessibleCampaignIds) {
+                return in_array($c['id'], $accessibleCampaignIds);
+            });
+            $campaigns = array_values($campaigns);
+        } else {
+            $campaigns = $allCampaigns;
         }
 
         // Debug
@@ -223,6 +276,7 @@ class ProductController
      * Mettre à jour un Promotion
      *
      * @modified 12/11/2025 17:30 - Ajout quotas
+     * @modified 18/12/2025 - Vérification accès campagne
      */
     public function update(int $id): void
     {
@@ -239,6 +293,13 @@ class ProductController
 
         if (!$product) {
             Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne du produit
+        if (!$this->canAccessProduct($product)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
             header("Location: /stm/admin/products");
             exit();
         }
@@ -318,6 +379,7 @@ class ProductController
      * Supprimer un Promotion
      *
      * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
+     * @modified 18/12/2025 - Vérification accès campagne
      */
     public function destroy(int $id): void
     {
@@ -333,6 +395,13 @@ class ProductController
 
         if (!$product) {
             Session::setFlash("error", "Promotion non trouvée");
+            header("Location: /stm/admin/products");
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne du produit
+        if (!$this->canAccessProduct($product)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
             header("Location: /stm/admin/products");
             exit();
         }
@@ -446,5 +515,25 @@ class ProductController
     {
         $token = $_POST["_token"] ?? "";
         return $token === Session::get("csrf_token");
+    }
+
+    /**
+     * Vérifier si l'utilisateur peut accéder à un produit
+     * basé sur les campagnes auxquelles il a accès
+     *
+     * @param array $product Données du produit
+     * @return bool
+     */
+    private function canAccessProduct(array $product): bool
+    {
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+
+        // null = accès à tout
+        if ($accessibleCampaignIds === null) {
+            return true;
+        }
+
+        // Vérifier si la campagne du produit est dans la liste des campagnes accessibles
+        return in_array($product['campaign_id'], $accessibleCampaignIds);
     }
 }
