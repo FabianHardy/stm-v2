@@ -9,6 +9,7 @@
  * @modified 2025/12/10 - Ajout gestion équipe (assignees) pour onglet Équipe
  * @modified 2025/12/12 - Intégration PermissionMiddleware (Phase 5)
  * @modified 2025/12/18 - Utilisation StatsAccessHelper pour filtrage reps/manager_reps
+ * @modified 2025/12/19 - Correction comptage actives (is_active=1 + dates)
  */
 
 namespace App\Controllers;
@@ -106,9 +107,9 @@ class CampaignController
             $result = $db->query("SELECT COUNT(*) as total FROM campaigns {$whereClause}", $params);
             $total = (int) ($result[0]['total'] ?? 0);
 
-            // Actives
+            // Actives (is_active=1 ET dans la période)
             $result = $db->query(
-                "SELECT COUNT(*) as active FROM campaigns {$whereClause} AND CURDATE() BETWEEN start_date AND end_date",
+                "SELECT COUNT(*) as active FROM campaigns {$whereClause} AND is_active = 1 AND CURDATE() BETWEEN start_date AND end_date",
                 $params
             );
             $active = (int) ($result[0]['active'] ?? 0);

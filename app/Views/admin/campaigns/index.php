@@ -3,10 +3,11 @@
  * Vue : Liste des campagnes
  *
  * @package STM/Views/Admin/Campaigns
- * @version 2.3.0
+ * @version 2.4.0
  * @created 07/11/2025
  * @modified 14/11/2025 - Ajout colonne statistiques (clients + promotions)
  * @modified 15/12/2025 - Masquage conditionnel boutons selon permissions (Phase 5)
+ * @modified 19/12/2025 - Correction affichage statut (is_active + dates)
  */
 
 use App\Helpers\PermissionHelper;
@@ -142,13 +143,15 @@ ob_start();
             </div>
 
             <div>
-                <label for="is_active" class="block text-sm font-medium text-gray-700">Statut</label>
-                <select name="is_active"
-                        id="is_active"
+                <label for="status" class="block text-sm font-medium text-gray-700">Statut</label>
+                <select name="status"
+                        id="status"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
                     <option value="">Tous les statuts</option>
-                    <option value="1" <?= isset($_GET["is_active"]) && $_GET["is_active"] === "1" ? "selected" : "" ?>>Active</option>
-                    <option value="0" <?= isset($_GET["is_active"]) && $_GET["is_active"] === "0" ? "selected" : "" ?>>Inactive</option>
+                    <option value="active" <?= ($_GET["status"] ?? "") === "active" ? "selected" : "" ?>>Active (en cours)</option>
+                    <option value="upcoming" <?= ($_GET["status"] ?? "") === "upcoming" ? "selected" : "" ?>>À venir</option>
+                    <option value="ended" <?= ($_GET["status"] ?? "") === "ended" ? "selected" : "" ?>>Terminée</option>
+                    <option value="inactive" <?= ($_GET["status"] ?? "") === "inactive" ? "selected" : "" ?>>Inactive (désactivée)</option>
                 </select>
             </div>
 
@@ -260,8 +263,8 @@ ob_start();
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <?php
                                 $customerStats = $campaign["customer_stats"] ?? [];
-                                $eligible = $customerStats["eligible"] ?? 0;
-                                $ordered = $customerStats["ordered"] ?? 0;
+                                $eligible = $customerStats["total"] ?? 0;
+                                $ordered = $customerStats["with_orders"] ?? 0;
                                 $promotionCount = $campaign["promotion_count"] ?? 0;
                                 ?>
                                 <div class="flex flex-col gap-1">
@@ -283,10 +286,10 @@ ob_start();
 
                             <!-- URL Publique -->
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <?php if (!empty($campaign["public_uuid"])): ?>
+                                <?php if (!empty($campaign["uuid"])): ?>
                                     <?php
-                                    $publicUrl = "https://actions.trendyfoods.com/stm/c/" . $campaign["public_uuid"];
-                                    $shortUuid = "..." . substr($campaign["public_uuid"], -8);
+                                    $publicUrl = "https://actions.trendyfoods.com/stm/c/" . $campaign["uuid"];
+                                    $shortUuid = "..." . substr($campaign["uuid"], -8);
                                     ?>
                                     <div class="flex items-center gap-2">
                                         <a href="<?= $publicUrl ?>"
@@ -310,21 +313,40 @@ ob_start();
 
                             <!-- Statut -->
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <?php if ($campaign["is_active"]): ?>
-                                    <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                                        <svg class="mr-1.5 h-2 w-2 fill-green-500" viewBox="0 0 6 6">
-                                            <circle cx="3" cy="3" r="3" />
-                                        </svg>
-                                        Active
-                                    </span>
-                                <?php else: ?>
-                                    <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                                        <svg class="mr-1.5 h-2 w-2 fill-gray-500" viewBox="0 0 6 6">
-                                            <circle cx="3" cy="3" r="3" />
-                                        </svg>
-                                        Inactive
-                                    </span>
-                                <?php endif; ?>
+                                <?php
+                                // Calculer le statut réel basé sur is_active ET les dates
+                                $today = date('Y-m-d');
+                                $startDate = $campaign["start_date"];
+                                $endDate = $campaign["end_date"];
+
+                                if (!$campaign["is_active"]) {
+                                    // Désactivé manuellement
+                                    $statusClass = "bg-red-100 text-red-800";
+                                    $dotClass = "fill-red-500";
+                                    $statusLabel = "Inactive";
+                                } elseif ($today < $startDate) {
+                                    // Pas encore commencée
+                                    $statusClass = "bg-blue-100 text-blue-800";
+                                    $dotClass = "fill-blue-500";
+                                    $statusLabel = "À venir";
+                                } elseif ($today > $endDate) {
+                                    // Terminée
+                                    $statusClass = "bg-gray-100 text-gray-800";
+                                    $dotClass = "fill-gray-500";
+                                    $statusLabel = "Terminée";
+                                } else {
+                                    // Active et dans la période
+                                    $statusClass = "bg-green-100 text-green-800";
+                                    $dotClass = "fill-green-500";
+                                    $statusLabel = "Active";
+                                }
+                                ?>
+                                <span class="inline-flex items-center rounded-full <?= $statusClass ?> px-2.5 py-0.5 text-xs font-medium">
+                                    <svg class="mr-1.5 h-2 w-2 <?= $dotClass ?>" viewBox="0 0 6 6">
+                                        <circle cx="3" cy="3" r="3" />
+                                    </svg>
+                                    <?= $statusLabel ?>
+                                </span>
                             </td>
 
                             <!-- Actions -->
@@ -384,7 +406,7 @@ ob_start();
                     <a href="?page=<?= $currentPage - 1 .
                         (!empty($_GET["search"]) ? "&search=" . urlencode($_GET["search"]) : "") .
                         (!empty($_GET["country"]) ? "&country=" . $_GET["country"] : "") .
-                        (isset($_GET["is_active"]) ? "&is_active=" . $_GET["is_active"] : "") ?>"
+                        (!empty($_GET["status"]) ? "&status=" . $_GET["status"] : "") ?>"
                        class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                         Précédent
                     </a>
@@ -393,7 +415,7 @@ ob_start();
                     <a href="?page=<?= $currentPage + 1 .
                         (!empty($_GET["search"]) ? "&search=" . urlencode($_GET["search"]) : "") .
                         (!empty($_GET["country"]) ? "&country=" . $_GET["country"] : "") .
-                        (isset($_GET["is_active"]) ? "&is_active=" . $_GET["is_active"] : "") ?>"
+                        (!empty($_GET["status"]) ? "&status=" . $_GET["status"] : "") ?>"
                        class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                         Suivant
                     </a>
@@ -417,7 +439,7 @@ ob_start();
                             <a href="?page=<?= $i .
                                 (!empty($_GET["search"]) ? "&search=" . urlencode($_GET["search"]) : "") .
                                 (!empty($_GET["country"]) ? "&country=" . $_GET["country"] : "") .
-                                (isset($_GET["is_active"]) ? "&is_active=" . $_GET["is_active"] : "") ?>"
+                                (!empty($_GET["status"]) ? "&status=" . $_GET["status"] : "") ?>"
                                class="relative inline-flex items-center px-4 py-2 border text-sm font-medium <?= $i === $currentPage
                                    ? "z-10 bg-purple-50 border-purple-500 text-purple-600"
                                    : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50" ?>">

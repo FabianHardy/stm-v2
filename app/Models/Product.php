@@ -4,10 +4,11 @@
  * Gestion des promotions par campagne
  *
  * @package STM/Models
- * @version 2.4.0
+ * @version 2.5.0
  * @created 11/11/2025
  * @modified 17/11/2025 - Ajout méthode hasOrders() pour vérification avant suppression
  * @modified 18/12/2025 - Ajout filtre campaign_ids pour filtrage par rôle (rep, manager_reps)
+ * @modified 19/12/2025 - Ajout filtre campaign_status (active/upcoming/ended) + dates campagne dans SELECT
  */
 
 namespace App\Models;
@@ -35,6 +36,9 @@ class Product
         $sql = "SELECT p.*,
                        c.name as campaign_name,
                        c.country as campaign_country,
+                       c.is_active as campaign_is_active,
+                       c.start_date as campaign_start_date,
+                       c.end_date as campaign_end_date,
                        cat.name_fr as category_name
                 FROM products p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
@@ -86,6 +90,29 @@ class Product
                 $sql .= " AND p.is_active = 1";
             } elseif ($filters['status'] === 'inactive') {
                 $sql .= " AND p.is_active = 0";
+            }
+        }
+
+        // Filtre par statut de campagne (active = is_active + dans la période)
+        if (!empty($filters['campaign_status'])) {
+            switch ($filters['campaign_status']) {
+                case 'active':
+                    // Campagne active : is_active = 1 ET dans la période
+                    $sql .= " AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
+                    break;
+                case 'upcoming':
+                    // Campagne à venir : is_active = 1 ET pas encore commencée
+                    $sql .= " AND c.is_active = 1 AND c.start_date > CURDATE()";
+                    break;
+                case 'ended':
+                    // Campagne terminée : end_date passée
+                    $sql .= " AND c.end_date < CURDATE()";
+                    break;
+                case 'inactive':
+                    // Campagne désactivée manuellement
+                    $sql .= " AND c.is_active = 0";
+                    break;
+                // 'all' ou autre = pas de filtre
             }
         }
 
