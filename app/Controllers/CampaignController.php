@@ -8,12 +8,14 @@
  * @created  2025/11/07 10:00
  * @modified 2025/12/10 - Ajout gestion équipe (assignees) pour onglet Équipe
  * @modified 2025/12/12 - Intégration PermissionMiddleware (Phase 5)
+ * @modified 2025/12/18 - Utilisation StatsAccessHelper pour filtrage reps/manager_reps
  */
 
 namespace App\Controllers;
 
 use App\Models\Campaign;
 use App\Helpers\PermissionHelper;
+use App\Helpers\StatsAccessHelper;
 use Middleware\PermissionMiddleware;
 use Core\Database;
 use Core\Session;
@@ -41,10 +43,16 @@ class CampaignController
             "status" => $_GET["status"] ?? "",
         ];
 
-        // Filtrer par scope selon le rôle
-        if (!PermissionHelper::can('campaigns.view_all')) {
-            // Créateur : seulement ses campagnes assignées
-            $filters['campaign_ids'] = PermissionHelper::getAccessibleCampaignIds();
+        // Filtrer par campagnes accessibles selon le rôle (utilise StatsAccessHelper pour rep/manager_reps)
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+        if ($accessibleCampaignIds !== null) {
+            $filters['campaign_ids'] = $accessibleCampaignIds;
+        }
+
+        // Filtrer aussi par pays accessibles
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        if ($accessibleCountries !== null && empty($filters['country'])) {
+            $filters['accessible_countries'] = $accessibleCountries;
         }
 
         $campaigns = $this->campaignModel->getAll($filters);
@@ -55,16 +63,82 @@ class CampaignController
         }
         unset($campaign);
 
-        $stats = $this->campaignModel->getStats();
-        $stats["be"] = $this->campaignModel->countByCountry("BE");
-        $stats["lu"] = $this->campaignModel->countByCountry("LU");
+        // Recalculer les stats en fonction des filtres d'accès
+        $stats = $this->getFilteredStats($accessibleCampaignIds, $accessibleCountries);
 
-        $total = $this->campaignModel->count($filters);
+        $total = count($campaigns);
         $perPage = 20;
         $currentPage = isset($_GET["page"]) ? (int) $_GET["page"] : 1;
         $totalPages = $total > 0 ? (int) ceil($total / $perPage) : 1;
 
         require_once __DIR__ . "/../Views/admin/campaigns/index.php";
+    }
+
+    /**
+     * Calcule les stats filtrées selon l'accès
+     */
+    private function getFilteredStats(?array $campaignIds, ?array $countries): array
+    {
+        $db = Database::getInstance();
+
+        $params = [];
+        $whereClause = "WHERE 1=1";
+
+        // Filtre par IDs de campagnes
+        if ($campaignIds !== null) {
+            if (empty($campaignIds)) {
+                return ['total' => 0, 'active' => 0, 'be' => 0, 'lu' => 0];
+            }
+            $placeholders = implode(",", array_fill(0, count($campaignIds), "?"));
+            $whereClause .= " AND id IN ({$placeholders})";
+            $params = $campaignIds;
+        }
+
+        // Filtre par pays
+        if ($countries !== null) {
+            $countryPlaceholders = implode(",", array_fill(0, count($countries), "?"));
+            $whereClause .= " AND country IN ({$countryPlaceholders})";
+            $params = array_merge($params, $countries);
+        }
+
+        try {
+            // Total
+            $result = $db->query("SELECT COUNT(*) as total FROM campaigns {$whereClause}", $params);
+            $total = (int) ($result[0]['total'] ?? 0);
+
+            // Actives
+            $result = $db->query(
+                "SELECT COUNT(*) as active FROM campaigns {$whereClause} AND CURDATE() BETWEEN start_date AND end_date",
+                $params
+            );
+            $active = (int) ($result[0]['active'] ?? 0);
+
+            // Par pays BE
+            $beParams = $params;
+            $result = $db->query(
+                "SELECT COUNT(*) as be FROM campaigns {$whereClause} AND country = 'BE'",
+                $beParams
+            );
+            $be = (int) ($result[0]['be'] ?? 0);
+
+            // Par pays LU
+            $luParams = $params;
+            $result = $db->query(
+                "SELECT COUNT(*) as lu FROM campaigns {$whereClause} AND country = 'LU'",
+                $luParams
+            );
+            $lu = (int) ($result[0]['lu'] ?? 0);
+
+            return [
+                'total' => $total,
+                'active' => $active,
+                'be' => $be,
+                'lu' => $lu
+            ];
+        } catch (\Exception $e) {
+            error_log("Erreur getFilteredStats: " . $e->getMessage());
+            return ['total' => 0, 'active' => 0, 'be' => 0, 'lu' => 0];
+        }
     }
 
     /**
@@ -169,8 +243,12 @@ class CampaignController
      */
     public function show(int $id): void
     {
-        // ✅ Permission requise : voir cette campagne spécifique (vérifie le scope)
-        PermissionMiddleware::requireCampaignAccess($id, 'view');
+        // ✅ Vérifier l'accès à cette campagne spécifique
+        if (!$this->canAccessCampaign($id)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
 
         $campaign = $this->campaignModel->findById($id);
 
@@ -195,12 +273,34 @@ class CampaignController
     }
 
     /**
+     * Vérifie si l'utilisateur peut accéder à une campagne
+     */
+    private function canAccessCampaign(int $campaignId): bool
+    {
+        $accessibleIds = StatsAccessHelper::getAccessibleCampaignIds();
+
+        // null = accès à tout
+        if ($accessibleIds === null) {
+            return true;
+        }
+
+        return in_array($campaignId, $accessibleIds);
+    }
+
+    /**
      * Afficher le formulaire de modification
      */
     public function edit(int $id): void
     {
-        // ✅ Permission requise : modifier cette campagne spécifique
-        PermissionMiddleware::requireCampaignAccess($id, 'edit');
+        // ✅ Vérifier l'accès à cette campagne
+        if (!$this->canAccessCampaign($id)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        // ✅ Permission requise : modifier les campagnes
+        PermissionMiddleware::require('campaigns.edit');
 
         $campaign = $this->campaignModel->findById($id);
 
@@ -213,12 +313,13 @@ class CampaignController
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
+        // Récupérer les clients assignés si mode manual
+        $assignedCustomers = [];
         if ($campaign["customer_assignment_mode"] === "manual") {
-            $customers = $this->campaignModel->getCustomerNumbers($id);
-            $campaign["customer_list"] = implode("\n", $customers);
+            $assignedCustomers = $this->campaignModel->getCampaignCustomers($id);
         }
 
-        // Équipe (pour section Équipe)
+        // Collaborateurs actuels
         $assignees = $this->getAssignees($id);
         $availableUsers = $this->getAvailableUsers($id);
 
@@ -230,8 +331,21 @@ class CampaignController
      */
     public function update(int $id): void
     {
-        // ✅ Permission requise : modifier cette campagne spécifique
-        PermissionMiddleware::requireCampaignAccess($id, 'edit');
+        // ✅ Vérifier l'accès à cette campagne
+        if (!$this->canAccessCampaign($id)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        // ✅ Permission requise : modifier les campagnes
+        PermissionMiddleware::require('campaigns.edit');
+
+        if (!$this->validateCSRF()) {
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/campaigns/" . $id . "/edit");
+            exit();
+        }
 
         $campaign = $this->campaignModel->findById($id);
 
@@ -241,18 +355,12 @@ class CampaignController
             exit();
         }
 
-        if (!$this->validateCSRF()) {
-            Session::setFlash("error", "Token de sécurité invalide");
-            header("Location: /stm/admin/campaigns/" . $id . "/edit");
-            exit();
-        }
-
         $data = [
             "name" => $_POST["name"] ?? "",
             "country" => $_POST["country"] ?? "",
             "is_active" => isset($_POST["is_active"]) ? 1 : 0,
-            "start_date" => !empty($_POST["start_date"]) ? substr($_POST["start_date"], 0, 10) . " 00:01:00" : "",
-            "end_date" => !empty($_POST["end_date"]) ? substr($_POST["end_date"], 0, 10) . " 23:59:00" : "",
+            "start_date" => !empty($_POST["start_date"]) ? $_POST["start_date"] . " 00:01:00" : "",
+            "end_date" => !empty($_POST["end_date"]) ? $_POST["end_date"] . " 23:59:00" : "",
             "title_fr" => $_POST["title_fr"] ?? "",
             "description_fr" => $_POST["description_fr"] ?? "",
             "title_nl" => $_POST["title_nl"] ?? "",
@@ -277,23 +385,19 @@ class CampaignController
             $success = $this->campaignModel->update($id, $data);
 
             if ($success) {
-                $oldMode = $campaign["customer_assignment_mode"];
-                $newMode = $data["customer_assignment_mode"];
+                // Gérer la liste de clients si mode manual
+                if ($data["customer_assignment_mode"] === "manual") {
+                    // Supprimer les anciens clients
+                    $this->campaignModel->removeAllCustomersFromCampaign($id);
 
-                if ($oldMode === "manual" && $newMode !== "manual") {
-                    $this->campaignModel->removeAllCustomers($id);
-                }
-
-                if ($newMode === "manual") {
-                    $this->campaignModel->removeAllCustomers($id);
-
+                    // Ajouter les nouveaux clients
                     if (!empty($_POST["customer_list"])) {
                         $customerList = str_replace(["\r\n", "\r"], "\n", $_POST["customer_list"]);
                         $customerNumbers = array_filter(array_map("trim", explode("\n", $customerList)));
 
                         if (!empty($customerNumbers)) {
                             $added = $this->campaignModel->addCustomersToCampaign($id, $customerNumbers);
-                            Session::setFlash("info", "{$added} client(s) ajouté(s) à la campagne");
+                            Session::setFlash("info", "{$added} client(s) mis à jour");
                         }
                     }
                 }
@@ -316,24 +420,30 @@ class CampaignController
     }
 
     /**
-     * Supprimer une campagne (POST)
+     * Supprimer une campagne
      */
     public function destroy(int $id): void
     {
-        // ✅ Permission requise : supprimer + pouvoir modifier cette campagne
+        // ✅ Vérifier l'accès à cette campagne
+        if (!$this->canAccessCampaign($id)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        // ✅ Permission requise : supprimer les campagnes
         PermissionMiddleware::require('campaigns.delete');
-        PermissionMiddleware::requireCampaignAccess($id, 'edit', '/stm/admin/campaigns');
+
+        if (!$this->validateCSRF()) {
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
 
         $campaign = $this->campaignModel->findById($id);
 
         if (!$campaign) {
             Session::setFlash("error", "Campagne introuvable");
-            header("Location: /stm/admin/campaigns");
-            exit();
-        }
-
-        if (!$this->validateCSRF()) {
-            Session::setFlash("error", "Token de sécurité invalide");
             header("Location: /stm/admin/campaigns");
             exit();
         }
@@ -356,6 +466,54 @@ class CampaignController
     }
 
     /**
+     * Activer/désactiver une campagne
+     */
+    public function toggleActive(int $id): void
+    {
+        // ✅ Vérifier l'accès à cette campagne
+        if (!$this->canAccessCampaign($id)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        // ✅ Permission requise : modifier les campagnes
+        PermissionMiddleware::require('campaigns.edit');
+
+        if (!$this->validateCSRF()) {
+            Session::setFlash("error", "Token de sécurité invalide");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        $campaign = $this->campaignModel->findById($id);
+
+        if (!$campaign) {
+            Session::setFlash("error", "Campagne introuvable");
+            header("Location: /stm/admin/campaigns");
+            exit();
+        }
+
+        try {
+            $newStatus = $campaign["is_active"] ? 0 : 1;
+            $success = $this->campaignModel->update($id, ["is_active" => $newStatus]);
+
+            if ($success) {
+                $statusText = $newStatus ? "activée" : "désactivée";
+                Session::setFlash("success", "Campagne {$statusText} avec succès");
+            } else {
+                Session::setFlash("error", "Erreur lors du changement de statut");
+            }
+        } catch (\Exception $e) {
+            error_log("Erreur toggle campagne: " . $e->getMessage());
+            Session::setFlash("error", "Erreur lors du changement de statut");
+        }
+
+        header("Location: /stm/admin/campaigns/" . $id);
+        exit();
+    }
+
+    /**
      * Afficher les campagnes actives uniquement
      */
     public function active(): void
@@ -363,17 +521,23 @@ class CampaignController
         // ✅ Permission requise : voir les campagnes
         PermissionMiddleware::require('campaigns.view');
 
-        $campaigns = $this->campaignModel->getActive();
+        $filters = [
+            "status" => "active",
+        ];
 
-        // Filtrer par scope si nécessaire
-        if (!PermissionHelper::can('campaigns.view_all')) {
-            $accessibleIds = PermissionHelper::getAccessibleCampaignIds();
-            $campaigns = array_filter($campaigns, function($c) use ($accessibleIds) {
-                return in_array($c['id'], $accessibleIds);
-            });
+        // Filtrer par campagnes accessibles selon le rôle
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+        if ($accessibleCampaignIds !== null) {
+            $filters['campaign_ids'] = $accessibleCampaignIds;
         }
 
-        $stats = $this->campaignModel->getStats();
+        // Filtrer par pays accessibles
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        if ($accessibleCountries !== null) {
+            $filters['accessible_countries'] = $accessibleCountries;
+        }
+
+        $campaigns = $this->campaignModel->getActive($filters);
 
         foreach ($campaigns as &$campaign) {
             $campaign["customer_stats"] = $this->campaignModel->getCustomerStats($campaign["id"]);
@@ -381,30 +545,36 @@ class CampaignController
         }
         unset($campaign);
 
-        $filters = ["status" => "active"];
-        $pageTitle = "Campagnes actives";
+        $stats = $this->getFilteredStats($accessibleCampaignIds, $accessibleCountries);
+
         require_once __DIR__ . "/../Views/admin/campaigns/active.php";
     }
 
     /**
-     * Afficher les campagnes archivées
+     * Afficher les campagnes archivées (terminées + inactives)
      */
     public function archives(): void
     {
         // ✅ Permission requise : voir les campagnes
         PermissionMiddleware::require('campaigns.view');
 
-        $campaigns = $this->campaignModel->getArchived();
+        $filters = [
+            "status" => "archived",
+        ];
 
-        // Filtrer par scope si nécessaire
-        if (!PermissionHelper::can('campaigns.view_all')) {
-            $accessibleIds = PermissionHelper::getAccessibleCampaignIds();
-            $campaigns = array_filter($campaigns, function($c) use ($accessibleIds) {
-                return in_array($c['id'], $accessibleIds);
-            });
+        // Filtrer par campagnes accessibles selon le rôle
+        $accessibleCampaignIds = StatsAccessHelper::getAccessibleCampaignIds();
+        if ($accessibleCampaignIds !== null) {
+            $filters['campaign_ids'] = $accessibleCampaignIds;
         }
 
-        $stats = $this->campaignModel->getStats();
+        // Filtrer par pays accessibles
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        if ($accessibleCountries !== null) {
+            $filters['accessible_countries'] = $accessibleCountries;
+        }
+
+        $campaigns = $this->campaignModel->getArchived($filters);
 
         foreach ($campaigns as &$campaign) {
             $campaign["customer_stats"] = $this->campaignModel->getCustomerStats($campaign["id"]);
@@ -412,57 +582,67 @@ class CampaignController
         }
         unset($campaign);
 
-        $filters = ["status" => "archived"];
-        $pageTitle = "Campagnes archivées";
+        $stats = $this->getFilteredStats($accessibleCampaignIds, $accessibleCountries);
+
         require_once __DIR__ . "/../Views/admin/campaigns/archives.php";
     }
 
+    // =========================================================================
+    // GESTION EQUIPE (ASSIGNEES)
+    // =========================================================================
+
     /**
-     * Activer/Désactiver une campagne (AJAX)
+     * Récupère les membres de l'équipe d'une campagne
      */
-    public function toggleActive(int $id): void
+    private function getAssignees(int $campaignId): array
     {
-        // ✅ Permission requise : modifier cette campagne
-        if (!PermissionHelper::canEditCampaign($id)) {
-            $this->jsonResponse(["success" => false, "message" => "Permission refusée"], 403);
-            return;
-        }
-
-        $campaign = $this->campaignModel->findById($id);
-
-        if (!$campaign) {
-            $this->jsonResponse(["success" => false, "message" => "Campagne introuvable"], 404);
-            return;
-        }
-
         try {
-            $newStatus = !$campaign["is_active"];
-            $success = $this->campaignModel->update($id, ["is_active" => $newStatus]);
-
-            if ($success) {
-                $this->jsonResponse(["success" => true, "is_active" => $newStatus]);
-            } else {
-                $this->jsonResponse(["success" => false, "message" => "Erreur mise à jour"]);
-            }
-        } catch (\Exception $e) {
-            error_log("Erreur toggle active: " . $e->getMessage());
-            $this->jsonResponse(["success" => false, "message" => "Erreur serveur"], 500);
+            $db = Database::getInstance();
+            return $db->query(
+                "SELECT u.id, u.name, u.email, u.role as user_role, ca.role as assignment_role, ca.assigned_at
+                 FROM campaign_assignees ca
+                 JOIN users u ON u.id = ca.user_id
+                 WHERE ca.campaign_id = :campaign_id
+                 ORDER BY ca.role ASC, ca.assigned_at ASC",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getAssignees: " . $e->getMessage());
+            return [];
         }
     }
 
-    // =========================================================================
-    // GESTION ÉQUIPE (ASSIGNEES)
-    // =========================================================================
+    /**
+     * Récupère les utilisateurs disponibles pour assignation
+     */
+    private function getAvailableUsers(int $campaignId): array
+    {
+        try {
+            $db = Database::getInstance();
+            return $db->query(
+                "SELECT id, name, email, role
+                 FROM users
+                 WHERE is_active = 1
+                 AND role IN ('superadmin', 'admin', 'createur')
+                 AND id NOT IN (
+                     SELECT user_id FROM campaign_assignees WHERE campaign_id = :campaign_id
+                 )
+                 ORDER BY name ASC",
+                [':campaign_id' => $campaignId]
+            );
+        } catch (\PDOException $e) {
+            error_log("Erreur getAvailableUsers: " . $e->getMessage());
+            return [];
+        }
+    }
 
     /**
-     * Assigne le créateur comme owner lors de la création
+     * Assigne le créateur comme owner de la campagne
      */
     private function assignOwner(int $campaignId): void
     {
         $currentUser = Session::get('user');
-        if (!$currentUser || !$currentUser['id']) {
-            return;
-        }
+        if (empty($currentUser['id'])) return;
 
         try {
             $db = Database::getInstance();
@@ -475,62 +655,7 @@ class CampaignController
                 ':assigned_by' => $currentUser['id']
             ]);
         } catch (\PDOException $e) {
-            error_log("Erreur assignation owner: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Récupère les utilisateurs assignés à une campagne
-     */
-    private function getAssignees(int $campaignId): array
-    {
-        try {
-            $db = Database::getInstance();
-            return $db->query(
-                "SELECT
-                    ca.id,
-                    ca.campaign_id,
-                    ca.user_id,
-                    ca.role,
-                    ca.assigned_at,
-                    ca.assigned_by,
-                    u.name AS user_name,
-                    u.email AS user_email,
-                    u.role AS user_role
-                 FROM campaign_assignees ca
-                 JOIN users u ON u.id = ca.user_id
-                 WHERE ca.campaign_id = :campaign_id
-                 ORDER BY ca.role DESC, ca.assigned_at ASC",
-                [':campaign_id' => $campaignId]
-            );
-        } catch (\PDOException $e) {
-            error_log("Erreur getAssignees: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * Récupère les utilisateurs NON assignés à une campagne
-     * Exclut manager et rep qui ne gèrent pas les campagnes
-     */
-    private function getAvailableUsers(int $campaignId): array
-    {
-        try {
-            $db = Database::getInstance();
-            return $db->query(
-                "SELECT u.id, u.name, u.email, u.role
-                 FROM users u
-                 WHERE u.is_active = 1
-                 AND u.role IN ('superadmin', 'admin', 'createur')
-                 AND u.id NOT IN (
-                     SELECT user_id FROM campaign_assignees WHERE campaign_id = :campaign_id
-                 )
-                 ORDER BY u.name ASC",
-                [':campaign_id' => $campaignId]
-            );
-        } catch (\PDOException $e) {
-            error_log("Erreur getAvailableUsers: " . $e->getMessage());
-            return [];
+            error_log("Erreur assignOwner: " . $e->getMessage());
         }
     }
 
