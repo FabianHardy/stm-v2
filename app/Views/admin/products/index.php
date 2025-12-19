@@ -128,23 +128,90 @@ ob_start();
 <!-- Filtres et recherche -->
 <div class="bg-white shadow rounded-lg mb-6">
     <div class="px-4 py-5 sm:p-6">
-        <form method="GET" action="/stm/admin/products" class="space-y-4">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <form method="GET" action="/stm/admin/products" class="space-y-4"
+              x-data="{
+                  campaignStatus: '<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active'); ?>',
+                  country: '<?php echo htmlspecialchars($_GET['country'] ?? ''); ?>',
+                  campaignId: '<?php echo htmlspecialchars($_GET['campaign_id'] ?? ''); ?>',
+                  campaigns: <?php echo json_encode(array_map(function($c) {
+                      return [
+                          'id' => $c['id'],
+                          'name' => $c['name'],
+                          'country' => $c['country'],
+                          'status' => $c['computed_status']
+                      ];
+                  }, $campaigns)); ?>,
+                  get filteredCampaigns() {
+                      return this.campaigns.filter(c => {
+                          // Filtre par statut
+                          if (this.campaignStatus && this.campaignStatus !== 'all') {
+                              if (c.status !== this.campaignStatus) return false;
+                          }
+                          // Filtre par pays
+                          if (this.country && c.country !== this.country) return false;
+                          return true;
+                      });
+                  },
+                  resetCampaignIfInvalid() {
+                      const validIds = this.filteredCampaigns.map(c => String(c.id));
+                      if (this.campaignId && !validIds.includes(this.campaignId)) {
+                          this.campaignId = '';
+                      }
+                  }
+              }"
+              x-init="$watch('campaignStatus', () => resetCampaignIfInvalid()); $watch('country', () => resetCampaignIfInvalid());">
 
-                <!-- Recherche -->
-                <div class="sm:col-span-2">
-                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
-                        🔍 Recherche
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+
+                <!-- 1. Statut Campagne -->
+                <div>
+                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
+                        📊 Statut
                     </label>
-                    <input type="text"
-                           name="search"
-                           id="search"
-                           value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
-                           placeholder="Code, nom..."
-                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <select name="campaign_status"
+                            id="campaign_status"
+                            x-model="campaignStatus"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="active">Actives</option>
+                        <option value="upcoming">À venir</option>
+                        <option value="ended">Terminées</option>
+                        <option value="all">Toutes</option>
+                    </select>
                 </div>
 
-                <!-- Catégorie -->
+                <!-- 2. Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">
+                        🌍 Pays
+                    </label>
+                    <select name="country"
+                            id="country"
+                            x-model="country"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Tous</option>
+                        <option value="BE">🇧🇪 Belgique</option>
+                        <option value="LU">🇱🇺 Luxembourg</option>
+                    </select>
+                </div>
+
+                <!-- 3. Campagne spécifique (filtré dynamiquement) -->
+                <div>
+                    <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        📢 Campagne
+                    </label>
+                    <select name="campaign_id"
+                            id="campaign_id"
+                            x-model="campaignId"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="camp in filteredCampaigns" :key="camp.id">
+                            <option :value="camp.id" x-text="camp.name + ' (' + camp.country + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 4. Catégorie -->
                 <div>
                     <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
                         📁 Catégorie
@@ -162,20 +229,17 @@ ob_start();
                     </select>
                 </div>
 
-                <!-- Statut Campagne -->
-                <div>
-                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
-                        📊 Campagne
+                <!-- 5. Recherche -->
+                <div class="lg:col-span-2">
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
+                        🔍 Recherche
                     </label>
-                    <select name="campaign_status"
-                            id="campaign_status"
-                            autocomplete="off"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="active" <?php echo (!isset($_GET['campaign_status']) || $_GET['campaign_status'] === 'active') ? 'selected' : ''; ?>>Campagnes actives</option>
-                        <option value="upcoming" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'upcoming') ? 'selected' : ''; ?>>Campagnes à venir</option>
-                        <option value="ended" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'ended') ? 'selected' : ''; ?>>Campagnes terminées</option>
-                        <option value="all" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'all') ? 'selected' : ''; ?>>Toutes les campagnes</option>
-                    </select>
+                    <input type="text"
+                           name="search"
+                           id="search"
+                           value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
+                           placeholder="Code, nom..."
+                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
             </div>
 

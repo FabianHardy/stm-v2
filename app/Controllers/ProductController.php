@@ -37,7 +37,8 @@ class ProductController
         $filters = [
             "search" => $_GET["search"] ?? "",
             "category" => $_GET["category"] ?? "",
-            "status" => $_GET["status"] ?? "",
+            "campaign_id" => $_GET["campaign_id"] ?? "",
+            "country" => $_GET["country"] ?? "",
             // Par défaut, afficher uniquement les promos des campagnes actives
             "campaign_status" => $_GET["campaign_status"] ?? "active",
         ];
@@ -56,6 +57,34 @@ class ProductController
         // Récupérer les catégories pour le filtre
         $categoryModel = new Category();
         $categories = $categoryModel->getAll();
+
+        // Récupérer les campagnes pour le filtre (filtrées par rôle) avec statut calculé
+        $campaignModel = new Campaign();
+        $allCampaigns = $campaignModel->getAll();
+        if ($accessibleCampaignIds !== null) {
+            $allCampaigns = array_filter($allCampaigns, function($c) use ($accessibleCampaignIds) {
+                return in_array($c['id'], $accessibleCampaignIds);
+            });
+            $allCampaigns = array_values($allCampaigns);
+        }
+
+        // Calculer le statut de chaque campagne pour le filtrage dynamique
+        $today = date('Y-m-d');
+        $campaigns = [];
+        foreach ($allCampaigns as $camp) {
+            $campStatus = 'inactive';
+            if ($camp['is_active']) {
+                if ($today < $camp['start_date']) {
+                    $campStatus = 'upcoming';
+                } elseif ($today > $camp['end_date']) {
+                    $campStatus = 'ended';
+                } else {
+                    $campStatus = 'active';
+                }
+            }
+            $camp['computed_status'] = $campStatus;
+            $campaigns[] = $camp;
+        }
 
         // Charger la vue
         require_once __DIR__ . "/../Views/admin/products/index.php";

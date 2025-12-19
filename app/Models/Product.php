@@ -63,6 +63,12 @@ class Product
             $params[] = $filters['campaign_id'];
         }
 
+        // Filtre par pays (via la campagne)
+        if (!empty($filters['country'])) {
+            $sql .= " AND c.country = ?";
+            $params[] = $filters['country'];
+        }
+
         // Filtre par catégorie
         if (!empty($filters['category'])) {
             $sql .= " AND p.category_id = ?";
