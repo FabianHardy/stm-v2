@@ -7,6 +7,7 @@
  * @created  2025/11/08 10:00
  * @modified 2025/11/14 00:00 - Sprint 5 : Ajout colonnes order_password, order_type, deferred_delivery, delivery_date + modification addCustomersToCampaign() pour utiliser customer_number + country
  * @modified 2025/12/09 - Ajout méthodes getPromotionStats() et getSupplierStats() pour stats fournisseurs
+ * @modified 2025/12/18 - Ajout filtres campaign_ids et accessible_countries pour filtrage par rôle (rep, manager_reps)
  */
 
 namespace App\Models;
@@ -73,7 +74,7 @@ class Campaign
     /**
      * Récupérer toutes les campagnes avec filtres optionnels
      *
-     * @param array $filters Filtres (search, country, status)
+     * @param array $filters Filtres (search, country, status, campaign_ids, accessible_countries)
      * @return array
      */
     public function getAll(array $filters = []): array
@@ -81,16 +82,36 @@ class Campaign
         $query = "SELECT * FROM campaigns WHERE 1=1";
         $params = [];
 
-        // Filtre recherche
-        if (!empty($filters["search"])) {
-            $query .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
-            $params[":search"] = "%" . $filters["search"] . "%";
+        // Filtre par IDs de campagnes (pour rôles limités : rep, manager_reps, createur)
+        if (isset($filters["campaign_ids"])) {
+            if (empty($filters["campaign_ids"])) {
+                return []; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($filters["campaign_ids"]), "?"));
+            $query .= " AND id IN ({$placeholders})";
+            $params = array_merge($params, $filters["campaign_ids"]);
         }
 
-        // Filtre pays
+        // Filtre par pays accessibles (pour rôles limités)
+        if (isset($filters["accessible_countries"]) && !empty($filters["accessible_countries"])) {
+            $countryPlaceholders = implode(",", array_fill(0, count($filters["accessible_countries"]), "?"));
+            $query .= " AND country IN ({$countryPlaceholders})";
+            $params = array_merge($params, $filters["accessible_countries"]);
+        }
+
+        // Filtre recherche
+        if (!empty($filters["search"])) {
+            $query .= " AND (name LIKE ? OR title_fr LIKE ? OR title_nl LIKE ?)";
+            $searchTerm = "%" . $filters["search"] . "%";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+
+        // Filtre pays (sélection utilisateur via dropdown)
         if (!empty($filters["country"])) {
-            $query .= " AND country = :country";
-            $params[":country"] = $filters["country"];
+            $query .= " AND country = ?";
+            $params[] = $filters["country"];
         }
 
         // Filtre statut
@@ -124,18 +145,38 @@ class Campaign
     /**
      * Récupérer les campagnes actives
      *
+     * @param array $filters Filtres optionnels (campaign_ids, accessible_countries)
      * @return array
      */
-    public function getActive(): array
+    public function getActive(array $filters = []): array
     {
         $query = "SELECT * FROM campaigns
                   WHERE is_active = 1
                   AND start_date <= CURDATE()
-                  AND end_date >= CURDATE()
-                  ORDER BY start_date DESC";
+                  AND end_date >= CURDATE()";
+        $params = [];
+
+        // Filtre par IDs de campagnes (pour rôles limités)
+        if (isset($filters["campaign_ids"])) {
+            if (empty($filters["campaign_ids"])) {
+                return []; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($filters["campaign_ids"]), "?"));
+            $query .= " AND id IN ({$placeholders})";
+            $params = array_merge($params, $filters["campaign_ids"]);
+        }
+
+        // Filtre par pays accessibles
+        if (isset($filters["accessible_countries"]) && !empty($filters["accessible_countries"])) {
+            $countryPlaceholders = implode(",", array_fill(0, count($filters["accessible_countries"]), "?"));
+            $query .= " AND country IN ({$countryPlaceholders})";
+            $params = array_merge($params, $filters["accessible_countries"]);
+        }
+
+        $query .= " ORDER BY start_date DESC";
 
         try {
-            return $this->db->query($query);
+            return $this->db->query($query, $params);
         } catch (\PDOException $e) {
             error_log("Erreur getActive: " . $e->getMessage());
             return [];
@@ -168,16 +209,36 @@ class Campaign
     /**
      * Récupérer les campagnes archivées
      *
+     * @param array $filters Filtres optionnels (campaign_ids, accessible_countries)
      * @return array
      */
-    public function getArchived(): array
+    public function getArchived(array $filters = []): array
     {
         $query = "SELECT * FROM campaigns
-                  WHERE end_date < CURDATE()
-                  ORDER BY end_date DESC";
+                  WHERE end_date < CURDATE()";
+        $params = [];
+
+        // Filtre par IDs de campagnes (pour rôles limités)
+        if (isset($filters["campaign_ids"])) {
+            if (empty($filters["campaign_ids"])) {
+                return []; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($filters["campaign_ids"]), "?"));
+            $query .= " AND id IN ({$placeholders})";
+            $params = array_merge($params, $filters["campaign_ids"]);
+        }
+
+        // Filtre par pays accessibles
+        if (isset($filters["accessible_countries"]) && !empty($filters["accessible_countries"])) {
+            $countryPlaceholders = implode(",", array_fill(0, count($filters["accessible_countries"]), "?"));
+            $query .= " AND country IN ({$countryPlaceholders})";
+            $params = array_merge($params, $filters["accessible_countries"]);
+        }
+
+        $query .= " ORDER BY end_date DESC";
 
         try {
-            return $this->db->query($query);
+            return $this->db->query($query, $params);
         } catch (\PDOException $e) {
             error_log("Erreur getArchived: " . $e->getMessage());
             return [];
@@ -222,7 +283,7 @@ class Campaign
     /**
      * Compter le nombre total de campagnes
      *
-     * @param array $filters Filtres optionnels
+     * @param array $filters Filtres optionnels (search, country, campaign_ids, accessible_countries)
      * @return int
      */
     public function count(array $filters = []): int
@@ -230,14 +291,34 @@ class Campaign
         $query = "SELECT COUNT(*) as count FROM campaigns WHERE 1=1";
         $params = [];
 
+        // Filtre par IDs de campagnes (pour rôles limités)
+        if (isset($filters["campaign_ids"])) {
+            if (empty($filters["campaign_ids"])) {
+                return 0; // Aucune campagne accessible
+            }
+            $placeholders = implode(",", array_fill(0, count($filters["campaign_ids"]), "?"));
+            $query .= " AND id IN ({$placeholders})";
+            $params = array_merge($params, $filters["campaign_ids"]);
+        }
+
+        // Filtre par pays accessibles
+        if (isset($filters["accessible_countries"]) && !empty($filters["accessible_countries"])) {
+            $countryPlaceholders = implode(",", array_fill(0, count($filters["accessible_countries"]), "?"));
+            $query .= " AND country IN ({$countryPlaceholders})";
+            $params = array_merge($params, $filters["accessible_countries"]);
+        }
+
         if (!empty($filters["search"])) {
-            $query .= " AND (name LIKE :search OR title_fr LIKE :search OR title_nl LIKE :search)";
-            $params[":search"] = "%" . $filters["search"] . "%";
+            $query .= " AND (name LIKE ? OR title_fr LIKE ? OR title_nl LIKE ?)";
+            $searchTerm = "%" . $filters["search"] . "%";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
         }
 
         if (!empty($filters["country"])) {
-            $query .= " AND country = :country";
-            $params[":country"] = $filters["country"];
+            $query .= " AND country = ?";
+            $params[] = $filters["country"];
         }
 
         try {
@@ -770,7 +851,7 @@ class Campaign
         try {
             $recentPromos = $this->db->query(
                 "SELECT id, product_code, name_fr, max_total, max_per_customer, created_at
-                 FROM products 
+                 FROM products
                  WHERE campaign_id = :id AND is_active = 1
                  ORDER BY created_at DESC
                  LIMIT 5",
@@ -804,8 +885,8 @@ class Campaign
         // Récupérer les produits de la campagne
         try {
             $products = $this->db->query(
-                "SELECT id, product_code, name_fr 
-                 FROM products 
+                "SELECT id, product_code, name_fr
+                 FROM products
                  WHERE campaign_id = :campaign_id AND is_active = 1",
                 [':campaign_id' => $campaignId]
             );
@@ -849,7 +930,7 @@ class Campaign
         // Récupérer toutes les lignes de commande de la campagne
         try {
             $orderLines = $this->db->query(
-                "SELECT 
+                "SELECT
                     ol.product_id,
                     o.id as order_id,
                     o.customer_id,
@@ -886,7 +967,7 @@ class Campaign
             }
 
             $supplierData[$suppId]['product_ids'][$p['id']] = true;
-            
+
             // Initialiser le produit dans la liste
             $supplierData[$suppId]['products'][$p['id']] = [
                 'product_id' => $p['id'],
@@ -914,7 +995,7 @@ class Campaign
             $supplierData[$suppId]['order_ids'][$line['order_id']] = true;
             $supplierData[$suppId]['customer_ids'][$line['customer_id']] = true;
             $supplierData[$suppId]['total_quantity'] += (int)$line['quantity'];
-            
+
             // Mettre à jour les stats du produit
             if (isset($supplierData[$suppId]['products'][$productId])) {
                 $supplierData[$suppId]['products'][$productId]['quantity_sold'] += (int)$line['quantity'];
@@ -940,12 +1021,12 @@ class Campaign
                     'orders_count' => isset($prodData['order_ids']) ? count($prodData['order_ids']) : 0
                 ];
             }
-            
+
             // Trier les produits par quantité vendue (décroissant)
             usort($productsList, function($a, $b) {
                 return $b['quantity_sold'] <=> $a['quantity_sold'];
             });
-            
+
             $result[] = [
                 'supplier_id' => $data['supplier_id'],
                 'supplier_number' => $data['supplier_number'],
