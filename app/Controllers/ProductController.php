@@ -5,6 +5,7 @@
  * @created 11/11/2025
  * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
  * @modified 18/12/2025 - Filtrage par campagnes accessibles selon le rôle
+ * @modified 19/12/2025 - Filtre par défaut sur campagnes actives (campaign_status)
  */
 
 namespace App\Controllers;
@@ -37,6 +38,8 @@ class ProductController
             "search" => $_GET["search"] ?? "",
             "category" => $_GET["category"] ?? "",
             "status" => $_GET["status"] ?? "",
+            // Par défaut, afficher uniquement les promos des campagnes actives
+            "campaign_status" => $_GET["campaign_status"] ?? "active",
         ];
 
         // Ajouter le filtre par campagnes accessibles

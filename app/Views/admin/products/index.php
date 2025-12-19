@@ -6,6 +6,7 @@
  *
  * @created 11/11/2025 22:30
  * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
+ * @modified 19/12/2025 - Filtre par statut campagne + affichage statut basé sur campagne
  */
 
 use Core\Session;
@@ -161,17 +162,19 @@ ob_start();
                     </select>
                 </div>
 
-                <!-- Statut -->
+                <!-- Statut Campagne -->
                 <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-1">
-                        📊 Statut
+                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
+                        📊 Campagne
                     </label>
-                    <select name="status"
-                            id="status"
+                    <select name="campaign_status"
+                            id="campaign_status"
+                            autocomplete="off"
                             class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Tous</option>
-                        <option value="1" <?php echo (isset($_GET['status']) && $_GET['status'] == '1') ? 'selected' : ''; ?>>Actifs</option>
-                        <option value="0" <?php echo (isset($_GET['status']) && $_GET['status'] == '0') ? 'selected' : ''; ?>>Inactifs</option>
+                        <option value="active" <?php echo (!isset($_GET['campaign_status']) || $_GET['campaign_status'] === 'active') ? 'selected' : ''; ?>>Campagnes actives</option>
+                        <option value="upcoming" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'upcoming') ? 'selected' : ''; ?>>Campagnes à venir</option>
+                        <option value="ended" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'ended') ? 'selected' : ''; ?>>Campagnes terminées</option>
+                        <option value="all" <?php echo (isset($_GET['campaign_status']) && $_GET['campaign_status'] === 'all') ? 'selected' : ''; ?>>Toutes les campagnes</option>
                     </select>
                 </div>
             </div>
@@ -181,9 +184,9 @@ ob_start();
                         class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                     🔍 Filtrer
                 </button>
-                <a href="/stm/admin/products"
+                <a href="/stm/admin/products?campaign_status=all"
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    ✖️ Réinitialiser
+                    📋 Voir tout
                 </a>
             </div>
         </form>
@@ -206,6 +209,9 @@ ob_start();
                         Code
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Campagne
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Catégorie
                     </th>
                     <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -219,7 +225,7 @@ ob_start();
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($products)): ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <div class="text-gray-400">
                                 <span class="text-4xl mb-2 block">📦</span>
                                 <p class="text-sm">Aucune Promotion trouvé</p>
@@ -267,6 +273,20 @@ ob_start();
                                 </div>
                             </td>
 
+                            <!-- Campagne -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if (!empty($product['campaign_name'])): ?>
+                                    <div class="text-sm text-gray-900"><?php echo htmlspecialchars($product['campaign_name']); ?></div>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium <?php echo $product['campaign_country'] === 'BE' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
+                                            <?php echo $product['campaign_country']; ?>
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-xs text-gray-400">-</span>
+                                <?php endif; ?>
+                            </td>
+
                             <!-- Catégorie -->
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <?php if (!empty($product['category_name'])): ?>
@@ -278,10 +298,40 @@ ob_start();
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Statut -->
+                            <!-- Statut (basé sur la campagne) -->
                             <td class="px-6 py-4 whitespace-nowrap text-center">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $product['is_active'] ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
-                                    <?php echo $product['is_active'] ? '✓ Actif' : '✗ Inactif'; ?>
+                                <?php
+                                // Calculer le statut en fonction de la campagne
+                                $today = date('Y-m-d');
+                                $campaignActive = $product['campaign_is_active'] ?? 0;
+                                $campaignStart = $product['campaign_start_date'] ?? null;
+                                $campaignEnd = $product['campaign_end_date'] ?? null;
+                                $promoActive = $product['is_active'];
+
+                                if (!$campaignActive) {
+                                    // Campagne désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif (!$promoActive) {
+                                    // Promo désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif ($campaignStart && $today < $campaignStart) {
+                                    // Campagne à venir
+                                    $statusClass = 'bg-blue-100 text-blue-800';
+                                    $statusLabel = '⏳ À venir';
+                                } elseif ($campaignEnd && $today > $campaignEnd) {
+                                    // Campagne terminée
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusLabel = '⏹ Terminée';
+                                } else {
+                                    // Active
+                                    $statusClass = 'bg-green-100 text-green-800';
+                                    $statusLabel = '✓ Active';
+                                }
+                                ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
+                                    <?php echo $statusLabel; ?>
                                 </span>
                             </td>
 

@@ -146,8 +146,9 @@ ob_start();
                 <label for="status" class="block text-sm font-medium text-gray-700">Statut</label>
                 <select name="status"
                         id="status"
+                        autocomplete="off"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
-                    <option value="">Tous les statuts</option>
+                    <option value="" <?= empty($_GET["status"]) ? "selected" : "" ?>>Tous les statuts</option>
                     <option value="active" <?= ($_GET["status"] ?? "") === "active" ? "selected" : "" ?>>Active (en cours)</option>
                     <option value="upcoming" <?= ($_GET["status"] ?? "") === "upcoming" ? "selected" : "" ?>>À venir</option>
                     <option value="ended" <?= ($_GET["status"] ?? "") === "ended" ? "selected" : "" ?>>Terminée</option>
