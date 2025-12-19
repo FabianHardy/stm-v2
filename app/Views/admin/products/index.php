@@ -65,7 +65,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Total Promotions</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions affichées</dt>
                         <dd class="text-2xl font-bold text-gray-900"><?php echo $stats['total']; ?></dd>
                     </dl>
                 </div>
@@ -73,7 +73,7 @@ ob_start();
         </div>
     </div>
 
-    <!-- Actifs -->
+    <!-- Actives (campagne active + promo active) -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
@@ -82,7 +82,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions actives</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Réellement actives</dt>
                         <dd class="text-2xl font-bold text-green-600"><?php echo $stats['active']; ?></dd>
                     </dl>
                 </div>
@@ -90,17 +90,17 @@ ob_start();
         </div>
     </div>
 
-    <!-- Inactifs -->
+    <!-- Non actives -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <span class="text-3xl">❌</span>
+                    <span class="text-3xl">⏸️</span>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions inactives</dt>
-                        <dd class="text-2xl font-bold text-red-600"><?php echo $stats['inactive']; ?></dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Non actives</dt>
+                        <dd class="text-2xl font-bold text-gray-600"><?php echo $stats['inactive']; ?></dd>
                     </dl>
                 </div>
             </div>

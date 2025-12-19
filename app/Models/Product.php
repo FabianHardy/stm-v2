@@ -464,10 +464,12 @@ class Product
      * Récupérer les statistiques des promotions
      *
      * @param array|null $campaignIds Liste des IDs de campagnes accessibles (null = toutes)
+     * @param string $campaignStatus Filtre par statut campagne (active/upcoming/ended/all)
      * @return array
      * @modified 18/12/2025 - Ajout paramètre campaignIds pour filtrage par rôle
+     * @modified 19/12/2025 - Ajout paramètre campaignStatus pour cohérence avec filtres
      */
-    public function getStats(?array $campaignIds = null): array
+    public function getStats(?array $campaignIds = null, string $campaignStatus = 'all'): array
     {
         $stats = [
             'total' => 0,
@@ -475,35 +477,52 @@ class Product
             'inactive' => 0,
         ];
 
-        // Construire le filtre campagne
-        $campaignFilter = "";
+        // Construire la requête avec JOIN sur campaigns
+        $baseQuery = "SELECT COUNT(*) as count FROM products p
+                      LEFT JOIN campaigns c ON p.campaign_id = c.id
+                      WHERE 1=1";
         $params = [];
 
+        // Filtre par IDs de campagnes accessibles
         if ($campaignIds !== null) {
             if (empty($campaignIds)) {
                 return $stats; // Aucune campagne accessible
             }
             $placeholders = implode(",", array_fill(0, count($campaignIds), "?"));
-            $campaignFilter = " WHERE campaign_id IN ({$placeholders})";
+            $baseQuery .= " AND p.campaign_id IN ({$placeholders})";
             $params = $campaignIds;
         }
 
-        // Total
-        $sql = "SELECT COUNT(*) as count FROM products" . $campaignFilter;
+        // Filtre par statut de campagne
+        $campaignStatusFilter = "";
+        switch ($campaignStatus) {
+            case 'active':
+                $campaignStatusFilter = " AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
+                break;
+            case 'upcoming':
+                $campaignStatusFilter = " AND c.is_active = 1 AND c.start_date > CURDATE()";
+                break;
+            case 'ended':
+                $campaignStatusFilter = " AND c.end_date < CURDATE()";
+                break;
+            case 'inactive':
+                $campaignStatusFilter = " AND c.is_active = 0";
+                break;
+            // 'all' = pas de filtre
+        }
+
+        // Total (avec filtre campaign_status)
+        $sql = $baseQuery . $campaignStatusFilter;
         $result = $this->db->query($sql, $params);
         $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
-        // Actives
-        $sql = "SELECT COUNT(*) as count FROM products" .
-               ($campaignFilter ? $campaignFilter . " AND is_active = 1" : " WHERE is_active = 1");
+        // Actives : promo active + campagne active (is_active=1 + dans la période)
+        $sql = $baseQuery . $campaignStatusFilter . " AND p.is_active = 1 AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
         $result = $this->db->query($sql, $params);
         $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
 
-        // Inactives
-        $sql = "SELECT COUNT(*) as count FROM products" .
-               ($campaignFilter ? $campaignFilter . " AND is_active = 0" : " WHERE is_active = 0");
-        $result = $this->db->query($sql, $params);
-        $stats['inactive'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
+        // Inactives : tout ce qui n'est pas actif
+        $stats['inactive'] = $stats['total'] - $stats['active'];
 
         return $stats;
     }

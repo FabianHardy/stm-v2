@@ -50,8 +50,8 @@ class ProductController
         // Récupérer les Promotions filtrées
         $products = $this->productModel->getAll($filters);
 
-        // Récupérer les statistiques (filtrées)
-        $stats = $this->productModel->getStats($accessibleCampaignIds);
+        // Récupérer les statistiques (filtrées par rôle ET par statut campagne)
+        $stats = $this->productModel->getStats($accessibleCampaignIds, $filters["campaign_status"]);
 
         // Récupérer les catégories pour le filtre
         $categoryModel = new Category();
