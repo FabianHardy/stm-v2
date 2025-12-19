@@ -22,6 +22,7 @@ use App\Helpers\PermissionHelper;
 $currentUser = Session::get('user');
 $userName = $currentUser['name'] ?? 'Utilisateur';
 $userRole = $currentUser['role'] ?? 'admin';
+$userAvatar = $currentUser['avatar'] ?? null;
 
 // Générer les initiales (première lettre de chaque mot, max 2)
 $nameParts = explode(' ', $userName);
@@ -170,13 +171,19 @@ $unreadNotifications = 0;
                     <button @click="userMenuOpen = !userMenuOpen"
                             type="button"
                             class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors <?= $isImpersonating ? 'ring-2 ring-orange-400' : '' ?>">
-                        <div class="h-8 w-8 rounded-full <?= $isImpersonating ? 'bg-orange-500' : 'bg-primary-600' ?> flex items-center justify-center text-white font-semibold text-sm">
-                            <?php if ($isImpersonating): ?>
+                        <?php if ($isImpersonating): ?>
+                            <div class="h-8 w-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold text-sm">
                                 <i class="fas fa-user-secret text-xs"></i>
-                            <?php else: ?>
+                            </div>
+                        <?php elseif (!empty($userAvatar)): ?>
+                            <img src="<?= htmlspecialchars($userAvatar) ?>"
+                                 alt="Avatar"
+                                 class="h-8 w-8 rounded-full object-cover border-2 border-primary-200">
+                        <?php else: ?>
+                            <div class="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold text-sm">
                                 <?= $userInitials ?>
-                            <?php endif; ?>
-                        </div>
+                            </div>
+                        <?php endif; ?>
                         <div class="hidden md:block text-left">
                             <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($userName) ?></p>
                             <p class="text-xs <?= $isImpersonating ? 'text-orange-600 font-medium' : 'text-gray-500' ?>">

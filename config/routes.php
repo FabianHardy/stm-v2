@@ -867,6 +867,43 @@ $router->post("/admin/settings/permissions", function () {
     $controller = new \App\Controllers\SettingsController();
     $controller->savePermissions();
 });
+
+// ============================================
+// PROFIL UTILISATEUR
+// ============================================
+
+// Page profil
+$router->get("/admin/profile", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\ProfileController();
+    $controller->index();
+});
+
+// Mettre à jour l'avatar
+$router->post("/admin/profile/avatar", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\ProfileController();
+    $controller->updateAvatar();
+});
+
+// Supprimer l'avatar
+$router->get("/admin/profile/avatar/delete", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\ProfileController();
+    $controller->deleteAvatarAction();
+});
+
+// Mettre à jour le mot de passe
+$router->post("/admin/profile/password", function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+    $controller = new \App\Controllers\ProfileController();
+    $controller->updatePassword();
+});
+
 /**
  * ROUTES AGENT - À ajouter dans config/routes.php
  *
