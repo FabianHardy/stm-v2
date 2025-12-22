@@ -12,6 +12,13 @@
 use Core\Session;
 use App\Helpers\PermissionHelper;
 
+// Valeurs par défaut pour éviter les erreurs undefined
+$stats = $stats ?? ['total' => 0, 'active' => 0, 'inactive' => 0];
+$categories = $categories ?? [];
+$campaigns = $campaigns ?? [];
+$categoryToCampaigns = $categoryToCampaigns ?? [];
+$products = $products ?? [];
+
 // Permissions pour les boutons
 $canCreate = PermissionHelper::can('products.create');
 $canEdit = PermissionHelper::can('products.edit');
@@ -354,7 +361,8 @@ function productFilters() {
 
             // Filtrer les catégories qui ont au moins un produit dans les campagnes valides
             this.availableCategories = this.allCategories.filter(cat => {
-                let catCampaigns = this.categoryToCampaigns[cat.id] || [];
+                // Utiliser String(cat.id) car les clés JSON sont des strings
+                let catCampaigns = this.categoryToCampaigns[String(cat.id)] || [];
                 return catCampaigns.some(campId => validCampaignIds.includes(campId));
             });
         }
