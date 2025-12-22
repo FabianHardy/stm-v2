@@ -742,9 +742,9 @@ class StatsController
      */
     public function exportRepsExcel(): void
     {
-        // Augmenter les limites pour la génération Excel
-        set_time_limit(300);
-        ini_set('memory_limit', '512M');
+        // Augmenter les limites pour la génération Excel (gros volumes)
+        set_time_limit(600); // 10 minutes
+        ini_set('memory_limit', '2048M'); // 2 Go
 
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
 
