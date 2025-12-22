@@ -127,7 +127,7 @@ ob_start();
 
 <!-- Filtres et recherche -->
 <?php
-// Préparer les données des campagnes pour Alpine.js
+// Préparer les données pour Alpine.js
 $campaignsJson = json_encode(array_map(function($c) {
     return [
         'id' => (int)$c['id'],
@@ -136,102 +136,27 @@ $campaignsJson = json_encode(array_map(function($c) {
         'status' => $c['computed_status']
     ];
 }, $campaigns), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoriesJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name_fr']
+    ];
+}, $categories), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoryToCampaignsJson = !empty($categoryToCampaigns)
+    ? json_encode($categoryToCampaigns, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_FORCE_OBJECT)
+    : '{}';
 ?>
-<div class="bg-white shadow rounded-lg mb-6"
-     x-data='{
-         campaignStatus: "<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active', ENT_QUOTES); ?>",
-         country: "<?php echo htmlspecialchars($_GET['country'] ?? '', ENT_QUOTES); ?>",
-         campaignId: "<?php echo htmlspecialchars($_GET['campaign_id'] ?? '', ENT_QUOTES); ?>",
-         campaigns: <?php echo $campaignsJson; ?>,
-         get filteredCampaigns() {
-             return this.campaigns.filter(c => {
-                 if (this.campaignStatus && this.campaignStatus !== "all") {
-                     if (c.status !== this.campaignStatus) return false;
-                 }
-                 if (this.country && c.country !== this.country) return false;
-                 return true;
-             });
-         },
-         resetCampaignIfInvalid() {
-             const validIds = this.filteredCampaigns.map(c => String(c.id));
-             if (this.campaignId && !validIds.includes(this.campaignId)) {
-                 this.campaignId = "";
-             }
-         }
-     }'
-     x-init="$watch('campaignStatus', () => resetCampaignIfInvalid()); $watch('country', () => resetCampaignIfInvalid());">
-    <div class="px-4 py-5 sm:p-6">
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:p-6"
+         x-data="productFilters()"
+         x-init="init()">
         <form method="GET" action="/stm/admin/products" class="space-y-4">
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
 
-                <!-- 1. Statut Campagne -->
-                <div>
-                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
-                        📊 Statut
-                    </label>
-                    <select name="campaign_status"
-                            id="campaign_status"
-                            x-model="campaignStatus"
-                            autocomplete="off"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="active">Actives</option>
-                        <option value="upcoming">À venir</option>
-                        <option value="ended">Terminées</option>
-                        <option value="all">Toutes</option>
-                    </select>
-                </div>
-
-                <!-- 2. Pays -->
-                <div>
-                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">
-                        🌍 Pays
-                    </label>
-                    <select name="country"
-                            id="country"
-                            x-model="country"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Tous</option>
-                        <option value="BE">🇧🇪 Belgique</option>
-                        <option value="LU">🇱🇺 Luxembourg</option>
-                    </select>
-                </div>
-
-                <!-- 3. Campagne spécifique (filtré dynamiquement) -->
-                <div>
-                    <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">
-                        📢 Campagne
-                    </label>
-                    <select name="campaign_id"
-                            id="campaign_id"
-                            x-model="campaignId"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Toutes</option>
-                        <template x-for="camp in filteredCampaigns" :key="camp.id">
-                            <option :value="camp.id" x-text="camp.name + ' (' + camp.country + ')'"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <!-- 4. Catégorie -->
-                <div>
-                    <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
-                        📁 Catégorie
-                    </label>
-                    <select name="category"
-                            id="category"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Toutes</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>"
-                                    <?php echo (isset($_GET['category']) && $_GET['category'] == $cat['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat['name_fr']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- 5. Recherche -->
+                <!-- 1. Recherche -->
                 <div class="lg:col-span-2">
                     <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
                         🔍 Recherche
@@ -242,6 +167,74 @@ $campaignsJson = json_encode(array_map(function($c) {
                            value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
                            placeholder="Code, nom..."
                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+
+                <!-- 2. Statut Campagne -->
+                <div>
+                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
+                        📊 Statut
+                    </label>
+                    <select name="campaign_status"
+                            id="campaign_status"
+                            x-model="campaignStatus"
+                            @change="onStatusChange()"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="active">Actives</option>
+                        <option value="upcoming">À venir</option>
+                        <option value="ended">Terminées</option>
+                        <option value="all">Toutes</option>
+                    </select>
+                </div>
+
+                <!-- 3. Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">
+                        🌍 Pays
+                    </label>
+                    <select name="country"
+                            id="country"
+                            x-model="country"
+                            @change="onCountryChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Tous</option>
+                        <template x-for="c in availableCountries" :key="c">
+                            <option :value="c" x-text="c === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 4. Campagne -->
+                <div>
+                    <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        📢 Campagne
+                    </label>
+                    <select name="campaign_id"
+                            id="campaign_id"
+                            x-model="campaignId"
+                            @change="onCampaignChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="camp in availableCampaigns" :key="camp.id">
+                            <option :value="camp.id" x-text="camp.name + ' (' + camp.country + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 5. Catégorie -->
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
+                        📁 Catégorie
+                    </label>
+                    <select name="category"
+                            id="category"
+                            x-model="categoryId"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="cat in availableCategories" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name"></option>
+                        </template>
+                    </select>
                 </div>
             </div>
 
@@ -258,6 +251,116 @@ $campaignsJson = json_encode(array_map(function($c) {
         </form>
     </div>
 </div>
+
+<script>
+function productFilters() {
+    return {
+        // Valeurs sélectionnées
+        campaignStatus: '<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active', ENT_QUOTES); ?>',
+        country: '<?php echo htmlspecialchars($_GET['country'] ?? '', ENT_QUOTES); ?>',
+        campaignId: '<?php echo htmlspecialchars($_GET['campaign_id'] ?? '', ENT_QUOTES); ?>',
+        categoryId: '<?php echo htmlspecialchars($_GET['category'] ?? '', ENT_QUOTES); ?>',
+
+        // Données brutes
+        allCampaigns: <?php echo $campaignsJson; ?>,
+        allCategories: <?php echo $categoriesJson; ?>,
+        categoryToCampaigns: <?php echo $categoryToCampaignsJson; ?>,
+
+        // Listes filtrées
+        availableCountries: [],
+        availableCampaigns: [],
+        availableCategories: [],
+
+        init() {
+            this.updateAvailableCountries();
+            this.updateAvailableCampaigns();
+            this.updateAvailableCategories();
+        },
+
+        // Filtre 1: Statut → met à jour Pays, Campagne, Catégorie
+        onStatusChange() {
+            this.updateAvailableCountries();
+            // Vérifier si le pays actuel est encore valide
+            if (this.country && !this.availableCountries.includes(this.country)) {
+                this.country = '';
+            }
+            this.updateAvailableCampaigns();
+            // Vérifier si la campagne actuelle est encore valide
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
+            }
+            this.updateAvailableCategories();
+            // Vérifier si la catégorie actuelle est encore valide
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Filtre 2: Pays → met à jour Campagne, Catégorie
+        onCountryChange() {
+            this.updateAvailableCampaigns();
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
+            }
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Filtre 3: Campagne → met à jour Catégorie
+        onCampaignChange() {
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Calcul des pays disponibles selon le statut
+        updateAvailableCountries() {
+            let countries = new Set();
+            this.allCampaigns.forEach(c => {
+                if (this.campaignStatus === 'all' || c.status === this.campaignStatus) {
+                    countries.add(c.country);
+                }
+            });
+            this.availableCountries = Array.from(countries).sort();
+        },
+
+        // Calcul des campagnes disponibles selon statut + pays
+        updateAvailableCampaigns() {
+            this.availableCampaigns = this.allCampaigns.filter(c => {
+                // Filtre par statut
+                if (this.campaignStatus !== 'all' && c.status !== this.campaignStatus) {
+                    return false;
+                }
+                // Filtre par pays
+                if (this.country && c.country !== this.country) {
+                    return false;
+                }
+                return true;
+            });
+        },
+
+        // Calcul des catégories disponibles selon les campagnes filtrées
+        updateAvailableCategories() {
+            // IDs des campagnes actuellement disponibles
+            let validCampaignIds = this.availableCampaigns.map(c => c.id);
+
+            // Si une campagne spécifique est sélectionnée, n'utiliser que celle-ci
+            if (this.campaignId) {
+                validCampaignIds = [parseInt(this.campaignId)];
+            }
+
+            // Filtrer les catégories qui ont au moins un produit dans les campagnes valides
+            this.availableCategories = this.allCategories.filter(cat => {
+                let catCampaigns = this.categoryToCampaigns[cat.id] || [];
+                return catCampaigns.some(campId => validCampaignIds.includes(campId));
+            });
+        }
+    };
+}
+</script>
 
 <!-- Tableau des Promotions -->
 <div class="bg-white shadow overflow-hidden rounded-lg">

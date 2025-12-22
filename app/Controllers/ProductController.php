@@ -86,6 +86,26 @@ class ProductController
             $campaigns[] = $camp;
         }
 
+        // Créer le mapping catégorie -> campagnes (pour filtrage dynamique des catégories)
+        $categoryToCampaigns = [];
+        $productFilters = [];
+        if ($accessibleCampaignIds !== null) {
+            $productFilters['campaign_ids'] = $accessibleCampaignIds;
+        }
+        $allProducts = $this->productModel->getAll($productFilters);
+        foreach ($allProducts as $prod) {
+            $catId = $prod['category_id'];
+            $campId = $prod['campaign_id'];
+            if ($catId && $campId) {
+                if (!isset($categoryToCampaigns[$catId])) {
+                    $categoryToCampaigns[$catId] = [];
+                }
+                if (!in_array($campId, $categoryToCampaigns[$catId])) {
+                    $categoryToCampaigns[$catId][] = $campId;
+                }
+            }
+        }
+
         // Charger la vue
         require_once __DIR__ . "/../Views/admin/products/index.php";
     }
