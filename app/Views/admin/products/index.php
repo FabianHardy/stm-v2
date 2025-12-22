@@ -152,7 +152,7 @@ $categoriesJson = json_encode(array_map(function($c) {
 }, $categories), JSON_HEX_APOS | JSON_HEX_QUOT);
 
 $categoryToCampaignsJson = !empty($categoryToCampaigns)
-    ? json_encode($categoryToCampaigns, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_FORCE_OBJECT)
+    ? json_encode($categoryToCampaigns, JSON_HEX_APOS | JSON_HEX_QUOT)
     : '{}';
 ?>
 <div class="bg-white shadow rounded-lg mb-6">
@@ -362,7 +362,11 @@ function productFilters() {
             // Filtrer les catégories qui ont au moins un produit dans les campagnes valides
             this.availableCategories = this.allCategories.filter(cat => {
                 // Utiliser String(cat.id) car les clés JSON sont des strings
-                let catCampaigns = this.categoryToCampaigns[String(cat.id)] || [];
+                let catCampaigns = this.categoryToCampaigns[String(cat.id)];
+                // S'assurer que c'est un tableau
+                if (!Array.isArray(catCampaigns)) {
+                    return false;
+                }
                 return catCampaigns.some(campId => validCampaignIds.includes(campId));
             });
         }
