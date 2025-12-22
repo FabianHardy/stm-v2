@@ -128,7 +128,7 @@ $menuItems = [
             ["label" => "Toutes les campagnes", "route" => "/stm/admin/campaigns", "permission" => "campaigns.view"],
             ["label" => "Créer une campagne", "route" => "/stm/admin/campaigns/create", "permission" => "campaigns.create"],
             ["label" => "Campagnes actives", "route" => "/stm/admin/campaigns/active", "permission" => "campaigns.view"],
-            ["label" => "Archives", "route" => "/stm/admin/campaigns/archived", "permission" => "campaigns.view"],
+            ["label" => "Terminées", "route" => "/stm/admin/campaigns?status=ended", "permission" => "campaigns.view"],
         ],
     ],
     [

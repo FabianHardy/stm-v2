@@ -290,7 +290,7 @@ if ($canViewOrders) {
     skip_recent_orders:
 }
 
-// Stats par campagne active (14 derniers jours)
+// Stats par campagne avec ventes (14 derniers jours)
 if ($canViewStats && $canViewCampaigns) {
     try {
         // Construire les filtres - commencer avec les dates
@@ -322,6 +322,7 @@ if ($canViewStats && $canViewCampaigns) {
             }
         }
 
+        // Campagnes avec ventes dans les 14 derniers jours (pas forcément actives aujourd'hui)
         $campaign_stats = $db->query("
             SELECT
                 c.name as campaign_name,
@@ -329,13 +330,14 @@ if ($canViewStats && $canViewCampaigns) {
                 COUNT(DISTINCT o.id) as orders_count,
                 COALESCE(SUM(ol.quantity), 0) as quantity_count
             FROM campaigns c
-            LEFT JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
-            LEFT JOIN customers cu ON o.customer_id = cu.id
+            INNER JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE CURDATE() BETWEEN c.start_date AND c.end_date
+            WHERE 1=1
             {$campaignStatsFilter}
             {$customerStatsFilter}
             GROUP BY c.id, c.name, c.country
+            HAVING quantity_count > 0
             ORDER BY quantity_count DESC
             LIMIT 5
         ", $campaignStatsParams);
@@ -382,8 +384,8 @@ if ($canViewStats && $canViewProducts) {
             SELECT
                 cat.name_fr as category_name,
                 cat.color,
-                COUNT(DISTINCT p.id) as products_count,
-                COALESCE(SUM(ol.quantity), 0) as quantity_sold
+                COUNT(DISTINCT CASE WHEN o.id IS NOT NULL THEN p.id ELSE NULL END) as products_count,
+                COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN ol.quantity ELSE 0 END), 0) as quantity_sold
             FROM categories cat
             LEFT JOIN products p ON cat.id = p.category_id AND p.is_active = 1
             LEFT JOIN order_lines ol ON p.id = ol.product_id
@@ -543,7 +545,7 @@ $quickActionsGridClass = match(true) {
 <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 <?= $kpiGridClass ?> mb-8">
 
     <?php if ($canViewCampaigns): ?>
-    <!-- Campagnes -->
+    <!-- Campagnes (actives aujourd'hui) -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
@@ -557,7 +559,7 @@ $quickActionsGridClass = match(true) {
                         <dt class="text-sm font-medium text-gray-500 truncate">Campagnes</dt>
                         <dd class="flex items-baseline">
                             <span class="text-2xl font-bold text-indigo-600"><?= $stats["active_campaigns"] ?></span>
-                            <span class="ml-2 text-sm text-gray-500">/ <?= $stats["total_campaigns"] ?> actives</span>
+                            <span class="ml-2 text-sm text-gray-500">actives / <?= $stats["total_campaigns"] ?> total</span>
                         </dd>
                     </dl>
                 </div>
@@ -567,7 +569,7 @@ $quickActionsGridClass = match(true) {
     <?php endif; ?>
 
     <?php if ($canViewCustomers): ?>
-    <!-- Clients -->
+    <!-- Clients ayant commandé -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
@@ -578,7 +580,7 @@ $quickActionsGridClass = match(true) {
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Clients actifs</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Clients ayant commandé</dt>
                         <dd class="text-2xl font-bold text-green-600"><?= number_format($stats["total_customers"], 0, ",", " ") ?></dd>
                     </dl>
                 </div>
@@ -628,7 +630,7 @@ $quickActionsGridClass = match(true) {
     <?php endif; ?>
 
     <?php if ($canViewProducts): ?>
-    <!-- Promos actives -->
+    <!-- Promos actives (campagnes en cours aujourd'hui) -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
@@ -639,7 +641,7 @@ $quickActionsGridClass = match(true) {
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Promos actives</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate" title="Promos des campagnes actives aujourd'hui">Promos disponibles</dt>
                         <dd class="text-2xl font-bold text-purple-600"><?= number_format($stats["total_promos"], 0, ",", " ") ?></dd>
                     </dl>
                 </div>
@@ -656,11 +658,11 @@ $quickActionsGridClass = match(true) {
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <!-- Graphique par campagne -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Promos vendues par campagne active <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par campagne <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
         <?php if (empty($campaign_stats)): ?>
         <div class="text-center py-8 text-gray-500">
             <i class="fas fa-chart-bar text-4xl text-gray-300 mb-3"></i>
-            <p>Aucune campagne active</p>
+            <p>Aucune vente sur cette période</p>
         </div>
         <?php else: ?>
         <canvas id="campaignChart" height="200"></canvas>
