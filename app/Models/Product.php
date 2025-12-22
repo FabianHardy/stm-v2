@@ -1,535 +1,597 @@
 <?php
 /**
- * Model Product (renommé en Promotion dans l'interface)
- * Gestion des promotions par campagne
+ * Vue : Liste des Promotions
  *
- * @package STM/Models
- * @version 2.5.0
- * @created 11/11/2025
- * @modified 17/11/2025 - Ajout méthode hasOrders() pour vérification avant suppression
- * @modified 18/12/2025 - Ajout filtre campaign_ids pour filtrage par rôle (rep, manager_reps)
- * @modified 19/12/2025 - Ajout filtre campaign_status (active/upcoming/ended) + dates campagne dans SELECT
+ * Affichage de tous les Promotions avec filtres, recherche et statistiques
+ *
+ * @created 11/11/2025 22:30
+ * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
+ * @modified 19/12/2025 - Filtre par statut campagne + affichage statut basé sur campagne
  */
 
-namespace App\Models;
+use Core\Session;
+use App\Helpers\PermissionHelper;
 
-use Core\Database;
+// Permissions pour les boutons
+$canCreate = PermissionHelper::can('products.create');
+$canEdit = PermissionHelper::can('products.edit');
+$canDelete = PermissionHelper::can('products.delete');
 
-class Product
-{
-    private $db;
+// Démarrer la capture du contenu pour le layout
+ob_start();
+?>
 
-    public function __construct()
-    {
-        $this->db = Database::getInstance();
-    }
+<!-- En-tête de la page -->
+<div class="mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Promotions</h1>
+            <p class="mt-2 text-sm text-gray-600">Gestion du catalogue de Promotions</p>
+        </div>
+        <?php if ($canCreate): ?>
+        <a href="/stm/admin/products/create"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+            ➕ Nouvelle Promotion
+        </a>
+        <?php endif; ?>
+    </div>
 
-    /**
-     * Récupérer toutes les promotions avec filtres
-     *
-     * @param array $filters Filtres optionnels (campaign_ids, campaign_id, category, search, is_active, status)
-     * @return array
-     * @modified 18/12/2025 - Ajout filtre campaign_ids pour filtrage par rôle
-     */
-    public function getAll(array $filters = []): array
-    {
-        $sql = "SELECT p.*,
-                       c.name as campaign_name,
-                       c.country as campaign_country,
-                       c.is_active as campaign_is_active,
-                       c.start_date as campaign_start_date,
-                       c.end_date as campaign_end_date,
-                       cat.name_fr as category_name
-                FROM products p
-                LEFT JOIN campaigns c ON p.campaign_id = c.id
-                LEFT JOIN categories cat ON p.category_id = cat.id
-                WHERE 1=1";
+    <!-- Breadcrumb -->
+    <nav class="mt-4 flex" aria-label="Breadcrumb">
+        <ol class="inline-flex items-center space-x-1 md:space-x-3">
+            <li class="inline-flex items-center">
+                <a href="/stm/admin/dashboard" class="text-gray-700 hover:text-gray-900">
+                    🏠 Dashboard
+                </a>
+            </li>
+            <li aria-current="page">
+                <div class="flex items-center">
+                    <span class="mx-2 text-gray-400">/</span>
+                    <span class="text-gray-500">Promotions</span>
+                </div>
+            </li>
+        </ol>
+    </nav>
+</div>
 
-        $params = [];
+<!-- Statistiques -->
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+    <!-- Total -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-3xl">📦</span>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions affichées</dt>
+                        <dd class="text-2xl font-bold text-gray-900"><?php echo $stats['total']; ?></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Filtre par liste d'IDs de campagnes (pour rôles limités)
-        if (isset($filters['campaign_ids'])) {
-            if (empty($filters['campaign_ids'])) {
-                return []; // Aucune campagne accessible
+    <!-- Actives (campagne active + promo active) -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-3xl">✅</span>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Réellement actives</dt>
+                        <dd class="text-2xl font-bold text-green-600"><?php echo $stats['active']; ?></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Non actives -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-3xl">⏸️</span>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Non actives</dt>
+                        <dd class="text-2xl font-bold text-gray-600"><?php echo $stats['inactive']; ?></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Catégories -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-3xl">📁</span>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Catégories</dt>
+                        <dd class="text-2xl font-bold text-indigo-600"><?php echo isset($stats['categories']) ? $stats['categories'] : count($categories); ?></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtres et recherche -->
+<?php
+// Préparer les données pour Alpine.js
+$campaignsJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name'],
+        'country' => $c['country'],
+        'status' => $c['computed_status']
+    ];
+}, $campaigns), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoriesJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name_fr']
+    ];
+}, $categories), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoryToCampaignsJson = !empty($categoryToCampaigns)
+    ? json_encode($categoryToCampaigns, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_FORCE_OBJECT)
+    : '{}';
+?>
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:p-6"
+         x-data="productFilters()"
+         x-init="init()">
+        <form method="GET" action="/stm/admin/products" class="space-y-4">
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+
+                <!-- 1. Recherche -->
+                <div class="lg:col-span-2">
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
+                        🔍 Recherche
+                    </label>
+                    <input type="text"
+                           name="search"
+                           id="search"
+                           value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
+                           placeholder="Code, nom..."
+                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+
+                <!-- 2. Statut Campagne -->
+                <div>
+                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
+                        📊 Statut
+                    </label>
+                    <select name="campaign_status"
+                            id="campaign_status"
+                            x-model="campaignStatus"
+                            @change="onStatusChange()"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="active">Actives</option>
+                        <option value="upcoming">À venir</option>
+                        <option value="ended">Terminées</option>
+                        <option value="all">Toutes</option>
+                    </select>
+                </div>
+
+                <!-- 3. Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">
+                        🌍 Pays
+                    </label>
+                    <select name="country"
+                            id="country"
+                            x-model="country"
+                            @change="onCountryChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Tous</option>
+                        <template x-for="c in availableCountries" :key="c">
+                            <option :value="c" x-text="c === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 4. Campagne -->
+                <div>
+                    <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        📢 Campagne
+                    </label>
+                    <select name="campaign_id"
+                            id="campaign_id"
+                            x-model="campaignId"
+                            @change="onCampaignChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="camp in availableCampaigns" :key="camp.id">
+                            <option :value="camp.id" x-text="camp.name + ' (' + camp.country + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 5. Catégorie -->
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
+                        📁 Catégorie
+                    </label>
+                    <select name="category"
+                            id="category"
+                            x-model="categoryId"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="cat in availableCategories" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    🔍 Filtrer
+                </button>
+                <a href="/stm/admin/products?campaign_status=all"
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    📋 Voir tout
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function productFilters() {
+    return {
+        // Valeurs sélectionnées
+        campaignStatus: '<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active', ENT_QUOTES); ?>',
+        country: '<?php echo htmlspecialchars($_GET['country'] ?? '', ENT_QUOTES); ?>',
+        campaignId: '<?php echo htmlspecialchars($_GET['campaign_id'] ?? '', ENT_QUOTES); ?>',
+        categoryId: '<?php echo htmlspecialchars($_GET['category'] ?? '', ENT_QUOTES); ?>',
+
+        // Données brutes
+        allCampaigns: <?php echo $campaignsJson; ?>,
+        allCategories: <?php echo $categoriesJson; ?>,
+        categoryToCampaigns: <?php echo $categoryToCampaignsJson; ?>,
+
+        // Listes filtrées
+        availableCountries: [],
+        availableCampaigns: [],
+        availableCategories: [],
+
+        init() {
+            console.log('categoryToCampaigns:', this.categoryToCampaigns);
+            console.log('allCategories:', this.allCategories);
+            console.log('allCampaigns:', this.allCampaigns);
+            this.updateAvailableCountries();
+            this.updateAvailableCampaigns();
+            this.updateAvailableCategories();
+            console.log('availableCategories:', this.availableCategories);
+        },
+
+        // Filtre 1: Statut → met à jour Pays, Campagne, Catégorie
+        onStatusChange() {
+            this.updateAvailableCountries();
+            // Vérifier si le pays actuel est encore valide
+            if (this.country && !this.availableCountries.includes(this.country)) {
+                this.country = '';
             }
-            $placeholders = implode(",", array_fill(0, count($filters['campaign_ids']), "?"));
-            $sql .= " AND p.campaign_id IN ({$placeholders})";
-            $params = array_merge($params, $filters['campaign_ids']);
-        }
-
-        // Filtre par campagne unique
-        if (!empty($filters['campaign_id'])) {
-            $sql .= " AND p.campaign_id = ?";
-            $params[] = $filters['campaign_id'];
-        }
-
-        // Filtre par pays (via la campagne)
-        if (!empty($filters['country'])) {
-            $sql .= " AND c.country = ?";
-            $params[] = $filters['country'];
-        }
-
-        // Filtre par catégorie
-        if (!empty($filters['category'])) {
-            $sql .= " AND p.category_id = ?";
-            $params[] = $filters['category'];
-        }
-
-        // Filtre par recherche
-        if (!empty($filters['search'])) {
-            $sql .= " AND (p.product_code LIKE ? OR p.name_fr LIKE ? OR p.name_nl LIKE ?)";
-            $searchTerm = '%' . $filters['search'] . '%';
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-        }
-
-        // Filtre par statut
-        if (isset($filters['is_active'])) {
-            $sql .= " AND p.is_active = ?";
-            $params[] = $filters['is_active'];
-        }
-
-        // Filtre par statut textuel
-        if (!empty($filters['status'])) {
-            if ($filters['status'] === 'active') {
-                $sql .= " AND p.is_active = 1";
-            } elseif ($filters['status'] === 'inactive') {
-                $sql .= " AND p.is_active = 0";
+            this.updateAvailableCampaigns();
+            // Vérifier si la campagne actuelle est encore valide
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
             }
-        }
-
-        // Filtre par statut de campagne (active = is_active + dans la période)
-        if (!empty($filters['campaign_status'])) {
-            switch ($filters['campaign_status']) {
-                case 'active':
-                    // Campagne active : is_active = 1 ET dans la période
-                    $sql .= " AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
-                    break;
-                case 'upcoming':
-                    // Campagne à venir : is_active = 1 ET pas encore commencée
-                    $sql .= " AND c.is_active = 1 AND c.start_date > CURDATE()";
-                    break;
-                case 'ended':
-                    // Campagne terminée : end_date passée
-                    $sql .= " AND c.end_date < CURDATE()";
-                    break;
-                case 'inactive':
-                    // Campagne désactivée manuellement
-                    $sql .= " AND c.is_active = 0";
-                    break;
-                // 'all' ou autre = pas de filtre
+            this.updateAvailableCategories();
+            // Vérifier si la catégorie actuelle est encore valide
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
             }
-        }
+        },
 
-        $sql .= " ORDER BY p.created_at DESC";
-
-        return $this->db->query($sql, $params);
-    }
-
-    /**
-     * Récupérer une promotion par son ID
-     *
-     * @param int $id ID de la promotion
-     * @return array|false
-     */
-    public function findById(int $id): array|false
-    {
-        $sql = "SELECT p.*,
-                       c.name as campaign_name,
-                       c.country as campaign_country,
-                       cat.name_fr as category_name
-                FROM products p
-                LEFT JOIN campaigns c ON p.campaign_id = c.id
-                LEFT JOIN categories cat ON p.category_id = cat.id
-                WHERE p.id = :id";
-
-        $result = $this->db->queryOne($sql, [':id' => $id]);
-
-        return $result ?: false;
-    }
-
-    /**
-     * ALIAS : find() → findById() pour compatibilité
-     *
-     * @param int $id ID de la promotion
-     * @return array|false
-     */
-    public function find(int $id): array|false
-    {
-        return $this->findById($id);
-    }
-
-    /**
-     * Récupérer une promotion par son code produit
-     *
-     * @param string $code Code produit
-     * @return array|false
-     */
-    public function findByCode(string $code): array|false
-    {
-        $sql = "SELECT * FROM products WHERE product_code = :code";
-        $result = $this->db->queryOne($sql, [':code' => $code]);
-
-        return $result ?: false;
-    }
-
-    /**
-     * Créer une nouvelle promotion
-     *
-     * @param array $data Données de la promotion
-     * @return int|false ID de la promotion créée ou false
-     * @modified 12/11/2025 17:30 - Ajout max_total et max_per_customer
-     */
-    public function create(array $data): int|false
-    {
-        $sql = "INSERT INTO products (
-                    campaign_id,
-                    category_id,
-                    product_code,
-                    name_fr,
-                    name_nl,
-                    description_fr,
-                    description_nl,
-                    image_fr,
-                    image_nl,
-                    display_order,
-                    max_total,
-                    max_per_customer,
-                    is_active
-                ) VALUES (
-                    :campaign_id,
-                    :category_id,
-                    :product_code,
-                    :name_fr,
-                    :name_nl,
-                    :description_fr,
-                    :description_nl,
-                    :image_fr,
-                    :image_nl,
-                    :display_order,
-                    :max_total,
-                    :max_per_customer,
-                    :is_active
-                )";
-
-        $params = [
-            ':campaign_id' => $data['campaign_id'] ?? null,
-            ':category_id' => $data['category_id'] ?? null,
-            ':product_code' => $data['product_code'] ?? '',
-            ':name_fr' => $data['name_fr'] ?? '',
-            ':name_nl' => $data['name_nl'] ?? '',
-            ':description_fr' => $data['description_fr'] ?? null,
-            ':description_nl' => $data['description_nl'] ?? null,
-            ':image_fr' => $data['image_fr'] ?? null,
-            ':image_nl' => $data['image_nl'] ?? null,
-            ':display_order' => $data['display_order'] ?? 0,
-            ':max_total' => !empty($data['max_total']) ? (int)$data['max_total'] : null,
-            ':max_per_customer' => !empty($data['max_per_customer']) ? (int)$data['max_per_customer'] : null,
-            ':is_active' => $data['is_active'] ?? 1,
-        ];
-
-        try {
-            if ($this->db->execute($sql, $params)) {
-                return (int) $this->db->lastInsertId();
+        // Filtre 2: Pays → met à jour Campagne, Catégorie
+        onCountryChange() {
+            this.updateAvailableCampaigns();
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
             }
-            return false;
-        } catch (\PDOException $e) {
-            error_log("Product::create() - SQL Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Mettre à jour une promotion
-     *
-     * @param int $id ID de la promotion
-     * @param array $data Nouvelles données
-     * @return bool
-     * @modified 12/11/2025 17:30 - Ajout max_total et max_per_customer
-     */
-    public function update(int $id, array $data): bool
-    {
-        $sql = "UPDATE products SET
-                    campaign_id = :campaign_id,
-                    category_id = :category_id,
-                    product_code = :product_code,
-                    name_fr = :name_fr,
-                    name_nl = :name_nl,
-                    description_fr = :description_fr,
-                    description_nl = :description_nl,
-                    image_fr = :image_fr,
-                    image_nl = :image_nl,
-                    display_order = :display_order,
-                    max_total = :max_total,
-                    max_per_customer = :max_per_customer,
-                    is_active = :is_active
-                WHERE id = :id";
-
-        $params = [
-            ':id' => $id,
-            ':campaign_id' => $data['campaign_id'] ?? null,
-            ':category_id' => $data['category_id'] ?? null,
-            ':product_code' => $data['product_code'] ?? '',
-            ':name_fr' => $data['name_fr'] ?? '',
-            ':name_nl' => $data['name_nl'] ?? '',
-            ':description_fr' => $data['description_fr'] ?? null,
-            ':description_nl' => $data['description_nl'] ?? null,
-            ':image_fr' => $data['image_fr'] ?? null,
-            ':image_nl' => $data['image_nl'] ?? null,
-            ':display_order' => $data['display_order'] ?? 0,
-            ':max_total' => !empty($data['max_total']) ? (int)$data['max_total'] : null,
-            ':max_per_customer' => !empty($data['max_per_customer']) ? (int)$data['max_per_customer'] : null,
-            ':is_active' => $data['is_active'] ?? 1,
-        ];
-
-        try {
-            return $this->db->execute($sql, $params);
-        } catch (\PDOException $e) {
-            error_log("Product::update() - SQL Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Supprimer une promotion
-     *
-     * @param int $id ID de la promotion
-     * @return bool
-     */
-    public function delete(int $id): bool
-    {
-        $sql = "DELETE FROM products WHERE id = :id";
-
-        return $this->db->execute($sql, [':id' => $id]);
-    }
-
-    /**
-     * Vérifier si une promotion a des commandes associées
-     *
-     * @param int $id ID de la promotion
-     * @return bool True si des commandes existent, False sinon
-     * @created 17/11/2025
-     */
-    public function hasOrders(int $id): bool
-    {
-        $sql = "SELECT COUNT(*) as count
-                FROM order_lines
-                WHERE product_id = :product_id";
-
-        try {
-            $result = $this->db->query($sql, [':product_id' => $id]);
-
-            if (!is_array($result) || empty($result)) {
-                return false;
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
             }
+        },
 
-            $count = isset($result[0]['count']) ? (int)$result[0]['count'] : 0;
-            return $count > 0;
+        // Filtre 3: Campagne → met à jour Catégorie
+        onCampaignChange() {
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
 
-        } catch (\PDOException $e) {
-            error_log("Product::hasOrders() - Erreur SQL: " . $e->getMessage());
-            // En cas d'erreur SQL, on bloque la suppression par sécurité
-            return true;
-        }
-    }
+        // Calcul des pays disponibles selon le statut
+        updateAvailableCountries() {
+            let countries = new Set();
+            this.allCampaigns.forEach(c => {
+                if (this.campaignStatus === 'all' || c.status === this.campaignStatus) {
+                    countries.add(c.country);
+                }
+            });
+            this.availableCountries = Array.from(countries).sort();
+        },
 
-    /**
-     * Récupérer les promotions actives
-     *
-     * @return array
-     */
-    public function getActive(): array
-    {
-        $sql = "SELECT p.*, c.name as campaign_name
-                FROM products p
-                LEFT JOIN campaigns c ON p.campaign_id = c.id
-                WHERE p.is_active = 1
-                ORDER BY p.created_at DESC";
+        // Calcul des campagnes disponibles selon statut + pays
+        updateAvailableCampaigns() {
+            this.availableCampaigns = this.allCampaigns.filter(c => {
+                // Filtre par statut
+                if (this.campaignStatus !== 'all' && c.status !== this.campaignStatus) {
+                    return false;
+                }
+                // Filtre par pays
+                if (this.country && c.country !== this.country) {
+                    return false;
+                }
+                return true;
+            });
+        },
 
-        return $this->db->query($sql);
-    }
+        // Calcul des catégories disponibles selon les campagnes filtrées
+        updateAvailableCategories() {
+            // IDs des campagnes actuellement disponibles
+            let validCampaignIds = this.availableCampaigns.map(c => c.id);
 
-    /**
-     * Récupérer les promotions d'une campagne
-     *
-     * @param int $campaignId ID de la campagne
-     * @return array
-     */
-    public function getByCampaign(int $campaignId): array
-    {
-        $sql = "SELECT * FROM products
-                WHERE campaign_id = :campaign_id
-                ORDER BY display_order ASC, created_at DESC";
-
-        return $this->db->query($sql, [':campaign_id' => $campaignId]);
-    }
-
-    /**
-     * Compter les promotions
-     *
-     * @param array $filters Filtres optionnels
-     * @return int
-     */
-    public function count(array $filters = []): int
-    {
-        $sql = "SELECT COUNT(*) as total FROM products WHERE 1=1";
-        $params = [];
-
-        if (!empty($filters['campaign_id'])) {
-            $sql .= " AND campaign_id = :campaign_id";
-            $params[':campaign_id'] = $filters['campaign_id'];
-        }
-
-        if (isset($filters['is_active'])) {
-            $sql .= " AND is_active = :is_active";
-            $params[':is_active'] = $filters['is_active'];
-        }
-
-        $result = $this->db->query($sql, $params);
-
-        return isset($result[0]['total']) ? (int) $result[0]['total'] : 0;
-    }
-
-    /**
-     * Valider les données d'une promotion
-     *
-     * @param array $data Données à valider
-     * @return array Tableau des erreurs (vide si OK)
-     * @modified 12/11/2025 17:30 - Ajout validation quotas
-     */
-    public function validate(array $data): array
-    {
-        $errors = [];
-
-        // Code produit obligatoire
-        if (empty($data['product_code'])) {
-            $errors['product_code'] = 'Le code produit est obligatoire';
-        } else {
-            // ⭐ NOUVEAU : Vérifier l'unicité (product_code + campaign_id)
-            // Permet le même code dans différentes campagnes
-            $sql = "SELECT id FROM products
-                    WHERE product_code = :product_code
-                    AND campaign_id = :campaign_id";
-
-            $params = [
-                ':product_code' => $data['product_code'],
-                ':campaign_id' => $data['campaign_id']
-            ];
-
-            // Si c'est un UPDATE, exclure l'ID actuel
-            if (isset($data['id'])) {
-                $sql .= " AND id != :id";
-                $params[':id'] = $data['id'];
+            // Si une campagne spécifique est sélectionnée, n'utiliser que celle-ci
+            if (this.campaignId) {
+                validCampaignIds = [parseInt(this.campaignId)];
             }
 
-            $existing = $this->db->queryOne($sql, $params);
-
-            if ($existing) {
-                $errors['product_code'] = 'Ce code produit existe déjà dans cette campagne';
-            }
+            // Filtrer les catégories qui ont au moins un produit dans les campagnes valides
+            this.availableCategories = this.allCategories.filter(cat => {
+                // Utiliser String(cat.id) car les clés JSON sont des strings
+                let catCampaigns = this.categoryToCampaigns[String(cat.id)] || [];
+                return catCampaigns.some(campId => validCampaignIds.includes(campId));
+            });
         }
-
-        // Campagne obligatoire
-        if (empty($data['campaign_id'])) {
-            $errors['campaign_id'] = 'La campagne est obligatoire';
-        } else {
-            // Vérifier que la campagne existe
-            $campaignModel = new \App\Models\Campaign();
-            $campaign = $campaignModel->findById((int) $data['campaign_id']);
-
-            if (!$campaign) {
-                $errors['campaign_id'] = 'La campagne sélectionnée n\'existe pas';
-            }
-        }
-
-        // Nom FR obligatoire
-        if (empty($data['name_fr'])) {
-            $errors['name_fr'] = 'Le nom en français est obligatoire';
-        }
-
-        // Validation des quotas (optionnels)
-        if (isset($data['max_total']) && $data['max_total'] !== null && $data['max_total'] !== '') {
-            $maxTotal = is_numeric($data['max_total']) ? (int)$data['max_total'] : $data['max_total'];
-            if (!is_int($maxTotal) || $maxTotal < 1) {
-                $errors['max_total'] = 'Le quota global doit être un nombre entier positif (minimum 1)';
-            }
-        }
-
-        if (isset($data['max_per_customer']) && $data['max_per_customer'] !== null && $data['max_per_customer'] !== '') {
-            $maxPerCustomer = is_numeric($data['max_per_customer']) ? (int)$data['max_per_customer'] : $data['max_per_customer'];
-            if (!is_int($maxPerCustomer) || $maxPerCustomer < 1) {
-                $errors['max_per_customer'] = 'Le quota par client doit être un nombre entier positif (minimum 1)';
-            }
-        }
-
-        return $errors;
-    }
-
-    /**
-     * Récupérer les statistiques des promotions
-     *
-     * @param array|null $campaignIds Liste des IDs de campagnes accessibles (null = toutes)
-     * @param string $campaignStatus Filtre par statut campagne (active/upcoming/ended/all)
-     * @return array
-     * @modified 18/12/2025 - Ajout paramètre campaignIds pour filtrage par rôle
-     * @modified 19/12/2025 - Ajout paramètre campaignStatus pour cohérence avec filtres
-     */
-    public function getStats(?array $campaignIds = null, string $campaignStatus = 'all'): array
-    {
-        $stats = [
-            'total' => 0,
-            'active' => 0,
-            'inactive' => 0,
-        ];
-
-        // Construire la requête avec JOIN sur campaigns
-        $baseQuery = "SELECT COUNT(*) as count FROM products p
-                      LEFT JOIN campaigns c ON p.campaign_id = c.id
-                      WHERE 1=1";
-        $params = [];
-
-        // Filtre par IDs de campagnes accessibles
-        if ($campaignIds !== null) {
-            if (empty($campaignIds)) {
-                return $stats; // Aucune campagne accessible
-            }
-            $placeholders = implode(",", array_fill(0, count($campaignIds), "?"));
-            $baseQuery .= " AND p.campaign_id IN ({$placeholders})";
-            $params = $campaignIds;
-        }
-
-        // Filtre par statut de campagne
-        $campaignStatusFilter = "";
-        switch ($campaignStatus) {
-            case 'active':
-                $campaignStatusFilter = " AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
-                break;
-            case 'upcoming':
-                $campaignStatusFilter = " AND c.is_active = 1 AND c.start_date > CURDATE()";
-                break;
-            case 'ended':
-                $campaignStatusFilter = " AND c.end_date < CURDATE()";
-                break;
-            case 'inactive':
-                $campaignStatusFilter = " AND c.is_active = 0";
-                break;
-            // 'all' = pas de filtre
-        }
-
-        // Total (avec filtre campaign_status)
-        $sql = $baseQuery . $campaignStatusFilter;
-        $result = $this->db->query($sql, $params);
-        $stats['total'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        // Actives : promo active + campagne active (is_active=1 + dans la période)
-        $sql = $baseQuery . $campaignStatusFilter . " AND p.is_active = 1 AND c.is_active = 1 AND CURDATE() BETWEEN c.start_date AND c.end_date";
-        $result = $this->db->query($sql, $params);
-        $stats['active'] = isset($result[0]['count']) ? (int) $result[0]['count'] : 0;
-
-        // Inactives : tout ce qui n'est pas actif
-        $stats['inactive'] = $stats['total'] - $stats['active'];
-
-        return $stats;
-    }
+    };
 }
+</script>
+
+<!-- Tableau des Promotions -->
+<div class="bg-white shadow overflow-hidden rounded-lg">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Image
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Promotion
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Code
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Campagne
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Catégorie
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Statut
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                <?php if (empty($products)): ?>
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center">
+                            <div class="text-gray-400">
+                                <span class="text-4xl mb-2 block">📦</span>
+                                <p class="text-sm">Aucune Promotion trouvé</p>
+                                <?php if ($canCreate): ?>
+                                <a href="/stm/admin/products/create"
+                                   class="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
+                                    ➕ Créer la première Promotion
+                                </a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($products as $product): ?>
+                        <tr class="hover:bg-gray-50">
+                            <!-- Image -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if (!empty($product['image_fr'])): ?>
+                                    <img src="<?php echo htmlspecialchars($product['image_fr']); ?>"
+                                         alt="<?php echo htmlspecialchars($product['name_fr']); ?>"
+                                         class="h-12 w-12 object-cover rounded border border-gray-200">
+                                <?php else: ?>
+                                    <div class="h-12 w-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                                        <span class="text-gray-400 text-xs">📷</span>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+
+                            <!-- Promotion -->
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-medium text-gray-900">
+                                    <?php echo htmlspecialchars($product['name_fr']); ?>
+                                </div>
+                                <?php if (!empty($product['name_nl'])): ?>
+                                    <div class="text-sm text-gray-500">
+                                        <?php echo htmlspecialchars($product['name_nl']); ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+
+                            <!-- Code -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 font-mono font-medium">
+                                    <?php echo htmlspecialchars($product['product_code']); ?>
+                                </div>
+                            </td>
+
+                            <!-- Campagne -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if (!empty($product['campaign_name'])): ?>
+                                    <div class="text-sm text-gray-900"><?php echo htmlspecialchars($product['campaign_name']); ?></div>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium <?php echo $product['campaign_country'] === 'BE' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
+                                            <?php echo $product['campaign_country']; ?>
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-xs text-gray-400">-</span>
+                                <?php endif; ?>
+                            </td>
+
+                            <!-- Catégorie -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if (!empty($product['category_name'])): ?>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                        <?php echo htmlspecialchars($product['category_name']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="text-xs text-gray-400">Non catégorisé</span>
+                                <?php endif; ?>
+                            </td>
+
+                            <!-- Statut (basé sur la campagne) -->
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <?php
+                                // Calculer le statut en fonction de la campagne
+                                $today = date('Y-m-d');
+                                $campaignActive = $product['campaign_is_active'] ?? 0;
+                                $campaignStart = $product['campaign_start_date'] ?? null;
+                                $campaignEnd = $product['campaign_end_date'] ?? null;
+                                $promoActive = $product['is_active'];
+
+                                if (!$campaignActive) {
+                                    // Campagne désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif (!$promoActive) {
+                                    // Promo désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif ($campaignStart && $today < $campaignStart) {
+                                    // Campagne à venir
+                                    $statusClass = 'bg-blue-100 text-blue-800';
+                                    $statusLabel = '⏳ À venir';
+                                } elseif ($campaignEnd && $today > $campaignEnd) {
+                                    // Campagne terminée
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusLabel = '⏹ Terminée';
+                                } else {
+                                    // Active
+                                    $statusClass = 'bg-green-100 text-green-800';
+                                    $statusLabel = '✓ Active';
+                                }
+                                ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
+                                    <?php echo $statusLabel; ?>
+                                </span>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>"
+                                       class="text-indigo-600 hover:text-indigo-900"
+                                       title="Voir les détails">
+                                        👁️
+                                    </a>
+                                    <?php if ($canEdit): ?>
+                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
+                                       class="text-gray-600 hover:text-gray-900"
+                                       title="Modifier">
+                                        ✏️
+                                    </a>
+                                    <?php endif; ?>
+                                    <?php if ($canDelete): ?>
+                                    <form method="POST"
+                                          action="/stm/admin/products/<?php echo $product['id']; ?>/delete"
+                                          onsubmit="return confirm('Supprimer cette Promotion ?');"
+                                          class="inline">
+                                        <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
+                                        <input type="hidden" name="_method" value="DELETE">
+                                        <button type="submit"
+                                                class="text-red-600 hover:text-red-900"
+                                                title="Supprimer">
+                                            🗑️
+                                        </button>
+                                    </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination (si nécessaire) -->
+<?php if (!empty($pagination) && $pagination['total_pages'] > 1): ?>
+    <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6">
+        <div class="flex-1 flex justify-between sm:hidden">
+            <?php if ($pagination['current_page'] > 1): ?>
+                <a href="?page=<?php echo $pagination['current_page'] - 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
+                   class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Précédent
+                </a>
+            <?php endif; ?>
+            <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
+                <a href="?page=<?php echo $pagination['current_page'] + 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
+                   class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Suivant
+                </a>
+            <?php endif; ?>
+        </div>
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700">
+                    Affichage de
+                    <span class="font-medium"><?php echo (($pagination['current_page'] - 1) * $pagination['per_page']) + 1; ?></span>
+                    à
+                    <span class="font-medium"><?php echo min($pagination['current_page'] * $pagination['per_page'], $pagination['total']); ?></span>
+                    sur
+                    <span class="font-medium"><?php echo $pagination['total']; ?></span>
+                    résultats
+                </p>
+            </div>
+            <div>
+                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <?php for ($i = 1; $i <= $pagination['total_pages']; $i++): ?>
+                        <a href="?page=<?php echo $i; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
+                           class="relative inline-flex items-center px-4 py-2 border text-sm font-medium <?php echo $i === $pagination['current_page'] ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
+                </nav>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php
+$content = ob_get_clean();
+require_once __DIR__ . '/../../layouts/admin.php';
+?>

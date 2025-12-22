@@ -94,14 +94,15 @@ class ProductController
         }
         $allProducts = $this->productModel->getAll($productFilters);
         foreach ($allProducts as $prod) {
-            $catId = $prod['category_id'];
-            $campId = $prod['campaign_id'];
+            $catId = (int)$prod['category_id'];
+            $campId = (int)$prod['campaign_id'];
             if ($catId && $campId) {
-                if (!isset($categoryToCampaigns[$catId])) {
-                    $categoryToCampaigns[$catId] = [];
+                $catKey = strval($catId); // Clé string pour JSON
+                if (!isset($categoryToCampaigns[$catKey])) {
+                    $categoryToCampaigns[$catKey] = [];
                 }
-                if (!in_array($campId, $categoryToCampaigns[$catId])) {
-                    $categoryToCampaigns[$catId][] = $campId;
+                if (!in_array($campId, $categoryToCampaigns[$catKey])) {
+                    $categoryToCampaigns[$catKey][] = $campId;
                 }
             }
         }
