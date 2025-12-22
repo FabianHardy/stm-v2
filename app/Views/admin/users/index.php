@@ -244,9 +244,9 @@ ob_start();
 
                     <!-- Dernière connexion -->
                     <td class="px-6 py-4">
-                        <?php if (!empty($user['last_login'])): ?>
+                        <?php if (!empty($user['last_login_at'])): ?>
                         <span class="text-sm text-gray-600">
-                            <?= date('d/m/Y H:i', strtotime($user['last_login'])) ?>
+                            <?= date('d/m/Y H:i', strtotime($user['last_login_at'])) ?>
                         </span>
                         <?php else: ?>
                         <span class="text-sm text-gray-400">Jamais</span>
@@ -256,14 +256,14 @@ ob_start();
                     <!-- Actions -->
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            
-                            <?php 
-                            // Bouton "Se connecter en tant que" - seulement pour superadmin, 
+
+                            <?php
+                            // Bouton "Se connecter en tant que" - seulement pour superadmin,
                             // pas sur les superadmins, pas si déjà en mode impersonate,
                             // et seulement sur les utilisateurs actifs
-                            $canImpersonate = $isSuperAdmin 
-                                && !$isImpersonating 
-                                && $user['role'] !== 'superadmin' 
+                            $canImpersonate = $isSuperAdmin
+                                && !$isImpersonating
+                                && $user['role'] !== 'superadmin'
                                 && $user['is_active'];
                             ?>
                             <?php if ($canImpersonate): ?>
