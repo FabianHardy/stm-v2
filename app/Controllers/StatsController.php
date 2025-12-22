@@ -7,6 +7,7 @@
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/09 - Ajout stats fournisseurs dans campaigns()
+ * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
  */
 
 namespace App\Controllers;
@@ -795,7 +796,7 @@ class StatsController
 
         // Trier les produits par nom
         usort($campaignProducts, function($a, $b) {
-            return strcasecmp($a["name"] ?? "", $b["name"] ?? "");
+            return strcasecmp($a["product_name"] ?? "", $b["product_name"] ?? "");
         });
 
         // En mode MANUAL, récupérer la liste des clients autorisés
@@ -937,7 +938,7 @@ class StatsController
             foreach ($campaignProducts as $product) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                 $productColumns[$product["id"]] = $colLetter;
-                $repSheet->setCellValue($colLetter . "1", $product["name"] ?? $product["product_code"]);
+                $repSheet->setCellValue($colLetter . "1", $product["product_name"] ?? $product["product_code"]);
                 $colIndex++;
             }
 
@@ -1077,43 +1078,84 @@ class StatsController
      * @param string $repCountry
      * @return array [customer_number => [product_id => quantity]]
      * @created 2025/12/10
+     * @modified 2025/12/22 - Correction : utiliser customer_number IN au lieu de rep_id
      */
     private function getClientProductQuantities(int $campaignId, string $repId, string $repCountry): array
     {
         $db = \Core\Database::getInstance();
 
-        $query = "
-            SELECT
-                cu.customer_number,
-                ol.product_id,
-                SUM(ol.quantity) as quantity
-            FROM orders o
-            INNER JOIN customers cu ON o.customer_id = cu.id
-            INNER JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
-            AND cu.rep_id = :rep_id
-            AND cu.country = :country
-            GROUP BY cu.customer_number, ol.product_id
-        ";
-
-        $results = $db->query($query, [
-            ":campaign_id" => $campaignId,
-            ":rep_id" => $repId,
-            ":country" => $repCountry
-        ]);
-
-        $quantities = [];
-        foreach ($results as $row) {
-            $customerNumber = $row["customer_number"];
-            $productId = $row["product_id"];
-
-            if (!isset($quantities[$customerNumber])) {
-                $quantities[$customerNumber] = [];
-            }
-            $quantities[$customerNumber][$productId] = (int) $row["quantity"];
+        // Étape 1 : Récupérer les customer_numbers du représentant depuis la DB externe
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+        } catch (\Exception $e) {
+            error_log("getClientProductQuantities: Impossible de se connecter à la DB externe - " . $e->getMessage());
+            return [];
         }
 
-        return $quantities;
+        try {
+            $tableClient = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
+            $clientsResult = $extDb->query(
+                "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+                [":rep_id" => $repId]
+            );
+
+            if (empty($clientsResult)) {
+                return [];
+            }
+
+            // Construire la liste des numéros clients (filtrer les nulls)
+            $customerNumbers = array_filter(
+                array_column($clientsResult, "customer_number"),
+                fn($n) => $n !== null && $n !== ""
+            );
+
+            if (empty($customerNumbers)) {
+                return [];
+            }
+
+            // Échapper les numéros pour la requête IN
+            $escapedNumbers = array_map(function ($num) {
+                return "'" . addslashes((string) $num) . "'";
+            }, $customerNumbers);
+            $inClause = implode(",", $escapedNumbers);
+
+            // Étape 2 : Requête pour les quantités par produit
+            $query = "
+                SELECT
+                    cu.customer_number,
+                    ol.product_id,
+                    SUM(ol.quantity) as quantity
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                INNER JOIN order_lines ol ON o.id = ol.order_id
+                WHERE o.campaign_id = :campaign_id
+                AND o.status = 'validated'
+                AND cu.customer_number IN ({$inClause})
+                AND cu.country = :country
+                GROUP BY cu.customer_number, ol.product_id
+            ";
+
+            $results = $db->query($query, [
+                ":campaign_id" => $campaignId,
+                ":country" => $repCountry
+            ]);
+
+            $quantities = [];
+            foreach ($results as $row) {
+                $customerNumber = $row["customer_number"];
+                $productId = $row["product_id"];
+
+                if (!isset($quantities[$customerNumber])) {
+                    $quantities[$customerNumber] = [];
+                }
+                $quantities[$customerNumber][$productId] = (int) $row["quantity"];
+            }
+
+            return $quantities;
+
+        } catch (\Exception $e) {
+            error_log("getClientProductQuantities error: " . $e->getMessage());
+            return [];
+        }
     }
 }
