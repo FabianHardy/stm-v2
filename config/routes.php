@@ -11,6 +11,7 @@
  * @author     Fabian Hardy
  * @version    2.0.0
  * @modified   11/12/2025 - Ajout routes équipe campagne (assignees)
+ * @modified   22/12/2025 - Ajout route API check-export-cache
  */
 
 // ============================================
@@ -633,7 +634,23 @@ $router->post("/admin/stats/export", function () {
     $controller->export();
 });
 
-$router->post('/admin/stats/export-reps-excel', [App\Controllers\StatsController::class, 'exportRepsExcel']);
+// Export Excel Représentants (POST)
+$router->post('/admin/stats/export-reps-excel', function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StatsController();
+    $controller->exportRepsExcel();
+});
+
+// API - Vérification cache export (AJAX)
+$router->get('/admin/stats/check-export-cache', function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StatsController();
+    $controller->checkExportCache();
+});
 
 // ============================================
 // ROUTES CONFIGURATION - COMPTES INTERNES
