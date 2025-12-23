@@ -12,6 +12,7 @@
  * @modified 2025/12/09 - Système d'onglets (Produits/Reps/Fournisseurs)
  * @modified 2025/12/09 - Ajout fournisseur dans Produits, accordion dans Fournisseurs, tri par colonnes
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
+ * @modified 2025/12/22 - Ajout overlay de chargement pour export Excel avec timer
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -56,6 +57,23 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
         </div>
         <p class="mt-4 text-gray-600 font-medium">Chargement des statistiques...</p>
         <p class="text-sm text-gray-400 mt-1">Cela peut prendre quelques secondes</p>
+    </div>
+</div>
+
+<!-- Export Loader Overlay -->
+<div id="export-loader" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
+        <div class="relative mb-4">
+            <div class="w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
+            <i class="fas fa-file-excel text-green-600 text-2xl absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
+        </div>
+        <h3 class="text-xl font-bold text-gray-900 mb-2">Génération de l'export Excel</h3>
+        <p class="text-gray-600 mb-4">Cette opération peut prendre plusieurs minutes selon le volume de données.</p>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <strong>Ne quittez pas cette page</strong> pendant la génération.
+        </div>
+        <p class="text-xs text-gray-400 mt-4">Temps écoulé : <span id="export-timer">0:00</span></p>
     </div>
 </div>
 
@@ -537,9 +555,10 @@ $suppliersCount = count($supplierStats ?? []);
 
             <!-- Bouton Export Excel Représentants -->
             <div class="flex justify-end mb-4">
-                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline">
+                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" onsubmit="return startExport(this)">
                     <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
                     <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                    <input type="hidden" name="download_token" id="download_token" value="">
                     <button type="submit"
                             class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-sm">
                         <i class="fas fa-file-excel"></i>
@@ -812,6 +831,90 @@ $pageScripts = <<<SCRIPTS
 function showLoader() {
     document.getElementById('page-loader').classList.remove('hidden');
     document.getElementById('page-loader').classList.add('flex');
+}
+
+// ============================================
+// EXPORT LOADER AVEC TIMER ET COOKIE TOKEN
+// ============================================
+let exportTimerInterval = null;
+let exportStartTime = null;
+let downloadCheckInterval = null;
+
+function startExport(form) {
+    // Générer un token unique pour ce téléchargement
+    const downloadToken = 'download_' + Date.now();
+
+    // Ajouter le token au formulaire
+    document.getElementById('download_token').value = downloadToken;
+
+    // Afficher l'overlay
+    document.getElementById('export-loader').classList.remove('hidden');
+    document.getElementById('export-loader').classList.add('flex');
+
+    // Démarrer le timer
+    exportStartTime = Date.now();
+    updateExportTimer();
+    exportTimerInterval = setInterval(updateExportTimer, 1000);
+
+    // Vérifier périodiquement si le cookie de téléchargement existe
+    downloadCheckInterval = setInterval(function() {
+        if (getCookie('download_complete') === downloadToken) {
+            // Téléchargement terminé
+            hideExportLoader();
+            // Supprimer le cookie
+            document.cookie = 'download_complete=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+    }, 500);
+
+    // Timeout de sécurité : masquer le loader après 10 minutes max
+    setTimeout(function() {
+        hideExportLoader();
+    }, 600000);
+
+    // Permettre la soumission du formulaire
+    return true;
+}
+
+function showExportLoader() {
+    // Fonction conservée pour compatibilité
+    const form = document.getElementById('export-form');
+    if (form) {
+        startExport(form);
+    }
+}
+
+function hideExportLoader() {
+    document.getElementById('export-loader').classList.add('hidden');
+    document.getElementById('export-loader').classList.remove('flex');
+
+    if (exportTimerInterval) {
+        clearInterval(exportTimerInterval);
+        exportTimerInterval = null;
+    }
+    if (downloadCheckInterval) {
+        clearInterval(downloadCheckInterval);
+        downloadCheckInterval = null;
+    }
+}
+
+function updateExportTimer() {
+    if (!exportStartTime) return;
+
+    const elapsed = Math.floor((Date.now() - exportStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+
+    const timerEl = document.getElementById('timer-value');
+    if (timerEl) {
+        timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    }
+}
+
+function getCookie(name) {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
 }
 
 // ============================================

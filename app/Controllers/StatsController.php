@@ -794,9 +794,9 @@ class StatsController
         // Récupérer tous les produits de la campagne (pour les colonnes)
         $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
 
-        // Trier les produits par nom
+        // Trier les produits par code article
         usort($campaignProducts, function($a, $b) {
-            return strcasecmp($a["product_name"] ?? "", $b["product_name"] ?? "");
+            return strcasecmp($a["product_code"] ?? "", $b["product_code"] ?? "");
         });
 
         // En mode MANUAL, récupérer la liste des clients autorisés
@@ -932,13 +932,13 @@ class StatsController
                 $col++;
             }
 
-            // En-têtes produits (colonnes dynamiques)
+            // En-têtes produits (colonnes dynamiques) - Utiliser le code article
             $productColumns = [];
             $colIndex = 6;
             foreach ($campaignProducts as $product) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                 $productColumns[$product["id"]] = $colLetter;
-                $repSheet->setCellValue($colLetter . "1", $product["product_name"] ?? $product["product_code"]);
+                $repSheet->setCellValue($colLetter . "1", $product["product_code"]);
                 $colIndex++;
             }
 
@@ -993,12 +993,23 @@ class StatsController
                     ]);
                 }
 
-                // Quantités par produit
+                // Quantités par produit (avec coloration si > 0)
                 foreach ($campaignProducts as $product) {
                     $productId = $product["id"];
                     $colLetter = $productColumns[$productId];
                     $qty = $clientProductQuantities[$customerNumber][$productId] ?? 0;
                     $repSheet->setCellValue($colLetter . $row, $qty);
+
+                    // Colorer en vert clair si quantité > 0
+                    if ($qty > 0) {
+                        $repSheet->getStyle($colLetter . $row)->applyFromArray([
+                            "font" => ["bold" => true, "color" => ["rgb" => "065F46"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "D1FAE5"]
+                            ]
+                        ]);
+                    }
                 }
 
                 $row++;
@@ -1032,6 +1043,12 @@ class StatsController
 
         // Générer le fichier
         $filename = "export_reps_" . preg_replace("/[^a-zA-Z0-9]/", "_", $campaignName) . "_" . date("Ymd_His") . ".xlsx";
+
+        // Cookie pour signaler au JS que le téléchargement est terminé
+        $downloadToken = $_POST['download_token'] ?? '';
+        if ($downloadToken) {
+            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        }
 
         header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         header("Content-Disposition: attachment;filename=\"" . $filename . "\"");
