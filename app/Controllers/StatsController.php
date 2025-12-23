@@ -11,6 +11,7 @@
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
  * @modified 2025/12/23 - Correction graphiques (getDailyEvolution, getCategoryStatsForCampaign) pour filtre clients
+ * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
  */
 
 namespace App\Controllers;
@@ -1625,6 +1626,132 @@ class StatsController
                 'debug_scope' => $accessScope,
                 'debug_role' => $rawRole,
                 'debug_impersonating' => $isImpersonating
+            ]);
+        }
+
+        exit();
+    }
+
+    /**
+     * API : Récupère les commandes d'un client pour une campagne (AJAX)
+     *
+     * @return void
+     * @created 2025/12/23
+     */
+    public function getCustomerOrdersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $campaignId = isset($_GET['campaign_id']) ? (int)$_GET['campaign_id'] : 0;
+        $customerNumber = $_GET['customer_number'] ?? '';
+        $country = $_GET['country'] ?? '';
+
+        if (!$campaignId || !$customerNumber || !$country) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Paramètres manquants'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à cette campagne'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au client (selon le rôle)
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+        if ($accessibleCustomerNumbers !== null && !in_array($customerNumber, $accessibleCustomerNumbers)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce client'
+            ]);
+            exit();
+        }
+
+        try {
+            $db = \Core\Database::getInstance();
+
+            // Debug : log les paramètres reçus
+            error_log("getCustomerOrdersApi - campaign_id: {$campaignId}, customer_number: {$customerNumber}, country: {$country}");
+
+            // Récupérer les commandes du client pour cette campagne
+            $query = "
+                SELECT
+                    o.id as order_id,
+                    o.created_at,
+                    o.total_items,
+                    o.status
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                WHERE o.campaign_id = :campaign_id
+                AND cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'validated'
+                ORDER BY o.created_at DESC
+            ";
+
+            $orders = $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            error_log("getCustomerOrdersApi - Found " . count($orders) . " orders");
+
+            // Pour chaque commande, récupérer les lignes de commande
+            foreach ($orders as &$order) {
+                $linesQuery = "
+                    SELECT
+                        ol.quantity,
+                        p.product_code,
+                        p.name_fr as product_name
+                    FROM order_lines ol
+                    INNER JOIN products p ON ol.product_id = p.id
+                    WHERE ol.order_id = :order_id
+                    ORDER BY p.name_fr
+                ";
+
+                $order['lines'] = $db->query($linesQuery, [':order_id' => $order['order_id']]);
+                $order['total_quantity'] = array_sum(array_column($order['lines'], 'quantity'));
+            }
+
+            // Récupérer les infos du client
+            $customerQuery = "
+                SELECT company_name, city
+                FROM customers
+                WHERE customer_number = :customer_number
+                AND country = :country
+                LIMIT 1
+            ";
+
+            $customerInfo = $db->query($customerQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'customer' => [
+                    'customer_number' => $customerNumber,
+                    'country' => $country,
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber,
+                    'city' => $customerInfo[0]['city'] ?? ''
+                ],
+                'orders' => $orders,
+                'total_orders' => count($orders),
+                'total_quantity' => array_sum(array_column($orders, 'total_quantity'))
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("getCustomerOrdersApi error: " . $e->getMessage() . " - File: " . $e->getFile() . " - Line: " . $e->getLine());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Erreur lors de la récupération des commandes: ' . $e->getMessage()
             ]);
         }
 

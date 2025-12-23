@@ -15,6 +15,7 @@
  * @modified 2025/12/22 - Ajout overlay de chargement pour export Excel avec timer
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  * @modified 2025/12/23 - Ajout onglet Clients (top clients par campagne)
+ * @modified 2025/12/23 - Ajout modal détail commandes client avec API
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -871,6 +872,7 @@ $customersCount = count($topCustomers ?? []);
                             <th class="py-3 px-4 text-right">CMD</th>
                             <th class="py-3 px-4 text-right">Promos</th>
                             <th class="py-3 px-4 text-right">Réf.</th>
+                            <th class="py-3 px-4 text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="text-sm divide-y divide-gray-100">
@@ -922,10 +924,87 @@ $customersCount = count($topCustomers ?? []);
                                     <?= $distinctProducts ?>
                                 </span>
                             </td>
+                            <td class="py-3 px-4 text-center">
+                                <button type="button"
+                                        onclick="openCustomerOrdersModal('<?= htmlspecialchars($customerNumber) ?>', '<?= $country ?>', '<?= htmlspecialchars(addslashes($companyName)) ?>')"
+                                        class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    Détail
+                                </button>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Modal détail commandes client -->
+            <div id="customerOrdersModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true">
+                <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                    <!-- Overlay -->
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeCustomerOrdersModal()"></div>
+
+                    <!-- Modal content -->
+                    <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-4xl sm:w-full mx-auto">
+                        <!-- Header -->
+                        <div class="bg-indigo-600 px-6 py-4 rounded-t-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white" id="modalCustomerName">Détail client</h3>
+                                    <p class="text-indigo-200 text-sm" id="modalCustomerNumber"></p>
+                                </div>
+                                <button type="button" onclick="closeCustomerOrdersModal()" class="text-white hover:text-indigo-200 transition">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
+                            <!-- Loading -->
+                            <div id="modalLoading" class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-indigo-600 text-2xl"></i>
+                                <p class="text-gray-500 mt-2">Chargement des commandes...</p>
+                            </div>
+
+                            <!-- Error -->
+                            <div id="modalError" class="hidden text-center py-8">
+                                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                                </div>
+                                <p class="text-red-600" id="modalErrorText">Erreur lors du chargement</p>
+                            </div>
+
+                            <!-- Content -->
+                            <div id="modalContent" class="hidden">
+                                <!-- Stats résumé -->
+                                <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <div class="bg-green-50 rounded-lg p-4 text-center">
+                                        <p class="text-2xl font-bold text-green-600" id="modalTotalOrders">0</p>
+                                        <p class="text-sm text-green-700">Commandes</p>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-lg p-4 text-center">
+                                        <p class="text-2xl font-bold text-orange-600" id="modalTotalQuantity">0</p>
+                                        <p class="text-sm text-orange-700">Promos vendues</p>
+                                    </div>
+                                </div>
+
+                                <!-- Liste des commandes -->
+                                <div id="modalOrdersList" class="space-y-4">
+                                    <!-- Rempli par JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="bg-gray-50 px-6 py-3 rounded-b-lg flex justify-end">
+                            <button type="button" onclick="closeCustomerOrdersModal()"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
+                                Fermer
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Légende -->
@@ -1365,6 +1444,146 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+});
+
+// ============================================
+// MODAL DÉTAIL COMMANDES CLIENT
+// ============================================
+function openCustomerOrdersModal(customerNumber, country, companyName) {
+    const modal = document.getElementById('customerOrdersModal');
+    const modalLoading = document.getElementById('modalLoading');
+    const modalError = document.getElementById('modalError');
+    const modalContent = document.getElementById('modalContent');
+    const modalCustomerName = document.getElementById('modalCustomerName');
+    const modalCustomerNumber = document.getElementById('modalCustomerNumber');
+
+    // Afficher le modal
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Reset état
+    modalLoading.classList.remove('hidden');
+    modalError.classList.add('hidden');
+    modalContent.classList.add('hidden');
+
+    // Mettre à jour le header
+    modalCustomerName.textContent = companyName;
+    modalCustomerNumber.textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
+
+    // Charger les données via API
+    const campaignId = {$campaignIdInt};
+    fetch('/stm/admin/stats/customer-orders?campaign_id=' + campaignId + '&customer_number=' + encodeURIComponent(customerNumber) + '&country=' + country)
+        .then(response => response.json())
+        .then(data => {
+            modalLoading.classList.add('hidden');
+
+            if (!data.success) {
+                modalError.classList.remove('hidden');
+                document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
+                return;
+            }
+
+            // Afficher le contenu
+            modalContent.classList.remove('hidden');
+
+            // Stats
+            document.getElementById('modalTotalOrders').textContent = data.total_orders;
+            document.getElementById('modalTotalQuantity').textContent = formatNumberFr(data.total_quantity);
+
+            // Liste des commandes
+            const ordersList = document.getElementById('modalOrdersList');
+            ordersList.innerHTML = '';
+
+            if (data.orders.length === 0) {
+                ordersList.innerHTML = '<div class="text-center py-4 text-gray-500">Aucune commande trouvée</div>';
+                return;
+            }
+
+            data.orders.forEach((order, index) => {
+                const orderDate = new Date(order.created_at);
+                const formattedDate = orderDate.toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                let linesHtml = '';
+                order.lines.forEach(line => {
+                    linesHtml += '<div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">' +
+                        '<div class="flex-1">' +
+                            '<span class="text-gray-900">' + escapeHtml(line.product_name) + '</span>' +
+                            '<span class="text-xs text-gray-400 ml-2">' + escapeHtml(line.product_code) + '</span>' +
+                        '</div>' +
+                        '<div class="font-medium text-orange-600">' + formatNumberFr(line.quantity) + '</div>' +
+                    '</div>';
+                });
+
+                const orderHtml = '<div class="bg-gray-50 rounded-lg overflow-hidden">' +
+                    '<div class="bg-gray-100 px-4 py-2 flex items-center justify-between cursor-pointer" onclick="toggleOrderDetail(' + index + ')">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<i class="fas fa-chevron-right text-gray-400 transition-transform duration-200" id="orderChevron' + index + '"></i>' +
+                            '<div>' +
+                                '<span class="font-medium text-gray-900">Commande #' + order.order_id + '</span>' +
+                                '<span class="text-xs text-gray-500 ml-2">' + formattedDate + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-4">' +
+                            '<span class="text-xs text-gray-500">' + order.lines.length + ' produit(s)</span>' +
+                            '<span class="font-bold text-orange-600">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="px-4 py-2 hidden" id="orderDetail' + index + '">' +
+                        '<div class="text-xs text-gray-500 uppercase font-medium mb-2">Détail des produits</div>' +
+                        linesHtml +
+                    '</div>' +
+                '</div>';
+
+                ordersList.innerHTML += orderHtml;
+            });
+        })
+        .catch(error => {
+            console.error('Erreur chargement commandes:', error);
+            modalLoading.classList.add('hidden');
+            modalError.classList.remove('hidden');
+            document.getElementById('modalErrorText').textContent = 'Erreur de connexion';
+        });
+}
+
+function closeCustomerOrdersModal() {
+    document.getElementById('customerOrdersModal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function toggleOrderDetail(index) {
+    const detail = document.getElementById('orderDetail' + index);
+    const chevron = document.getElementById('orderChevron' + index);
+
+    if (detail.classList.contains('hidden')) {
+        detail.classList.remove('hidden');
+        chevron.style.transform = 'rotate(90deg)';
+    } else {
+        detail.classList.add('hidden');
+        chevron.style.transform = 'rotate(0deg)';
+    }
+}
+
+function formatNumberFr(num) {
+    return new Intl.NumberFormat('fr-FR').format(num);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Fermer modal avec Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCustomerOrdersModal();
     }
 });
 </script>
