@@ -9,6 +9,7 @@
  * @created 2025/11/25
  * @modified 2025/12/16 - Ajout filtrage hiérarchique par accessibleCampaignIds
  * @modified 2025/12/23 - Correction getCampaignProducts() : affiche tous les produits même sans commandes
+ * @modified 2025/12/23 - Ajout getTopCustomersForCampaign() pour top clients par campagne
  */
 
 namespace App\Models;
@@ -1369,6 +1370,125 @@ class Stats
     // ========================================
     // LISTES ET HELPERS
     // ========================================
+
+    /**
+     * Top clients pour une campagne (ceux ayant commandé)
+     *
+     * Retourne les clients triés par quantité commandée, avec enrichissement
+     * depuis la base externe pour le nom du représentant
+     *
+     * @param int $campaignId ID de la campagne
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
+     * @param int $limit Nombre max de clients (10, 25, 50, 100)
+     * @return array
+     * @created 2025/12/23
+     */
+    public function getTopCustomersForCampaign(int $campaignId, ?array $accessibleCustomerNumbers = null, int $limit = 50): array
+    {
+        // Limiter à 100 max
+        $limit = min($limit, 100);
+
+        $params = [":campaign_id" => $campaignId];
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":topcust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Requête principale : stats par client
+        $query = "
+            SELECT
+                cu.customer_number,
+                cu.company_name,
+                cu.country,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity,
+                COUNT(DISTINCT ol.product_id) as distinct_products
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'validated'
+            {$customerFilter}
+            GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
+            HAVING total_quantity > 0
+            ORDER BY total_quantity DESC
+            LIMIT {$limit}
+        ";
+
+        $results = $this->db->query($query, $params);
+
+        // Enrichir avec les données de la base externe (nom du rep)
+        if (!empty($results) && $this->extDb) {
+            // Séparer par pays pour les requêtes
+            $customersBE = [];
+            $customersLU = [];
+
+            foreach ($results as $row) {
+                if ($row['country'] === 'BE') {
+                    $customersBE[] = $row['customer_number'];
+                } else {
+                    $customersLU[] = $row['customer_number'];
+                }
+            }
+
+            $repMapping = [];
+
+            try {
+                // Récupérer les reps pour les clients BE
+                if (!empty($customersBE)) {
+                    $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
+                    $beData = $this->extDb->query(
+                        "SELECT cll.CLL_NCLIXX as customer_number,
+                                CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                         FROM BE_CLL cll
+                         LEFT JOIN BE_REP r ON cll.IDE_REP = r.IDE_REP
+                         WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                        $customersBE
+                    );
+                    foreach ($beData as $row) {
+                        $repMapping[$row['customer_number'] . '_BE'] = trim($row['rep_name']);
+                    }
+                }
+
+                // Récupérer les reps pour les clients LU
+                if (!empty($customersLU)) {
+                    $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
+                    $luData = $this->extDb->query(
+                        "SELECT cll.CLL_NCLIXX as customer_number,
+                                CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                         FROM LU_CLL cll
+                         LEFT JOIN LU_REP r ON cll.IDE_REP = r.IDE_REP
+                         WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                        $customersLU
+                    );
+                    foreach ($luData as $row) {
+                        $repMapping[$row['customer_number'] . '_LU'] = trim($row['rep_name']);
+                    }
+                }
+            } catch (\Exception $e) {
+                error_log("Stats::getTopCustomersForCampaign enrichment error: " . $e->getMessage());
+            }
+
+            // Ajouter le nom du rep aux résultats
+            foreach ($results as &$row) {
+                $key = $row['customer_number'] . '_' . $row['country'];
+                $row['rep_name'] = $repMapping[$key] ?? '-';
+            }
+        }
+
+        return $results;
+    }
 
     /**
      * Liste des campagnes pour les filtres

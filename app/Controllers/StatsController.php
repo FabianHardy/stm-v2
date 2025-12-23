@@ -223,6 +223,7 @@ class StatsController
      * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
      * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
      * @modified 2025/12/17 - Ajout filtrage par clients accessibles
+ * @modified 2025/12/23 - Ajout top clients (getTopCustomersForCampaign)
      */
     public function campaigns(): void
     {
@@ -268,6 +269,14 @@ class StatsController
 
         // Mapping produit → fournisseur pour l'onglet Produits
         $productSuppliers = [];
+
+        // Top clients
+        $topCustomers = [];
+        $topCustomersLimit = isset($_GET["customers_limit"]) ? (int) $_GET["customers_limit"] : 50;
+        // Valider la limite (10, 25, 50, 100)
+        if (!in_array($topCustomersLimit, [10, 25, 50, 100])) {
+            $topCustomersLimit = 50;
+        }
 
         if ($campaignId) {
             // Passer le filtre clients aux méthodes de stats
@@ -359,6 +368,11 @@ class StatsController
                 error_log("Erreur getSupplierStats: " . $e->getMessage());
                 $supplierStats = [];
             }
+
+            // ============================================
+            // Top clients (23/12/2025)
+            // ============================================
+            $topCustomers = $this->statsModel->getTopCustomersForCampaign($campaignId, $accessibleCustomerNumbers, $topCustomersLimit);
         }
 
         $title = "Statistiques - Par campagne";
