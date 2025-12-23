@@ -1226,10 +1226,10 @@ class StatsController
     private function getExportAccessScope(): string
     {
         $userId = Session::get('user_id');
-        $userRole = Session::get('user_role');
+        $userRole = strtolower(Session::get('user_role') ?? '');
 
         // Admin et superadmin : accès global (même fichier pour tous)
-        if (in_array($userRole, ['superadmin', 'admin'])) {
+        if (in_array($userRole, ['superadmin', 'admin', 'super_admin'])) {
             return 'global';
         }
 
