@@ -579,7 +579,7 @@ $suppliersCount = count($supplierStats ?? []);
                     </template>
                 </div>
 
-                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="return startExport(cacheStatus)">
+                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="startExport($event, cacheStatus)">
                     <input type="hidden" name="campaign_id" value="<?= $campaignId ?? '' ?>">
                     <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                     <input type="hidden" name="download_token" id="download_token" value="">
@@ -916,7 +916,7 @@ let exportTimerInterval = null;
 let exportStartTime = null;
 let downloadCheckInterval = null;
 
-function startExport(cacheStatus) {
+function startExport(event, cacheStatus) {
     // Générer un token unique pour ce téléchargement
     const downloadToken = 'download_' + Date.now();
 
