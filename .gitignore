@@ -6,6 +6,9 @@
 .env.prod
 .env.dev
 
+# Microsoft Entra
+/config/microsoft.php
+
 # Vendor
 /vendor/
 /node_modules/

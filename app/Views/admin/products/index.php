@@ -1,14 +1,28 @@
 <?php
 /**
  * Vue : Liste des Promotions
- * 
+ *
  * Affichage de tous les Promotions avec filtres, recherche et statistiques
- * 
+ *
  * @created 11/11/2025 22:30
- * @modified 12/11/2025 02:00 - Suppression EAN et package_number
+ * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
+ * @modified 19/12/2025 - Filtre par statut campagne + affichage statut basé sur campagne
  */
 
 use Core\Session;
+use App\Helpers\PermissionHelper;
+
+// Valeurs par défaut pour éviter les erreurs undefined
+$stats = $stats ?? ['total' => 0, 'active' => 0, 'inactive' => 0];
+$categories = $categories ?? [];
+$campaigns = $campaigns ?? [];
+$categoryToCampaigns = $categoryToCampaigns ?? [];
+$products = $products ?? [];
+
+// Permissions pour les boutons
+$canCreate = PermissionHelper::can('products.create');
+$canEdit = PermissionHelper::can('products.edit');
+$canDelete = PermissionHelper::can('products.delete');
 
 // Démarrer la capture du contenu pour le layout
 ob_start();
@@ -21,10 +35,12 @@ ob_start();
             <h1 class="text-3xl font-bold text-gray-900">Promotions</h1>
             <p class="mt-2 text-sm text-gray-600">Gestion du catalogue de Promotions</p>
         </div>
-        <a href="/stm/admin/products/create" 
+        <?php if ($canCreate): ?>
+        <a href="/stm/admin/products/create"
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
             ➕ Nouvelle Promotion
         </a>
+        <?php endif; ?>
     </div>
 
     <!-- Breadcrumb -->
@@ -56,7 +72,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Total Promotions</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions affichées</dt>
                         <dd class="text-2xl font-bold text-gray-900"><?php echo $stats['total']; ?></dd>
                     </dl>
                 </div>
@@ -64,7 +80,7 @@ ob_start();
         </div>
     </div>
 
-    <!-- Actifs -->
+    <!-- Actives (campagne active + promo active) -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
@@ -73,7 +89,7 @@ ob_start();
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions actives</dt>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Réellement actives</dt>
                         <dd class="text-2xl font-bold text-green-600"><?php echo $stats['active']; ?></dd>
                     </dl>
                 </div>
@@ -81,17 +97,17 @@ ob_start();
         </div>
     </div>
 
-    <!-- Inactifs -->
+    <!-- Non actives -->
     <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
-                    <span class="text-3xl">❌</span>
+                    <span class="text-3xl">⏸️</span>
                 </div>
                 <div class="ml-5 w-0 flex-1">
                     <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Promotions inactives</dt>
-                        <dd class="text-2xl font-bold text-red-600"><?php echo $stats['inactive']; ?></dd>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Non actives</dt>
+                        <dd class="text-2xl font-bold text-gray-600"><?php echo $stats['inactive']; ?></dd>
                     </dl>
                 </div>
             </div>
@@ -117,85 +133,249 @@ ob_start();
 </div>
 
 <!-- Filtres et recherche -->
+<?php
+// Préparer les données pour Alpine.js
+$campaignsJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name'],
+        'country' => $c['country'],
+        'status' => $c['computed_status']
+    ];
+}, $campaigns), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoriesJson = json_encode(array_map(function($c) {
+    return [
+        'id' => (int)$c['id'],
+        'name' => $c['name_fr']
+    ];
+}, $categories), JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$categoryToCampaignsJson = !empty($categoryToCampaigns)
+    ? json_encode($categoryToCampaigns, JSON_HEX_APOS | JSON_HEX_QUOT)
+    : '{}';
+?>
 <div class="bg-white shadow rounded-lg mb-6">
-    <div class="px-4 py-5 sm:p-6">
+    <div class="px-4 py-5 sm:p-6"
+         x-data="productFilters()"
+         x-init="init()">
         <form method="GET" action="/stm/admin/products" class="space-y-4">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                
-                <!-- Recherche -->
-                <div class="sm:col-span-2">
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+
+                <!-- 1. Recherche -->
+                <div class="lg:col-span-2">
                     <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
                         🔍 Recherche
                     </label>
-                    <input type="text" 
-                           name="search" 
+                    <input type="text"
+                           name="search"
                            id="search"
                            value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
                            placeholder="Code, nom..."
                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
 
-                <!-- Catégorie -->
+                <!-- 2. Statut Campagne -->
+                <div>
+                    <label for="campaign_status" class="block text-sm font-medium text-gray-700 mb-1">
+                        📊 Statut
+                    </label>
+                    <select name="campaign_status"
+                            id="campaign_status"
+                            x-model="campaignStatus"
+                            @change="onStatusChange()"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="active">Actives</option>
+                        <option value="upcoming">À venir</option>
+                        <option value="ended">Terminées</option>
+                        <option value="all">Toutes</option>
+                    </select>
+                </div>
+
+                <!-- 3. Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">
+                        🌍 Pays
+                    </label>
+                    <select name="country"
+                            id="country"
+                            x-model="country"
+                            @change="onCountryChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Tous</option>
+                        <template x-for="c in availableCountries" :key="c">
+                            <option :value="c" x-text="c === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 4. Campagne -->
+                <div>
+                    <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        📢 Campagne
+                    </label>
+                    <select name="campaign_id"
+                            id="campaign_id"
+                            x-model="campaignId"
+                            @change="onCampaignChange()"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Toutes</option>
+                        <template x-for="camp in availableCampaigns" :key="camp.id">
+                            <option :value="camp.id" x-text="camp.name + ' (' + camp.country + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- 5. Catégorie -->
                 <div>
                     <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
                         📁 Catégorie
                     </label>
-                    <select name="category" 
+                    <select name="category"
                             id="category"
+                            x-model="categoryId"
                             class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         <option value="">Toutes</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>" 
-                                    <?php echo (isset($_GET['category']) && $_GET['category'] == $cat['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat['name_fr']); ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <template x-for="cat in availableCategories" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name"></option>
+                        </template>
                     </select>
                 </div>
-
-                <!-- Statut -->
-                <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-1">
-                        ⚡ Statut
-                    </label>
-                    <select name="status" 
-                            id="status"
-                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Tous</option>
-                        <option value="active" <?php echo (isset($_GET['status']) && $_GET['status'] === 'active') ? 'selected' : ''; ?>>Actifs</option>
-                        <option value="inactive" <?php echo (isset($_GET['status']) && $_GET['status'] === 'inactive') ? 'selected' : ''; ?>>Inactifs</option>
-                    </select>
-                </div>
-
             </div>
 
-            <!-- Boutons -->
-            <div class="flex gap-2">
-                <button type="submit" 
+            <div class="flex items-center gap-3">
+                <button type="submit"
                         class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                     🔍 Filtrer
                 </button>
-                <a href="/stm/admin/products" 
+                <a href="/stm/admin/products?campaign_status=all"
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    🔄 Réinitialiser
+                    📋 Voir tout
                 </a>
             </div>
         </form>
     </div>
 </div>
 
+<script>
+function productFilters() {
+    return {
+        // Valeurs sélectionnées
+        campaignStatus: '<?php echo htmlspecialchars($_GET['campaign_status'] ?? 'active', ENT_QUOTES); ?>',
+        country: '<?php echo htmlspecialchars($_GET['country'] ?? '', ENT_QUOTES); ?>',
+        campaignId: '<?php echo htmlspecialchars($_GET['campaign_id'] ?? '', ENT_QUOTES); ?>',
+        categoryId: '<?php echo htmlspecialchars($_GET['category'] ?? '', ENT_QUOTES); ?>',
+
+        // Données brutes
+        allCampaigns: <?php echo $campaignsJson; ?>,
+        allCategories: <?php echo $categoriesJson; ?>,
+        categoryToCampaigns: <?php echo $categoryToCampaignsJson; ?>,
+
+        // Listes filtrées
+        availableCountries: [],
+        availableCampaigns: [],
+        availableCategories: [],
+
+        init() {
+            this.updateAvailableCountries();
+            this.updateAvailableCampaigns();
+            this.updateAvailableCategories();
+        },
+
+        // Filtre 1: Statut → met à jour Pays, Campagne, Catégorie
+        onStatusChange() {
+            this.updateAvailableCountries();
+            // Vérifier si le pays actuel est encore valide
+            if (this.country && !this.availableCountries.includes(this.country)) {
+                this.country = '';
+            }
+            this.updateAvailableCampaigns();
+            // Vérifier si la campagne actuelle est encore valide
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
+            }
+            this.updateAvailableCategories();
+            // Vérifier si la catégorie actuelle est encore valide
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Filtre 2: Pays → met à jour Campagne, Catégorie
+        onCountryChange() {
+            this.updateAvailableCampaigns();
+            if (this.campaignId && !this.availableCampaigns.find(c => c.id == this.campaignId)) {
+                this.campaignId = '';
+            }
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Filtre 3: Campagne → met à jour Catégorie
+        onCampaignChange() {
+            this.updateAvailableCategories();
+            if (this.categoryId && !this.availableCategories.find(c => c.id == this.categoryId)) {
+                this.categoryId = '';
+            }
+        },
+
+        // Calcul des pays disponibles selon le statut
+        updateAvailableCountries() {
+            let countries = new Set();
+            this.allCampaigns.forEach(c => {
+                if (this.campaignStatus === 'all' || c.status === this.campaignStatus) {
+                    countries.add(c.country);
+                }
+            });
+            this.availableCountries = Array.from(countries).sort();
+        },
+
+        // Calcul des campagnes disponibles selon statut + pays
+        updateAvailableCampaigns() {
+            this.availableCampaigns = this.allCampaigns.filter(c => {
+                // Filtre par statut
+                if (this.campaignStatus !== 'all' && c.status !== this.campaignStatus) {
+                    return false;
+                }
+                // Filtre par pays
+                if (this.country && c.country !== this.country) {
+                    return false;
+                }
+                return true;
+            });
+        },
+
+        // Calcul des catégories disponibles selon les campagnes filtrées
+        updateAvailableCategories() {
+            // IDs des campagnes actuellement disponibles
+            let validCampaignIds = this.availableCampaigns.map(c => c.id);
+
+            // Si une campagne spécifique est sélectionnée, n'utiliser que celle-ci
+            if (this.campaignId) {
+                validCampaignIds = [parseInt(this.campaignId)];
+            }
+
+            // Filtrer les catégories qui ont au moins un produit dans les campagnes valides
+            this.availableCategories = this.allCategories.filter(cat => {
+                // Utiliser String(cat.id) car les clés JSON sont des strings
+                let catCampaigns = this.categoryToCampaigns[String(cat.id)];
+                // S'assurer que c'est un tableau
+                if (!Array.isArray(catCampaigns)) {
+                    return false;
+                }
+                return catCampaigns.some(campId => validCampaignIds.includes(campId));
+            });
+        }
+    };
+}
+</script>
+
 <!-- Tableau des Promotions -->
-<div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">
-            📋 Liste des Promotions
-            <?php if (!empty($products)): ?>
-                <span class="ml-2 text-sm font-normal text-gray-500">
-                    (<?php echo count($products); ?> résultat<?php echo count($products) > 1 ? 's' : ''; ?>)
-                </span>
-            <?php endif; ?>
-        </h3>
-    </div>
+<div class="bg-white shadow overflow-hidden rounded-lg">
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
@@ -208,6 +388,9 @@ ob_start();
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Code
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Campagne
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Catégorie
@@ -223,14 +406,16 @@ ob_start();
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($products)): ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <div class="text-gray-400">
                                 <span class="text-4xl mb-2 block">📦</span>
                                 <p class="text-sm">Aucune Promotion trouvé</p>
-                                <a href="/stm/admin/products/create" 
+                                <?php if ($canCreate): ?>
+                                <a href="/stm/admin/products/create"
                                    class="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
                                     ➕ Créer la première Promotion
                                 </a>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -240,7 +425,7 @@ ob_start();
                             <!-- Image -->
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <?php if (!empty($product['image_fr'])): ?>
-                                    <img src="<?php echo htmlspecialchars($product['image_fr']); ?>" 
+                                    <img src="<?php echo htmlspecialchars($product['image_fr']); ?>"
                                          alt="<?php echo htmlspecialchars($product['name_fr']); ?>"
                                          class="h-12 w-12 object-cover rounded border border-gray-200">
                                 <?php else: ?>
@@ -269,6 +454,20 @@ ob_start();
                                 </div>
                             </td>
 
+                            <!-- Campagne -->
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if (!empty($product['campaign_name'])): ?>
+                                    <div class="text-sm text-gray-900"><?php echo htmlspecialchars($product['campaign_name']); ?></div>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium <?php echo $product['campaign_country'] === 'BE' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
+                                            <?php echo $product['campaign_country']; ?>
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-xs text-gray-400">-</span>
+                                <?php endif; ?>
+                            </td>
+
                             <!-- Catégorie -->
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <?php if (!empty($product['category_name'])): ?>
@@ -280,38 +479,72 @@ ob_start();
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Statut -->
+                            <!-- Statut (basé sur la campagne) -->
                             <td class="px-6 py-4 whitespace-nowrap text-center">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $product['is_active'] ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
-                                    <?php echo $product['is_active'] ? '✓ Actif' : '✗ Inactif'; ?>
+                                <?php
+                                // Calculer le statut en fonction de la campagne
+                                $today = date('Y-m-d');
+                                $campaignActive = $product['campaign_is_active'] ?? 0;
+                                $campaignStart = $product['campaign_start_date'] ?? null;
+                                $campaignEnd = $product['campaign_end_date'] ?? null;
+                                $promoActive = $product['is_active'];
+
+                                if (!$campaignActive) {
+                                    // Campagne désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif (!$promoActive) {
+                                    // Promo désactivée
+                                    $statusClass = 'bg-red-100 text-red-800';
+                                    $statusLabel = '✗ Inactive';
+                                } elseif ($campaignStart && $today < $campaignStart) {
+                                    // Campagne à venir
+                                    $statusClass = 'bg-blue-100 text-blue-800';
+                                    $statusLabel = '⏳ À venir';
+                                } elseif ($campaignEnd && $today > $campaignEnd) {
+                                    // Campagne terminée
+                                    $statusClass = 'bg-gray-100 text-gray-800';
+                                    $statusLabel = '⏹ Terminée';
+                                } else {
+                                    // Active
+                                    $statusClass = 'bg-green-100 text-green-800';
+                                    $statusLabel = '✓ Active';
+                                }
+                                ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
+                                    <?php echo $statusLabel; ?>
                                 </span>
                             </td>
 
                             <!-- Actions -->
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>" 
+                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>"
                                        class="text-indigo-600 hover:text-indigo-900"
                                        title="Voir les détails">
                                         👁️
                                     </a>
-                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit" 
+                                    <?php if ($canEdit): ?>
+                                    <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
                                        class="text-gray-600 hover:text-gray-900"
                                        title="Modifier">
                                         ✏️
                                     </a>
-                                    <form method="POST" 
-                                          action="/stm/admin/products/<?php echo $product['id']; ?>/delete" 
+                                    <?php endif; ?>
+                                    <?php if ($canDelete): ?>
+                                    <form method="POST"
+                                          action="/stm/admin/products/<?php echo $product['id']; ?>/delete"
                                           onsubmit="return confirm('Supprimer cette Promotion ?');"
                                           class="inline">
                                         <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
                                         <input type="hidden" name="_method" value="DELETE">
-                                        <button type="submit" 
+                                        <button type="submit"
                                                 class="text-red-600 hover:text-red-900"
                                                 title="Supprimer">
                                             🗑️
                                         </button>
                                     </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -327,13 +560,13 @@ ob_start();
     <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6">
         <div class="flex-1 flex justify-between sm:hidden">
             <?php if ($pagination['current_page'] > 1): ?>
-                <a href="?page=<?php echo $pagination['current_page'] - 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>" 
+                <a href="?page=<?php echo $pagination['current_page'] - 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                     Précédent
                 </a>
             <?php endif; ?>
             <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
-                <a href="?page=<?php echo $pagination['current_page'] + 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>" 
+                <a href="?page=<?php echo $pagination['current_page'] + 1; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
                    class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                     Suivant
                 </a>
@@ -342,11 +575,11 @@ ob_start();
         <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
                 <p class="text-sm text-gray-700">
-                    Affichage de 
+                    Affichage de
                     <span class="font-medium"><?php echo (($pagination['current_page'] - 1) * $pagination['per_page']) + 1; ?></span>
-                    à 
+                    à
                     <span class="font-medium"><?php echo min($pagination['current_page'] * $pagination['per_page'], $pagination['total']); ?></span>
-                    sur 
+                    sur
                     <span class="font-medium"><?php echo $pagination['total']; ?></span>
                     résultats
                 </p>
@@ -354,7 +587,7 @@ ob_start();
             <div>
                 <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                     <?php for ($i = 1; $i <= $pagination['total_pages']; $i++): ?>
-                        <a href="?page=<?php echo $i; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>" 
+                        <a href="?page=<?php echo $i; ?><?php echo !empty($_GET['search']) ? '&search=' . urlencode($_GET['search']) : ''; ?><?php echo !empty($_GET['category']) ? '&category=' . $_GET['category'] : ''; ?><?php echo !empty($_GET['status']) ? '&status=' . $_GET['status'] : ''; ?>"
                            class="relative inline-flex items-center px-4 py-2 border text-sm font-medium <?php echo $i === $pagination['current_page'] ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'; ?>">
                             <?php echo $i; ?>
                         </a>

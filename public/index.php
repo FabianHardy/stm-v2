@@ -1,13 +1,15 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 /**
  * Point d'entrée principal de l'application STM v2
- * 
+ *
  * Ce fichier :
  * - Charge les dépendances (Composer autoloader)
  * - Initialise l'application (config, session, router)
  * - Gère le routage des requêtes
  * - Dispatche les routes vers les controllers
- * 
+ *
  * @package STM
  * @version 2.0
  */
@@ -162,7 +164,7 @@ try {
         echo '</body>';
         echo '</html>';
     }
-    
+
     // Logger l'erreur
     error_log(sprintf(
         "[STM v2] Erreur: %s dans %s ligne %d",
@@ -170,6 +172,6 @@ try {
         $e->getFile(),
         $e->getLine()
     ));
-    
+
     exit;
 }

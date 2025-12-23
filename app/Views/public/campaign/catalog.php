@@ -1,7 +1,7 @@
 <?php
 /**
  * Vue : Catalogue produits - Page principale client
- * 
+ *
  * @package STM
  * @created 2025/11/14
  * @modified 2025/11/21 - Adaptation au layout public centralisé
@@ -11,8 +11,8 @@
 // VARIABLES POUR LE LAYOUT
 // ========================================
 
-$lang = $customer['language'];
-$title = htmlspecialchars($campaign['name']) . ' - ' . ($lang === 'fr' ? 'Catalogue' : 'Catalogus');
+$lang = $customer["language"];
+$title = htmlspecialchars($campaign["name"]) . " - " . ($lang === "fr" ? "Catalogue" : "Catalogus");
 $useAlpine = true;
 $bodyAttrs = 'x-data="cartManager()" x-init="init()"';
 
@@ -49,17 +49,17 @@ ob_start();
 
                     <div>
 
-                        <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
+                        <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign["name"]) ?></h1>
 
                         <p class="text-sm text-gray-600">
 
                             <i class="fas fa-building mr-1"></i>
 
-                            <?= htmlspecialchars($customer['company_name']) ?> 
+                            <?= htmlspecialchars($customer["company_name"]) ?>
 
                             <span class="mx-2">•</span>
 
-                            <?= htmlspecialchars($customer['customer_number']) ?>
+                            <?= htmlspecialchars($customer["customer_number"]) ?>
 
                         </p>
 
@@ -67,27 +67,31 @@ ob_start();
 
                 </div>
 
-                
+
 
                 <div class="flex items-center gap-4">
 
                     <!-- Switch langue FR/NL (visible uniquement pour campagnes BE) -->
 
-                    <?php if ($campaign['country'] === 'BE'): ?>
+                    <?php if ($campaign["country"] === "BE"): ?>
 
                     <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
 
-                        <button onclick="switchLanguage('fr')" 
+                        <button onclick="switchLanguage('fr')"
 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'fr' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                class="px-4 py-2 rounded-md <?= $customer["language"] === "fr"
+                                    ? "bg-white text-blue-600 font-semibold shadow-sm"
+                                    : "text-gray-600 hover:bg-white hover:shadow-sm" ?> transition">
 
                             FR
 
                         </button>
 
-                        <button onclick="switchLanguage('nl')" 
+                        <button onclick="switchLanguage('nl')"
 
-                                class="px-4 py-2 rounded-md <?= $customer['language'] === 'nl' ? 'bg-white text-blue-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                                class="px-4 py-2 rounded-md <?= $customer["language"] === "nl"
+                                    ? "bg-white text-blue-600 font-semibold shadow-sm"
+                                    : "text-gray-600 hover:bg-white hover:shadow-sm" ?> transition">
 
                             NL
 
@@ -97,7 +101,7 @@ ob_start();
 
                     <?php endif; ?>
 
-                    
+
 
                     <!-- Bouton panier mobile -->
 
@@ -105,9 +109,9 @@ ob_start();
 
                         <i class="fas fa-shopping-cart"></i>
 
-                        <span x-show="cartItemCount > 0" 
+                        <span x-show="cartItemCount > 0"
 
-                              x-text="cartItemCount" 
+                              x-text="cartItemCount"
 
                               class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
 
@@ -115,13 +119,15 @@ ob_start();
 
                     </button>
 
-                    
+
 
                     <!-- Déconnexion desktop -->
 
                     <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">
 
-                        <i class="fas fa-sign-out-alt mr-2"></i><?= $customer['language'] === 'fr' ? 'Déconnexion' : 'Afmelden' ?>
+                        <i class="fas fa-sign-out-alt mr-2"></i><?= $customer["language"] === "fr"
+                            ? "Déconnexion"
+                            : "Afmelden" ?>
 
                     </a>
 
@@ -146,12 +152,11 @@ ob_start();
                 <?php foreach ($categories as $category): ?>
 
                 <?php
-
                 // Calculer la couleur de texte optimale (blanc ou noir) selon la luminosité du fond
 
-                $color = $category['color'];
+                $color = $category["color"];
 
-                $hex = ltrim($color, '#');
+                $hex = ltrim($color, "#");
 
                 $r = hexdec(substr($hex, 0, 2));
 
@@ -163,27 +168,28 @@ ob_start();
 
                 $luminosity = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
 
-                $textColor = $luminosity > 0.5 ? '#000000' : '#FFFFFF';
-
+                $textColor = $luminosity > 0.5 ? "#000000" : "#FFFFFF";
                 ?>
 
-                <a href="#category-<?= $category['id'] ?>" 
+                <a href="#category-<?= $category["id"] ?>"
 
    class="category-btn flex items-center gap-2 pl-2 pr-6 py-2.5 rounded-lg font-medium whitespace-nowrap"
 
-   id="cat-btn-<?= $category['id'] ?>"
+   id="cat-btn-<?= $category["id"] ?>"
 
-   style="background-color: <?= htmlspecialchars($category['color']) ?>CC; color: <?= $textColor ?>;">
+   style="background-color: <?= htmlspecialchars($category["color"]) ?>CC; color: <?= $textColor ?>;">
 
-                    <?php if (!empty($category['icon_path'])): ?>
+                    <?php if (!empty($category["icon_path"])): ?>
 
-                        <img src="<?= htmlspecialchars($category['icon_path']) ?>" 
+                        <img src="<?= htmlspecialchars($category["icon_path"]) ?>"
 
-                             alt="<?= htmlspecialchars($category['name_' . $customer['language']]) ?>" 
+                             alt="<?= htmlspecialchars($category["name_" . $customer["language"]]) ?>"
 
                              class="w-5 h-5 object-contain"
 
-                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars($category['icon_path']) ?>');">
+                             onerror="this.style.display='none'; console.log('Icon load error: <?= htmlspecialchars(
+                                 $category["icon_path"],
+                             ) ?>');">
 
                     <?php else: ?>
 
@@ -191,7 +197,7 @@ ob_start();
 
                     <?php endif; ?>
 
-                    <span><?= htmlspecialchars($category['name_' . $customer['language']]) ?></span>
+                    <span><?= htmlspecialchars($category["name_" . $customer["language"]]) ?></span>
 
                 </a>
 
@@ -211,57 +217,57 @@ ob_start();
 
         <div class="flex flex-col lg:flex-row gap-6">
 
-            
+
 
             <!-- Zone produits (gauche) -->
 
             <div class="flex-1">
 
-                
+
 
                 <?php foreach ($categories as $category): ?>
 
-                    
 
-                <?php 
 
+                <?php
                 // Filtrer les produits commandables uniquement AVANT d'afficher la catégorie
 
-                $orderableProducts = array_filter($category['products'], function($p) {
-
-                    return $p['is_orderable'] === true;
-
+                $orderableProducts = array_filter($category["products"], function ($p) {
+                    return $p["is_orderable"] === true;
                 });
 
                 $productCount = count($orderableProducts);
 
-                
-
                 // Si aucun produit disponible, ne pas afficher la catégorie
 
-                if ($productCount === 0) continue;
-
+                if ($productCount === 0) {
+                    continue;
+                }
                 ?>
 
-                
+
 
                 <!-- Section catégorie -->
 
-                <section id="category-<?= $category['id'] ?>" class="mb-12 scroll-mt">
+                <section id="category-<?= $category["id"] ?>" class="mb-12 scroll-mt">
 
                     <h2 class="text-2xl font-bold mb-6 flex items-center">
 
-                        <span class="w-1 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars($category['color']) ?>;"></span>
+                        <span class="w-1 h-8 mr-3 rounded" style="background-color: <?= htmlspecialchars(
+                            $category["color"],
+                        ) ?>;"></span>
 
-                        <?= htmlspecialchars($category['name_' . $customer['language']]) ?>
+                        <?= htmlspecialchars($category["name_" . $customer["language"]]) ?>
 
                     </h2>
 
-                    
 
-                    <!-- Grid produits - 2 COLONNES MAX -->
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Grid produits - Dynamique selon nombre de produits -->
+                    <!-- 1 produit = pleine largeur avec grande image, 2+ = 2 colonnes -->
+                    <div class="grid <?= $productCount === 1
+                        ? "grid-cols-1 max-w-4xl mx-auto"
+                        : "grid-cols-1 lg:grid-cols-2" ?> gap-6">
 
                         <?php foreach ($orderableProducts as $product): ?>
 
@@ -269,23 +275,23 @@ ob_start();
 
                         <div class="product-card bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
 
-                            
+
 
                             <!-- Image A4 paysage -->
 
-                            <?php 
+                            <?php
+                            $productImage = $product["image_" . $customer["language"]] ?? $product["image_fr"];
 
-                            $productImage = $product['image_' . $customer['language']] ?? $product['image_fr'];
-
-                            $productName = $product['name_' . $customer['language']];
-
+                            $productName = $product["name_" . $customer["language"]];
                             ?>
 
-                            <div class="relative bg-gray-100 cursor-pointer" style="height: 213px;" @click="openLightbox('<?= htmlspecialchars($productImage) ?>')">
+                            <div class="relative bg-gray-100 cursor-pointer" style="height: <?= $productCount === 1
+                                ? "450px"
+                                : "213px" ?>;" @click="openLightbox('<?= htmlspecialchars($productImage) ?>')">
 
                                 <?php if (!empty($productImage)): ?>
 
-                                    <img src="<?= htmlspecialchars($productImage) ?>" 
+                                    <img src="<?= htmlspecialchars($productImage) ?>"
 
                                          alt="<?= htmlspecialchars($productName) ?>"
 
@@ -301,7 +307,7 @@ ob_start();
 
                                 <?php endif; ?>
 
-                                
+
 
                                 <!-- Icône zoom -->
 
@@ -315,11 +321,11 @@ ob_start();
 
                                 <!-- Badge ÉPUISÉ si quotas à 0 -->
 
-                                <?php if (!$product['is_orderable']): ?>
+                                <?php if (!$product["is_orderable"]): ?>
 
                                 <div class="absolute top-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
 
-                                    <?= $customer['language'] === 'fr' ? 'ÉPUISÉ' : 'UITVERKOCHT' ?>
+                                    <?= $customer["language"] === "fr" ? "ÉPUISÉ" : "UITVERKOCHT" ?>
 
                                 </div>
 
@@ -327,7 +333,7 @@ ob_start();
 
                             </div>
 
-                            
+
 
                             <!-- Infos produit -->
 
@@ -341,22 +347,20 @@ ob_start();
 
                                 </h3>
 
-                                
+
 
                                 <!-- Quotas sur 1 SEULE LIGNE -->
 
-                                <?php if (!is_null($product['max_per_customer']) && $product['is_orderable']): ?>
+                                <?php if (!is_null($product["max_per_customer"]) && $product["is_orderable"]): ?>
 
                                 <?php
+                                $maxLabel = $customer["language"] === "fr" ? "Maximum" : "Maximum";
 
-                                $maxLabel = $customer['language'] === 'fr' ? 'Maximum' : 'Maximum';
+                                $remainLabel = $customer["language"] === "fr" ? "Reste" : "Resterend";
 
-                                $remainLabel = $customer['language'] === 'fr' ? 'Reste' : 'Resterend';
+                                $unitSingle = $customer["language"] === "fr" ? "unité" : "eenheid";
 
-                                $unitSingle = $customer['language'] === 'fr' ? 'unité' : 'eenheid';
-
-                                $unitPlural = $customer['language'] === 'fr' ? 'unités' : 'eenheden';
-
+                                $unitPlural = $customer["language"] === "fr" ? "unités" : "eenheden";
                                 ?>
 
                                 <div class="text-sm mb-3 flex items-center justify-between">
@@ -367,7 +371,11 @@ ob_start();
 
                                         <span class="font-semibold text-blue-600">
 
-                                            <?= $maxLabel ?> : <?= $product['max_per_customer'] ?> <?= $product['max_per_customer'] > 1 ? $unitPlural : $unitSingle ?>
+                                            <?= $maxLabel ?> : <?= $product["max_per_customer"] ?> <?= $product[
+     "max_per_customer"
+ ] > 1
+     ? $unitPlural
+     : $unitSingle ?>
 
                                         </span>
 
@@ -375,17 +383,19 @@ ob_start();
 
                                     <span class="flex items-center">
 
-                                        <?php if ($product['available_for_customer'] > 1): ?>
+                                        <?php if ($product["available_for_customer"] > 1): ?>
 
                                             <i class="fas fa-check-circle w-4 text-green-600 mr-1"></i>
 
                                             <span class="font-semibold text-green-600">
 
-                                                <?= $remainLabel ?> : <?= $product['available_for_customer'] ?> <?= $unitPlural ?>
+                                                <?= $remainLabel ?> : <?= $product[
+     "available_for_customer"
+ ] ?> <?= $unitPlural ?>
 
                                             </span>
 
-                                        <?php elseif ($product['available_for_customer'] == 1): ?>
+                                        <?php elseif ($product["available_for_customer"] == 1): ?>
 
                                             <i class="fas fa-exclamation-circle w-4 text-orange-600 mr-1"></i>
 
@@ -417,7 +427,11 @@ ob_start();
 
                                 <!-- Alerte si quota global proche -->
 
-                                <?php if (!is_null($product['max_total']) && $product['available_global'] <= 10 && $product['available_global'] > 0): ?>
+                                <?php if (
+                                    !is_null($product["max_total"]) &&
+                                    $product["available_global"] <= 10 &&
+                                    $product["available_global"] > 0
+                                ): ?>
 
                                 <div class="bg-amber-50 border-l-4 border-amber-400 p-2 mb-3 text-xs">
 
@@ -425,7 +439,11 @@ ob_start();
 
                                     <span class="text-amber-800">
 
-                                        <?= $customer['language'] === 'fr' ? 'Stock global limité' : 'Beperkte globale voorraad' ?> : <?= $product['available_global'] ?> <?= $customer['language'] === 'fr' ? 'restants' : 'resterend' ?>
+                                        <?= $customer["language"] === "fr"
+                                            ? "Stock global limité"
+                                            : "Beperkte globale voorraad" ?> : <?= $product[
+     "available_global"
+ ] ?> <?= $customer["language"] === "fr" ? "restants" : "resterend" ?>
 
                                     </span>
 
@@ -437,29 +455,29 @@ ob_start();
 
                                 <!-- Boutons action -->
 
-                                <?php if ($product['is_orderable']): ?>
+                                <?php if ($product["is_orderable"]): ?>
 
                                 <div class="flex items-center gap-3">
 
-                                    <input 
+                                    <input
 
-                                        type="number" 
+                                        type="number"
 
-                                        id="qty-<?= $product['id'] ?>" 
+                                        id="qty-<?= $product["id"] ?>"
 
-                                        value="1" 
+                                        value="1"
 
-                                        min="1" 
+                                        min="1"
 
-                                        max="<?= $product['max_orderable'] ?>"
+                                        max="<?= $product["max_orderable"] ?>"
 
                                         class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:ring-2 focus:ring-red-500 focus:border-transparent"
 
                                     >
 
-                                    <button 
+                                    <button
 
-                                        @click="addToCart(<?= $product['id'] ?>, <?= $product['max_orderable'] ?>)"
+                                        @click="addToCart(<?= $product["id"] ?>, <?= $product["max_orderable"] ?>)"
 
                                         class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition shadow-md hover:shadow-lg flex items-center justify-center"
 
@@ -467,7 +485,7 @@ ob_start();
 
                                         <i class="fas fa-shopping-cart mr-2"></i>
 
-                                        <?= $customer['language'] === 'fr' ? 'Ajouter' : 'Toevoegen' ?>
+                                        <?= $customer["language"] === "fr" ? "Ajouter" : "Toevoegen" ?>
 
                                     </button>
 
@@ -475,9 +493,9 @@ ob_start();
 
                                 <?php else: ?>
 
-                                <button 
+                                <button
 
-                                    disabled 
+                                    disabled
 
                                     class="w-full bg-gray-300 text-gray-500 font-semibold py-2 px-4 rounded-lg cursor-not-allowed flex items-center justify-center"
 
@@ -485,7 +503,7 @@ ob_start();
 
                                     <i class="fas fa-ban mr-2"></i>
 
-                                    <?= $customer['language'] === 'fr' ? 'Stock épuisé' : 'Uitverkocht' ?>
+                                    <?= $customer["language"] === "fr" ? "Stock épuisé" : "Uitverkocht" ?>
 
                                 </button>
 
@@ -501,7 +519,7 @@ ob_start();
 
                 </section>
 
-                
+
 
                 <?php endforeach; ?>
 
@@ -521,11 +539,11 @@ ob_start();
 
                             <i class="fas fa-shopping-cart mr-2"></i>
 
-                            <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelmandje' ?>
+                            <?= $customer["language"] === "fr" ? "Mon panier" : "Mijn winkelmandje" ?>
 
-                            <span x-show="cartItemCount > 0" 
+                            <span x-show="cartItemCount > 0"
 
-                                  x-text="cartItemCount" 
+                                  x-text="cartItemCount"
 
                                   class="ml-2 bg-red-600 text-white text-sm px-2 py-1 rounded-full">
 
@@ -535,7 +553,7 @@ ob_start();
 
                     </div>
 
-                    
+
 
                     <!-- Items panier -->
 
@@ -547,13 +565,15 @@ ob_start();
 
                                 <i class="fas fa-shopping-basket text-4xl mb-2"></i>
 
-                                <p class="text-sm"><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelmandje is leeg' ?></p>
+                                <p class="text-sm"><?= $customer["language"] === "fr"
+                                    ? "Votre panier est vide"
+                                    : "Uw winkelmandje is leeg" ?></p>
 
                             </div>
 
                         </template>
 
-                        
+
 
                         <template x-for="item in cart.items" :key="item.product_id">
 
@@ -561,9 +581,11 @@ ob_start();
 
                                 <!-- Nom du produit bien visible -->
 
-                                <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer['language'] ?>"></p>
+                                <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer[
+                                    "language"
+                                ] ?>"></p>
 
-                                
+
 
                                 <!-- Contrôles quantité + poubelle -->
 
@@ -571,7 +593,7 @@ ob_start();
 
                                     <div class="flex items-center gap-2">
 
-                                        <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
+                                        <button @click="updateQuantity(item.product_id, item.quantity - 1)"
 
                                                 class="w-7 h-7 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
 
@@ -581,7 +603,7 @@ ob_start();
 
                                         <span class="font-bold text-lg" x-text="item.quantity"></span>
 
-                                        <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
+                                        <button @click="updateQuantity(item.product_id, item.quantity + 1)"
 
                                                 class="w-7 h-7 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
 
@@ -591,7 +613,7 @@ ob_start();
 
                                     </div>
 
-                                    <button @click="removeFromCart(item.product_id)" 
+                                    <button @click="removeFromCart(item.product_id)"
 
                                             class="text-red-600 hover:text-red-700">
 
@@ -607,7 +629,7 @@ ob_start();
 
                     </div>
 
-                    
+
 
                     <!-- Total -->
 
@@ -615,7 +637,7 @@ ob_start();
 
                         <div class="flex justify-between text-lg font-bold">
 
-                            <span><?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?> :</span>
+                            <span><?= $customer["language"] === "fr" ? "Total articles" : "Totaal artikelen" ?> :</span>
 
                             <span class="text-blue-600" x-text="cartItemCount"></span>
 
@@ -623,7 +645,7 @@ ob_start();
 
                     </div>
 
-                    
+
 
                     <!-- Actions -->
 
@@ -631,23 +653,25 @@ ob_start();
 
                         <div>
 
-                            <button @click="validateOrder()" 
+                            <button @click="validateOrder()"
 
                                     class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg mb-2 transition shadow-md hover:shadow-lg flex items-center justify-center">
 
                                 <i class="fas fa-check mr-2"></i>
 
-                                <?= $customer['language'] === 'fr' ? 'Valider ma commande' : 'Mijn bestelling bevestigen' ?>
+                                <?= $customer["language"] === "fr"
+                                    ? "Valider ma commande"
+                                    : "Mijn bestelling bevestigen" ?>
 
                             </button>
 
-                            <button @click="clearCart()" 
+                            <button @click="clearCart()"
 
                                     class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center">
 
                                 <i class="fas fa-trash mr-2"></i>
 
-                                <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelmandje legen' ?>
+                                <?= $customer["language"] === "fr" ? "Vider le panier" : "Winkelmandje legen" ?>
 
                             </button>
 
@@ -669,7 +693,7 @@ ob_start();
 
     <!-- Panier mobile (modal plein écran) -->
 
-    <div x-show="showCartMobile" 
+    <div x-show="showCartMobile"
 
          x-transition
 
@@ -677,7 +701,7 @@ ob_start();
 
          style="display: none;">
 
-        
+
 
         <!-- Header modal -->
 
@@ -687,11 +711,11 @@ ob_start();
 
                 <i class="fas fa-shopping-cart mr-2"></i>
 
-                <?= $customer['language'] === 'fr' ? 'Mon panier' : 'Mijn winkelmandje' ?>
+                <?= $customer["language"] === "fr" ? "Mon panier" : "Mijn winkelmandje" ?>
 
-                <span x-show="cartItemCount > 0" 
+                <span x-show="cartItemCount > 0"
 
-                      x-text="'(' + cartItemCount + ')'" 
+                      x-text="'(' + cartItemCount + ')'"
 
                       class="ml-2">
 
@@ -719,13 +743,13 @@ ob_start();
 
                     <i class="fas fa-shopping-basket text-6xl mb-4"></i>
 
-                    <p><?= $customer['language'] === 'fr' ? 'Votre panier est vide' : 'Uw winkelmandje is leeg' ?></p>
+                    <p><?= $customer["language"] === "fr" ? "Votre panier est vide" : "Uw winkelmandje is leeg" ?></p>
 
-                    <button @click="toggleCartMobile()" 
+                    <button @click="toggleCartMobile()"
 
                             class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">
 
-                        <?= $customer['language'] === 'fr' ? 'Continuer mes achats' : 'Verder winkelen' ?>
+                        <?= $customer["language"] === "fr" ? "Continuer mes achats" : "Verder winkelen" ?>
 
                     </button>
 
@@ -743,9 +767,9 @@ ob_start();
 
                         <!-- Nom du produit bien visible -->
 
-                        <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer['language'] ?>"></p>
+                        <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $customer["language"] ?>"></p>
 
-                        
+
 
                         <!-- Contrôles quantité + poubelle -->
 
@@ -753,7 +777,7 @@ ob_start();
 
                             <div class="flex items-center gap-3">
 
-                                <button @click="updateQuantity(item.product_id, item.quantity - 1)" 
+                                <button @click="updateQuantity(item.product_id, item.quantity - 1)"
 
                                         class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
 
@@ -763,7 +787,7 @@ ob_start();
 
                                 <span class="font-bold text-lg" x-text="item.quantity"></span>
 
-                                <button @click="updateQuantity(item.product_id, item.quantity + 1)" 
+                                <button @click="updateQuantity(item.product_id, item.quantity + 1)"
 
                                         class="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
 
@@ -773,7 +797,7 @@ ob_start();
 
                             </div>
 
-                            <button @click="removeFromCart(item.product_id)" 
+                            <button @click="removeFromCart(item.product_id)"
 
                                     class="text-red-600 hover:text-red-700 text-xl">
 
@@ -799,29 +823,31 @@ ob_start();
 
                     <div class="bg-gray-100 rounded-lg p-4 flex justify-between items-center">
 
-                        <span class="font-semibold"><?= $customer['language'] === 'fr' ? 'Total articles' : 'Totaal artikelen' ?> :</span>
+                        <span class="font-semibold"><?= $customer["language"] === "fr"
+                            ? "Total articles"
+                            : "Totaal artikelen" ?> :</span>
 
                         <span class="text-2xl font-bold text-blue-600" x-text="cartItemCount"></span>
 
                     </div>
 
-                    <button @click="validateOrder()" 
+                    <button @click="validateOrder()"
 
                             class="w-full bg-green-600 text-white font-bold py-4 rounded-lg text-lg">
 
                         <i class="fas fa-check mr-2"></i>
 
-                        <?= $customer['language'] === 'fr' ? 'Valider ma commande' : 'Mijn bestelling bevestigen' ?>
+                        <?= $customer["language"] === "fr" ? "Valider ma commande" : "Mijn bestelling bevestigen" ?>
 
                     </button>
 
-                    <button @click="clearCart()" 
+                    <button @click="clearCart()"
 
                             class="w-full bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg">
 
                         <i class="fas fa-trash mr-2"></i>
 
-                        <?= $customer['language'] === 'fr' ? 'Vider le panier' : 'Winkelmandje legen' ?>
+                        <?= $customer["language"] === "fr" ? "Vider le panier" : "Winkelmandje legen" ?>
 
                     </button>
 
@@ -837,7 +863,7 @@ ob_start();
 
     <!-- Lightbox zoom image -->
 
-    <div x-show="showLightbox" 
+    <div x-show="showLightbox"
 
          x-transition
 
@@ -849,7 +875,7 @@ ob_start();
 
         <div class="relative max-w-4xl max-h-full">
 
-            <button @click="closeLightbox()" 
+            <button @click="closeLightbox()"
 
                     class="absolute -top-10 right-0 text-white hover:text-gray-300 text-3xl">
 
@@ -857,7 +883,7 @@ ob_start();
 
             </button>
 
-            <img :src="lightboxImage" 
+            <img :src="lightboxImage"
 
                  alt="Zoom produit"
 
@@ -875,7 +901,7 @@ ob_start();
 
         // Traductions selon la langue
 
-        const lang = '<?= $customer['language'] ?>';
+        const lang = '<?= $customer["language"] ?>';
 
         const translations = {
 
@@ -923,7 +949,7 @@ ob_start();
 
         const t = translations[lang];
 
-        
+
 
         // Fonction pour changer la langue
 
@@ -941,7 +967,7 @@ ob_start();
 
         }
 
-        
+
 
         function cartManager() {
 
@@ -955,7 +981,7 @@ ob_start();
 
                 lightboxImage: '',
 
-                
+
 
                 init() {
 
@@ -967,7 +993,7 @@ ob_start();
 
                 },
 
-                
+
 
                 get cartItemCount() {
 
@@ -975,7 +1001,7 @@ ob_start();
 
                 },
 
-                
+
 
                 toggleCartMobile() {
 
@@ -983,7 +1009,7 @@ ob_start();
 
                 },
 
-                
+
 
                 openLightbox(imagePath) {
 
@@ -993,7 +1019,7 @@ ob_start();
 
                 },
 
-                
+
 
                 closeLightbox() {
 
@@ -1001,7 +1027,7 @@ ob_start();
 
                 },
 
-                
+
 
                 handleCategoryHighlight() {
 
@@ -1019,7 +1045,7 @@ ob_start();
 
                     };
 
-                    
+
 
                     const observer = new IntersectionObserver((entries) => {
 
@@ -1057,7 +1083,7 @@ ob_start();
 
                                 });
 
-                                // <?= $customer['language'] === 'fr' ? 'Ajouter' : 'Toevoegen' ?> active au bon
+                                // <?= $customer["language"] === "fr" ? "Ajouter" : "Toevoegen" ?> active au bon
 
                                 const btn = document.getElementById('cat-btn-' + catId);
 
@@ -1111,13 +1137,13 @@ ob_start();
 
                     }, options);
 
-                    
+
 
                     sections.forEach(section => observer.observe(section));
 
                 },
 
-                
+
 
                 async addToCart(productId, maxOrderable) {
 
@@ -1125,7 +1151,7 @@ ob_start();
 
                     const quantity = parseInt(qtyInput.value);
 
-                    
+
 
                     if (quantity <= 0 || quantity > maxOrderable) {
 
@@ -1135,7 +1161,7 @@ ob_start();
 
                     }
 
-                    
+
 
                     try {
 
@@ -1145,7 +1171,7 @@ ob_start();
 
                         formData.append('quantity', quantity);
 
-                        
+
 
                         const response = await fetch('/stm/c/<?= $uuid ?>/cart/add', {
 
@@ -1155,11 +1181,11 @@ ob_start();
 
                         });
 
-                        
+
 
                         const data = await response.json();
 
-                        
+
 
                         if (data.success) {
 
@@ -1185,7 +1211,7 @@ ob_start();
 
                 },
 
-                
+
 
                 async updateQuantity(productId, newQuantity) {
 
@@ -1195,7 +1221,7 @@ ob_start();
 
                     }
 
-                    
+
 
                     try {
 
@@ -1205,7 +1231,7 @@ ob_start();
 
                         formData.append('quantity', newQuantity);
 
-                        
+
 
                         const response = await fetch('/stm/c/<?= $uuid ?>/cart/update', {
 
@@ -1215,11 +1241,11 @@ ob_start();
 
                         });
 
-                        
+
 
                         const data = await response.json();
 
-                        
+
 
                         if (data.success) {
 
@@ -1239,13 +1265,13 @@ ob_start();
 
                 },
 
-                
+
 
                 async removeFromCart(productId) {
 
                     if (!confirm(t.removeConfirm)) return;
 
-                    
+
 
                     try {
 
@@ -1253,7 +1279,7 @@ ob_start();
 
                         formData.append('product_id', productId);
 
-                        
+
 
                         const response = await fetch('/stm/c/<?= $uuid ?>/cart/remove', {
 
@@ -1263,11 +1289,11 @@ ob_start();
 
                         });
 
-                        
+
 
                         const data = await response.json();
 
-                        
+
 
                         if (data.success) {
 
@@ -1283,13 +1309,13 @@ ob_start();
 
                 },
 
-                
+
 
                 async clearCart() {
 
                     if (!confirm(t.clearConfirm)) return;
 
-                    
+
 
                     try {
 
@@ -1299,11 +1325,11 @@ ob_start();
 
                         });
 
-                        
+
 
                         const data = await response.json();
 
-                        
+
 
                         if (data.success) {
 
@@ -1321,7 +1347,7 @@ ob_start();
 
                 },
 
-                
+
 
                 validateOrder() {
 
@@ -1333,13 +1359,13 @@ ob_start();
 
                     }
 
-                    
+
 
                     window.location.href = '/stm/c/<?= $uuid ?>/checkout';
 
                 },
 
-                
+
 
                 showNotification(message) {
 
@@ -1351,7 +1377,7 @@ ob_start();
 
                     document.body.appendChild(notification);
 
-                    
+
 
                     setTimeout(() => {
 
@@ -1382,22 +1408,22 @@ $pageScripts = <<<'JAVASCRIPT'
         clearConfirm: '<?= $customer["language"] === "fr" ? "Vider tout le panier ?" : "Hele winkelwagen leegmaken?" ?>',
         emptyCart: '<?= $customer["language"] === "fr" ? "Votre panier est vide" : "Uw winkelwagen is leeg" ?>'
     };
-    
+
     function cartManager() {
         return {
             cart: <?= json_encode($_SESSION["cart"] ?? ["items" => []]) ?>,
             isCartOpen: false,
             showLightbox: false,
             lightboxImage: '',
-            
+
             get cartItemCount() {
                 return this.cart.items ? this.cart.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
             },
-            
+
             init() {
                 const sections = document.querySelectorAll('section[id^="category-"]');
                 const options = { root: null, rootMargin: '-50% 0px -50% 0px', threshold: 0 };
-                
+
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
@@ -1435,35 +1461,35 @@ $pageScripts = <<<'JAVASCRIPT'
                         }
                     });
                 }, options);
-                
+
                 sections.forEach(section => observer.observe(section));
             },
-            
+
             toggleCartMobile() {
                 this.isCartOpen = !this.isCartOpen;
             },
-            
+
             async addToCart(productId, maxOrderable) {
                 const qtyInput = document.getElementById('qty-' + productId);
                 const quantity = parseInt(qtyInput.value);
-                
+
                 if (quantity <= 0 || quantity > maxOrderable) {
                     alert(t.invalidQty + ' : ' + maxOrderable);
                     return;
                 }
-                
+
                 try {
                     const formData = new FormData();
                     formData.append('product_id', productId);
                     formData.append('quantity', quantity);
-                    
+
                     const response = await fetch('/stm/c/<?= $uuid ?>/cart/add', {
                         method: 'POST',
                         body: formData
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         this.cart = data.cart;
                         qtyInput.value = 1;
@@ -1476,24 +1502,24 @@ $pageScripts = <<<'JAVASCRIPT'
                     alert(t.connectionError);
                 }
             },
-            
+
             async updateQuantity(productId, newQuantity) {
                 if (newQuantity <= 0) {
                     return this.removeFromCart(productId);
                 }
-                
+
                 try {
                     const formData = new FormData();
                     formData.append('product_id', productId);
                     formData.append('quantity', newQuantity);
-                    
+
                     const response = await fetch('/stm/c/<?= $uuid ?>/cart/update', {
                         method: 'POST',
                         body: formData
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         this.cart = data.cart;
                     } else {
@@ -1503,21 +1529,21 @@ $pageScripts = <<<'JAVASCRIPT'
                     console.error('Error:', error);
                 }
             },
-            
+
             async removeFromCart(productId) {
                 if (!confirm(t.removeConfirm)) return;
-                
+
                 try {
                     const formData = new FormData();
                     formData.append('product_id', productId);
-                    
+
                     const response = await fetch('/stm/c/<?= $uuid ?>/cart/remove', {
                         method: 'POST',
                         body: formData
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         this.cart = data.cart;
                     }
@@ -1525,17 +1551,17 @@ $pageScripts = <<<'JAVASCRIPT'
                     console.error('Error:', error);
                 }
             },
-            
+
             async clearCart() {
                 if (!confirm(t.clearConfirm)) return;
-                
+
                 try {
                     const response = await fetch('/stm/c/<?= $uuid ?>/cart/clear', {
                         method: 'POST'
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         this.cart = data.cart;
                         this.showNotification(t.cartCleared);
@@ -1544,7 +1570,7 @@ $pageScripts = <<<'JAVASCRIPT'
                     console.error('Error:', error);
                 }
             },
-            
+
             validateOrder() {
                 if (this.cart.items.length === 0) {
                     alert(t.emptyCart);
@@ -1552,7 +1578,7 @@ $pageScripts = <<<'JAVASCRIPT'
                 }
                 window.location.href = '/stm/c/<?= $uuid ?>/checkout';
             },
-            
+
             showNotification(message) {
                 const notification = document.createElement('div');
                 notification.className = 'fixed top-20 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
@@ -1564,5 +1590,6 @@ $pageScripts = <<<'JAVASCRIPT'
     }
 JAVASCRIPT;
 
-require __DIR__ . '/../../layouts/public.php';
+require __DIR__ . "/../../layouts/public.php";
+
 ?>

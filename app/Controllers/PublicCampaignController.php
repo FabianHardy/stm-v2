@@ -4,13 +4,13 @@
 
  * PublicCampaignController.php
 
- * 
+ *
 
  * Contrôleur pour l'interface publique des campagnes
 
  * Gère l'accès client, l'identification, le catalogue et la commande
 
- * 
+ *
 
  * @created  2025/11/14 16:30
 
@@ -22,11 +22,7 @@
 
  */
 
-
-
 namespace App\Controllers;
-
-
 
 use Core\Database;
 
@@ -34,25 +30,14 @@ use Core\Session;
 
 use App\Services\MailchimpEmailService;
 
-
-
 class PublicCampaignController
-
 {
-
     private Database $db;
 
-
-
     public function __construct()
-
     {
-
         $this->db = Database::getInstance();
-
     }
-
-
 
     /**
 
@@ -60,7 +45,7 @@ class PublicCampaignController
 
      * Route : GET /c/{uuid}
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -69,20 +54,17 @@ class PublicCampaignController
      */
 
     public function show(string $uuid): void
-
     {
-
         try {
-
             // Récupérer la campagne par UUID
 
             $query = "
 
-                SELECT 
+                SELECT
 
                     c.*,
 
-                    CASE 
+                    CASE
 
                         WHEN CURDATE() < c.start_date THEN 'upcoming'
 
@@ -100,91 +82,57 @@ class PublicCampaignController
 
             ";
 
-            
-
-            $campaign = $this->db->query($query, [':uuid' => $uuid]);
-
-            
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
 
             // Campagne introuvable
 
             if (empty($campaign)) {
-
-                $this->renderAccessDenied('campaign_not_found', $uuid);
+                $this->renderAccessDenied("campaign_not_found", $uuid);
 
                 return;
-
             }
-
-            
 
             $campaign = $campaign[0];
 
-            
-
             // Vérifier le statut de la campagne
 
-            if ($campaign['computed_status'] === 'upcoming') {
-
-                $this->renderAccessDenied('upcoming', $uuid, $campaign);
-
-                return;
-
-            }
-
-            
-
-            if ($campaign['computed_status'] === 'ended') {
-
-                $this->renderAccessDenied('ended', $uuid, $campaign);
+            if ($campaign["computed_status"] === "upcoming") {
+                $this->renderAccessDenied("upcoming", $uuid, $campaign);
 
                 return;
-
             }
 
-            
-
-            if ($campaign['computed_status'] === 'inactive') {
-
-                $this->renderAccessDenied('inactive', $uuid, $campaign);
+            if ($campaign["computed_status"] === "ended") {
+                $this->renderAccessDenied("ended", $uuid, $campaign);
 
                 return;
-
             }
 
-            
+            if ($campaign["computed_status"] === "inactive") {
+                $this->renderAccessDenied("inactive", $uuid, $campaign);
+
+                return;
+            }
 
             // Campagne active - afficher la page d'identification
 
             // Compter les promotions actives de la campagne
 
             $promotionsCountResult = $this->db->query(
-
                 "SELECT COUNT(*) as count FROM products WHERE campaign_id = :campaign_id AND is_active = 1",
 
-                [':campaign_id' => $campaign['id']]
-
+                [":campaign_id" => $campaign["id"]],
             );
 
-            $promotionsCount = (int) ($promotionsCountResult[0]['count'] ?? 0);
-
-            
+            $promotionsCount = (int) ($promotionsCountResult[0]["count"] ?? 0);
 
             $this->renderIdentificationPage($campaign, $promotionsCount);
-
-            
-
         } catch (\PDOException $e) {
-
             error_log("Erreur show() : " . $e->getMessage());
 
-            $this->renderAccessDenied('error', $uuid);
-
+            $this->renderAccessDenied("error", $uuid);
         }
-
     }
-
-
 
     /**
 
@@ -192,7 +140,7 @@ class PublicCampaignController
 
      * Route : POST /c/{uuid}/identify
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -201,74 +149,53 @@ class PublicCampaignController
      */
 
     public function identify(string $uuid): void
-
     {
-
         try {
+            // ========================================
 
-        // ========================================
+            // STOCKER LA LANGUE DÈS LE DÉBUT
 
-        // STOCKER LA LANGUE DÈS LE DÉBUT
+            // ========================================
 
-        // ========================================
+            // Récupérer la langue du formulaire AVANT les vérifications
 
-        // Récupérer la langue du formulaire AVANT les vérifications
+            $requestedLang = $_POST["language"] ?? "fr";
 
-        $requestedLang = $_POST['language'] ?? 'fr';
+            $selectedLanguage = in_array($requestedLang, ["fr", "nl"], true) ? $requestedLang : "fr";
 
-        $selectedLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
+            // Stocker dans session temporaire pour access_denied
 
-        
+            Session::set("temp_language", $selectedLanguage);
 
-        // Stocker dans session temporaire pour access_denied
+            // Récupérer la campagne
 
-        Session::set('temp_language', $selectedLanguage);
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
 
-        
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
 
-        // Récupérer la campagne
+            if (empty($campaign)) {
+                $this->renderAccessDenied("campaign_not_found", $uuid);
 
-        $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
-
-        $campaign = $this->db->query($query, [':uuid' => $uuid]);
-
-        
-
-        if (empty($campaign)) {
-
-            $this->renderAccessDenied('campaign_not_found', $uuid);
-
-            return;
-
-        }
-
-            
+                return;
+            }
 
             $campaign = $campaign[0];
 
-            
-
             // Récupérer les données du formulaire
 
-            $customerNumber = trim($_POST['customer_number'] ?? '');
+            $customerNumber = trim($_POST["customer_number"] ?? "");
 
-            $country = $_POST['country'] ?? ($campaign['country'] === 'BOTH' ? 'BE' : $campaign['country']);
-
-            
+            $country = $_POST["country"] ?? ($campaign["country"] === "BOTH" ? "BE" : $campaign["country"]);
 
             // Validation
 
             if (empty($customerNumber)) {
-
-                Session::set('error', 'Le numéro client est obligatoire.');
+                Session::set("error", "Le numéro client est obligatoire.");
 
                 header("Location: /stm/c/{$uuid}");
 
-                exit;
-
+                exit();
             }
-
-            
 
             // Vérifier que le client existe dans la DB externe
 
@@ -276,121 +203,86 @@ class PublicCampaignController
 
             $customerData = $this->getCustomerFromExternal($externalDb, $customerNumber, $country);
 
-            
-
             if (!$customerData) {
-
-                Session::set('error', 'Numéro client introuvable. Veuillez vérifier votre numéro.');
+                Session::set("error", "Numéro client introuvable. Veuillez vérifier votre numéro.");
 
                 header("Location: /stm/c/{$uuid}");
 
-                exit;
-
+                exit();
             }
-
-            
 
             // Vérifier les droits selon le mode de la campagne
 
             $hasAccess = $this->checkCustomerAccess($campaign, $customerNumber, $country);
 
-            
-
             if (!$hasAccess) {
-
-                $this->renderAccessDenied('no_access', $uuid, $campaign);
+                $this->renderAccessDenied("no_access", $uuid, $campaign);
 
                 return;
-
             }
-
-            
 
             // Vérifier si tous les produits ont atteint leurs quotas
 
-            $hasAvailableProducts = $this->checkAvailableProducts($campaign['id'], $customerNumber, $country);
-
-            
+            $hasAvailableProducts = $this->checkAvailableProducts($campaign["id"], $customerNumber, $country);
 
             if (!$hasAvailableProducts) {
-
-                $this->renderAccessDenied('quotas_reached', $uuid, $campaign);
+                $this->renderAccessDenied("quotas_reached", $uuid, $campaign);
 
                 return;
-
             }
-
-            
 
             // Déterminer la langue selon le paramètre transmis ou FR par défaut
 
-        //    $requestedLang = $_POST['language'] ?? 'fr';
+            //    $requestedLang = $_POST['language'] ?? 'fr';
 
-        //    $defaultLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
-
-
+            //    $defaultLanguage = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
 
             // Tout est OK - créer la session client
 
-            Session::set('public_customer', [
+            Session::set("public_customer", [
+                "customer_number" => $customerNumber,
 
-                'customer_number' => $customerNumber,
+                "country" => $country,
 
-                'country' => $country,
+                "company_name" => $customerData["company_name"],
 
-                'company_name' => $customerData['company_name'],
+                "campaign_uuid" => $uuid,
 
-                'campaign_uuid' => $uuid,
+                "campaign_id" => $campaign["id"],
 
-                'campaign_id' => $campaign['id'],
+                "language" => $selectedLanguage,
 
-                'language' => $selectedLanguage,
-
-                'logged_at' => date('Y-m-d H:i:s')
-
+                "logged_at" => date("Y-m-d H:i:s"),
             ]);
-
-            
 
             // Initialiser le panier vide
 
-            Session::set('cart', [
+            Session::set("cart", [
+                "campaign_uuid" => $uuid,
 
-                'campaign_uuid' => $uuid,
-
-                'items' => []
-
+                "items" => [],
             ]);
-
-            
 
             // Rediriger vers le catalogue
 
             header("Location: /stm/c/{$uuid}/catalog");
 
-            exit;
-
-            
-
+            exit();
         } catch (\PDOException $e) {
-
             error_log("Erreur identify() : " . $e->getMessage());
 
             // En développement, afficher l'erreur détaillée
 
-            $errorDetail = ($_ENV['APP_DEBUG'] ?? false) ? $e->getMessage() : 'Une erreur est survenue. Veuillez réessayer.';
+            $errorDetail =
+                $_ENV["APP_DEBUG"] ?? false ? $e->getMessage() : "Une erreur est survenue. Veuillez réessayer.";
 
-            Session::set('error', $errorDetail);
+            Session::set("error", $errorDetail);
 
             header("Location: /stm/c/{$uuid}");
 
-            exit;
-
+            exit();
         }
-
     }
-
-
 
     /**
 
@@ -398,7 +290,7 @@ class PublicCampaignController
 
      * Route : GET /c/{uuid}/catalog
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -407,96 +299,67 @@ class PublicCampaignController
      */
 
     public function catalog(string $uuid): void
-
     {
-
         try {
-
             // ========================================
 
             // GESTION DU SWITCH LANGUE (FR/NL)
 
             // ========================================
 
-            
-
             // Récupérer le paramètre ?lang de l'URL
 
-            $requestedLang = $_GET['lang'] ?? null;
-
-            
+            $requestedLang = $_GET["lang"] ?? null;
 
             // Si une langue est demandée ET que c'est FR ou NL
 
-            if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
-
+            if ($requestedLang && in_array($requestedLang, ["fr", "nl"], true)) {
                 // Récupérer le client de la session
 
-                $tempCustomer = Session::get('public_customer');
-
-                
+                $tempCustomer = Session::get("public_customer");
 
                 // Si le client existe, mettre à jour sa langue
 
                 if ($tempCustomer) {
+                    $tempCustomer["language"] = $requestedLang;
 
-                    $tempCustomer['language'] = $requestedLang;
-
-                    Session::set('public_customer', $tempCustomer);
-
+                    Session::set("public_customer", $tempCustomer);
                 }
-
-                
 
                 // Rediriger vers l'URL propre (sans ?lang=)
 
-                $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+                $cleanUrl = strtok($_SERVER["REQUEST_URI"], "?");
 
                 header("Location: {$cleanUrl}");
 
-                exit;
-
+                exit();
             }
-
-            
 
             // Vérifier que le client est identifié
 
-            $customer = Session::get('public_customer');
+            $customer = Session::get("public_customer");
 
-            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
-
+            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
                 header("Location: /stm/c/{$uuid}");
 
-                exit;
-
+                exit();
             }
-
-            
 
             // Récupérer la campagne
 
             $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
 
-            $campaign = $this->db->query($query, [':uuid' => $uuid]);
-
-            
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
 
             if (empty($campaign)) {
-
-                Session::remove('public_customer');
+                Session::remove("public_customer");
 
                 header("Location: /stm/c/{$uuid}");
 
-                exit;
-
+                exit();
             }
 
-            
-
             $campaign = $campaign[0];
-
-            
 
             // Récupérer toutes les catégories actives avec leurs produits
 
@@ -532,19 +395,14 @@ class PublicCampaignController
 
             ";
 
-            
-
-            $categories = $this->db->query($categoriesQuery, [':campaign_id' => $campaign['id']]);
-
-            
+            $categories = $this->db->query($categoriesQuery, [":campaign_id" => $campaign["id"]]);
 
             // Pour chaque catégorie, récupérer ses produits avec quotas
 
             foreach ($categories as $key => $category) {
-
                 $productsQuery = "
 
-                    SELECT 
+                    SELECT
 
                         p.*
 
@@ -560,89 +418,60 @@ class PublicCampaignController
 
                 ";
 
-                
-
                 $products = $this->db->query($productsQuery, [
+                    ":category_id" => $category["id"],
 
-                    ':category_id' => $category['id'],
-
-                    ':campaign_id' => $campaign['id']
-
+                    ":campaign_id" => $campaign["id"],
                 ]);
-
-                
 
                 // Calculer les quotas disponibles pour chaque produit
 
                 foreach ($products as $productKey => $product) {
-
                     $quotas = $this->calculateAvailableQuotas(
+                        $product["id"],
 
-                        $product['id'],
+                        $customer["customer_number"],
 
-                        $customer['customer_number'],
+                        $customer["country"],
 
-                        $customer['country'],
+                        $product["max_per_customer"],
 
-                        $product['max_per_customer'],
-
-                        $product['max_total']
-
+                        $product["max_total"],
                     );
 
-                    
+                    $products[$productKey]["available_for_customer"] = $quotas["customer"];
 
-                    $products[$productKey]['available_for_customer'] = $quotas['customer'];
+                    $products[$productKey]["available_global"] = $quotas["global"];
 
-                    $products[$productKey]['available_global'] = $quotas['global'];
+                    $products[$productKey]["max_orderable"] = $quotas["max_orderable"];
 
-                    $products[$productKey]['max_orderable'] = $quotas['max_orderable'];
-
-                    $products[$productKey]['is_orderable'] = $quotas['is_orderable'];
-
+                    $products[$productKey]["is_orderable"] = $quotas["is_orderable"];
                 }
 
-                
-
-                $categories[$key]['products'] = $products;
-
+                $categories[$key]["products"] = $products;
             }
-
-            
 
             // Récupérer le panier depuis la session
 
-            $cart = Session::get('cart', [
+            $cart = Session::get("cart", [
+                "campaign_uuid" => $uuid,
 
-                'campaign_uuid' => $uuid,
-
-                'items' => []
-
+                "items" => [],
             ]);
-
-            
 
             // Afficher la vue
 
-            require __DIR__ . '/../Views/public/campaign/catalog.php';
-
-            
-
+            require __DIR__ . "/../Views/public/campaign/catalog.php";
         } catch (\PDOException $e) {
-
             error_log("Erreur catalog() : " . $e->getMessage());
 
-            Session::set('error', 'Une erreur est survenue lors du chargement du catalogue.');
+            Session::set("error", "Une erreur est survenue lors du chargement du catalogue.");
 
             header("Location: /stm/c/{$uuid}");
 
-            exit;
-
+            exit();
         }
-
     }
-
-
 
     /**
 
@@ -650,7 +479,7 @@ class PublicCampaignController
 
      * Route : POST /c/{uuid}/cart/add
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -659,222 +488,151 @@ class PublicCampaignController
      */
 
     public function addToCart(string $uuid): void
-
     {
-
-        header('Content-Type: application/json');
-
-        
+        header("Content-Type: application/json");
 
         try {
-
             // Vérifier session client
 
-            $customer = Session::get('public_customer');
+            $customer = Session::get("public_customer");
 
-            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+                echo json_encode(["success" => false, "error" => "Session expirée"]);
 
-                echo json_encode(['success' => false, 'error' => 'Session expirée']);
-
-                exit;
-
+                exit();
             }
-
-            
 
             // Récupérer les données
 
-            $productId = (int)($_POST['product_id'] ?? 0);
+            $productId = (int) ($_POST["product_id"] ?? 0);
 
-            $quantity = (int)($_POST['quantity'] ?? 0);
-
-            
+            $quantity = (int) ($_POST["quantity"] ?? 0);
 
             if ($productId <= 0 || $quantity <= 0) {
+                echo json_encode(["success" => false, "error" => "Données invalides"]);
 
-                echo json_encode(['success' => false, 'error' => 'Données invalides']);
-
-                exit;
-
+                exit();
             }
-
-            
 
             // Récupérer le produit
 
             $productQuery = "SELECT * FROM products WHERE id = :id AND campaign_id = :campaign_id AND is_active = 1";
 
             $product = $this->db->query($productQuery, [
+                ":id" => $productId,
 
-                ':id' => $productId,
-
-                ':campaign_id' => $customer['campaign_id']
-
+                ":campaign_id" => $customer["campaign_id"],
             ]);
 
-            
-
             if (empty($product)) {
+                echo json_encode(["success" => false, "error" => "Produit introuvable"]);
 
-                echo json_encode(['success' => false, 'error' => 'Produit introuvable']);
-
-                exit;
-
+                exit();
             }
 
-            
-
             $product = $product[0];
-
-            
 
             // Vérifier les quotas disponibles
 
             $quotas = $this->calculateAvailableQuotas(
-
                 $productId,
 
-                $customer['customer_number'],
+                $customer["customer_number"],
 
-                $customer['country'],
+                $customer["country"],
 
-                $product['max_per_customer'],
+                $product["max_per_customer"],
 
-                $product['max_total']
-
+                $product["max_total"],
             );
 
-            
+            if (!$quotas["is_orderable"]) {
+                echo json_encode(["success" => false, "error" => "Produit plus disponible"]);
 
-            if (!$quotas['is_orderable']) {
-
-                echo json_encode(['success' => false, 'error' => 'Produit plus disponible']);
-
-                exit;
-
+                exit();
             }
-
-            
 
             // Récupérer le panier
 
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
-
-            
+            $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
             // Chercher si le produit existe déjà dans le panier
 
             $existingIndex = null;
 
-            foreach ($cart['items'] as $index => $item) {
-
-                if ($item['product_id'] == $productId) {
-
+            foreach ($cart["items"] as $index => $item) {
+                if ($item["product_id"] == $productId) {
                     $existingIndex = $index;
 
                     break;
-
                 }
-
             }
-
-            
 
             // Calculer la nouvelle quantité totale
 
-            $currentQtyInCart = $existingIndex !== null ? $cart['items'][$existingIndex]['quantity'] : 0;
+            $currentQtyInCart = $existingIndex !== null ? $cart["items"][$existingIndex]["quantity"] : 0;
 
             $newTotalQty = $currentQtyInCart + $quantity;
 
-            
-
             // Vérifier que la nouvelle quantité ne dépasse pas les quotas
 
-            if ($newTotalQty > $quotas['max_orderable']) {
-
+            if ($newTotalQty > $quotas["max_orderable"]) {
                 echo json_encode([
+                    "success" => false,
 
-                    'success' => false, 
-
-                    'error' => "Quantité maximale : {$quotas['max_orderable']}"
-
+                    "error" => "Quantité maximale : {$quotas["max_orderable"]}",
                 ]);
 
-                exit;
-
+                exit();
             }
-
-            
 
             // Ajouter ou mettre à jour le produit dans le panier
 
             if ($existingIndex !== null) {
-
                 // Mise à jour quantité
 
-                $cart['items'][$existingIndex]['quantity'] = $newTotalQty;
-
+                $cart["items"][$existingIndex]["quantity"] = $newTotalQty;
             } else {
-
                 // Nouveau produit - Stocker FR et NL pour le switch langue
 
-                $cart['items'][] = [
+                $cart["items"][] = [
+                    "product_id" => $productId,
 
-                    'product_id' => $productId,
+                    "code" => $product["product_code"],
 
-                    'code' => $product['product_code'],
+                    "name_fr" => $product["name_fr"],
 
-                    'name_fr' => $product['name_fr'],
+                    "name_nl" => $product["name_nl"] ?? $product["name_fr"],
 
-                    'name_nl' => $product['name_nl'] ?? $product['name_fr'],
+                    "image_fr" => $product["image_fr"] ?? null,
 
-                    'image_fr' => $product['image_fr'] ?? null,
+                    "image_nl" => $product["image_nl"] ?? $product["image_fr"],
 
-                    'image_nl' => $product['image_nl'] ?? $product['image_fr'],
-
-                    'quantity' => $quantity
-
+                    "quantity" => $quantity,
                 ];
-
             }
-
-            
 
             // Sauvegarder le panier en session
 
-            Session::set('cart', $cart);
-
-            
+            Session::set("cart", $cart);
 
             // Retourner le succès avec le panier mis à jour
 
             echo json_encode([
+                "success" => true,
 
-                'success' => true,
+                "cart" => $cart,
 
-                'cart' => $cart,
-
-                'message' => 'Produit ajouté au panier'
-
+                "message" => "Produit ajouté au panier",
             ]);
-
-            
-
         } catch (\Exception $e) {
-
             error_log("Erreur addToCart() : " . $e->getMessage());
 
-            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
-
+            echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
-        
-
-        exit;
-
+        exit();
     }
-
-
 
     /**
 
@@ -882,7 +640,7 @@ class PublicCampaignController
 
      * Route : POST /c/{uuid}/cart/update
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -891,156 +649,97 @@ class PublicCampaignController
      */
 
     public function updateCart(string $uuid): void
-
     {
-
-        header('Content-Type: application/json');
-
-        
+        header("Content-Type: application/json");
 
         try {
-
             // Vérifier session client
 
-            $customer = Session::get('public_customer');
+            $customer = Session::get("public_customer");
 
-            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
+            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+                echo json_encode(["success" => false, "error" => "Session expirée"]);
 
-                echo json_encode(['success' => false, 'error' => 'Session expirée']);
-
-                exit;
-
+                exit();
             }
 
-            
+            $productId = (int) ($_POST["product_id"] ?? 0);
 
-            $productId = (int)($_POST['product_id'] ?? 0);
-
-            $quantity = (int)($_POST['quantity'] ?? 0);
-
-            
+            $quantity = (int) ($_POST["quantity"] ?? 0);
 
             if ($productId <= 0) {
+                echo json_encode(["success" => false, "error" => "Données invalides"]);
 
-                echo json_encode(['success' => false, 'error' => 'Données invalides']);
-
-                exit;
-
+                exit();
             }
 
-            
-
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
-
-            
+            $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
             // Si quantité = 0, supprimer le produit
 
             if ($quantity <= 0) {
-
-                $cart['items'] = array_values(array_filter($cart['items'], function($item) use ($productId) {
-
-                    return $item['product_id'] != $productId;
-
-                }));
-
+                $cart["items"] = array_values(
+                    array_filter($cart["items"], function ($item) use ($productId) {
+                        return $item["product_id"] != $productId;
+                    }),
+                );
             } else {
-
                 // Vérifier les quotas
 
-                $product = $this->db->query("SELECT * FROM products WHERE id = :id", [':id' => $productId]);
-
-                
+                $product = $this->db->query("SELECT * FROM products WHERE id = :id", [":id" => $productId]);
 
                 if (empty($product)) {
+                    echo json_encode(["success" => false, "error" => "Produit introuvable"]);
 
-                    echo json_encode(['success' => false, 'error' => 'Produit introuvable']);
-
-                    exit;
-
+                    exit();
                 }
-
-                
 
                 $product = $product[0];
 
-                
-
                 $quotas = $this->calculateAvailableQuotas(
-
                     $productId,
 
-                    $customer['customer_number'],
+                    $customer["customer_number"],
 
-                    $customer['country'],
+                    $customer["country"],
 
-                    $product['max_per_customer'],
+                    $product["max_per_customer"],
 
-                    $product['max_total']
-
+                    $product["max_total"],
                 );
 
-                
-
-                if ($quantity > $quotas['max_orderable']) {
-
+                if ($quantity > $quotas["max_orderable"]) {
                     echo json_encode([
+                        "success" => false,
 
-                        'success' => false, 
-
-                        'error' => "Quantité maximale : {$quotas['max_orderable']}"
-
+                        "error" => "Quantité maximale : {$quotas["max_orderable"]}",
                     ]);
 
-                    exit;
-
+                    exit();
                 }
-
-                
 
                 // Mettre à jour la quantité
 
-                foreach ($cart['items'] as &$item) {
-
-                    if ($item['product_id'] == $productId) {
-
-                        $item['quantity'] = $quantity;
+                foreach ($cart["items"] as &$item) {
+                    if ($item["product_id"] == $productId) {
+                        $item["quantity"] = $quantity;
 
                         break;
-
                     }
-
                 }
-
             }
 
-            
+            Session::set("cart", $cart);
 
-            
-
-            Session::set('cart', $cart);
-
-            
-
-            echo json_encode(['success' => true, 'cart' => $cart]);
-
-            
-
+            echo json_encode(["success" => true, "cart" => $cart]);
         } catch (\Exception $e) {
-
             error_log("Erreur updateCart() : " . $e->getMessage());
 
-            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
-
+            echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
-        
-
-        exit;
-
+        exit();
     }
-
-
 
     /**
 
@@ -1048,7 +747,7 @@ class PublicCampaignController
 
      * Route : POST /c/{uuid}/cart/remove
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -1057,70 +756,41 @@ class PublicCampaignController
      */
 
     public function removeFromCart(string $uuid): void
-
     {
-
-        header('Content-Type: application/json');
-
-        
+        header("Content-Type: application/json");
 
         try {
+            $customer = Session::get("public_customer");
 
-            $customer = Session::get('public_customer');
+            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+                echo json_encode(["success" => false, "error" => "Session expirée"]);
 
-            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
-
-                echo json_encode(['success' => false, 'error' => 'Session expirée']);
-
-                exit;
-
+                exit();
             }
 
-            
+            $productId = (int) ($_POST["product_id"] ?? 0);
 
-            $productId = (int)($_POST['product_id'] ?? 0);
-
-            
-
-            $cart = Session::get('cart', ['campaign_uuid' => $uuid, 'items' => []]);
-
-            
+            $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
             // Retirer le produit
 
-            $cart['items'] = array_values(array_filter($cart['items'], function($item) use ($productId) {
+            $cart["items"] = array_values(
+                array_filter($cart["items"], function ($item) use ($productId) {
+                    return $item["product_id"] != $productId;
+                }),
+            );
 
-                return $item['product_id'] != $productId;
+            Session::set("cart", $cart);
 
-            }));
-
-            
-
-            
-
-            Session::set('cart', $cart);
-
-            
-
-            echo json_encode(['success' => true, 'cart' => $cart]);
-
-            
-
+            echo json_encode(["success" => true, "cart" => $cart]);
         } catch (\Exception $e) {
-
             error_log("Erreur removeFromCart() : " . $e->getMessage());
 
-            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
-
+            echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
-        
-
-        exit;
-
+        exit();
     }
-
-
 
     /**
 
@@ -1128,7 +798,7 @@ class PublicCampaignController
 
      * Route : POST /c/{uuid}/cart/clear
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -1137,62 +807,39 @@ class PublicCampaignController
      */
 
     public function clearCart(string $uuid): void
-
     {
-
-        header('Content-Type: application/json');
-
-        
+        header("Content-Type: application/json");
 
         try {
+            $customer = Session::get("public_customer");
 
-            $customer = Session::get('public_customer');
+            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+                echo json_encode(["success" => false, "error" => "Session expirée"]);
 
-            if (!$customer || $customer['campaign_uuid'] !== $uuid) {
-
-                echo json_encode(['success' => false, 'error' => 'Session expirée']);
-
-                exit;
-
+                exit();
             }
 
-            
+            Session::set("cart", [
+                "campaign_uuid" => $uuid,
 
-            Session::set('cart', [
-
-                'campaign_uuid' => $uuid,
-
-                'items' => []
-
+                "items" => [],
             ]);
 
-            
-
-            echo json_encode(['success' => true, 'cart' => Session::get('cart')]);
-
-            
-
+            echo json_encode(["success" => true, "cart" => Session::get("cart")]);
         } catch (\Exception $e) {
-
             error_log("Erreur clearCart() : " . $e->getMessage());
 
-            echo json_encode(['success' => false, 'error' => 'Erreur serveur']);
-
+            echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
-        
-
-        exit;
-
+        exit();
     }
-
-
 
     /**
 
      * Calculer les quotas disponibles pour un produit
 
-     * 
+     *
 
      * @param int $productId ID du produit
 
@@ -1209,7 +856,6 @@ class PublicCampaignController
      */
 
     private function calculateAvailableQuotas(
-
         int $productId,
 
         string $customerNumber,
@@ -1218,29 +864,21 @@ class PublicCampaignController
 
         ?int $maxPerCustomer,
 
-        ?int $maxTotal
-
+        ?int $maxTotal,
     ): array {
-
         // Quota utilisé par le client (commandes validées uniquement)
 
         $customerUsed = $this->getCustomerQuotaUsed($productId, $customerNumber, $country);
-
-        
 
         // Quota utilisé globalement (toutes commandes validées)
 
         $globalUsed = $this->getGlobalQuotaUsed($productId);
 
-        
-
         // Calculer disponibles
 
-        $availableForCustomer = is_null($maxPerCustomer) ? PHP_INT_MAX : ($maxPerCustomer - $customerUsed);
+        $availableForCustomer = is_null($maxPerCustomer) ? PHP_INT_MAX : $maxPerCustomer - $customerUsed;
 
-        $availableGlobal = is_null($maxTotal) ? PHP_INT_MAX : ($maxTotal - $globalUsed);
-
-        
+        $availableGlobal = is_null($maxTotal) ? PHP_INT_MAX : $maxTotal - $globalUsed;
 
         // Maximum commandable = minimum des 2
 
@@ -1248,69 +886,51 @@ class PublicCampaignController
 
         $isOrderable = $maxOrderable > 0;
 
-        
-
         return [
+            "customer" => max(0, $availableForCustomer),
 
-            'customer' => max(0, $availableForCustomer),
+            "global" => max(0, $availableGlobal),
 
-            'global' => max(0, $availableGlobal),
+            "max_orderable" => max(0, $maxOrderable),
 
-            'max_orderable' => max(0, $maxOrderable),
-
-            'is_orderable' => $isOrderable
-
+            "is_orderable" => $isOrderable,
         ];
-
     }
-
-
 
     /**
 
      * Récupérer la connexion à la base externe
 
-     * 
+     *
 
      * @return \PDO
 
      */
 
     private function getExternalDatabase(): \PDO
-
     {
+        $host = $_ENV["DB_HOST"] ?? "localhost";
 
-        $host = $_ENV['DB_HOST'] ?? 'localhost';
+        $dbname = "trendyblog_sig"; // DB externe
 
-        $dbname = 'trendyblog_sig'; // DB externe
+        $user = $_ENV["DB_USER"] ?? "";
 
-        $user = $_ENV['DB_USER'] ?? '';
-
-        $password = $_ENV['DB_PASS'] ?? '';
-
-        
+        $password = $_ENV["DB_PASS"] ?? "";
 
         $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
 
-        
-
         return new \PDO($dsn, $user, $password, [
-
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
 
-            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC
-
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ]);
-
     }
-
-
 
     /**
 
      * Récupérer les infos client depuis la DB externe
 
-     * 
+     *
 
      * @param \PDO $externalDb Connexion DB externe
 
@@ -1323,16 +943,12 @@ class PublicCampaignController
      */
 
     private function getCustomerFromExternal(\PDO $externalDb, string $customerNumber, string $country): ?array
-
     {
-
-        $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
-
-        
+        $table = $country === "BE" ? "BE_CLL" : "LU_CLL";
 
         $query = "
 
-            SELECT 
+            SELECT
 
                 CLL_NCLIXX as customer_number,
 
@@ -1348,27 +964,20 @@ class PublicCampaignController
 
         ";
 
-        
-
         $stmt = $externalDb->prepare($query);
 
-        $stmt->execute([':customer_number' => $customerNumber]);
+        $stmt->execute([":customer_number" => $customerNumber]);
 
         $result = $stmt->fetch();
 
-        
-
         return $result ?: null;
-
     }
-
-
 
     /**
 
      * Vérifier si le client a accès à cette campagne
 
-     * 
+     *
 
      * @param array $campaign Données de la campagne
 
@@ -1381,23 +990,34 @@ class PublicCampaignController
      */
 
     private function checkCustomerAccess(array $campaign, string $customerNumber, string $country): bool
-
     {
+        // ========================================
+        // COMPTES INTERNES : accès à TOUTES les campagnes
+        // ========================================
+        $internalCheck = $this->db->query(
+            "SELECT COUNT(*) as count FROM internal_customers
+             WHERE customer_number = :customer_number
+             AND country = :country
+             AND is_active = 1",
+            [
+                ":customer_number" => $customerNumber,
+                ":country" => $country,
+            ],
+        );
+
+        if (($internalCheck[0]["count"] ?? 0) > 0) {
+            return true; // Compte interne : accès à toutes les campagnes
+        }
 
         // Mode AUTOMATIC : tous les clients ont accès
 
-        if ($campaign['customer_assignment_mode'] === 'automatic') {
-
+        if ($campaign["customer_assignment_mode"] === "automatic") {
             return true;
-
         }
-
-        
 
         // Mode MANUAL : vérifier si le client est dans la liste
 
-        if ($campaign['customer_assignment_mode'] === 'manual') {
-
+        if ($campaign["customer_assignment_mode"] === "manual") {
             $query = "
 
                 SELECT COUNT(*) as count
@@ -1412,65 +1032,43 @@ class PublicCampaignController
 
             ";
 
-            
-
             $result = $this->db->query($query, [
+                ":campaign_id" => $campaign["id"],
 
-                ':campaign_id' => $campaign['id'],
+                ":customer_number" => $customerNumber,
 
-                ':customer_number' => $customerNumber,
-
-                ':country' => $country
-
+                ":country" => $country,
             ]);
 
-            
-
-            return ($result[0]['count'] ?? 0) > 0;
-
+            return ($result[0]["count"] ?? 0) > 0;
         }
-
-        
 
         // Mode PROTECTED : vérifier mot de passe + existence client
 
-        if ($campaign['customer_assignment_mode'] === 'protected') {
-
-            $password = $_POST['password'] ?? '';
-
-            
+        if ($campaign["customer_assignment_mode"] === "protected") {
+            $password = $_POST["password"] ?? "";
 
             // Vérifier d'abord le mot de passe
 
-            if (empty($password) || $password !== $campaign['order_password']) {
-
+            if (empty($password) || $password !== $campaign["order_password"]) {
                 return false;
-
             }
-
-            
 
             // Mot de passe correct : client déjà vérifié dans identify()
 
             return true;
-
         }
-
-        
 
         // Mode inconnu ou non géré
 
         return false;
-
     }
-
-
 
     /**
 
      * Vérifier s'il reste des produits commandables (quotas)
 
-     * 
+     *
 
      * @param int $campaignId ID de la campagne
 
@@ -1483,14 +1081,12 @@ class PublicCampaignController
      */
 
     private function checkAvailableProducts(int $campaignId, string $customerNumber, string $country): bool
-
     {
-
         // Récupérer tous les produits de la campagne
 
         $query = "
 
-            SELECT 
+            SELECT
 
                 p.id,
 
@@ -1506,61 +1102,40 @@ class PublicCampaignController
 
         ";
 
-        
-
-        $products = $this->db->query($query, [':campaign_id' => $campaignId]);
-
-        
+        $products = $this->db->query($query, [":campaign_id" => $campaignId]);
 
         if (empty($products)) {
-
             return false; // Aucun produit dans la campagne
-
         }
 
-        
-
         foreach ($products as $product) {
-
             $quotas = $this->calculateAvailableQuotas(
-
-                $product['id'],
+                $product["id"],
 
                 $customerNumber,
 
                 $country,
 
-                $product['max_per_customer'],
+                $product["max_per_customer"],
 
-                $product['max_total']
-
+                $product["max_total"],
             );
-
-            
 
             // Si au moins 1 produit est disponible
 
-            if ($quotas['is_orderable']) {
-
+            if ($quotas["is_orderable"]) {
                 return true;
-
             }
-
         }
 
-        
-
         return false; // Tous les quotas atteints
-
     }
-
-
 
     /**
 
      * Récupérer le quota utilisé par un client pour un produit
 
-     * 
+     *
 
      * @param int $productId ID du produit
 
@@ -1573,9 +1148,7 @@ class PublicCampaignController
      */
 
     private function getCustomerQuotaUsed(int $productId, string $customerNumber, string $country): int
-
     {
-
         $query = "
 
             SELECT COALESCE(SUM(ol.quantity), 0) as total
@@ -1596,31 +1169,22 @@ class PublicCampaignController
 
         ";
 
-        
-
         $result = $this->db->query($query, [
+            ":product_id" => $productId,
 
-            ':product_id' => $productId,
+            ":customer_number" => $customerNumber,
 
-            ':customer_number' => $customerNumber,
-
-            ':country' => $country
-
+            ":country" => $country,
         ]);
 
-        
-
-        return (int)($result[0]['total'] ?? 0);
-
+        return (int) ($result[0]["total"] ?? 0);
     }
-
-
 
     /**
 
      * Récupérer le quota global utilisé pour un produit
 
-     * 
+     *
 
      * @param int $productId ID du produit
 
@@ -1629,9 +1193,7 @@ class PublicCampaignController
      */
 
     private function getGlobalQuotaUsed(int $productId): int
-
     {
-
         $query = "
 
             SELECT COALESCE(SUM(ol.quantity), 0) as total
@@ -1646,23 +1208,16 @@ class PublicCampaignController
 
         ";
 
-        
+        $result = $this->db->query($query, [":product_id" => $productId]);
 
-        $result = $this->db->query($query, [':product_id' => $productId]);
-
-        
-
-        return (int)($result[0]['total'] ?? 0);
-
+        return (int) ($result[0]["total"] ?? 0);
     }
-
-
 
     /**
 
      * Afficher la page d'identification client
 
-     * 
+     *
 
      * @param array $campaign Données de la campagne
 
@@ -1673,22 +1228,17 @@ class PublicCampaignController
      */
 
     private function renderIdentificationPage(array $campaign, int $promotionsCount): void
-
     {
-
         // Inclure la vue
 
-        require __DIR__ . '/../Views/public/campaign/show.php';
-
+        require __DIR__ . "/../Views/public/campaign/show.php";
     }
-
-
 
     /**
 
      * Afficher la page d'accès refusé
 
-     * 
+     *
 
      * @param string $reason Raison du refus
 
@@ -1701,22 +1251,17 @@ class PublicCampaignController
      */
 
     private function renderAccessDenied(string $reason, string $uuid, ?array $campaign = null): void
-
     {
-
         // Inclure la vue
 
-        require __DIR__ . '/../Views/public/campaign/access_denied.php';
-
+        require __DIR__ . "/../Views/public/campaign/access_denied.php";
     }
-
-
 
     /**
 
      * Afficher la page de validation de commande (checkout)
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -1727,134 +1272,91 @@ class PublicCampaignController
      */
 
     public function checkout(string $uuid): void
-
     {
-
-
-
         // ========================================
 
         // GESTION DU SWITCH LANGUE (FR/NL)
 
         // ========================================
 
-        $requestedLang = $_GET['lang'] ?? null;
+        $requestedLang = $_GET["lang"] ?? null;
 
-        
-
-        if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
-
-            if (isset($_SESSION['public_customer'])) {
-
-                $_SESSION['public_customer']['language'] = $requestedLang;
-
+        if ($requestedLang && in_array($requestedLang, ["fr", "nl"], true)) {
+            if (isset($_SESSION["public_customer"])) {
+                $_SESSION["public_customer"]["language"] = $requestedLang;
             }
 
-            
-
-            $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+            $cleanUrl = strtok($_SERVER["REQUEST_URI"], "?");
 
             header("Location: {$cleanUrl}");
 
-            exit;
-
+            exit();
         }
-
-
 
         // Vérifier session client
 
-        if (!isset($_SESSION['public_customer']) || $_SESSION['public_customer']['campaign_uuid'] !== $uuid) {
+        if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
+            header("Location: /stm/c/" . $uuid);
 
-            header('Location: /stm/c/' . $uuid);
-
-            exit;
-
+            exit();
         }
-
-
 
         // Récupérer les données de session
 
-        $customer = $_SESSION['public_customer'];
+        $customer = $_SESSION["public_customer"];
 
-        $cart = $_SESSION['cart'] ?? ['campaign_uuid' => $uuid, 'items' => []];
-
-
+        $cart = $_SESSION["cart"] ?? ["campaign_uuid" => $uuid, "items" => []];
 
         // Vérifier que le panier n'est pas vide
 
-        if (empty($cart['items'])) {
+        if (empty($cart["items"])) {
+            $_SESSION["error"] =
+                $customer["language"] === "fr"
+                    ? "Votre panier est vide. Veuillez ajouter des produits avant de valider."
+                    : "Uw winkelwagen is leeg. Voeg producten toe voordat u valideert.";
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/catalog");
 
-                ? 'Votre panier est vide. Veuillez ajouter des produits avant de valider.' 
-
-                : 'Uw winkelwagen is leeg. Voeg producten toe voordat u valideert.';
-
-            header('Location: /stm/c/' . $uuid . '/catalog');
-
-            exit;
-
+            exit();
         }
-
-
 
         // Récupérer la campagne depuis la DB
 
         try {
-
             $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
 
-            $campaign = $this->db->query($query, [':uuid' => $uuid]);
-
-
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
 
             if (empty($campaign)) {
+                header("Location: /stm/c/" . $uuid);
 
-                header('Location: /stm/c/' . $uuid);
-
-                exit;
-
+                exit();
             }
-
-
 
             $campaign = $campaign[0];
 
-
-
             // Charger la vue checkout
 
-            require __DIR__ . '/../Views/public/campaign/checkout.php';
-
-            
-
+            require __DIR__ . "/../Views/public/campaign/checkout.php";
         } catch (\PDOException $e) {
-
             error_log("Erreur checkout: " . $e->getMessage());
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            $_SESSION["error"] =
+                $customer["language"] === "fr"
+                    ? "Une erreur est survenue. Veuillez réessayer."
+                    : "Er is een fout opgetreden. Probeer het opnieuw.";
 
-                ? 'Une erreur est survenue. Veuillez réessayer.' 
+            header("Location: /stm/c/" . $uuid . "/catalog");
 
-                : 'Er is een fout opgetreden. Probeer het opnieuw.';
-
-            header('Location: /stm/c/' . $uuid . '/catalog');
-
-            exit;
-
+            exit();
         }
-
     }
-
-
 
     /**
 
      * Traiter la soumission de commande
 
-     * 
+     *
 
      * Processus complet :
 
@@ -1874,7 +1376,7 @@ class PublicCampaignController
 
      * 8. Redirection page confirmation
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -1885,238 +1387,163 @@ class PublicCampaignController
      */
 
     public function submitOrder(string $uuid): void
-
     {
-
         // Vérifier session client
 
-        if (!isset($_SESSION['public_customer']) || $_SESSION['public_customer']['campaign_uuid'] !== $uuid) {
+        if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
+            header("Location: /stm/c/" . $uuid);
 
-            header('Location: /stm/c/' . $uuid);
-
-            exit;
-
+            exit();
         }
 
+        $customer = $_SESSION["public_customer"];
 
-
-        $customer = $_SESSION['public_customer'];
-
-        $cart = $_SESSION['cart'] ?? ['campaign_uuid' => $uuid, 'items' => []];
-
-
+        $cart = $_SESSION["cart"] ?? ["campaign_uuid" => $uuid, "items" => []];
 
         // Vérifier panier non vide
 
-        if (empty($cart['items'])) {
+        if (empty($cart["items"])) {
+            $_SESSION["error"] = $customer["language"] === "fr" ? "Votre panier est vide." : "Uw winkelwagen is leeg.";
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/catalog");
 
-                ? 'Votre panier est vide.' 
-
-                : 'Uw winkelwagen is leeg.';
-
-            header('Location: /stm/c/' . $uuid . '/catalog');
-
-            exit;
-
+            exit();
         }
-
-
-
-
 
         // PROTECTION : Empêcher double validation
 
-        if (isset($_SESSION['last_order_uuid']) && 
-
-            isset($_SESSION['order_validated_at']) && 
-
-            (time() - $_SESSION['order_validated_at']) < 60) {
-
+        if (
+            isset($_SESSION["last_order_uuid"]) &&
+            isset($_SESSION["order_validated_at"]) &&
+            time() - $_SESSION["order_validated_at"] < 60
+        ) {
             // Commande déjà validée il y a moins de 60 secondes
 
-            header('Location: /stm/c/' . $uuid . '/order/confirmation');
+            header("Location: /stm/c/" . $uuid . "/order/confirmation");
 
-            exit;
-
+            exit();
         }
 
         // Vérifier token CSRF
 
-        if (!isset($_POST['_token']) || $_POST['_token'] !== $_SESSION['csrf_token']) {
+        if (!isset($_POST["_token"]) || $_POST["_token"] !== $_SESSION["csrf_token"]) {
+            $_SESSION["error"] =
+                $customer["language"] === "fr" ? "Token de sécurité invalide." : "Ongeldig beveiligingstoken.";
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/checkout");
 
-                ? 'Token de sécurité invalide.' 
-
-                : 'Ongeldig beveiligingstoken.';
-
-            header('Location: /stm/c/' . $uuid . '/checkout');
-
-            exit;
-
+            exit();
         }
-
-
 
         // Récupérer et valider l'email
 
-        $customerEmail = trim($_POST['customer_email'] ?? '');
+        $customerEmail = trim($_POST["customer_email"] ?? "");
 
         if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION["error"] =
+                $customer["language"] === "fr"
+                    ? "Veuillez saisir une adresse email valide."
+                    : "Gelieve een geldig e-mailadres in te voeren.";
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/checkout");
 
-                ? 'Veuillez saisir une adresse email valide.' 
-
-                : 'Gelieve een geldig e-mailadres in te voeren.';
-
-            header('Location: /stm/c/' . $uuid . '/checkout');
-
-            exit;
-
+            exit();
         }
-
-
 
         // Vérifier CGV
 
-        if (!isset($_POST['cgv_1']) || !isset($_POST['cgv_2']) || !isset($_POST['cgv_3'])) {
+        if (!isset($_POST["cgv_1"]) || !isset($_POST["cgv_2"]) || !isset($_POST["cgv_3"])) {
+            $_SESSION["error"] =
+                $customer["language"] === "fr"
+                    ? "Vous devez accepter toutes les conditions."
+                    : "U moet alle voorwaarden aanvaarden.";
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/checkout");
 
-                ? 'Vous devez accepter toutes les conditions.' 
-
-                : 'U moet alle voorwaarden aanvaarden.';
-
-            header('Location: /stm/c/' . $uuid . '/checkout');
-
-            exit;
-
+            exit();
         }
 
-
-
         try {
-
             // Démarrer transaction
 
             $this->db->beginTransaction();
-
-
 
             // 1. Récupérer la campagne
 
             $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
 
-            $campaignResult = $this->db->query($query, [':uuid' => $uuid]);
-
-
+            $campaignResult = $this->db->query($query, [":uuid" => $uuid]);
 
             if (empty($campaignResult)) {
-
                 throw new \Exception("Campagne introuvable");
-
             }
-
-
 
             $campaign = $campaignResult[0];
 
-
-
             // 2. VALIDATION FINALE DES QUOTAS pour chaque produit
 
-            foreach ($cart['items'] as $item) {
-
+            foreach ($cart["items"] as $item) {
                 // Récupérer le produit
 
                 $productQuery = "SELECT * FROM products WHERE id = :id AND campaign_id = :campaign_id";
 
                 $productResult = $this->db->query($productQuery, [
+                    ":id" => $item["product_id"],
 
-                    ':id' => $item['product_id'], 
-
-                    ':campaign_id' => $campaign['id']
-
+                    ":campaign_id" => $campaign["id"],
                 ]);
 
-
-
                 if (empty($productResult)) {
-
-                    throw new \Exception("Produit introuvable : " . $item['name_' . $customer['language']]);
-
+                    throw new \Exception("Produit introuvable : " . $item["name_" . $customer["language"]]);
                 }
 
-
-
                 $product = $productResult[0];
-
-
 
                 // Calculer quotas disponibles
 
                 $quotas = $this->calculateAvailableQuotas(
+                    $product["id"],
 
-                    $product['id'],
+                    $customer["customer_number"],
 
-                    $customer['customer_number'],
+                    $customer["country"],
 
-                    $customer['country'],
+                    $product["max_per_customer"],
 
-                    $product['max_per_customer'],
-
-                    $product['max_total']
-
+                    $product["max_total"],
                 );
-
-
 
                 // Vérifier si quantité demandée est disponible
 
-                if ($item['quantity'] > $quotas['max_orderable']) {
-
+                if ($item["quantity"] > $quotas["max_orderable"]) {
                     throw new \Exception(
-
-                        "Quota dépassé pour " . $item['name_' . $customer['language']] .
-
-                        ". Maximum disponible : " . $quotas['max_orderable']
-
+                        "Quota dépassé pour " .
+                            $item["name_" . $customer["language"]] .
+                            ". Maximum disponible : " .
+                            $quotas["max_orderable"],
                     );
-
                 }
-
             }
-
-
 
             // 3. Créer ou récupérer le client dans table customers
 
             $customerId = $this->getOrCreateCustomer(
+                $customer["customer_number"],
 
-                $customer['customer_number'],
+                $customer["country"],
 
-                $customer['country'],
+                $customer["company_name"] ?? "",
 
-                $customer['company_name'] ?? '',
-
-                $customerEmail
-
+                $customerEmail,
             );
-
-
 
             // 4. Créer la commande dans table orders
 
             $orderUuid = $this->generateUuid();
 
-            $totalItems = array_sum(array_column($cart['items'], 'quantity'));
+            $totalItems = array_sum(array_column($cart["items"], "quantity"));
 
-            $totalProducts = count($cart['items']);
-
-
+            $totalProducts = count($cart["items"]);
 
             $queryOrder = "INSERT INTO orders (
 
@@ -2132,34 +1559,25 @@ class PublicCampaignController
 
             )";
 
-
-
             $this->db->execute($queryOrder, [
+                ":uuid" => $orderUuid,
 
-                ':uuid' => $orderUuid,
+                ":campaign_id" => $campaign["id"],
 
-                ':campaign_id' => $campaign['id'],
+                ":customer_id" => $customerId,
 
-                ':customer_id' => $customerId,
+                ":customer_email" => $customerEmail,
 
-                ':customer_email' => $customerEmail,
+                ":total_items" => $totalItems,
 
-                ':total_items' => $totalItems,
-
-                ':total_products' => $totalProducts
-
+                ":total_products" => $totalProducts,
             ]);
-
-
 
             $orderId = $this->db->lastInsertId();
 
-
-
             // 5. Créer les lignes de commande dans order_lines
 
-            foreach ($cart['items'] as $item) {
-
+            foreach ($cart["items"] as $item) {
                 $queryLine = "INSERT INTO order_lines (
 
                     order_id, product_id, product_code, product_name, quantity, created_at
@@ -2170,167 +1588,120 @@ class PublicCampaignController
 
                 )";
 
-
-
                 $this->db->execute($queryLine, [
+                    ":order_id" => $orderId,
 
-                    ':order_id' => $orderId,
+                    ":product_id" => $item["product_id"],
 
-                    ':product_id' => $item['product_id'],
+                    ":product_code" => $item["code"],
 
-                    ':product_code' => $item['code'],
+                    ":product_name" => $item["name_" . $customer["language"]],
 
-                    ':product_name' => $item['name_' . $customer['language']],
-
-                    ':quantity' => $item['quantity']
-
+                    ":quantity" => $item["quantity"],
                 ]);
-
-
-
             }
-
-
 
             // 6. Générer le fichier TXT pour l'ERP
 
             $filePath = $this->generateOrderFile(
-
                 $orderId,
 
                 $campaign,
 
-                $customer['customer_number'],
+                $customer["customer_number"],
 
-                $customer['country'],
+                $customer["country"],
 
-                $cart['items']
-
+                $cart["items"],
             );
-
-
 
             // Mettre à jour le chemin du fichier dans la commande
 
             $this->db->execute(
-
                 "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), status = 'validated' WHERE id = :id",
 
-                [':file_path' => $filePath, ':id' => $orderId]
-
+                [":file_path" => $filePath, ":id" => $orderId],
             );
-
-
 
             // 7. Valider la transaction
 
             $this->db->commit();
 
-
-
             // 8. Vider le panier
 
-            $_SESSION['cart'] = ['campaign_uuid' => $uuid, 'items' => []];
-
-
+            $_SESSION["cart"] = ["campaign_uuid" => $uuid, "items" => []];
 
             // 9. Stocker l'UUID de la commande en session
 
-            $_SESSION['last_order_uuid'] = $orderUuid;
-
-
+            $_SESSION["last_order_uuid"] = $orderUuid;
 
             // 10. Message de succès
 
-            $_SESSION['success'] = $customer['language'] === 'fr' 
-
-                ? 'Votre commande a été validée avec succès !' 
-
-                : 'Uw bestelling is succesvol gevalideerd!';
-
-
+            $_SESSION["success"] =
+                $customer["language"] === "fr"
+                    ? "Votre commande a été validée avec succès !"
+                    : "Uw bestelling is succesvol gevalideerd!";
 
             // 11. Préparer les données email pour envoi asynchrone
 
-            $_SESSION['pending_email'] = [
+            $_SESSION["pending_email"] = [
+                "customer_email" => $customerEmail,
 
-                'customer_email' => $customerEmail,
+                "order_id" => $orderId,
 
-                'order_id' => $orderId,
+                "order_number" => "ORD-" . date("Y") . "-" . str_pad($orderId, 6, "0", STR_PAD_LEFT),
 
-                'order_number' => 'ORD-' . date('Y') . '-' . str_pad($orderId, 6, '0', STR_PAD_LEFT),
+                "campaign_title_fr" => $campaign["title_fr"],
 
-                'campaign_title_fr' => $campaign['title_fr'],
+                "campaign_title_nl" => $campaign["title_nl"],
 
-                'campaign_title_nl' => $campaign['title_nl'],
+                "customer_number" => $customer["customer_number"],
 
-                'customer_number' => $customer['customer_number'],
+                "company_name" => $customer["company_name"] ?? "Client " . $customer["customer_number"],
 
-                'company_name' => $customer['company_name'] ?? ('Client ' . $customer['customer_number']),
+                "country" => $campaign["country"],
 
-                'country' => $campaign['country'],
+                "deferred_delivery" => $campaign["deferred_delivery"] ?? 0,
 
-                'deferred_delivery' => $campaign['deferred_delivery'] ?? 0,
+                "delivery_date" => $campaign["delivery_date"] ?? null,
 
-                'delivery_date' => $campaign['delivery_date'] ?? null,
+                "language" => $customer["language"] ?? "fr",
 
-                'language' => $customer['language'] ?? 'fr',
-
-                'lines' => $cart['items']
-
+                "lines" => $cart["items"],
             ];
-
-
 
             // Horodatage de la validation (protection double soumission)
 
-            $_SESSION['order_validated_at'] = time();
-
-
-
-
+            $_SESSION["order_validated_at"] = time();
 
             // 12. Redirection IMMÉDIATE (AVANT l'envoi email)
 
-            header('Location: /stm/c/' . $uuid . '/order/confirmation');
+            header("Location: /stm/c/" . $uuid . "/order/confirmation");
 
-            exit;
-
+            exit();
         } catch (\Exception $e) {
-
             // Rollback en cas d'erreur
 
             $this->db->rollBack();
 
-            
-
             error_log("Erreur submitOrder: " . $e->getMessage());
 
-            
+            $_SESSION["error"] =
+                $customer["language"] === "fr"
+                    ? "Erreur lors de la validation de votre commande : " . $e->getMessage()
+                    : "Fout bij het valideren van uw bestelling: " . $e->getMessage();
 
-            $_SESSION['error'] = $customer['language'] === 'fr' 
+            header("Location: /stm/c/" . $uuid . "/checkout");
 
-                ? 'Erreur lors de la validation de votre commande : ' . $e->getMessage()
-
-                : 'Fout bij het valideren van uw bestelling: ' . $e->getMessage();
-
-            
-
-            header('Location: /stm/c/' . $uuid . '/checkout');
-
-            exit;
-
+            exit();
         }
-
     }
-
-
 
     /**
 
      * Récupérer ou créer un client dans la table customers
 
-     * 
+     *
 
      * @param string $customerNumber Numéro client
 
@@ -2347,94 +1718,72 @@ class PublicCampaignController
      */
 
     private function getOrCreateCustomer(
+        string $customerNumber,
 
-        string $customerNumber, 
+        string $country,
 
-        string $country, 
+        string $companyName,
 
-        string $companyName, 
-
-        string $email
-
+        string $email,
     ): int {
-
         // Chercher client existant
 
         $query = "SELECT id FROM customers WHERE customer_number = :number AND country = :country LIMIT 1";
 
         $existingResult = $this->db->query($query, [
+            ":number" => $customerNumber,
 
-            ':number' => $customerNumber,
-
-            ':country' => $country
-
+            ":country" => $country,
         ]);
 
-
-
         if (!empty($existingResult)) {
-
             $existing = $existingResult[0];
 
             // Client existe : mettre à jour email et last_order_date
 
             $this->db->execute(
-
                 "UPDATE customers SET email = :email, last_order_date = CURDATE(), total_orders = total_orders + 1 WHERE id = :id",
 
-                [':email' => $email, ':id' => $existing['id']]
-
+                [":email" => $email, ":id" => $existing["id"]],
             );
 
-            return (int)$existing['id'];
-
+            return (int) $existing["id"];
         }
-
-
 
         // Client n'existe pas : créer
 
         $queryInsert = "INSERT INTO customers (
 
-            customer_number, country, company_name, email, 
+            customer_number, country, company_name, email,
 
             total_orders, last_order_date, is_active, created_at
 
         ) VALUES (
 
-            :number, :country, :company, :email, 
+            :number, :country, :company, :email,
 
             1, CURDATE(), 1, NOW()
 
         )";
 
-
-
         $this->db->execute($queryInsert, [
+            ":number" => $customerNumber,
 
-            ':number' => $customerNumber,
+            ":country" => $country,
 
-            ':country' => $country,
+            ":company" => $companyName,
 
-            ':company' => $companyName,
-
-            ':email' => $email
-
+            ":email" => $email,
         ]);
 
-
-
         return $this->db->lastInsertId();
-
     }
-
-
 
     /**
 
      * Générer le fichier TXT pour l'ERP
 
-     * 
+     *
 
      * Format traitement.php :
 
@@ -2444,7 +1793,7 @@ class PublicCampaignController
 
      * D{numProduit}{qte10digits}
 
-     * 
+     *
 
      * @param int $orderId ID de la commande
 
@@ -2463,7 +1812,6 @@ class PublicCampaignController
      */
 
     private function generateOrderFile(
-
         int $orderId,
 
         array $campaign,
@@ -2472,116 +1820,83 @@ class PublicCampaignController
 
         string $country,
 
-        array $items
-
+        array $items,
     ): string {
-
-        $today = date('dmy'); // Format: 171125
-
-
+        $today = date("dmy"); // Format: 171125
 
         // Ligne I00 : Date commande + date livraison (si applicable)
 
-        if ($campaign['deferred_delivery'] == 1 && !empty($campaign['delivery_date'])) {
-
-            $deliveryDate = date('dmy', strtotime($campaign['delivery_date']));
+        if ($campaign["deferred_delivery"] == 1 && !empty($campaign["delivery_date"])) {
+            $deliveryDate = date("dmy", strtotime($campaign["delivery_date"]));
 
             $lineI = "I00{$today}{$deliveryDate}\n";
-
         } else {
-
             $lineI = "I00{$today}\n";
-
         }
-
-
 
         // Formater numéro client sur 8 caractères
 
         $customerNumber8 = $this->formatCustomerNumber($customerNumber);
 
-
-
         // Ligne H : Numéro client + Type commande + Nom campagne
 
-        $orderType = $campaign['order_type']; // V ou W
+        $orderType = $campaign["order_type"]; // V ou W
 
-        $campaignName = str_replace([' ', '-', '_'], '', $campaign['name']); // Enlever espaces et tirets
+        $campaignName = str_replace([" ", "-", "_"], "", $campaign["name"]); // Enlever espaces et tirets
 
         $lineH = "H{$customerNumber8}{$orderType}{$campaignName}\n";
 
-
-
         // Lignes D : Détails produits
 
-        $linesD = '';
+        $linesD = "";
 
         foreach ($items as $item) {
+            $productCode = $item["code"];
 
-            $productCode = $item['code'];
-
-            $quantity = sprintf("%'.010d", $item['quantity']); // Padding 10 digits avec 0
+            $quantity = sprintf("%'.010d", $item["quantity"]); // Padding 10 digits avec 0
 
             $linesD .= "D{$productCode}{$quantity}\n";
-
         }
-
-
 
         // Contenu complet du fichier
 
         $content = $lineI . $lineH . $linesD;
 
-
-
         // Créer le répertoire si nécessaire
 
-        $directory = $country === 'BE' ? 'commande_BE' : 'commande_LU';
+        $directory = $country === "BE" ? "commande_BE" : "commande_LU";
 
-        $fullPath = __DIR__ . '/../../public/' . $directory;
-
-        
+        $fullPath = __DIR__ . "/../../public/" . $directory;
 
         if (!is_dir($fullPath)) {
-
             mkdir($fullPath, 0755, true);
-
         }
-
-
 
         // Nom du fichier : WebAction_{Ymd-His}_{numClient8}.txt
         // Utiliser formatCustomerNumberForFilename() pour remplacer * par x (Windows)
         $customerNumberFilename = $this->formatCustomerNumberForFilename($customerNumber);
-        $filename = 'WebAction_' . date('Ymd-His') . '_' . $customerNumberFilename . '.txt';
+        $filename = "WebAction_" . date("Ymd-His") . "_" . $customerNumberFilename . ".txt";
 
-        $filepath = $fullPath . '/' . $filename;
-
-
+        $filepath = $fullPath . "/" . $filename;
 
         // Écrire le fichier
 
         file_put_contents($filepath, $content);
 
-
-
         // Retourner chemin relatif pour stockage en DB
 
-        return '/' . $directory . '/' . $filename;
-
+        return "/" . $directory . "/" . $filename;
     }
 
-
-
- /**
+    /**
      * Formater un numéro client sur 8 caractères (pour contenu fichier)
-     *  
+     *
      * Règles :
      * - Numéro de base (6 car.) : Ajouter "00" → 8 caractères
      *   Ex: 802412 → 80241200, *12345 → *1234500, DE1234 → DE123400
      * - Numéro livraison (6 + "-" + 2 = 9 car.) : Supprimer le tiret → 8 caractères
      *   Ex: 802412-AF → 802412AF, *12345-G1 → *12345G1, DE1234-25 → DE123425
-     *  
+     *
      * @param string $number Numéro client brut
      * @return string Numéro sur 8 caractères
      * @created 17/11/2025
@@ -2590,22 +1905,22 @@ class PublicCampaignController
     private function formatCustomerNumber(string $number): string
     {
         // Supprimer uniquement le tiret
-        $cleaned = str_replace('-', '', $number);
-        
+        $cleaned = str_replace("-", "", $number);
+
         // Si 6 caractères → ajouter 00 à la fin
         if (strlen($cleaned) === 6) {
-            return $cleaned . '00';
+            return $cleaned . "00";
         }
-        
+
         return $cleaned;
     }
 
     /**
      * Formater un numéro client pour le nom de fichier (compatible Windows)
-     *  
+     *
      * Même logique que formatCustomerNumber() mais remplace * par x
      * car * est interdit dans les noms de fichiers Windows
-     *  
+     *
      * @param string $number Numéro client brut
      * @return string Numéro formaté compatible Windows
      * @created 25/11/2025
@@ -2613,15 +1928,14 @@ class PublicCampaignController
     private function formatCustomerNumberForFilename(string $number): string
     {
         $formatted = $this->formatCustomerNumber($number);
-        return str_replace('*', 'x', $formatted);
+        return str_replace("*", "x", $formatted);
     }
-
 
     /**
 
      * Générer un UUID v4
 
-     * 
+     *
 
      * @return string UUID
 
@@ -2630,14 +1944,12 @@ class PublicCampaignController
      */
 
     private function generateUuid(): string
-
     {
-
         return sprintf(
+            "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
 
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
 
             mt_rand(0, 0xffff),
 
@@ -2645,21 +1957,17 @@ class PublicCampaignController
 
             mt_rand(0, 0x3fff) | 0x8000,
 
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
         );
-
     }
-
-
-
-
 
     /**
 
      * Afficher la page de confirmation de commande
 
-     * 
+     *
 
      * @param string $uuid UUID de la campagne
 
@@ -2670,175 +1978,121 @@ class PublicCampaignController
      */
 
     public function orderConfirmation(string $uuid): void
-
     {
-
         // Programmer l'envoi email APRÈS la réponse HTTP (shutdown function)
 
-        if (isset($_SESSION['pending_email'])) {
+        if (isset($_SESSION["pending_email"])) {
+            $data = $_SESSION["pending_email"];
 
-            $data = $_SESSION['pending_email'];
+            unset($_SESSION["pending_email"]);
 
-            unset($_SESSION['pending_email']);
-
-            
-
-            register_shutdown_function(function() use ($data) {
-
-                @ini_set('display_errors', '0');
+            register_shutdown_function(function () use ($data) {
+                @ini_set("display_errors", "0");
 
                 error_reporting(0);
 
-                
-
                 try {
-
                     $orderData = [
+                        "order_number" => $data["order_number"],
 
-                        'order_number' => $data['order_number'],
+                        "campaign_title_fr" => $data["campaign_title_fr"],
 
-                        'campaign_title_fr' => $data['campaign_title_fr'],
+                        "campaign_title_nl" => $data["campaign_title_nl"],
 
-                        'campaign_title_nl' => $data['campaign_title_nl'],
+                        "customer_number" => $data["customer_number"],
 
-                        'customer_number' => $data['customer_number'],
+                        "company_name" => $data["company_name"],
 
-                        'company_name' => $data['company_name'],
+                        "created_at" => date("Y-m-d H:i:s"),
 
-                        'created_at' => date('Y-m-d H:i:s'),
+                        "country" => $data["country"],
 
-                        'country' => $data['country'],
+                        "deferred_delivery" => $data["deferred_delivery"],
 
-                        'deferred_delivery' => $data['deferred_delivery'],
+                        "delivery_date" => $data["delivery_date"],
 
-                        'delivery_date' => $data['delivery_date'],
-
-                        'lines' => []
-
+                        "lines" => [],
                     ];
 
-                    
+                    foreach ($data["lines"] as $item) {
+                        $orderData["lines"][] = [
+                            "name_fr" => $item["name_fr"],
 
-                    foreach ($data['lines'] as $item) {
+                            "name_nl" => $item["name_nl"],
 
-                        $orderData['lines'][] = [
+                            "quantity" => $item["quantity"],
 
-                            'name_fr' => $item['name_fr'],
-
-                            'name_nl' => $item['name_nl'],
-
-                            'quantity' => $item['quantity'],
-
-                            'product_code' => $item['code']
-
+                            "product_code" => $item["code"],
                         ];
-
                     }
-
-                    
 
                     $mailchimpService = new \App\Services\MailchimpEmailService();
 
-                    $emailSent = @$mailchimpService->sendOrderConfirmation($data['customer_email'], $orderData, $data['language']);
-
-                    
+                    $emailSent = @$mailchimpService->sendOrderConfirmation(
+                        $data["customer_email"],
+                        $orderData,
+                        $data["language"],
+                    );
 
                     if ($emailSent) {
-
-                        error_log("Email confirmation envoyé avec succès via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
-
+                        error_log(
+                            "Email confirmation envoyé avec succès via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
+                        );
                     } else {
-
-                        error_log("Échec envoi email confirmation via Mailchimp à: {$data['customer_email']} (Commande: {$data['order_number']})");
-
+                        error_log(
+                            "Échec envoi email confirmation via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
+                        );
                     }
-
-                    
-
                 } catch (\Exception $e) {
-
                     error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
-
                 }
-
             });
-
         }
-
-        
 
         // Vérifier la session
 
-        if (!isset($_SESSION['last_order_uuid'])) {
+        if (!isset($_SESSION["last_order_uuid"])) {
+            header("Location: /stm/c/" . $uuid);
 
-            header('Location: /stm/c/' . $uuid);
-
-            exit;
-
+            exit();
         }
-
-        
 
         // Récupérer les infos de la campagne
 
         $campaign = $this->db->query(
-
             "SELECT * FROM campaigns WHERE uuid = :uuid",
 
-            [':uuid' => $uuid]
-
+            [":uuid" => $uuid],
         );
 
-        
-
         if (empty($campaign)) {
+            header("Location: /stm/");
 
-            header('Location: /stm/');
-
-            exit;
-
+            exit();
         }
-
-        
 
         $campaign = $campaign[0];
 
-        
-
         // Récupérer la commande
 
-        $orderUuid = $_SESSION['last_order_uuid'];
+        $orderUuid = $_SESSION["last_order_uuid"];
 
         $order = $this->db->query(
-
             "SELECT * FROM orders WHERE uuid = :uuid",
 
-            [':uuid' => $orderUuid]
-
+            [":uuid" => $orderUuid],
         );
 
-        
-
         if (empty($order)) {
+            header("Location: /stm/c/" . $uuid);
 
-            header('Location: /stm/c/' . $uuid);
-
-            exit;
-
+            exit();
         }
-
-        
 
         $order = $order[0];
 
-        
-
         // Charger la vraie vue de confirmation
 
-        require_once __DIR__ . '/../Views/public/campaign/confirmation.php';
-
+        require_once __DIR__ . "/../Views/public/campaign/confirmation.php";
     }
-
-
-
 }

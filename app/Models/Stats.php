@@ -7,6 +7,7 @@
  *
  * @package STM
  * @created 2025/11/25
+ * @modified 2025/12/16 - Ajout filtrage hiérarchique par accessibleCampaignIds
  */
 
 namespace App\Models;
@@ -34,6 +35,42 @@ class Stats
         }
     }
 
+    /**
+     * Génère la clause SQL IN pour filtrer par campagnes accessibles
+     *
+     * @param string $columnName Nom de la colonne (ex: "o.campaign_id")
+     * @param array|null $accessibleCampaignIds Liste des IDs ou null si pas de filtre
+     * @param array &$params Référence vers les paramètres de la requête
+     * @param string $prefix Préfixe pour les placeholders (éviter les conflits)
+     * @return string Clause SQL vide si pas de filtre, ou "AND column IN (...)"
+     */
+    private function buildCampaignAccessFilter(
+        string $columnName,
+        ?array $accessibleCampaignIds,
+        array &$params,
+        string $prefix = "acc"
+    ): string {
+        // null = accès à tout, pas de filtre
+        if ($accessibleCampaignIds === null) {
+            return "";
+        }
+
+        // Aucune campagne accessible = bloquer tout
+        if (empty($accessibleCampaignIds)) {
+            return " AND 1 = 0"; // Retourne toujours faux
+        }
+
+        // Générer la clause IN
+        $placeholders = [];
+        foreach ($accessibleCampaignIds as $i => $id) {
+            $key = ":{$prefix}_{$i}";
+            $placeholders[] = $key;
+            $params[$key] = $id;
+        }
+
+        return " AND {$columnName} IN (" . implode(",", $placeholders) . ")";
+    }
+
     // ========================================
     // STATISTIQUES GLOBALES
     // ========================================
@@ -45,6 +82,7 @@ class Stats
      * @param string $dateTo Date fin (Y-m-d)
      * @param int|null $campaignId Filtrer par campagne
      * @param string|null $country Filtrer par pays (BE, LU)
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
     public function getGlobalKPIs(
@@ -52,6 +90,7 @@ class Stats
         string $dateTo,
         ?int $campaignId = null,
         ?string $country = null,
+        ?array $accessibleCampaignIds = null,
     ): array {
         $params = [
             ":date_from" => $dateFrom . " 00:00:00",
@@ -60,6 +99,7 @@ class Stats
 
         $campaignFilter = "";
         $countryFilter = "";
+        $accessFilter = "";
 
         if ($campaignId) {
             $campaignFilter = " AND o.campaign_id = :campaign_id";
@@ -70,6 +110,9 @@ class Stats
             $countryFilter = " AND cu.country = :country";
             $params[":country"] = $country;
         }
+
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "kpi_acc");
 
         // Total commandes
         $queryOrders = "
@@ -82,6 +125,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
         ";
 
         $resultOrders = $this->db->query($queryOrders, $params);
@@ -96,11 +140,27 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
         ";
 
         $resultQuantity = $this->db->query($queryQuantity, $params);
 
         // Répartition BE/LU
+        // Reconstruire les params pour cette requête (sans country filter)
+        $paramsCountry = [
+            ":date_from" => $dateFrom . " 00:00:00",
+            ":date_to" => $dateTo . " 23:59:59",
+        ];
+
+        $campaignFilterCountry = "";
+        if ($campaignId) {
+            $campaignFilterCountry = " AND o.campaign_id = :campaign_id";
+            $paramsCountry[":campaign_id"] = $campaignId;
+        }
+
+        // Ajouter le filtre d'accès pour cette requête aussi
+        $accessFilterCountry = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $paramsCountry, "kpi_country_acc");
+
         $queryCountry = "
             SELECT cu.country,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -111,18 +171,10 @@ class Stats
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
             AND o.created_at BETWEEN :date_from AND :date_to
-            {$campaignFilter}
+            {$campaignFilterCountry}
+            {$accessFilterCountry}
             GROUP BY cu.country
         ";
-
-        // Params sans country filter pour cette requête
-        $paramsCountry = [
-            ":date_from" => $dateFrom . " 00:00:00",
-            ":date_to" => $dateTo . " 23:59:59",
-        ];
-        if ($campaignId) {
-            $paramsCountry[":campaign_id"] = $campaignId;
-        }
 
         $resultCountry = $this->db->query($queryCountry, $paramsCountry);
 
@@ -152,10 +204,15 @@ class Stats
      * @param string $dateFrom
      * @param string $dateTo
      * @param int|null $campaignId
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
-    public function getDailyEvolution(string $dateFrom, string $dateTo, ?int $campaignId = null): array
-    {
+    public function getDailyEvolution(
+        string $dateFrom,
+        string $dateTo,
+        ?int $campaignId = null,
+        ?array $accessibleCampaignIds = null
+    ): array {
         $params = [
             ":date_from" => $dateFrom,
             ":date_to" => $dateTo,
@@ -167,6 +224,9 @@ class Stats
             $params[":campaign_id"] = $campaignId;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "daily_acc");
+
         $query = "
             SELECT DATE(o.created_at) as day,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -176,6 +236,7 @@ class Stats
             WHERE o.status = 'validated'
             AND DATE(o.created_at) BETWEEN :date_from AND :date_to
             {$campaignFilter}
+            {$accessFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY day ASC
         ";
@@ -189,7 +250,9 @@ class Stats
      * @param string $dateFrom
      * @param string $dateTo
      * @param int|null $campaignId
+     * @param string|null $country
      * @param int $limit
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array
      */
     public function getTopProducts(
@@ -198,6 +261,7 @@ class Stats
         ?int $campaignId = null,
         ?string $country = null,
         int $limit = 10,
+        ?array $accessibleCampaignIds = null,
     ): array {
         $params = [
             ":date_from" => $dateFrom . " 00:00:00",
@@ -217,6 +281,9 @@ class Stats
             $params[":country"] = $country;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "top_acc");
+
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
                    camp.name as campaign_name, camp.country as campaign_country,
@@ -230,6 +297,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
             GROUP BY p.id, camp.id
             ORDER BY total_quantity DESC
             LIMIT {$limit}
@@ -250,6 +318,7 @@ class Stats
      * @param string $dateTo
      * @param int|null $campaignId
      * @param string|null $country Filtre par pays (BE, LU)
+     * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
      * @return array ['cluster_name' => ['quantity' => X, 'customers' => Y], ...]
      */
     public function getStatsByCluster(
@@ -257,6 +326,7 @@ class Stats
         string $dateTo,
         ?int $campaignId = null,
         ?string $country = null,
+        ?array $accessibleCampaignIds = null,
     ): array {
         // Si pas de connexion externe, retourner vide
         if (!$this->extDb) {
@@ -281,6 +351,9 @@ class Stats
             $params[":country"] = $country;
         }
 
+        // Filtrage hiérarchique par campagnes accessibles
+        $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "cluster_acc");
+
         // Étape 1 : Récupérer les stats par customer_number et country depuis la DB locale
         $query = "
             SELECT cu.customer_number, cu.country,
@@ -294,6 +367,7 @@ class Stats
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
+            {$accessFilter}
             GROUP BY cu.customer_number, cu.country
         ";
 
@@ -419,9 +493,10 @@ class Stats
      * Stats détaillées pour une campagne
      *
      * @param int $campaignId
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
      */
-    public function getCampaignStats(int $campaignId): array
+    public function getCampaignStats(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
         // Infos campagne
         $campaign = $this->db->query("SELECT * FROM campaigns WHERE id = :id", [":id" => $campaignId]);
@@ -447,20 +522,52 @@ class Stats
             }
         }
 
-        // Stats commandes
+        // Construire le filtre clients si nécessaire
+        $customerFilter = "";
+        $params = [":campaign_id" => $campaignId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = stats vides
+                return [
+                    "campaign" => $campaign,
+                    "total_orders" => 0,
+                    "customers_ordered" => 0,
+                    "total_quantity" => 0,
+                    "eligible_customers" => 0,
+                    "participation_rate" => 0,
+                    "by_country" => [
+                        "BE" => ["orders" => 0, "customers" => 0, "quantity" => 0],
+                        "LU" => ["orders" => 0, "customers" => 0, "quantity" => 0],
+                    ],
+                ];
+            }
+
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Stats commandes (filtrées par clients accessibles)
         $queryOrders = "
             SELECT COUNT(DISTINCT o.id) as total_orders,
                    COUNT(DISTINCT o.customer_id) as customers_ordered,
                    COALESCE(SUM(ol.quantity), 0) as total_quantity
             FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'validated'
+            {$customerFilter}
         ";
 
-        $ordersStats = $this->db->query($queryOrders, [":campaign_id" => $campaignId]);
+        $ordersStats = $this->db->query($queryOrders, $params);
 
-        // Stats par pays
+        // Stats par pays (filtrées par clients accessibles)
         $queryCountry = "
             SELECT cu.country,
                    COUNT(DISTINCT o.id) as orders_count,
@@ -471,10 +578,11 @@ class Stats
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'validated'
+            {$customerFilter}
             GROUP BY cu.country
         ";
 
-        $countryStats = $this->db->query($queryCountry, [":campaign_id" => $campaignId]);
+        $countryStats = $this->db->query($queryCountry, $params);
 
         // Formater par pays
         $byCountry = [
@@ -489,8 +597,8 @@ class Stats
             ];
         }
 
-        // Clients éligibles
-        $eligibleCustomers = $this->getEligibleCustomersCount($campaignId, $campaign);
+        // Clients éligibles (filtrés par clients accessibles)
+        $eligibleCustomers = $this->getEligibleCustomersCount($campaignId, $campaign, $accessibleCustomerNumbers);
 
         return [
             "campaign" => $campaign,
@@ -511,28 +619,76 @@ class Stats
      *
      * @param int $campaignId
      * @param array $campaign
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return int|string
      */
-    private function getEligibleCustomersCount(int $campaignId, array $campaign)
+    private function getEligibleCustomersCount(int $campaignId, array $campaign, ?array $accessibleCustomerNumbers = null)
     {
         $mode = $campaign["customer_assignment_mode"] ?? "automatic";
         $country = $campaign["country"] ?? "BE";
 
         if ($mode === "manual") {
             // Compter dans campaign_customers
+            $params = [":id" => $campaignId];
+            $customerFilter = "";
+
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+                $placeholders = [];
+                foreach ($accessibleCustomerNumbers as $i => $num) {
+                    $key = ":cust_{$i}";
+                    $placeholders[] = $key;
+                    $params[$key] = $num;
+                }
+                $customerFilter = " AND customer_number IN (" . implode(",", $placeholders) . ")";
+            }
+
             $result = $this->db->query(
-                "SELECT COUNT(*) as total FROM campaign_customers WHERE campaign_id = :id AND is_authorized = 1",
-                [":id" => $campaignId],
+                "SELECT COUNT(*) as total FROM campaign_customers WHERE campaign_id = :id AND is_authorized = 1 {$customerFilter}",
+                $params,
             );
             return (int) ($result[0]["total"] ?? 0);
         }
 
-        // Mode automatic ou protected : tous les clients du/des pays
+        // Mode automatic ou protected : clients du/des pays
         if (!$this->extDb) {
             return "N/A";
         }
 
         try {
+            // Si filtre par clients accessibles, compter uniquement ceux-là
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+
+                // Compter les clients accessibles qui sont dans le bon pays
+                $total = 0;
+
+                if ($country === "BE" || $country === "BOTH") {
+                    $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                    $result = $this->extDb->query(
+                        "SELECT COUNT(*) as total FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                        $accessibleCustomerNumbers
+                    );
+                    $total += (int) ($result[0]["total"] ?? 0);
+                }
+
+                if ($country === "LU" || $country === "BOTH") {
+                    $placeholders = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                    $result = $this->extDb->query(
+                        "SELECT COUNT(*) as total FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                        $accessibleCustomerNumbers
+                    );
+                    $total += (int) ($result[0]["total"] ?? 0);
+                }
+
+                return $total;
+            }
+
+            // Pas de filtre : compter tous les clients
             $total = 0;
 
             if ($country === "BE" || $country === "BOTH") {
@@ -556,10 +712,27 @@ class Stats
      * Produits vendus pour une campagne
      *
      * @param int $campaignId
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
      */
-    public function getCampaignProducts(int $campaignId): array
+    public function getCampaignProducts(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
+        $params = [":campaign_id" => $campaignId];
+        $customerFilter = "";
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
                    COALESCE(SUM(ol.quantity), 0) as quantity_sold,
@@ -568,13 +741,15 @@ class Stats
             FROM products p
             LEFT JOIN order_lines ol ON p.id = ol.product_id
             LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            LEFT JOIN customers cu ON o.customer_id = cu.id
             WHERE p.campaign_id = :campaign_id
             AND p.is_active = 1
+            {$customerFilter}
             GROUP BY p.id
             ORDER BY quantity_sold DESC
         ";
 
-        return $this->db->query($query, [":campaign_id" => $campaignId]);
+        return $this->db->query($query, $params);
     }
 
     /**
@@ -702,81 +877,104 @@ class Stats
     // ========================================
 
     /**
-     * Liste des représentants avec leurs stats
-     *
-     * @param string|null $country
-     * @param int|null $campaignId
-     * @return array
-     */
-    public function getRepStats(?string $country = null, ?int $campaignId = null): array
-    {
-        if (!$this->extDb) {
-            return [];
-        }
-
-        $reps = [];
-
-        try {
-            // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
-            if (!$country || $country === "BE") {
-                $beReps = $this->extDb->query(
-                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                     FROM BE_REP r
-                     LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                     LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                     ORDER BY c.CLU_LIB1, r.REP_NOM",
-                );
-
-                foreach ($beReps as $rep) {
-                    $reps[] = [
-                        "id" => $rep["IDE_REP"],
-                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                        "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["cluster_name"] ?: "Non défini",
-                        "country" => "BE",
-                    ];
-                }
-            }
-
-            // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
-            if (!$country || $country === "LU") {
-                $luReps = $this->extDb->query(
-                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                     FROM LU_REP r
-                     LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                     LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                     ORDER BY c.CLU_LIB1, r.REP_NOM",
-                );
-
-                foreach ($luReps as $rep) {
-                    $reps[] = [
-                        "id" => $rep["IDE_REP"],
-                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                        "email" => $rep["REP_EMAIL"],
-                        "cluster" => $rep["cluster_name"] ?: "Non défini",
-                        "country" => "LU",
-                    ];
-                }
-            }
-
-            // Enrichir avec les stats de commandes
-            foreach ($reps as &$rep) {
-                $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
-                $rep["total_clients"] = $this->getRepClientsCount($rep["id"], $rep["country"]);
-            }
-        } catch (\Exception $e) {
-            error_log("Stats::getRepStats error: " . $e->getMessage());
-        }
-
-        // Trier par quantité commandée
-        usort($reps, function ($a, $b) {
-            return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
-        });
-
-        return $reps;
+ * Liste des représentants avec leurs stats
+ *
+ * @modified 2025/12/08 - Filtrage clients éligibles selon mode campagne
+ *
+ * @param string|null $country
+ * @param int|null $campaignId
+ * @return array
+ */
+public function getRepStats(?string $country = null, ?int $campaignId = null): array
+{
+    if (!$this->extDb) {
+        return [];
     }
+
+    $reps = [];
+
+    // Récupérer les infos de la campagne si spécifiée (pour le filtrage clients)
+    $campaign = null;
+    if ($campaignId) {
+        $result = $this->db->query(
+            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+            [":id" => $campaignId]
+        );
+        if (!empty($result)) {
+            $campaign = $result[0];
+            // Forcer le filtrage sur le pays de la campagne
+            $country = $campaign["country"];
+        }
+    }
+
+    try {
+        // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
+        if (!$country || $country === "BE") {
+            $beReps = $this->extDb->query(
+                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                 FROM BE_REP r
+                 LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                 LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                 ORDER BY c.CLU_LIB1, r.REP_NOM",
+            );
+
+            foreach ($beReps as $rep) {
+                $reps[] = [
+                    "id" => $rep["IDE_REP"],
+                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                    "email" => $rep["REP_EMAIL"],
+                    "cluster" => $rep["cluster_name"] ?: "Non défini",
+                    "country" => "BE",
+                ];
+            }
+        }
+
+        // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
+        if (!$country || $country === "LU") {
+            $luReps = $this->extDb->query(
+                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                 FROM LU_REP r
+                 LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                 LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                 ORDER BY c.CLU_LIB1, r.REP_NOM",
+            );
+
+            foreach ($luReps as $rep) {
+                $reps[] = [
+                    "id" => $rep["IDE_REP"],
+                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                    "email" => $rep["REP_EMAIL"],
+                    "cluster" => $rep["cluster_name"] ?: "Non défini",
+                    "country" => "LU",
+                ];
+            }
+        }
+
+        // Enrichir avec les stats de commandes ET le nombre de clients éligibles
+        foreach ($reps as &$rep) {
+            $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
+
+            // 🔧 CORRECTION : Utiliser la nouvelle méthode qui filtre selon le mode campagne
+            $rep["total_clients"] = $this->getRepClientsCountForCampaign(
+                $rep["id"],
+                $rep["country"],
+                $campaignId,
+                $campaign
+            );
+        }
+    } catch (\Exception $e) {
+        error_log("Stats::getRepStats error: " . $e->getMessage());
+    }
+
+    // Trier par quantité commandée
+    usort($reps, function ($a, $b) {
+        return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
+    });
+
+    return $reps;
+}
 
     /**
      * Stats de commandes pour un représentant
@@ -879,6 +1077,115 @@ class Stats
             return 0;
         }
     }
+
+/**
+ * Nombre de clients d'un représentant ÉLIGIBLES pour une campagne
+ *
+ * Filtre selon le mode d'attribution de la campagne :
+ * - MANUAL : Intersection clients rep ET campaign_customers
+ * - AUTOMATIC/PROTECTED : Tous les clients du rep
+ *
+ * @param string $repId ID du représentant
+ * @param string $country Pays (BE/LU)
+ * @param int|null $campaignId ID de la campagne
+ * @param array|null $campaign Données de la campagne (optionnel, sera chargé si null)
+ * @return int Nombre de clients éligibles
+ *
+ * @created 2025/12/08
+ */
+private function getRepClientsCountForCampaign(
+    string $repId,
+    string $country,
+    ?int $campaignId = null,
+    ?array $campaign = null
+): int {
+    // Si pas de campagne spécifiée, retourner le total normal
+    if (!$campaignId) {
+        return $this->getRepClientsCount($repId, $country);
+    }
+
+    // Charger les infos campagne si pas fournies
+    if ($campaign === null) {
+        $result = $this->db->query(
+            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+            [":id" => $campaignId]
+        );
+        if (empty($result)) {
+            return $this->getRepClientsCount($repId, $country);
+        }
+        $campaign = $result[0];
+    }
+
+    $mode = $campaign["customer_assignment_mode"] ?? "automatic";
+    $campaignCountry = $campaign["country"] ?? "BE";
+
+    // Si le pays du rep ne correspond pas à la campagne, retourner 0
+    if ($country !== $campaignCountry) {
+        return 0;
+    }
+
+    // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
+    if ($mode !== "manual") {
+        return $this->getRepClientsCount($repId, $country);
+    }
+
+    // Mode MANUAL : intersection clients rep ET campaign_customers
+    if (!$this->extDb) {
+        return 0;
+    }
+
+    try {
+        $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
+
+        // Récupérer les numéros clients du représentant
+        $repClients = $this->extDb->query(
+            "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+            [":rep_id" => $repId]
+        );
+
+        if (empty($repClients)) {
+            return 0;
+        }
+
+        // Extraire les numéros clients
+        $customerNumbers = array_filter(
+            array_column($repClients, "customer_number"),
+            fn($n) => $n !== null && $n !== ""
+        );
+
+        if (empty($customerNumbers)) {
+            return 0;
+        }
+
+        // Créer les placeholders pour la requête IN
+        $placeholders = [];
+        $params = [":campaign_id" => $campaignId];
+        foreach ($customerNumbers as $i => $num) {
+            $placeholders[] = ":num{$i}";
+            $params[":num{$i}"] = $num;
+        }
+        $inClause = implode(",", $placeholders);
+
+        // Compter l'intersection avec campaign_customers
+        $query = "
+            SELECT COUNT(*) as total
+            FROM campaign_customers
+            WHERE campaign_id = :campaign_id
+            AND is_authorized = 1
+            AND customer_number IN ({$inClause})
+        ";
+
+        $result = $this->db->query($query, $params);
+
+        return (int) ($result[0]["total"] ?? 0);
+
+    } catch (\Exception $e) {
+        error_log("Stats::getRepClientsCountForCampaign error: " . $e->getMessage());
+        return 0;
+    }
+}
+
+
 
     /**
      * Récupère le cluster d'un représentant via REPCLU → CLU
