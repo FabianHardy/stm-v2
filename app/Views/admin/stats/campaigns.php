@@ -1510,33 +1510,49 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
                     minute: '2-digit'
                 });
 
-                let linesHtml = '';
+                let linesHtml = '<table class="min-w-full">' +
+                    '<thead class="bg-gray-100">' +
+                        '<tr class="text-left text-xs text-gray-500 uppercase">' +
+                            '<th class="py-2 px-3">Promotion</th>' +
+                            '<th class="py-2 px-3">Code</th>' +
+                            '<th class="py-2 px-3 text-right">Quantité</th>' +
+                        '</tr>' +
+                    '</thead>' +
+                    '<tbody class="text-sm divide-y divide-gray-100">';
+
                 order.lines.forEach(line => {
-                    linesHtml += '<div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">' +
-                        '<div class="flex-1">' +
-                            '<span class="text-gray-900">' + escapeHtml(line.product_name) + '</span>' +
-                            '<span class="text-xs text-gray-400 ml-2">' + escapeHtml(line.product_code) + '</span>' +
-                        '</div>' +
-                        '<div class="font-medium text-orange-600">' + formatNumberFr(line.quantity) + '</div>' +
-                    '</div>';
+                    linesHtml += '<tr class="hover:bg-gray-50">' +
+                        '<td class="py-2 px-3">' +
+                            '<p class="font-medium text-gray-900">' + escapeHtml(line.product_name) + '</p>' +
+                        '</td>' +
+                        '<td class="py-2 px-3">' +
+                            '<span class="text-gray-500 font-mono text-xs">' + escapeHtml(line.product_code) + '</span>' +
+                        '</td>' +
+                        '<td class="py-2 px-3 text-right">' +
+                            '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' + formatNumberFr(line.quantity) + '</span>' +
+                        '</td>' +
+                    '</tr>';
                 });
 
-                const orderHtml = '<div class="bg-gray-50 rounded-lg overflow-hidden">' +
-                    '<div class="bg-gray-100 px-4 py-2 flex items-center justify-between cursor-pointer" onclick="toggleOrderDetail(' + index + ')">' +
+                linesHtml += '</tbody></table>';
+
+                const orderHtml = '<div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">' +
+                    '<div class="bg-gradient-to-r from-indigo-50 to-white px-4 py-3 flex items-center justify-between cursor-pointer border-b border-gray-200" onclick="toggleOrderDetail(' + index + ')">' +
                         '<div class="flex items-center gap-3">' +
-                            '<i class="fas fa-chevron-right text-gray-400 transition-transform duration-200" id="orderChevron' + index + '"></i>' +
+                            '<i class="fas fa-chevron-down text-indigo-400 transition-transform duration-200" id="orderChevron' + index + '"></i>' +
                             '<div>' +
-                                '<span class="font-medium text-gray-900">Commande #' + order.order_id + '</span>' +
-                                '<span class="text-xs text-gray-500 ml-2">' + formattedDate + '</span>' +
+                                '<span class="font-semibold text-gray-900">Commande #' + order.order_id + '</span>' +
+                                '<span class="text-sm text-gray-500 ml-3"><i class="far fa-calendar-alt mr-1"></i>' + formattedDate + '</span>' +
                             '</div>' +
                         '</div>' +
                         '<div class="flex items-center gap-4">' +
-                            '<span class="text-xs text-gray-500">' + order.lines.length + ' produit(s)</span>' +
-                            '<span class="font-bold text-orange-600">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
+                            '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">' +
+                                '<i class="fas fa-box mr-1"></i>' + order.lines.length + ' produit(s)' +
+                            '</span>' +
+                            '<span class="inline-flex items-center px-3 py-1 bg-orange-500 text-white rounded font-bold">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="px-4 py-2 hidden" id="orderDetail' + index + '">' +
-                        '<div class="text-xs text-gray-500 uppercase font-medium mb-2">Détail des produits</div>' +
+                    '<div class="p-0" id="orderDetail' + index + '">' +
                         linesHtml +
                     '</div>' +
                 '</div>';
@@ -1563,10 +1579,12 @@ function toggleOrderDetail(index) {
 
     if (detail.classList.contains('hidden')) {
         detail.classList.remove('hidden');
-        chevron.style.transform = 'rotate(90deg)';
+        chevron.classList.remove('fa-chevron-right');
+        chevron.classList.add('fa-chevron-down');
     } else {
         detail.classList.add('hidden');
-        chevron.style.transform = 'rotate(0deg)';
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-right');
     }
 }
 
