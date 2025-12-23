@@ -1450,6 +1450,7 @@ class Stats
                     $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
                     $beData = $this->extDb->query(
                         "SELECT cll.CLL_NCLIXX as customer_number,
+                                cll.IDE_REP as rep_id,
                                 CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
                          FROM BE_CLL cll
                          LEFT JOIN BE_REP r ON cll.IDE_REP = r.IDE_REP
@@ -1457,7 +1458,9 @@ class Stats
                         $customersBE
                     );
                     foreach ($beData as $row) {
-                        $repMapping[$row['customer_number'] . '_BE'] = trim($row['rep_name']);
+                        // Utiliser le nom du rep, ou le code rep en fallback
+                        $name = trim($row['rep_name'] ?? '');
+                        $repMapping[$row['customer_number'] . '_BE'] = !empty($name) ? $name : ($row['rep_id'] ?? '-');
                     }
                 }
 
@@ -1466,6 +1469,7 @@ class Stats
                     $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
                     $luData = $this->extDb->query(
                         "SELECT cll.CLL_NCLIXX as customer_number,
+                                cll.IDE_REP as rep_id,
                                 CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
                          FROM LU_CLL cll
                          LEFT JOIN LU_REP r ON cll.IDE_REP = r.IDE_REP
@@ -1473,7 +1477,9 @@ class Stats
                         $customersLU
                     );
                     foreach ($luData as $row) {
-                        $repMapping[$row['customer_number'] . '_LU'] = trim($row['rep_name']);
+                        // Utiliser le nom du rep, ou le code rep en fallback
+                        $name = trim($row['rep_name'] ?? '');
+                        $repMapping[$row['customer_number'] . '_LU'] = !empty($name) ? $name : ($row['rep_id'] ?? '-');
                     }
                 }
             } catch (\Exception $e) {

@@ -1704,11 +1704,12 @@ class StatsController
                     SELECT
                         ol.quantity,
                         p.product_code,
-                        p.name_fr as product_name
+                        p.name_fr as product_name,
+                        p.image_fr as product_image
                     FROM order_lines ol
                     INNER JOIN products p ON ol.product_id = p.id
                     WHERE ol.order_id = :order_id
-                    ORDER BY p.name_fr
+                    ORDER BY ol.quantity DESC, p.name_fr ASC
                 ";
 
                 $order['lines'] = $db->query($linesQuery, [':order_id' => $order['order_id']]);
