@@ -9,6 +9,7 @@
  * @modified 2025/12/09 - Ajout stats fournisseurs dans campaigns()
  * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
+ * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
  */
 
 namespace App\Controllers;
@@ -1219,14 +1220,27 @@ class StatsController
 
     /**
      * Calcule le scope d'accès selon le rôle de l'utilisateur
+     * Gère aussi le mode impersonation (se connecter en tant que)
      *
      * @return string Le scope d'accès (global, createur_X, manager_X, rep_X)
      * @created 2025/12/22
+     * @modified 2025/12/23 - Correction support impersonation
      */
     private function getExportAccessScope(): string
     {
-        $userId = Session::get('user_id');
-        $userRole = strtolower(Session::get('user_role') ?? '');
+        // Vérifier si on est en mode impersonation
+        $isImpersonating = Session::get('impersonate_original_user') !== null;
+
+        if ($isImpersonating) {
+            // En mode impersonation : lire le rôle depuis Session::get('user')
+            $user = Session::get('user');
+            $userRole = strtolower($user['role'] ?? '');
+            $userId = $user['id'] ?? Session::get('user_id');
+        } else {
+            // Mode normal : utiliser user_id et user_role
+            $userId = Session::get('user_id');
+            $userRole = strtolower(Session::get('user_role') ?? '');
+        }
 
         // Admin et superadmin : accès global (même fichier pour tous)
         if (in_array($userRole, ['superadmin', 'admin', 'super_admin'])) {
@@ -1524,16 +1538,23 @@ class StatsController
             exit();
         }
 
-        // Debug : récupérer le rôle brut
-        $rawRole = Session::get('user_role');
-        $userId = Session::get('user_id');
+        // Debug : récupérer le rôle (prend en compte l'impersonation)
+        $isImpersonating = Session::get('impersonate_original_user') !== null;
+        if ($isImpersonating) {
+            $user = Session::get('user');
+            $rawRole = $user['role'] ?? 'unknown';
+            $userId = $user['id'] ?? Session::get('user_id');
+        } else {
+            $rawRole = Session::get('user_role');
+            $userId = Session::get('user_id');
+        }
 
         $accessScope = $this->getExportAccessScope();
         $currentHash = $this->getExportDataHash($campaignId, $accessScope);
         $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
 
         // Debug : log le scope calculé
-        error_log("checkExportCache - user_id: " . $userId . ", role: " . $rawRole . ", scope: " . $accessScope);
+        error_log("checkExportCache - user_id: " . $userId . ", role: " . $rawRole . ", scope: " . $accessScope . ", impersonating: " . ($isImpersonating ? 'yes' : 'no'));
 
         if (!$cache) {
             // Pas de cache
@@ -1542,7 +1563,8 @@ class StatsController
                 'message' => 'Première génération requise',
                 'debug_scope' => $accessScope,
                 'debug_role' => $rawRole,
-                'debug_user_id' => $userId
+                'debug_user_id' => $userId,
+                'debug_impersonating' => $isImpersonating
             ]);
         } elseif ($cache['data_hash'] !== $currentHash) {
             // Cache obsolète
@@ -1552,7 +1574,8 @@ class StatsController
                 'cached_at' => $cache['created_at'],
                 'file_size' => $cache['file_size'],
                 'debug_scope' => $accessScope,
-                'debug_role' => $rawRole
+                'debug_role' => $rawRole,
+                'debug_impersonating' => $isImpersonating
             ]);
         } else {
             // Cache valide
@@ -1562,7 +1585,8 @@ class StatsController
                 'cached_at' => $cache['created_at'],
                 'file_size' => $cache['file_size'],
                 'debug_scope' => $accessScope,
-                'debug_role' => $rawRole
+                'debug_role' => $rawRole,
+                'debug_impersonating' => $isImpersonating
             ]);
         }
 
