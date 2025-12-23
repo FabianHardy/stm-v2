@@ -904,7 +904,7 @@ function updateExportTimer() {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
 
-    const timerEl = document.getElementById('timer-value');
+    const timerEl = document.getElementById('export-timer');
     if (timerEl) {
         timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
     }
