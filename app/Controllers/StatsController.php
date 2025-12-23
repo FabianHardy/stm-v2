@@ -1676,9 +1676,6 @@ class StatsController
         try {
             $db = \Core\Database::getInstance();
 
-            // Debug : log les paramètres reçus
-            error_log("getCustomerOrdersApi - campaign_id: {$campaignId}, customer_number: {$customerNumber}, country: {$country}");
-
             // Récupérer les commandes du client pour cette campagne
             $query = "
                 SELECT
@@ -1701,8 +1698,6 @@ class StatsController
                 ':country' => $country
             ]);
 
-            error_log("getCustomerOrdersApi - Found " . count($orders) . " orders");
-
             // Pour chaque commande, récupérer les lignes de commande
             foreach ($orders as &$order) {
                 $linesQuery = "
@@ -1722,7 +1717,7 @@ class StatsController
 
             // Récupérer les infos du client
             $customerQuery = "
-                SELECT company_name, city
+                SELECT company_name
                 FROM customers
                 WHERE customer_number = :customer_number
                 AND country = :country
@@ -1739,8 +1734,7 @@ class StatsController
                 'customer' => [
                     'customer_number' => $customerNumber,
                     'country' => $country,
-                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber,
-                    'city' => $customerInfo[0]['city'] ?? ''
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
                 ],
                 'orders' => $orders,
                 'total_orders' => count($orders),
@@ -1748,10 +1742,10 @@ class StatsController
             ]);
 
         } catch (\Exception $e) {
-            error_log("getCustomerOrdersApi error: " . $e->getMessage() . " - File: " . $e->getFile() . " - Line: " . $e->getLine());
+            error_log("getCustomerOrdersApi error: " . $e->getMessage());
             echo json_encode([
                 'success' => false,
-                'error' => 'Erreur lors de la récupération des commandes: ' . $e->getMessage()
+                'error' => 'Erreur lors de la récupération des commandes'
             ]);
         }
 
