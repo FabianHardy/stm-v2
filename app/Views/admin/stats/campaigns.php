@@ -569,7 +569,7 @@ $suppliersCount = count($supplierStats ?? []);
                     </template>
                     <template x-if="cacheStatus === 'outdated'">
                         <span class="text-amber-600" :title="'Fichier du ' + cachedAt + ' - nouvelles données disponibles'">
-                            <i class="fas fa-exclamation-circle mr-1"></i>Mise à jour disponible
+                            <i class="fas fa-exclamation-circle mr-1"></i>Mise à jour requise
                         </span>
                     </template>
                     <template x-if="cacheStatus === 'no_cache'">
@@ -579,14 +579,15 @@ $suppliersCount = count($supplierStats ?? []);
                     </template>
                 </div>
 
-                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="return startExport($event, cacheStatus)">
-                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
+                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="return startExport(cacheStatus)">
+                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?? '' ?>">
                     <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                     <input type="hidden" name="download_token" id="download_token" value="">
                     <button type="submit"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-sm">
+                            class="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition shadow-sm"
+                            :class="cacheStatus === 'valid' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'">
                         <i class="fas fa-file-excel"></i>
-                        <span x-text="cacheStatus === 'valid' ? 'Télécharger' : 'Export Excel'"></span>
+                        <span x-text="cacheStatus === 'valid' ? 'Télécharger' : 'Générer'"></span>
                     </button>
                 </form>
             </div>
@@ -836,6 +837,7 @@ $content = ob_get_clean();
 
 // Script Alpine.js pour le filtrage pays → campagne
 $campaignIdJs = $campaignId ?? "";
+$campaignIdInt = isset($campaignId) ? (int)$campaignId : 0;
 $selectedCountryJs = $selectedCountry ?? "";
 
 // Données des graphiques (passées depuis le controller)
@@ -867,7 +869,7 @@ function exportCache() {
         fileSize: 0,
 
         checkCache() {
-            const campaignId = <?= $campaignId ?? 0 ?>;
+            const campaignId = {$campaignIdInt};
             if (!campaignId) {
                 this.cacheStatus = 'no_cache';
                 return;
@@ -914,7 +916,7 @@ let exportTimerInterval = null;
 let exportStartTime = null;
 let downloadCheckInterval = null;
 
-function startExport(event, cacheStatus) {
+function startExport(cacheStatus) {
     // Générer un token unique pour ce téléchargement
     const downloadToken = 'download_' + Date.now();
 
@@ -928,26 +930,20 @@ function startExport(event, cacheStatus) {
     const spinnerEl = document.getElementById('export-spinner');
 
     if (cacheStatus === 'valid') {
-        // Fichier en cache - téléchargement rapide
         titleEl.textContent = 'Téléchargement en cours...';
         messageEl.textContent = 'Le fichier est en cache, téléchargement immédiat.';
         warningEl.classList.add('hidden');
-        spinnerEl.classList.remove('border-green-200', 'border-t-green-600');
-        spinnerEl.classList.add('border-blue-200', 'border-t-blue-600');
+        spinnerEl.className = 'w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto';
     } else if (cacheStatus === 'outdated') {
-        // Cache obsolète - régénération
-        titleEl.textContent = 'Mise à jour de l\'export...';
+        titleEl.textContent = 'Mise à jour en cours...';
         messageEl.textContent = 'De nouvelles données ont été détectées. Régénération du fichier en cours.';
         warningEl.classList.remove('hidden');
-        spinnerEl.classList.remove('border-blue-200', 'border-t-blue-600');
-        spinnerEl.classList.add('border-green-200', 'border-t-green-600');
+        spinnerEl.className = 'w-20 h-20 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mx-auto';
     } else {
-        // Pas de cache - première génération
-        titleEl.textContent = 'Génération de l\'export Excel';
+        titleEl.textContent = 'Génération Excel en cours...';
         messageEl.textContent = 'Cette opération peut prendre plusieurs minutes selon le volume de données.';
         warningEl.classList.remove('hidden');
-        spinnerEl.classList.remove('border-blue-200', 'border-t-blue-600');
-        spinnerEl.classList.add('border-green-200', 'border-t-green-600');
+        spinnerEl.className = 'w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto';
     }
 
     // Afficher l'overlay
@@ -962,14 +958,8 @@ function startExport(event, cacheStatus) {
     // Vérifier périodiquement si le cookie de téléchargement existe
     downloadCheckInterval = setInterval(function() {
         if (getCookie('download_complete') === downloadToken) {
-            // Téléchargement terminé
             hideExportLoader();
-            // Supprimer le cookie
             document.cookie = 'download_complete=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            // Rafraîchir le statut du cache (si Alpine.js est disponible)
-            if (window.Alpine) {
-                // Le composant se rafraîchira automatiquement
-            }
         }
     }, 500);
 
@@ -978,13 +968,7 @@ function startExport(event, cacheStatus) {
         hideExportLoader();
     }, 600000);
 
-    // Permettre la soumission du formulaire
     return true;
-}
-
-function showExportLoader() {
-    // Fonction conservée pour compatibilité
-    startExport(null, 'no_cache');
 }
 
 function hideExportLoader() {
