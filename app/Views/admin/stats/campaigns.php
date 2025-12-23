@@ -1510,25 +1510,30 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
                     minute: '2-digit'
                 });
 
-                let linesHtml = '<table class="min-w-full">' +
+                let linesHtml = '<table class="min-w-full table-fixed">' +
                     '<thead class="bg-gray-100">' +
                         '<tr class="text-left text-xs text-gray-500 uppercase">' +
-                            '<th class="py-2 px-3">Promotion</th>' +
-                            '<th class="py-2 px-3">Code</th>' +
-                            '<th class="py-2 px-3 text-right">Quantité</th>' +
+                            '<th class="py-2 px-3 w-16">Image</th>' +
+                            '<th class="py-2 px-3 text-left">Promotion</th>' +
+                            '<th class="py-2 px-3 w-28">Code</th>' +
+                            '<th class="py-2 px-3 w-24 text-right">Quantité</th>' +
                         '</tr>' +
                     '</thead>' +
                     '<tbody class="text-sm divide-y divide-gray-100">';
 
                 order.lines.forEach(line => {
+                    const imageUrl = line.product_image || '/stm/assets/images/no-image.png';
                     linesHtml += '<tr class="hover:bg-gray-50">' +
-                        '<td class="py-2 px-3">' +
-                            '<p class="font-medium text-gray-900">' + escapeHtml(line.product_name) + '</p>' +
+                        '<td class="py-2 px-3 w-16">' +
+                            '<img src="' + imageUrl + '" alt="" class="w-12 h-12 object-contain rounded border border-gray-200 bg-white">' +
                         '</td>' +
-                        '<td class="py-2 px-3">' +
+                        '<td class="py-2 px-3 text-left">' +
+                            '<p class="font-medium text-gray-900 text-left">' + escapeHtml(line.product_name) + '</p>' +
+                        '</td>' +
+                        '<td class="py-2 px-3 w-28">' +
                             '<span class="text-gray-500 font-mono text-xs">' + escapeHtml(line.product_code) + '</span>' +
                         '</td>' +
-                        '<td class="py-2 px-3 text-right">' +
+                        '<td class="py-2 px-3 w-24 text-right">' +
                             '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' + formatNumberFr(line.quantity) + '</span>' +
                         '</td>' +
                     '</tr>';
