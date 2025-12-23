@@ -1528,11 +1528,15 @@ class StatsController
         $currentHash = $this->getExportDataHash($campaignId, $accessScope);
         $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
 
+        // Debug : log le scope calculé
+        error_log("checkExportCache - user_id: " . Session::get('user_id') . ", role: " . Session::get('user_role') . ", scope: " . $accessScope);
+
         if (!$cache) {
             // Pas de cache
             echo json_encode([
                 'status' => 'no_cache',
-                'message' => 'Première génération requise'
+                'message' => 'Première génération requise',
+                'debug_scope' => $accessScope
             ]);
         } elseif ($cache['data_hash'] !== $currentHash) {
             // Cache obsolète
@@ -1540,7 +1544,8 @@ class StatsController
                 'status' => 'outdated',
                 'message' => 'Nouvelles données détectées',
                 'cached_at' => $cache['created_at'],
-                'file_size' => $cache['file_size']
+                'file_size' => $cache['file_size'],
+                'debug_scope' => $accessScope
             ]);
         } else {
             // Cache valide
@@ -1548,7 +1553,8 @@ class StatsController
                 'status' => 'valid',
                 'message' => 'Fichier en cache',
                 'cached_at' => $cache['created_at'],
-                'file_size' => $cache['file_size']
+                'file_size' => $cache['file_size'],
+                'debug_scope' => $accessScope
             ]);
         }
 

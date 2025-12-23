@@ -878,6 +878,9 @@ function exportCache() {
             fetch('/stm/admin/stats/check-export-cache?campaign_id=' + campaignId)
                 .then(response => response.json())
                 .then(data => {
+                    // Debug : afficher le scope dans la console
+                    console.log('Export cache check:', data);
+
                     this.cacheStatus = data.status || 'no_cache';
                     this.cachedAt = data.cached_at ? this.formatDate(data.cached_at) : null;
                     this.fileSize = data.file_size || 0;
