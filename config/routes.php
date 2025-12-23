@@ -12,6 +12,7 @@
  * @version    2.0.0
  * @modified   11/12/2025 - Ajout routes équipe campagne (assignees)
  * @modified   22/12/2025 - Ajout route API check-export-cache
+ * @modified   23/12/2025 - Ajout route API customer-orders
  */
 
 // ============================================
@@ -650,6 +651,15 @@ $router->get('/admin/stats/check-export-cache', function () {
 
     $controller = new \App\Controllers\StatsController();
     $controller->checkExportCache();
+});
+
+// API - Détail commandes d'un client pour une campagne (AJAX)
+$router->get('/admin/stats/customer-orders', function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StatsController();
+    $controller->getCustomerOrdersApi();
 });
 
 // ============================================

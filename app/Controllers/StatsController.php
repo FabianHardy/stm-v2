@@ -10,6 +10,8 @@
  * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
+ * @modified 2025/12/23 - Correction graphiques (getDailyEvolution, getCategoryStatsForCampaign) pour filtre clients
+ * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
  */
 
 namespace App\Controllers;
@@ -222,6 +224,7 @@ class StatsController
      * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
      * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
      * @modified 2025/12/17 - Ajout filtrage par clients accessibles
+ * @modified 2025/12/23 - Ajout top clients (getTopCustomersForCampaign)
      */
     public function campaigns(): void
     {
@@ -267,6 +270,14 @@ class StatsController
 
         // Mapping produit → fournisseur pour l'onglet Produits
         $productSuppliers = [];
+
+        // Top clients
+        $topCustomers = [];
+        $topCustomersLimit = isset($_GET["customers_limit"]) ? (int) $_GET["customers_limit"] : 50;
+        // Valider la limite (10, 25, 50, 100)
+        if (!in_array($topCustomersLimit, [10, 25, 50, 100])) {
+            $topCustomersLimit = 50;
+        }
 
         if ($campaignId) {
             // Passer le filtre clients aux méthodes de stats
@@ -319,7 +330,7 @@ class StatsController
                 $endDate = $today;
             }
 
-            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId);
+            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId, null, $accessibleCustomerNumbers);
 
             // Préparer les données pour le graphique d'évolution
             $currentDate = new \DateTime($startDate);
@@ -341,7 +352,7 @@ class StatsController
             // ============================================
             // Stats par catégorie pour le donut
             // ============================================
-            $categoryStats = $this->getCategoryStatsForCampaign($campaignId);
+            $categoryStats = $this->getCategoryStatsForCampaign($campaignId, $accessibleCustomerNumbers);
 
             foreach ($categoryStats as $cat) {
                 $categoryLabels[] = $cat["category_name"];
@@ -358,6 +369,11 @@ class StatsController
                 error_log("Erreur getSupplierStats: " . $e->getMessage());
                 $supplierStats = [];
             }
+
+            // ============================================
+            // Top clients (23/12/2025)
+            // ============================================
+            $topCustomers = $this->statsModel->getTopCustomersForCampaign($campaignId, $accessibleCustomerNumbers, $topCustomersLimit);
         }
 
         $title = "Statistiques - Par campagne";
@@ -377,11 +393,33 @@ class StatsController
      * Récupérer les stats par catégorie pour une campagne
      *
      * @param int $campaignId ID de la campagne
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array Stats par catégorie
+     * @modified 2025/12/23 - Ajout filtre par clients accessibles
      */
-    private function getCategoryStatsForCampaign(int $campaignId): array
+    private function getCategoryStatsForCampaign(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
         $db = \Core\Database::getInstance();
+        $params = [":campaign_id" => $campaignId];
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $customerJoin = "";
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner tableau vide
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cat_cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerJoin = "INNER JOIN customers cu ON o.customer_id = cu.id";
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
 
         $query = "
             SELECT
@@ -392,14 +430,15 @@ class StatsController
             INNER JOIN products p ON c.id = p.category_id AND p.campaign_id = :campaign_id
             LEFT JOIN order_lines ol ON p.id = ol.product_id
             LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            {$customerJoin}
+            WHERE 1=1
+            {$customerFilter}
             GROUP BY c.id, c.name_fr, c.color
             HAVING quantity > 0
             ORDER BY quantity DESC
         ";
 
-        return $db->query($query, [
-            ":campaign_id" => $campaignId,
-        ]);
+        return $db->query($query, $params);
     }
 
     /**
@@ -1587,6 +1626,126 @@ class StatsController
                 'debug_scope' => $accessScope,
                 'debug_role' => $rawRole,
                 'debug_impersonating' => $isImpersonating
+            ]);
+        }
+
+        exit();
+    }
+
+    /**
+     * API : Récupère les commandes d'un client pour une campagne (AJAX)
+     *
+     * @return void
+     * @created 2025/12/23
+     */
+    public function getCustomerOrdersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $campaignId = isset($_GET['campaign_id']) ? (int)$_GET['campaign_id'] : 0;
+        $customerNumber = $_GET['customer_number'] ?? '';
+        $country = $_GET['country'] ?? '';
+
+        if (!$campaignId || !$customerNumber || !$country) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Paramètres manquants'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à cette campagne'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au client (selon le rôle)
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+        if ($accessibleCustomerNumbers !== null && !in_array($customerNumber, $accessibleCustomerNumbers)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce client'
+            ]);
+            exit();
+        }
+
+        try {
+            $db = \Core\Database::getInstance();
+
+            // Récupérer les commandes du client pour cette campagne
+            $query = "
+                SELECT
+                    o.id as order_id,
+                    o.created_at,
+                    o.total_items,
+                    o.status
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                WHERE o.campaign_id = :campaign_id
+                AND cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'validated'
+                ORDER BY o.created_at DESC
+            ";
+
+            $orders = $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            // Pour chaque commande, récupérer les lignes de commande
+            foreach ($orders as &$order) {
+                $linesQuery = "
+                    SELECT
+                        ol.quantity,
+                        p.product_code,
+                        p.name_fr as product_name
+                    FROM order_lines ol
+                    INNER JOIN products p ON ol.product_id = p.id
+                    WHERE ol.order_id = :order_id
+                    ORDER BY p.name_fr
+                ";
+
+                $order['lines'] = $db->query($linesQuery, [':order_id' => $order['order_id']]);
+                $order['total_quantity'] = array_sum(array_column($order['lines'], 'quantity'));
+            }
+
+            // Récupérer les infos du client
+            $customerQuery = "
+                SELECT company_name
+                FROM customers
+                WHERE customer_number = :customer_number
+                AND country = :country
+                LIMIT 1
+            ";
+
+            $customerInfo = $db->query($customerQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'customer' => [
+                    'customer_number' => $customerNumber,
+                    'country' => $country,
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
+                ],
+                'orders' => $orders,
+                'total_orders' => count($orders),
+                'total_quantity' => array_sum(array_column($orders, 'total_quantity'))
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("getCustomerOrdersApi error: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Erreur lors de la récupération des commandes'
             ]);
         }
 

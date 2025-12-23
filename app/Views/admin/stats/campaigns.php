@@ -14,6 +14,8 @@
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
  * @modified 2025/12/22 - Ajout overlay de chargement pour export Excel avec timer
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
+ * @modified 2025/12/23 - Ajout onglet Clients (top clients par campagne)
+ * @modified 2025/12/23 - Ajout modal détail commandes client avec API
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -391,6 +393,7 @@ if (!empty($reps)) {
     }
 }
 $suppliersCount = count($supplierStats ?? []);
+$customersCount = count($topCustomers ?? []);
 ?>
 
 <div class="bg-white rounded-lg shadow-sm mb-6" x-data="{ activeTab: 'products' }">
@@ -431,6 +434,18 @@ $suppliersCount = count($supplierStats ?? []);
                 <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
                       :class="activeTab === 'suppliers' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
                     <?= $suppliersCount ?>
+                </span>
+            </button>
+
+            <!-- Onglet Clients -->
+            <button @click="activeTab = 'customers'"
+                    :class="activeTab === 'customers' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
+                <i class="fas fa-building"></i>
+                <span>Clients</span>
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="activeTab === 'customers' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
+                    <?= $customersCount ?>
                 </span>
             </button>
         </nav>
@@ -811,6 +826,196 @@ $suppliersCount = count($supplierStats ?? []);
                     </div>
                 </div>
             </template>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ONGLET CLIENTS (top clients)                 -->
+        <!-- ============================================ -->
+        <div x-show="activeTab === 'customers'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <?php if (empty($topCustomers)): ?>
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-building text-gray-400"></i>
+                </div>
+                <p class="text-gray-500">Aucun client n'a commandé sur cette campagne</p>
+            </div>
+            <?php else: ?>
+
+            <!-- Sélecteur de limite -->
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-gray-600">
+                    <i class="fas fa-building mr-1"></i>
+                    Top <strong><?= $topCustomersLimit ?></strong> clients ayant commandé
+                </p>
+                <form method="GET" class="flex items-center gap-2">
+                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
+                    <input type="hidden" name="country" value="<?= htmlspecialchars($selectedCountry ?? '') ?>">
+                    <label class="text-sm text-gray-500">Afficher</label>
+                    <select name="customers_limit" onchange="showLoader(); this.form.submit();"
+                            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <?php foreach ([10, 25, 50, 100] as $opt): ?>
+                        <option value="<?= $opt ?>" <?= ($topCustomersLimit == $opt) ? 'selected' : '' ?>><?= $opt ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span class="text-sm text-gray-500">clients</span>
+                </form>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr class="text-left text-xs text-gray-500 uppercase">
+                            <th class="py-3 px-4">#</th>
+                            <th class="py-3 px-4">Client</th>
+                            <th class="py-3 px-4">N° Client</th>
+                            <th class="py-3 px-4">Représentant</th>
+                            <th class="py-3 px-4 text-right">CMD</th>
+                            <th class="py-3 px-4 text-right">Promos</th>
+                            <th class="py-3 px-4 text-right">Réf.</th>
+                            <th class="py-3 px-4 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        <?php
+                        $rank = 0;
+                        foreach ($topCustomers as $customer):
+                            $rank++;
+                            $companyName = $customer["company_name"] ?? "-";
+                            $customerNumber = $customer["customer_number"] ?? "-";
+                            $country = $customer["country"] ?? "-";
+                            $repName = $customer["rep_name"] ?? "-";
+                            $ordersCount = (int)($customer["orders_count"] ?? 0);
+                            $totalQty = (int)($customer["total_quantity"] ?? 0);
+                            $distinctProducts = (int)($customer["distinct_products"] ?? 0);
+                        ?>
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-3 px-4">
+                                <?php if ($rank <= 3): ?>
+                                <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
+                                <?php else: ?>
+                                <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                                    <?= $rank ?>
+                                </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-3 px-4">
+                                <p class="font-medium text-gray-900"><?= htmlspecialchars($companyName) ?></p>
+                                <span class="inline-flex items-center px-1.5 py-0.5 <?= $country === 'BE' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700' ?> rounded text-[10px]">
+                                    <?= $country === 'BE' ? '🇧🇪' : '🇱🇺' ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="text-gray-600 font-mono text-xs"><?= htmlspecialchars($customerNumber) ?></span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">
+                                    <i class="fas fa-user mr-1 text-[10px]"></i>
+                                    <?= htmlspecialchars($repName) ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                    <?= $ordersCount ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
+                            <td class="py-3 px-4 text-right">
+                                <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                                    <?= $distinctProducts ?>
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <button type="button"
+                                        onclick="openCustomerOrdersModal('<?= htmlspecialchars($customerNumber) ?>', '<?= $country ?>', '<?= htmlspecialchars(addslashes($companyName)) ?>')"
+                                        class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    Détail
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal détail commandes client -->
+            <div id="customerOrdersModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true">
+                <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                    <!-- Overlay -->
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeCustomerOrdersModal()"></div>
+
+                    <!-- Modal content -->
+                    <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-4xl sm:w-full mx-auto">
+                        <!-- Header -->
+                        <div class="bg-indigo-600 px-6 py-4 rounded-t-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white" id="modalCustomerName">Détail client</h3>
+                                    <p class="text-indigo-200 text-sm" id="modalCustomerNumber"></p>
+                                </div>
+                                <button type="button" onclick="closeCustomerOrdersModal()" class="text-white hover:text-indigo-200 transition">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
+                            <!-- Loading -->
+                            <div id="modalLoading" class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-indigo-600 text-2xl"></i>
+                                <p class="text-gray-500 mt-2">Chargement des commandes...</p>
+                            </div>
+
+                            <!-- Error -->
+                            <div id="modalError" class="hidden text-center py-8">
+                                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                                </div>
+                                <p class="text-red-600" id="modalErrorText">Erreur lors du chargement</p>
+                            </div>
+
+                            <!-- Content -->
+                            <div id="modalContent" class="hidden">
+                                <!-- Stats résumé -->
+                                <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <div class="bg-green-50 rounded-lg p-4 text-center">
+                                        <p class="text-2xl font-bold text-green-600" id="modalTotalOrders">0</p>
+                                        <p class="text-sm text-green-700">Commandes</p>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-lg p-4 text-center">
+                                        <p class="text-2xl font-bold text-orange-600" id="modalTotalQuantity">0</p>
+                                        <p class="text-sm text-orange-700">Promos vendues</p>
+                                    </div>
+                                </div>
+
+                                <!-- Liste des commandes -->
+                                <div id="modalOrdersList" class="space-y-4">
+                                    <!-- Rempli par JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="bg-gray-50 px-6 py-3 rounded-b-lg flex justify-end">
+                            <button type="button" onclick="closeCustomerOrdersModal()"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
+                                Fermer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Légende -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <p class="text-xs text-gray-500">
+                    <strong>CMD</strong> : Nombre de commandes •
+                    <strong>Promos</strong> : Total promos commandées •
+                    <strong>Réf.</strong> : Nombre de produits différents commandés
+                </p>
+            </div>
+            <?php endif; ?>
         </div>
 
     </div>
@@ -1239,6 +1444,146 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+});
+
+// ============================================
+// MODAL DÉTAIL COMMANDES CLIENT
+// ============================================
+function openCustomerOrdersModal(customerNumber, country, companyName) {
+    const modal = document.getElementById('customerOrdersModal');
+    const modalLoading = document.getElementById('modalLoading');
+    const modalError = document.getElementById('modalError');
+    const modalContent = document.getElementById('modalContent');
+    const modalCustomerName = document.getElementById('modalCustomerName');
+    const modalCustomerNumber = document.getElementById('modalCustomerNumber');
+
+    // Afficher le modal
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Reset état
+    modalLoading.classList.remove('hidden');
+    modalError.classList.add('hidden');
+    modalContent.classList.add('hidden');
+
+    // Mettre à jour le header
+    modalCustomerName.textContent = companyName;
+    modalCustomerNumber.textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
+
+    // Charger les données via API
+    const campaignId = {$campaignIdInt};
+    fetch('/stm/admin/stats/customer-orders?campaign_id=' + campaignId + '&customer_number=' + encodeURIComponent(customerNumber) + '&country=' + country)
+        .then(response => response.json())
+        .then(data => {
+            modalLoading.classList.add('hidden');
+
+            if (!data.success) {
+                modalError.classList.remove('hidden');
+                document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
+                return;
+            }
+
+            // Afficher le contenu
+            modalContent.classList.remove('hidden');
+
+            // Stats
+            document.getElementById('modalTotalOrders').textContent = data.total_orders;
+            document.getElementById('modalTotalQuantity').textContent = formatNumberFr(data.total_quantity);
+
+            // Liste des commandes
+            const ordersList = document.getElementById('modalOrdersList');
+            ordersList.innerHTML = '';
+
+            if (data.orders.length === 0) {
+                ordersList.innerHTML = '<div class="text-center py-4 text-gray-500">Aucune commande trouvée</div>';
+                return;
+            }
+
+            data.orders.forEach((order, index) => {
+                const orderDate = new Date(order.created_at);
+                const formattedDate = orderDate.toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                let linesHtml = '';
+                order.lines.forEach(line => {
+                    linesHtml += '<div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">' +
+                        '<div class="flex-1">' +
+                            '<span class="text-gray-900">' + escapeHtml(line.product_name) + '</span>' +
+                            '<span class="text-xs text-gray-400 ml-2">' + escapeHtml(line.product_code) + '</span>' +
+                        '</div>' +
+                        '<div class="font-medium text-orange-600">' + formatNumberFr(line.quantity) + '</div>' +
+                    '</div>';
+                });
+
+                const orderHtml = '<div class="bg-gray-50 rounded-lg overflow-hidden">' +
+                    '<div class="bg-gray-100 px-4 py-2 flex items-center justify-between cursor-pointer" onclick="toggleOrderDetail(' + index + ')">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<i class="fas fa-chevron-right text-gray-400 transition-transform duration-200" id="orderChevron' + index + '"></i>' +
+                            '<div>' +
+                                '<span class="font-medium text-gray-900">Commande #' + order.order_id + '</span>' +
+                                '<span class="text-xs text-gray-500 ml-2">' + formattedDate + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-4">' +
+                            '<span class="text-xs text-gray-500">' + order.lines.length + ' produit(s)</span>' +
+                            '<span class="font-bold text-orange-600">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="px-4 py-2 hidden" id="orderDetail' + index + '">' +
+                        '<div class="text-xs text-gray-500 uppercase font-medium mb-2">Détail des produits</div>' +
+                        linesHtml +
+                    '</div>' +
+                '</div>';
+
+                ordersList.innerHTML += orderHtml;
+            });
+        })
+        .catch(error => {
+            console.error('Erreur chargement commandes:', error);
+            modalLoading.classList.add('hidden');
+            modalError.classList.remove('hidden');
+            document.getElementById('modalErrorText').textContent = 'Erreur de connexion';
+        });
+}
+
+function closeCustomerOrdersModal() {
+    document.getElementById('customerOrdersModal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function toggleOrderDetail(index) {
+    const detail = document.getElementById('orderDetail' + index);
+    const chevron = document.getElementById('orderChevron' + index);
+
+    if (detail.classList.contains('hidden')) {
+        detail.classList.remove('hidden');
+        chevron.style.transform = 'rotate(90deg)';
+    } else {
+        detail.classList.add('hidden');
+        chevron.style.transform = 'rotate(0deg)';
+    }
+}
+
+function formatNumberFr(num) {
+    return new Intl.NumberFormat('fr-FR').format(num);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Fermer modal avec Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCustomerOrdersModal();
     }
 });
 </script>

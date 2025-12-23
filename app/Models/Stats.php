@@ -8,6 +8,8 @@
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/16 - Ajout filtrage hiérarchique par accessibleCampaignIds
+ * @modified 2025/12/23 - Correction getCampaignProducts() : affiche tous les produits même sans commandes
+ * @modified 2025/12/23 - Ajout getTopCustomersForCampaign() pour top clients par campagne
  */
 
 namespace App\Models;
@@ -205,13 +207,16 @@ class Stats
      * @param string $dateTo
      * @param int|null $campaignId
      * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
+     * @modified 2025/12/23 - Ajout filtre par clients accessibles
      */
     public function getDailyEvolution(
         string $dateFrom,
         string $dateTo,
         ?int $campaignId = null,
-        ?array $accessibleCampaignIds = null
+        ?array $accessibleCampaignIds = null,
+        ?array $accessibleCustomerNumbers = null
     ): array {
         $params = [
             ":date_from" => $dateFrom,
@@ -227,16 +232,40 @@ class Stats
         // Filtrage hiérarchique par campagnes accessibles
         $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "daily_acc");
 
+        // Filtrage par clients accessibles
+        $customerFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner tableau vide
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":daily_cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Si filtre clients, joindre la table customers
+        $customerJoin = "";
+        if ($customerFilter !== "") {
+            $customerJoin = "INNER JOIN customers cu ON o.customer_id = cu.id";
+        }
+
         $query = "
             SELECT DATE(o.created_at) as day,
                    COUNT(DISTINCT o.id) as orders_count,
                    COALESCE(SUM(ol.quantity), 0) as quantity
             FROM orders o
+            {$customerJoin}
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
             AND DATE(o.created_at) BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$accessFilter}
+            {$customerFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY day ASC
         ";
@@ -398,91 +427,70 @@ class Stats
         }
 
         // Étape 2 : Récupérer les clusters depuis la DB externe
-        $clustersByCustomer = [];
-
-        // Pour la Belgique
-        if (!empty($customersBE)) {
-            $clustersByCustomer = array_merge($clustersByCustomer, $this->getClusterForCustomers($customersBE, "BE"));
-        }
-
-        // Pour le Luxembourg
-        if (!empty($customersLU)) {
-            $clustersByCustomer = array_merge($clustersByCustomer, $this->getClusterForCustomers($customersLU, "LU"));
-        }
-
-        // Étape 3 : Agréger par cluster
         $clusterStats = [];
 
-        foreach ($statsByCustomer as $key => $stats) {
-            $cluster = $clustersByCustomer[$key] ?? "Non défini";
+        try {
+            // Traiter les clients BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
+                $beClusterData = $this->extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number,
+                            COALESCE(clu.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM BE_CLL cll
+                     LEFT JOIN BE_REPCLU repclu ON cll.IDE_REP = repclu.IDE_REP
+                     LEFT JOIN BE_CLU clu ON repclu.IDE_CLU = clu.IDE_CLU
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    $customersBE,
+                );
 
-            if (!isset($clusterStats[$cluster])) {
-                $clusterStats[$cluster] = [
-                    "quantity" => 0,
-                    "orders" => 0,
-                    "customers" => 0,
-                ];
+                foreach ($beClusterData as $row) {
+                    $key = $row["customer_number"] . "_BE";
+                    if (isset($statsByCustomer[$key])) {
+                        $clusterName = $row["cluster_name"] ?: "Non défini";
+                        if (!isset($clusterStats[$clusterName])) {
+                            $clusterStats[$clusterName] = ["quantity" => 0, "customers" => 0];
+                        }
+                        $clusterStats[$clusterName]["quantity"] += $statsByCustomer[$key]["quantity"];
+                        $clusterStats[$clusterName]["customers"]++;
+                    }
+                }
             }
 
-            $clusterStats[$cluster]["quantity"] += $stats["quantity"];
-            $clusterStats[$cluster]["orders"] += $stats["orders"];
-            $clusterStats[$cluster]["customers"] += $stats["count"];
+            // Traiter les clients LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
+                $luClusterData = $this->extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number,
+                            COALESCE(clu.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM LU_CLL cll
+                     LEFT JOIN LU_REPCLU repclu ON cll.IDE_REP = repclu.IDE_REP
+                     LEFT JOIN LU_CLU clu ON repclu.IDE_CLU = clu.IDE_CLU
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    $customersLU,
+                );
+
+                foreach ($luClusterData as $row) {
+                    $key = $row["customer_number"] . "_LU";
+                    if (isset($statsByCustomer[$key])) {
+                        $clusterName = $row["cluster_name"] ?: "Non défini";
+                        if (!isset($clusterStats[$clusterName])) {
+                            $clusterStats[$clusterName] = ["quantity" => 0, "customers" => 0];
+                        }
+                        $clusterStats[$clusterName]["quantity"] += $statsByCustomer[$key]["quantity"];
+                        $clusterStats[$clusterName]["customers"]++;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("Stats::getStatsByCluster error: " . $e->getMessage());
         }
+
+        // Trier par quantité décroissante
+        uasort($clusterStats, function ($a, $b) {
+            return $b["quantity"] - $a["quantity"];
+        });
 
         return $clusterStats;
-    }
-
-    /**
-     * Récupère le cluster pour une liste de clients depuis la DB externe
-     *
-     * Jointures : CLL → REPCLU → CLU
-     *
-     * @param array $customerNumbers Liste des numéros clients
-     * @param string $country BE ou LU
-     * @return array ['customerNumber_country' => 'clusterName', ...]
-     */
-    private function getClusterForCustomers(array $customerNumbers, string $country): array
-    {
-        if (empty($customerNumbers) || !$this->extDb) {
-            return [];
-        }
-
-        $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
-        $tableRepClu = $country === "BE" ? "BE_REPCLU" : "LU_REPCLU";
-        $tableClu = $country === "BE" ? "BE_CLU" : "LU_CLU";
-
-        // Créer les placeholders pour la requête IN
-        $placeholders = [];
-        $params = [];
-        foreach ($customerNumbers as $i => $num) {
-            $placeholders[] = ":num{$i}";
-            $params[":num{$i}"] = $num;
-        }
-        $inClause = implode(",", $placeholders);
-
-        // Requête avec jointure CLL → REPCLU → CLU
-        $query = "
-            SELECT c.CLL_NCLIXX as customer_number, clu.CLU_LIB1 as cluster_name
-            FROM {$tableClient} c
-            LEFT JOIN {$tableRepClu} rc ON c.IDE_REP = rc.IDE_REP
-            LEFT JOIN {$tableClu} clu ON rc.IDE_CLU = clu.IDE_CLU
-            WHERE c.CLL_NCLIXX IN ({$inClause})
-        ";
-
-        try {
-            $results = $this->extDb->query($query, $params);
-
-            $clusterMap = [];
-            foreach ($results as $row) {
-                $key = $row["customer_number"] . "_" . $country;
-                $clusterMap[$key] = $row["cluster_name"] ?: "Non défini";
-            }
-
-            return $clusterMap;
-        } catch (\Exception $e) {
-            error_log("Stats::getClusterForCustomers error: " . $e->getMessage());
-            return [];
-        }
     }
 
     // ========================================
@@ -490,7 +498,7 @@ class Stats
     // ========================================
 
     /**
-     * Stats détaillées pour une campagne
+     * Statistiques complètes d'une campagne
      *
      * @param int $campaignId
      * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
@@ -709,44 +717,77 @@ class Stats
     }
 
     /**
-     * Produits vendus pour une campagne
+     * Produits d'une campagne avec leurs stats de vente
+     *
+     * Retourne TOUS les produits actifs de la campagne, même ceux sans commandes
      *
      * @param int $campaignId
      * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
+     * @modified 2025/12/23 - Correction : affiche tous les produits même sans commandes
+     * @modified 2025/12/23 - Correction : filtrage correct des stats par clients accessibles
      */
     public function getCampaignProducts(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
-        $params = [":campaign_id" => $campaignId];
+        $params = [
+            ":campaign_id" => $campaignId,
+            ":campaign_id_stats" => $campaignId
+        ];
+
+        // Construire le filtre clients pour la sous-requête des stats
         $customerFilter = "";
 
         if ($accessibleCustomerNumbers !== null) {
             if (empty($accessibleCustomerNumbers)) {
-                return [];
+                // Aucun client accessible = retourner les produits avec stats à 0
+                $query = "
+                    SELECT p.id, p.product_code, p.name_fr as product_name,
+                           0 as quantity_sold,
+                           0 as orders_count,
+                           0 as customers_count
+                    FROM products p
+                    WHERE p.campaign_id = :campaign_id
+                    AND p.is_active = 1
+                    ORDER BY p.product_code ASC
+                ";
+                return $this->db->query($query, [":campaign_id" => $campaignId]);
             }
+
+            // Créer les placeholders pour le filtre clients
             $placeholders = [];
             foreach ($accessibleCustomerNumbers as $i => $num) {
                 $key = ":cust_{$i}";
                 $placeholders[] = $key;
                 $params[$key] = $num;
             }
-            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+            $customerInClause = implode(",", $placeholders);
+            $customerFilter = "AND cu.customer_number IN ({$customerInClause})";
         }
 
+        // Requête avec sous-requête pour les stats filtrées
+        // La sous-requête calcule les stats UNIQUEMENT pour les clients accessibles
+        // Le LEFT JOIN garantit que tous les produits apparaissent même sans ventes
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
-                   COALESCE(SUM(ol.quantity), 0) as quantity_sold,
-                   COUNT(DISTINCT o.id) as orders_count,
-                   COUNT(DISTINCT o.customer_id) as customers_count
+                   COALESCE(stats.quantity_sold, 0) as quantity_sold,
+                   COALESCE(stats.orders_count, 0) as orders_count,
+                   COALESCE(stats.customers_count, 0) as customers_count
             FROM products p
-            LEFT JOIN order_lines ol ON p.id = ol.product_id
-            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
-            LEFT JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN (
+                SELECT ol.product_id,
+                       SUM(ol.quantity) as quantity_sold,
+                       COUNT(DISTINCT o.id) as orders_count,
+                       COUNT(DISTINCT o.customer_id) as customers_count
+                FROM order_lines ol
+                INNER JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                WHERE o.campaign_id = :campaign_id_stats
+                {$customerFilter}
+                GROUP BY ol.product_id
+            ) stats ON p.id = stats.product_id
             WHERE p.campaign_id = :campaign_id
             AND p.is_active = 1
-            {$customerFilter}
-            GROUP BY p.id
-            ORDER BY quantity_sold DESC
+            ORDER BY quantity_sold DESC, p.product_code ASC
         ";
 
         return $this->db->query($query, $params);
@@ -877,104 +918,104 @@ class Stats
     // ========================================
 
     /**
- * Liste des représentants avec leurs stats
- *
- * @modified 2025/12/08 - Filtrage clients éligibles selon mode campagne
- *
- * @param string|null $country
- * @param int|null $campaignId
- * @return array
- */
-public function getRepStats(?string $country = null, ?int $campaignId = null): array
-{
-    if (!$this->extDb) {
-        return [];
-    }
-
-    $reps = [];
-
-    // Récupérer les infos de la campagne si spécifiée (pour le filtrage clients)
-    $campaign = null;
-    if ($campaignId) {
-        $result = $this->db->query(
-            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
-            [":id" => $campaignId]
-        );
-        if (!empty($result)) {
-            $campaign = $result[0];
-            // Forcer le filtrage sur le pays de la campagne
-            $country = $campaign["country"];
+     * Liste des représentants avec leurs stats
+     *
+     * @modified 2025/12/08 - Filtrage clients éligibles selon mode campagne
+     *
+     * @param string|null $country
+     * @param int|null $campaignId
+     * @return array
+     */
+    public function getRepStats(?string $country = null, ?int $campaignId = null): array
+    {
+        if (!$this->extDb) {
+            return [];
         }
-    }
 
-    try {
-        // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
-        if (!$country || $country === "BE") {
-            $beReps = $this->extDb->query(
-                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                 FROM BE_REP r
-                 LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                 LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                 ORDER BY c.CLU_LIB1, r.REP_NOM",
+        $reps = [];
+
+        // Récupérer les infos de la campagne si spécifiée (pour le filtrage clients)
+        $campaign = null;
+        if ($campaignId) {
+            $result = $this->db->query(
+                "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+                [":id" => $campaignId]
             );
-
-            foreach ($beReps as $rep) {
-                $reps[] = [
-                    "id" => $rep["IDE_REP"],
-                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                    "email" => $rep["REP_EMAIL"],
-                    "cluster" => $rep["cluster_name"] ?: "Non défini",
-                    "country" => "BE",
-                ];
+            if (!empty($result)) {
+                $campaign = $result[0];
+                // Forcer le filtrage sur le pays de la campagne
+                $country = $campaign["country"];
             }
         }
 
-        // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
-        if (!$country || $country === "LU") {
-            $luReps = $this->extDb->query(
-                "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
-                        COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
-                 FROM LU_REP r
-                 LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
-                 LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
-                 ORDER BY c.CLU_LIB1, r.REP_NOM",
-            );
+        try {
+            // Récupérer les reps BE avec le nom du cluster via BE_REPCLU → BE_CLU
+            if (!$country || $country === "BE") {
+                $beReps = $this->extDb->query(
+                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM BE_REP r
+                     LEFT JOIN BE_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                     LEFT JOIN BE_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                     ORDER BY c.CLU_LIB1, r.REP_NOM",
+                );
 
-            foreach ($luReps as $rep) {
-                $reps[] = [
-                    "id" => $rep["IDE_REP"],
-                    "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
-                    "email" => $rep["REP_EMAIL"],
-                    "cluster" => $rep["cluster_name"] ?: "Non défini",
-                    "country" => "LU",
-                ];
+                foreach ($beReps as $rep) {
+                    $reps[] = [
+                        "id" => $rep["IDE_REP"],
+                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                        "email" => $rep["REP_EMAIL"],
+                        "cluster" => $rep["cluster_name"] ?: "Non défini",
+                        "country" => "BE",
+                    ];
+                }
             }
+
+            // Récupérer les reps LU avec le nom du cluster via LU_REPCLU → LU_CLU
+            if (!$country || $country === "LU") {
+                $luReps = $this->extDb->query(
+                    "SELECT r.IDE_REP, r.REP_PRENOM, r.REP_NOM, r.REP_EMAIL,
+                            COALESCE(c.CLU_LIB1, 'Non défini') as cluster_name
+                     FROM LU_REP r
+                     LEFT JOIN LU_REPCLU rc ON r.IDE_REP = rc.IDE_REP
+                     LEFT JOIN LU_CLU c ON rc.IDE_CLU = c.IDE_CLU
+                     ORDER BY c.CLU_LIB1, r.REP_NOM",
+                );
+
+                foreach ($luReps as $rep) {
+                    $reps[] = [
+                        "id" => $rep["IDE_REP"],
+                        "name" => trim($rep["REP_PRENOM"] . " " . $rep["REP_NOM"]),
+                        "email" => $rep["REP_EMAIL"],
+                        "cluster" => $rep["cluster_name"] ?: "Non défini",
+                        "country" => "LU",
+                    ];
+                }
+            }
+
+            // Enrichir avec les stats de commandes ET le nombre de clients éligibles
+            foreach ($reps as &$rep) {
+                $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
+
+                // 🔧 CORRECTION : Utiliser la nouvelle méthode qui filtre selon le mode campagne
+                $rep["total_clients"] = $this->getRepClientsCountForCampaign(
+                    $rep["id"],
+                    $rep["country"],
+                    $campaignId,
+                    $campaign
+                );
+            }
+        } catch (\Exception $e) {
+            error_log("Stats::getRepStats error: " . $e->getMessage());
         }
 
-        // Enrichir avec les stats de commandes ET le nombre de clients éligibles
-        foreach ($reps as &$rep) {
-            $rep["stats"] = $this->getRepOrderStats($rep["id"], $rep["country"], $campaignId);
+        // Trier par quantité commandée
+        usort($reps, function ($a, $b) {
+            return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
+        });
 
-            // 🔧 CORRECTION : Utiliser la nouvelle méthode qui filtre selon le mode campagne
-            $rep["total_clients"] = $this->getRepClientsCountForCampaign(
-                $rep["id"],
-                $rep["country"],
-                $campaignId,
-                $campaign
-            );
-        }
-    } catch (\Exception $e) {
-        error_log("Stats::getRepStats error: " . $e->getMessage());
+        return $reps;
     }
-
-    // Trier par quantité commandée
-    usort($reps, function ($a, $b) {
-        return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
-    });
-
-    return $reps;
-}
 
     /**
      * Stats de commandes pour un représentant
@@ -1078,112 +1119,112 @@ public function getRepStats(?string $country = null, ?int $campaignId = null): a
         }
     }
 
-/**
- * Nombre de clients d'un représentant ÉLIGIBLES pour une campagne
- *
- * Filtre selon le mode d'attribution de la campagne :
- * - MANUAL : Intersection clients rep ET campaign_customers
- * - AUTOMATIC/PROTECTED : Tous les clients du rep
- *
- * @param string $repId ID du représentant
- * @param string $country Pays (BE/LU)
- * @param int|null $campaignId ID de la campagne
- * @param array|null $campaign Données de la campagne (optionnel, sera chargé si null)
- * @return int Nombre de clients éligibles
- *
- * @created 2025/12/08
- */
-private function getRepClientsCountForCampaign(
-    string $repId,
-    string $country,
-    ?int $campaignId = null,
-    ?array $campaign = null
-): int {
-    // Si pas de campagne spécifiée, retourner le total normal
-    if (!$campaignId) {
-        return $this->getRepClientsCount($repId, $country);
-    }
-
-    // Charger les infos campagne si pas fournies
-    if ($campaign === null) {
-        $result = $this->db->query(
-            "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
-            [":id" => $campaignId]
-        );
-        if (empty($result)) {
+    /**
+     * Nombre de clients d'un représentant ÉLIGIBLES pour une campagne
+     *
+     * Filtre selon le mode d'attribution de la campagne :
+     * - MANUAL : Intersection clients rep ET campaign_customers
+     * - AUTOMATIC/PROTECTED : Tous les clients du rep
+     *
+     * @param string $repId ID du représentant
+     * @param string $country Pays (BE/LU)
+     * @param int|null $campaignId ID de la campagne
+     * @param array|null $campaign Données de la campagne (optionnel, sera chargé si null)
+     * @return int Nombre de clients éligibles
+     *
+     * @created 2025/12/08
+     */
+    private function getRepClientsCountForCampaign(
+        string $repId,
+        string $country,
+        ?int $campaignId = null,
+        ?array $campaign = null
+    ): int {
+        // Si pas de campagne spécifiée, retourner le total normal
+        if (!$campaignId) {
             return $this->getRepClientsCount($repId, $country);
         }
-        $campaign = $result[0];
-    }
 
-    $mode = $campaign["customer_assignment_mode"] ?? "automatic";
-    $campaignCountry = $campaign["country"] ?? "BE";
+        // Charger les infos campagne si pas fournies
+        if ($campaign === null) {
+            $result = $this->db->query(
+                "SELECT customer_assignment_mode, country FROM campaigns WHERE id = :id",
+                [":id" => $campaignId]
+            );
+            if (empty($result)) {
+                return $this->getRepClientsCount($repId, $country);
+            }
+            $campaign = $result[0];
+        }
 
-    // Si le pays du rep ne correspond pas à la campagne, retourner 0
-    if ($country !== $campaignCountry) {
-        return 0;
-    }
+        $mode = $campaign["customer_assignment_mode"] ?? "automatic";
+        $campaignCountry = $campaign["country"] ?? "BE";
 
-    // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
-    if ($mode !== "manual") {
-        return $this->getRepClientsCount($repId, $country);
-    }
-
-    // Mode MANUAL : intersection clients rep ET campaign_customers
-    if (!$this->extDb) {
-        return 0;
-    }
-
-    try {
-        $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
-
-        // Récupérer les numéros clients du représentant
-        $repClients = $this->extDb->query(
-            "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
-            [":rep_id" => $repId]
-        );
-
-        if (empty($repClients)) {
+        // Si le pays du rep ne correspond pas à la campagne, retourner 0
+        if ($country !== $campaignCountry) {
             return 0;
         }
 
-        // Extraire les numéros clients
-        $customerNumbers = array_filter(
-            array_column($repClients, "customer_number"),
-            fn($n) => $n !== null && $n !== ""
-        );
+        // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
+        if ($mode !== "manual") {
+            return $this->getRepClientsCount($repId, $country);
+        }
 
-        if (empty($customerNumbers)) {
+        // Mode MANUAL : intersection clients rep ET campaign_customers
+        if (!$this->extDb) {
             return 0;
         }
 
-        // Créer les placeholders pour la requête IN
-        $placeholders = [];
-        $params = [":campaign_id" => $campaignId];
-        foreach ($customerNumbers as $i => $num) {
-            $placeholders[] = ":num{$i}";
-            $params[":num{$i}"] = $num;
+        try {
+            $tableClient = $country === "BE" ? "BE_CLL" : "LU_CLL";
+
+            // Récupérer les numéros clients du représentant
+            $repClients = $this->extDb->query(
+                "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+                [":rep_id" => $repId]
+            );
+
+            if (empty($repClients)) {
+                return 0;
+            }
+
+            // Extraire les numéros clients
+            $customerNumbers = array_filter(
+                array_column($repClients, "customer_number"),
+                fn($n) => $n !== null && $n !== ""
+            );
+
+            if (empty($customerNumbers)) {
+                return 0;
+            }
+
+            // Créer les placeholders pour la requête IN
+            $placeholders = [];
+            $params = [":campaign_id" => $campaignId];
+            foreach ($customerNumbers as $i => $num) {
+                $placeholders[] = ":num{$i}";
+                $params[":num{$i}"] = $num;
+            }
+            $inClause = implode(",", $placeholders);
+
+            // Compter l'intersection avec campaign_customers
+            $query = "
+                SELECT COUNT(*) as total
+                FROM campaign_customers
+                WHERE campaign_id = :campaign_id
+                AND is_authorized = 1
+                AND customer_number IN ({$inClause})
+            ";
+
+            $result = $this->db->query($query, $params);
+
+            return (int) ($result[0]["total"] ?? 0);
+
+        } catch (\Exception $e) {
+            error_log("Stats::getRepClientsCountForCampaign error: " . $e->getMessage());
+            return 0;
         }
-        $inClause = implode(",", $placeholders);
-
-        // Compter l'intersection avec campaign_customers
-        $query = "
-            SELECT COUNT(*) as total
-            FROM campaign_customers
-            WHERE campaign_id = :campaign_id
-            AND is_authorized = 1
-            AND customer_number IN ({$inClause})
-        ";
-
-        $result = $this->db->query($query, $params);
-
-        return (int) ($result[0]["total"] ?? 0);
-
-    } catch (\Exception $e) {
-        error_log("Stats::getRepClientsCountForCampaign error: " . $e->getMessage());
-        return 0;
     }
-}
 
 
 
@@ -1329,6 +1370,125 @@ private function getRepClientsCountForCampaign(
     // ========================================
     // LISTES ET HELPERS
     // ========================================
+
+    /**
+     * Top clients pour une campagne (ceux ayant commandé)
+     *
+     * Retourne les clients triés par quantité commandée, avec enrichissement
+     * depuis la base externe pour le nom du représentant
+     *
+     * @param int $campaignId ID de la campagne
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
+     * @param int $limit Nombre max de clients (10, 25, 50, 100)
+     * @return array
+     * @created 2025/12/23
+     */
+    public function getTopCustomersForCampaign(int $campaignId, ?array $accessibleCustomerNumbers = null, int $limit = 50): array
+    {
+        // Limiter à 100 max
+        $limit = min($limit, 100);
+
+        $params = [":campaign_id" => $campaignId];
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":topcust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Requête principale : stats par client
+        $query = "
+            SELECT
+                cu.customer_number,
+                cu.company_name,
+                cu.country,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity,
+                COUNT(DISTINCT ol.product_id) as distinct_products
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'validated'
+            {$customerFilter}
+            GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
+            HAVING total_quantity > 0
+            ORDER BY total_quantity DESC
+            LIMIT {$limit}
+        ";
+
+        $results = $this->db->query($query, $params);
+
+        // Enrichir avec les données de la base externe (nom du rep)
+        if (!empty($results) && $this->extDb) {
+            // Séparer par pays pour les requêtes
+            $customersBE = [];
+            $customersLU = [];
+
+            foreach ($results as $row) {
+                if ($row['country'] === 'BE') {
+                    $customersBE[] = $row['customer_number'];
+                } else {
+                    $customersLU[] = $row['customer_number'];
+                }
+            }
+
+            $repMapping = [];
+
+            try {
+                // Récupérer les reps pour les clients BE
+                if (!empty($customersBE)) {
+                    $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
+                    $beData = $this->extDb->query(
+                        "SELECT cll.CLL_NCLIXX as customer_number,
+                                CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                         FROM BE_CLL cll
+                         LEFT JOIN BE_REP r ON cll.IDE_REP = r.IDE_REP
+                         WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                        $customersBE
+                    );
+                    foreach ($beData as $row) {
+                        $repMapping[$row['customer_number'] . '_BE'] = trim($row['rep_name']);
+                    }
+                }
+
+                // Récupérer les reps pour les clients LU
+                if (!empty($customersLU)) {
+                    $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
+                    $luData = $this->extDb->query(
+                        "SELECT cll.CLL_NCLIXX as customer_number,
+                                CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                         FROM LU_CLL cll
+                         LEFT JOIN LU_REP r ON cll.IDE_REP = r.IDE_REP
+                         WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                        $customersLU
+                    );
+                    foreach ($luData as $row) {
+                        $repMapping[$row['customer_number'] . '_LU'] = trim($row['rep_name']);
+                    }
+                }
+            } catch (\Exception $e) {
+                error_log("Stats::getTopCustomersForCampaign enrichment error: " . $e->getMessage());
+            }
+
+            // Ajouter le nom du rep aux résultats
+            foreach ($results as &$row) {
+                $key = $row['customer_number'] . '_' . $row['country'];
+                $row['rep_name'] = $repMapping[$key] ?? '-';
+            }
+        }
+
+        return $results;
+    }
 
     /**
      * Liste des campagnes pour les filtres
