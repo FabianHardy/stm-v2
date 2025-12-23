@@ -1524,19 +1524,25 @@ class StatsController
             exit();
         }
 
+        // Debug : récupérer le rôle brut
+        $rawRole = Session::get('user_role');
+        $userId = Session::get('user_id');
+
         $accessScope = $this->getExportAccessScope();
         $currentHash = $this->getExportDataHash($campaignId, $accessScope);
         $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
 
         // Debug : log le scope calculé
-        error_log("checkExportCache - user_id: " . Session::get('user_id') . ", role: " . Session::get('user_role') . ", scope: " . $accessScope);
+        error_log("checkExportCache - user_id: " . $userId . ", role: " . $rawRole . ", scope: " . $accessScope);
 
         if (!$cache) {
             // Pas de cache
             echo json_encode([
                 'status' => 'no_cache',
                 'message' => 'Première génération requise',
-                'debug_scope' => $accessScope
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole,
+                'debug_user_id' => $userId
             ]);
         } elseif ($cache['data_hash'] !== $currentHash) {
             // Cache obsolète
@@ -1545,7 +1551,8 @@ class StatsController
                 'message' => 'Nouvelles données détectées',
                 'cached_at' => $cache['created_at'],
                 'file_size' => $cache['file_size'],
-                'debug_scope' => $accessScope
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole
             ]);
         } else {
             // Cache valide
@@ -1554,7 +1561,8 @@ class StatsController
                 'message' => 'Fichier en cache',
                 'cached_at' => $cache['created_at'],
                 'file_size' => $cache['file_size'],
-                'debug_scope' => $accessScope
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole
             ]);
         }
 
