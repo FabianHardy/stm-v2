@@ -206,13 +206,16 @@ class Stats
      * @param string $dateTo
      * @param int|null $campaignId
      * @param array|null $accessibleCampaignIds Liste des campagnes accessibles (null = tout)
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
+     * @modified 2025/12/23 - Ajout filtre par clients accessibles
      */
     public function getDailyEvolution(
         string $dateFrom,
         string $dateTo,
         ?int $campaignId = null,
-        ?array $accessibleCampaignIds = null
+        ?array $accessibleCampaignIds = null,
+        ?array $accessibleCustomerNumbers = null
     ): array {
         $params = [
             ":date_from" => $dateFrom,
@@ -228,16 +231,40 @@ class Stats
         // Filtrage hiérarchique par campagnes accessibles
         $accessFilter = $this->buildCampaignAccessFilter("o.campaign_id", $accessibleCampaignIds, $params, "daily_acc");
 
+        // Filtrage par clients accessibles
+        $customerFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner tableau vide
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":daily_cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = " AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Si filtre clients, joindre la table customers
+        $customerJoin = "";
+        if ($customerFilter !== "") {
+            $customerJoin = "INNER JOIN customers cu ON o.customer_id = cu.id";
+        }
+
         $query = "
             SELECT DATE(o.created_at) as day,
                    COUNT(DISTINCT o.id) as orders_count,
                    COALESCE(SUM(ol.quantity), 0) as quantity
             FROM orders o
+            {$customerJoin}
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.status = 'validated'
             AND DATE(o.created_at) BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$accessFilter}
+            {$customerFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY day ASC
         ";
@@ -697,15 +724,34 @@ class Stats
      * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array
      * @modified 2025/12/23 - Correction : affiche tous les produits même sans commandes
+     * @modified 2025/12/23 - Correction : filtrage correct des stats par clients accessibles
      */
     public function getCampaignProducts(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
-        $params = [":campaign_id" => $campaignId];
+        $params = [
+            ":campaign_id" => $campaignId,
+            ":campaign_id_stats" => $campaignId
+        ];
 
-        // Construire la condition de jointure pour filtrer par clients accessibles
-        $customerJoinCondition = "o.customer_id = cu.id";
+        // Construire le filtre clients pour la sous-requête des stats
+        $customerFilter = "";
 
-        if ($accessibleCustomerNumbers !== null && !empty($accessibleCustomerNumbers)) {
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner les produits avec stats à 0
+                $query = "
+                    SELECT p.id, p.product_code, p.name_fr as product_name,
+                           0 as quantity_sold,
+                           0 as orders_count,
+                           0 as customers_count
+                    FROM products p
+                    WHERE p.campaign_id = :campaign_id
+                    AND p.is_active = 1
+                    ORDER BY p.product_code ASC
+                ";
+                return $this->db->query($query, [":campaign_id" => $campaignId]);
+            }
+
             // Créer les placeholders pour le filtre clients
             $placeholders = [];
             foreach ($accessibleCustomerNumbers as $i => $num) {
@@ -714,25 +760,32 @@ class Stats
                 $params[$key] = $num;
             }
             $customerInClause = implode(",", $placeholders);
-
-            // Ajouter le filtre clients dans la condition de jointure customers
-            $customerJoinCondition .= " AND cu.customer_number IN ({$customerInClause})";
+            $customerFilter = "AND cu.customer_number IN ({$customerInClause})";
         }
 
-        // Requête qui retourne TOUS les produits actifs, avec stats à 0 si pas de commandes
-        // Le filtre clients est dans le LEFT JOIN customers, pas dans le WHERE
+        // Requête avec sous-requête pour les stats filtrées
+        // La sous-requête calcule les stats UNIQUEMENT pour les clients accessibles
+        // Le LEFT JOIN garantit que tous les produits apparaissent même sans ventes
         $query = "
             SELECT p.id, p.product_code, p.name_fr as product_name,
-                   COALESCE(SUM(ol.quantity), 0) as quantity_sold,
-                   COUNT(DISTINCT o.id) as orders_count,
-                   COUNT(DISTINCT cu.id) as customers_count
+                   COALESCE(stats.quantity_sold, 0) as quantity_sold,
+                   COALESCE(stats.orders_count, 0) as orders_count,
+                   COALESCE(stats.customers_count, 0) as customers_count
             FROM products p
-            LEFT JOIN order_lines ol ON p.id = ol.product_id
-            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
-            LEFT JOIN customers cu ON {$customerJoinCondition}
+            LEFT JOIN (
+                SELECT ol.product_id,
+                       SUM(ol.quantity) as quantity_sold,
+                       COUNT(DISTINCT o.id) as orders_count,
+                       COUNT(DISTINCT o.customer_id) as customers_count
+                FROM order_lines ol
+                INNER JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                WHERE o.campaign_id = :campaign_id_stats
+                {$customerFilter}
+                GROUP BY ol.product_id
+            ) stats ON p.id = stats.product_id
             WHERE p.campaign_id = :campaign_id
             AND p.is_active = 1
-            GROUP BY p.id
             ORDER BY quantity_sold DESC, p.product_code ASC
         ";
 
