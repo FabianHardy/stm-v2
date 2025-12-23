@@ -10,6 +10,7 @@
  * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
+ * @modified 2025/12/23 - Correction graphiques (getDailyEvolution, getCategoryStatsForCampaign) pour filtre clients
  */
 
 namespace App\Controllers;
@@ -319,7 +320,7 @@ class StatsController
                 $endDate = $today;
             }
 
-            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId);
+            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId, null, $accessibleCustomerNumbers);
 
             // Préparer les données pour le graphique d'évolution
             $currentDate = new \DateTime($startDate);
@@ -341,7 +342,7 @@ class StatsController
             // ============================================
             // Stats par catégorie pour le donut
             // ============================================
-            $categoryStats = $this->getCategoryStatsForCampaign($campaignId);
+            $categoryStats = $this->getCategoryStatsForCampaign($campaignId, $accessibleCustomerNumbers);
 
             foreach ($categoryStats as $cat) {
                 $categoryLabels[] = $cat["category_name"];
@@ -377,11 +378,33 @@ class StatsController
      * Récupérer les stats par catégorie pour une campagne
      *
      * @param int $campaignId ID de la campagne
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
      * @return array Stats par catégorie
+     * @modified 2025/12/23 - Ajout filtre par clients accessibles
      */
-    private function getCategoryStatsForCampaign(int $campaignId): array
+    private function getCategoryStatsForCampaign(int $campaignId, ?array $accessibleCustomerNumbers = null): array
     {
         $db = \Core\Database::getInstance();
+        $params = [":campaign_id" => $campaignId];
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $customerJoin = "";
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner tableau vide
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cat_cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerJoin = "INNER JOIN customers cu ON o.customer_id = cu.id";
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
 
         $query = "
             SELECT
@@ -392,14 +415,15 @@ class StatsController
             INNER JOIN products p ON c.id = p.category_id AND p.campaign_id = :campaign_id
             LEFT JOIN order_lines ol ON p.id = ol.product_id
             LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            {$customerJoin}
+            WHERE 1=1
+            {$customerFilter}
             GROUP BY c.id, c.name_fr, c.color
             HAVING quantity > 0
             ORDER BY quantity DESC
         ";
 
-        return $db->query($query, [
-            ":campaign_id" => $campaignId,
-        ]);
+        return $db->query($query, $params);
     }
 
     /**
