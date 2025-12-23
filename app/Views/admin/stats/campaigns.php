@@ -13,6 +13,7 @@
  * @modified 2025/12/09 - Ajout fournisseur dans Produits, accordion dans Fournisseurs, tri par colonnes
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
  * @modified 2025/12/22 - Ajout overlay de chargement pour export Excel avec timer
+ * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -64,12 +65,12 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
 <div id="export-loader" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden items-center justify-center">
     <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
         <div class="relative mb-4">
-            <div class="w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
+            <div id="export-spinner" class="w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
             <i class="fas fa-file-excel text-green-600 text-2xl absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
         </div>
-        <h3 class="text-xl font-bold text-gray-900 mb-2">Génération de l'export Excel</h3>
-        <p class="text-gray-600 mb-4">Cette opération peut prendre plusieurs minutes selon le volume de données.</p>
-        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+        <h3 id="export-title" class="text-xl font-bold text-gray-900 mb-2">Génération de l'export Excel</h3>
+        <p id="export-message" class="text-gray-600 mb-4">Cette opération peut prendre plusieurs minutes selon le volume de données.</p>
+        <div id="export-warning" class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
             <i class="fas fa-exclamation-triangle mr-2"></i>
             <strong>Ne quittez pas cette page</strong> pendant la génération.
         </div>
@@ -553,16 +554,39 @@ $suppliersCount = count($supplierStats ?? []);
             </div>
             <?php else: ?>
 
-            <!-- Bouton Export Excel Représentants -->
-            <div class="flex justify-end mb-4">
-                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" onsubmit="return startExport(this)">
+            <!-- Bouton Export Excel Représentants avec statut cache -->
+            <div class="flex justify-end items-center gap-3 mb-4" x-data="exportCache()" x-init="checkCache()">
+                <!-- Indicateur de statut du cache -->
+                <div class="text-xs text-right">
+                    <template x-if="cacheStatus === 'checking'">
+                        <span class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification...</span>
+                    </template>
+                    <template x-if="cacheStatus === 'valid'">
+                        <span class="text-green-600" :title="'Généré le ' + cachedAt">
+                            <i class="fas fa-check-circle mr-1"></i>En cache
+                            <span class="text-gray-400">(<span x-text="formatFileSize(fileSize)"></span>)</span>
+                        </span>
+                    </template>
+                    <template x-if="cacheStatus === 'outdated'">
+                        <span class="text-amber-600" :title="'Fichier du ' + cachedAt + ' - nouvelles données disponibles'">
+                            <i class="fas fa-exclamation-circle mr-1"></i>Mise à jour disponible
+                        </span>
+                    </template>
+                    <template x-if="cacheStatus === 'no_cache'">
+                        <span class="text-gray-400">
+                            <i class="fas fa-file-excel mr-1"></i>Non généré
+                        </span>
+                    </template>
+                </div>
+
+                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="return startExport($event, cacheStatus)">
                     <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
                     <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                     <input type="hidden" name="download_token" id="download_token" value="">
                     <button type="submit"
                             class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition shadow-sm">
                         <i class="fas fa-file-excel"></i>
-                        <span>Export Excel Représentants</span>
+                        <span x-text="cacheStatus === 'valid' ? 'Télécharger' : 'Export Excel'"></span>
                     </button>
                 </form>
             </div>
@@ -834,18 +858,97 @@ function showLoader() {
 }
 
 // ============================================
+// EXPORT CACHE - Vérifie l'état du cache
+// ============================================
+function exportCache() {
+    return {
+        cacheStatus: 'checking',
+        cachedAt: null,
+        fileSize: 0,
+
+        checkCache() {
+            const campaignId = <?= $campaignId ?? 0 ?>;
+            if (!campaignId) {
+                this.cacheStatus = 'no_cache';
+                return;
+            }
+
+            fetch('/stm/admin/stats/check-export-cache?campaign_id=' + campaignId)
+                .then(response => response.json())
+                .then(data => {
+                    this.cacheStatus = data.status || 'no_cache';
+                    this.cachedAt = data.cached_at ? this.formatDate(data.cached_at) : null;
+                    this.fileSize = data.file_size || 0;
+                })
+                .catch(error => {
+                    console.error('Erreur vérification cache:', error);
+                    this.cacheStatus = 'no_cache';
+                });
+        },
+
+        formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+    }
+}
+
+// ============================================
 // EXPORT LOADER AVEC TIMER ET COOKIE TOKEN
 // ============================================
 let exportTimerInterval = null;
 let exportStartTime = null;
 let downloadCheckInterval = null;
 
-function startExport(form) {
+function startExport(event, cacheStatus) {
     // Générer un token unique pour ce téléchargement
     const downloadToken = 'download_' + Date.now();
 
     // Ajouter le token au formulaire
     document.getElementById('download_token').value = downloadToken;
+
+    // Adapter le message selon le statut du cache
+    const titleEl = document.getElementById('export-title');
+    const messageEl = document.getElementById('export-message');
+    const warningEl = document.getElementById('export-warning');
+    const spinnerEl = document.getElementById('export-spinner');
+
+    if (cacheStatus === 'valid') {
+        // Fichier en cache - téléchargement rapide
+        titleEl.textContent = 'Téléchargement en cours...';
+        messageEl.textContent = 'Le fichier est en cache, téléchargement immédiat.';
+        warningEl.classList.add('hidden');
+        spinnerEl.classList.remove('border-green-200', 'border-t-green-600');
+        spinnerEl.classList.add('border-blue-200', 'border-t-blue-600');
+    } else if (cacheStatus === 'outdated') {
+        // Cache obsolète - régénération
+        titleEl.textContent = 'Mise à jour de l\'export...';
+        messageEl.textContent = 'De nouvelles données ont été détectées. Régénération du fichier en cours.';
+        warningEl.classList.remove('hidden');
+        spinnerEl.classList.remove('border-blue-200', 'border-t-blue-600');
+        spinnerEl.classList.add('border-green-200', 'border-t-green-600');
+    } else {
+        // Pas de cache - première génération
+        titleEl.textContent = 'Génération de l\'export Excel';
+        messageEl.textContent = 'Cette opération peut prendre plusieurs minutes selon le volume de données.';
+        warningEl.classList.remove('hidden');
+        spinnerEl.classList.remove('border-blue-200', 'border-t-blue-600');
+        spinnerEl.classList.add('border-green-200', 'border-t-green-600');
+    }
 
     // Afficher l'overlay
     document.getElementById('export-loader').classList.remove('hidden');
@@ -863,6 +966,10 @@ function startExport(form) {
             hideExportLoader();
             // Supprimer le cookie
             document.cookie = 'download_complete=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            // Rafraîchir le statut du cache (si Alpine.js est disponible)
+            if (window.Alpine) {
+                // Le composant se rafraîchira automatiquement
+            }
         }
     }, 500);
 
@@ -877,10 +984,7 @@ function startExport(form) {
 
 function showExportLoader() {
     // Fonction conservée pour compatibilité
-    const form = document.getElementById('export-form');
-    if (form) {
-        startExport(form);
-    }
+    startExport(null, 'no_cache');
 }
 
 function hideExportLoader() {

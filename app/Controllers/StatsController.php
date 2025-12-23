@@ -8,6 +8,7 @@
  * @created 2025/11/25
  * @modified 2025/12/09 - Ajout stats fournisseurs dans campaigns()
  * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
+ * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  */
 
 namespace App\Controllers;
@@ -747,6 +748,8 @@ class StatsController
         ini_set('memory_limit', '2048M'); // 2 Go
 
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
+        $downloadToken = $_POST['download_token'] ?? '';
+        $forceRegenerate = !empty($_POST["force_regenerate"]);
 
         if (!$campaignId) {
             Session::setFlash("error", "Veuillez sélectionner une campagne");
@@ -772,6 +775,28 @@ class StatsController
         $campaignCountry = $campaign["country"];
         $campaignName = $campaign["name"];
         $assignmentMode = $campaign["customer_assignment_mode"] ?? "automatic";
+
+        // ============================================
+        // SYSTÈME DE CACHE
+        // ============================================
+
+        // 1. Calculer le scope d'accès selon le rôle
+        $accessScope = $this->getExportAccessScope();
+
+        // 2. Calculer le hash des données actuelles
+        $currentHash = $this->getExportDataHash($campaignId, $accessScope);
+
+        // 3. Vérifier si un cache existe
+        $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
+
+        // 4. Si cache valide (même hash) et pas de régénération forcée → servir le fichier
+        if ($cache && $cache['data_hash'] === $currentHash && !$forceRegenerate) {
+            $this->serveExportFile($cache, $downloadToken);
+            exit();
+        }
+
+        // 5. Sinon → générer le fichier
+        // (cache inexistant, hash différent, ou régénération forcée)
 
         // Récupérer les représentants avec leurs stats (filtrés par campagne)
         $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
@@ -1041,25 +1066,37 @@ class StatsController
         // Activer la première feuille
         $spreadsheet->setActiveSheetIndex(0);
 
-        // Générer le fichier
-        $filename = "export_reps_" . preg_replace("/[^a-zA-Z0-9]/", "_", $campaignName) . "_" . date("Ymd_His") . ".xlsx";
+        // ============================================
+        // SAUVEGARDE EN CACHE
+        // ============================================
 
-        // Cookie pour signaler au JS que le téléchargement est terminé
-        $downloadToken = $_POST['download_token'] ?? '';
-        if ($downloadToken) {
-            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        // Créer le dossier de stockage si nécessaire
+        $storageDir = __DIR__ . '/../../storage/exports';
+        if (!is_dir($storageDir)) {
+            mkdir($storageDir, 0755, true);
         }
 
-        header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        header("Content-Disposition: attachment;filename=\"" . $filename . "\"");
-        header("Cache-Control: max-age=0");
-        header("Pragma: public");
+        // Générer un nom de fichier unique pour le cache
+        $filename = "export_reps_" . preg_replace("/[^a-zA-Z0-9]/", "_", $campaignName) . "_" . $campaignId . "_" . md5($accessScope) . ".xlsx";
+        $filePath = $storageDir . '/' . $filename;
 
+        // Sauvegarder le fichier sur le serveur
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $writer->save("php://output");
+        $writer->save($filePath);
 
         $spreadsheet->disconnectWorksheets();
         unset($spreadsheet);
+
+        // Enregistrer dans la table de cache
+        $fileSize = filesize($filePath);
+        $this->saveExportCache($campaignId, 'reps_excel', $accessScope, $filePath, $filename, $currentHash, $fileSize);
+
+        // Servir le fichier
+        $cacheData = [
+            'file_path' => $filePath,
+            'file_name' => $filename
+        ];
+        $this->serveExportFile($cacheData, $downloadToken);
 
         exit();
     }
@@ -1174,5 +1211,347 @@ class StatsController
             error_log("getClientProductQuantities error: " . $e->getMessage());
             return [];
         }
+    }
+
+    // =========================================================================
+    // MÉTHODES DE CACHE POUR LES EXPORTS
+    // =========================================================================
+
+    /**
+     * Calcule le scope d'accès selon le rôle de l'utilisateur
+     *
+     * @return string Le scope d'accès (global, createur_X, manager_X, rep_X)
+     * @created 2025/12/22
+     */
+    private function getExportAccessScope(): string
+    {
+        $userId = Session::get('user_id');
+        $userRole = Session::get('user_role');
+
+        // Admin et superadmin : accès global (même fichier pour tous)
+        if (in_array($userRole, ['superadmin', 'admin'])) {
+            return 'global';
+        }
+
+        // Créateur : scope basé sur user_id
+        if ($userRole === 'createur') {
+            return 'createur_' . $userId;
+        }
+
+        // Manager reps : scope basé sur user_id
+        if ($userRole === 'manager_reps') {
+            return 'manager_' . $userId;
+        }
+
+        // Rep : scope basé sur user_id
+        if ($userRole === 'rep') {
+            return 'rep_' . $userId;
+        }
+
+        // Par défaut : scope unique par utilisateur
+        return 'user_' . $userId;
+    }
+
+    /**
+     * Calcule le hash des données pour détecter les changements
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $accessScope Scope d'accès
+     * @return string Hash SHA256 des données
+     * @created 2025/12/22
+     */
+    private function getExportDataHash(int $campaignId, string $accessScope): string
+    {
+        $db = \Core\Database::getInstance();
+
+        // Récupérer les stats de base selon le scope
+        $accessibleCampaignIds = $this->getAccessibleCampaignIds();
+
+        // Filtre campagne si on a des restrictions
+        $campaignFilter = "";
+        $params = [":campaign_id" => $campaignId];
+
+        if ($accessibleCampaignIds !== null && !in_array($campaignId, $accessibleCampaignIds)) {
+            // Pas d'accès à cette campagne - hash vide
+            return hash('sha256', 'no_access');
+        }
+
+        // Compter les commandes validées
+        $query = "
+            SELECT
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity,
+                MAX(o.created_at) as last_order_date
+            FROM orders o
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'validated'
+        ";
+
+        $result = $db->query($query, $params);
+        $stats = $result[0] ?? ['orders_count' => 0, 'total_quantity' => 0, 'last_order_date' => null];
+
+        // Compter les représentants avec clients (selon le scope)
+        $repsCount = 0;
+        if (strpos($accessScope, 'rep_') === 0) {
+            // Rep : un seul rep
+            $repsCount = 1;
+        } elseif (strpos($accessScope, 'manager_') === 0) {
+            // Manager : compter ses reps
+            $managedReps = $this->getManagedRepIds();
+            $repsCount = count($managedReps);
+        } else {
+            // Admin/Global : compter tous les reps de la campagne
+            $campaign = $this->campaignModel->findById($campaignId);
+            $allReps = $this->statsModel->getRepStats($campaign['country'] ?? 'BE', $campaignId);
+            $repsCount = count($allReps);
+        }
+
+        // Construire une chaîne unique pour le hash
+        $hashString = implode('|', [
+            $campaignId,
+            $accessScope,
+            $stats['orders_count'],
+            $stats['total_quantity'],
+            $stats['last_order_date'] ?? 'none',
+            $repsCount
+        ]);
+
+        return hash('sha256', $hashString);
+    }
+
+    /**
+     * Récupère le cache d'un export s'il existe
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $exportType Type d'export
+     * @param string $accessScope Scope d'accès
+     * @return array|null Données du cache ou null
+     * @created 2025/12/22
+     */
+    private function getExportCache(int $campaignId, string $exportType, string $accessScope): ?array
+    {
+        $db = \Core\Database::getInstance();
+
+        try {
+            $query = "
+                SELECT * FROM export_cache
+                WHERE campaign_id = :campaign_id
+                AND export_type = :export_type
+                AND access_scope = :access_scope
+            ";
+
+            $result = $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':export_type' => $exportType,
+                ':access_scope' => $accessScope
+            ]);
+
+            if (empty($result)) {
+                return null;
+            }
+
+            $cache = $result[0];
+
+            // Vérifier que le fichier existe toujours
+            if (!file_exists($cache['file_path'])) {
+                // Fichier supprimé, nettoyer le cache
+                $db->query("DELETE FROM export_cache WHERE id = :id", [':id' => $cache['id']]);
+                return null;
+            }
+
+            return $cache;
+
+        } catch (\Exception $e) {
+            error_log("getExportCache error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Sauvegarde les infos d'un export en cache
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $exportType Type d'export
+     * @param string $accessScope Scope d'accès
+     * @param string $filePath Chemin du fichier
+     * @param string $fileName Nom du fichier
+     * @param string $dataHash Hash des données
+     * @param int $fileSize Taille du fichier
+     * @created 2025/12/22
+     */
+    private function saveExportCache(
+        int $campaignId,
+        string $exportType,
+        string $accessScope,
+        string $filePath,
+        string $fileName,
+        string $dataHash,
+        int $fileSize
+    ): void {
+        $db = \Core\Database::getInstance();
+
+        try {
+            // Supprimer l'ancien cache s'il existe (et son fichier)
+            $oldCache = $this->getExportCache($campaignId, $exportType, $accessScope);
+            if ($oldCache && $oldCache['file_path'] !== $filePath && file_exists($oldCache['file_path'])) {
+                unlink($oldCache['file_path']);
+            }
+
+            // Insérer ou mettre à jour le cache
+            $query = "
+                INSERT INTO export_cache
+                (campaign_id, export_type, access_scope, file_path, file_name, data_hash, file_size, created_at)
+                VALUES
+                (:campaign_id, :export_type, :access_scope, :file_path, :file_name, :data_hash, :file_size, NOW())
+                ON DUPLICATE KEY UPDATE
+                file_path = VALUES(file_path),
+                file_name = VALUES(file_name),
+                data_hash = VALUES(data_hash),
+                file_size = VALUES(file_size),
+                updated_at = NOW()
+            ";
+
+            $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':export_type' => $exportType,
+                ':access_scope' => $accessScope,
+                ':file_path' => $filePath,
+                ':file_name' => $fileName,
+                ':data_hash' => $dataHash,
+                ':file_size' => $fileSize
+            ]);
+
+            // Nettoyer les vieux fichiers (> 6 mois) - occasionnellement
+            if (rand(1, 100) === 1) {
+                $this->cleanOldExportCache();
+            }
+
+        } catch (\Exception $e) {
+            error_log("saveExportCache error: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Sert un fichier d'export au navigateur
+     *
+     * @param array $cache Données du cache
+     * @param string $downloadToken Token pour signaler la fin du téléchargement
+     * @created 2025/12/22
+     */
+    private function serveExportFile(array $cache, string $downloadToken): void
+    {
+        $filePath = $cache['file_path'];
+        $fileName = $cache['file_name'];
+
+        // Vérifier que le fichier existe
+        if (!file_exists($filePath)) {
+            Session::setFlash("error", "Fichier d'export introuvable");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Cookie pour signaler au JS que le téléchargement est terminé
+        if ($downloadToken) {
+            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        }
+
+        // Headers pour le téléchargement
+        header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        header("Content-Disposition: attachment;filename=\"" . $fileName . "\"");
+        header("Content-Length: " . filesize($filePath));
+        header("Cache-Control: max-age=0");
+        header("Pragma: public");
+
+        // Envoyer le fichier
+        readfile($filePath);
+    }
+
+    /**
+     * Nettoie les exports en cache de plus de 6 mois
+     *
+     * @created 2025/12/22
+     */
+    private function cleanOldExportCache(): void
+    {
+        $db = \Core\Database::getInstance();
+
+        try {
+            // Récupérer les vieux caches
+            $query = "
+                SELECT id, file_path FROM export_cache
+                WHERE created_at < DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            ";
+
+            $oldCaches = $db->query($query);
+
+            foreach ($oldCaches as $cache) {
+                // Supprimer le fichier
+                if (file_exists($cache['file_path'])) {
+                    unlink($cache['file_path']);
+                }
+
+                // Supprimer l'entrée en base
+                $db->query("DELETE FROM export_cache WHERE id = :id", [':id' => $cache['id']]);
+            }
+
+            error_log("cleanOldExportCache: " . count($oldCaches) . " fichiers nettoyés");
+
+        } catch (\Exception $e) {
+            error_log("cleanOldExportCache error: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * API pour vérifier l'état du cache d'un export (appelé en AJAX)
+     *
+     * @created 2025/12/22
+     */
+    public function checkExportCache(): void
+    {
+        header('Content-Type: application/json');
+
+        $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+
+        if (!$campaignId) {
+            echo json_encode(['error' => 'campaign_id requis']);
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            echo json_encode(['error' => 'Accès non autorisé']);
+            exit();
+        }
+
+        $accessScope = $this->getExportAccessScope();
+        $currentHash = $this->getExportDataHash($campaignId, $accessScope);
+        $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
+
+        if (!$cache) {
+            // Pas de cache
+            echo json_encode([
+                'status' => 'no_cache',
+                'message' => 'Première génération requise'
+            ]);
+        } elseif ($cache['data_hash'] !== $currentHash) {
+            // Cache obsolète
+            echo json_encode([
+                'status' => 'outdated',
+                'message' => 'Nouvelles données détectées',
+                'cached_at' => $cache['created_at'],
+                'file_size' => $cache['file_size']
+            ]);
+        } else {
+            // Cache valide
+            echo json_encode([
+                'status' => 'valid',
+                'message' => 'Fichier en cache',
+                'cached_at' => $cache['created_at'],
+                'file_size' => $cache['file_size']
+            ]);
+        }
+
+        exit();
     }
 }
