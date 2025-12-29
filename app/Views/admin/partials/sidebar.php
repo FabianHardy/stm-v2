@@ -17,6 +17,7 @@
  * @modified 12/12/2025 - Intégration système permissions (masquage menus selon rôle)
  * @modified 15/12/2025 - Ajout permission agent.view pour Agent STM
  * @modified 15/12/2025 - Correction logique filtrage : menu parent affiché si sous-menu accessible
+ * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
  */
 
 use App\Helpers\PermissionHelper;
@@ -149,11 +150,7 @@ $menuItems = [
         "route" => "/stm/admin/customers",
         "badge" => null,
         "permission" => "customers.view",
-        "submenu" => [
-            ["label" => "Tous les clients", "route" => "/stm/admin/customers", "permission" => "customers.view"],
-            ["label" => "Ajouter un client", "route" => "/stm/admin/customers/create", "permission" => "customers.create"],
-            ["label" => "Importer des clients", "route" => "/stm/admin/customers/import", "permission" => "customers.import"],
-        ],
+        // Pas de sous-menu : consultation uniquement
     ],
     [
         "label" => "Commandes",

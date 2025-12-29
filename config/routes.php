@@ -378,8 +378,10 @@ $router->post("/admin/products/{id}/delete", function ($id) {
 // ============================================
 // ROUTES CLIENTS (CRUD COMPLET)
 // ============================================
+// ROUTES CLIENTS (Consultation uniquement)
+// ============================================
 
-// Liste des clients
+// Liste des clients (depuis DB externe)
 $router->get("/admin/customers", function () {
     $middleware = new AuthMiddleware();
     $middleware->handle();
@@ -388,76 +390,22 @@ $router->get("/admin/customers", function () {
     $controller->index();
 });
 
-// Formulaire de création
-$router->get("/admin/customers/create", function () {
+// Détail d'un client (via query params: customer_number + country)
+$router->get("/admin/customers/show", function () {
     $middleware = new AuthMiddleware();
     $middleware->handle();
 
     $controller = new CustomerController();
-    $controller->create();
+    $controller->show();
 });
 
-// Page d'import depuis DB externe
-$router->get("/admin/customers/import", function () {
+// API - Détail d'une commande (AJAX)
+$router->get("/admin/customers/order-detail", function () {
     $middleware = new AuthMiddleware();
     $middleware->handle();
 
     $controller = new CustomerController();
-    $controller->importPreview();
-});
-
-// Exécuter l'import
-$router->post("/admin/customers/import/execute", function () {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->importExecute();
-});
-
-// Enregistrer un nouveau client
-$router->post("/admin/customers", function () {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->store();
-});
-
-// Détails d'un client
-$router->get("/admin/customers/{id}", function ($id) {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->show((int) $id);
-});
-
-// Formulaire d'édition
-$router->get("/admin/customers/{id}/edit", function ($id) {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->edit((int) $id);
-});
-
-// Mettre à jour un client
-$router->post("/admin/customers/{id}", function ($id) {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->update((int) $id);
-});
-
-// Supprimer un client
-$router->post("/admin/customers/{id}/delete", function ($id) {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new CustomerController();
-    $controller->delete((int) $id);
+    $controller->getOrderDetailApi();
 });
 
 // ============================================
