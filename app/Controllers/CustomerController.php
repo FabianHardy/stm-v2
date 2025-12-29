@@ -590,7 +590,7 @@ class CustomerController
                 $params[] = $cluster;
             }
 
-            $query .= " ORDER BY r.REP_NOM, r.REP_PRENOM";
+            $query .= " ORDER BY r.REP_PRENOM, r.REP_NOM, r.REP_CLU";
 
             $results = $extDb->query($query, $params);
 
