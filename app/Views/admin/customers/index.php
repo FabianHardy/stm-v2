@@ -129,7 +129,8 @@ ob_start();
             <div>
                 <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                 <select id="country" name="country"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        onchange="updateCascadeFilters()">
                     <option value="BE" <?= ($filters['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
                     <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
                 </select>
@@ -139,7 +140,8 @@ ob_start();
             <div>
                 <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
                 <select id="cluster" name="cluster"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        onchange="updateRepresentatives()">
                     <option value="">Tous les clusters</option>
                     <?php foreach ($clusters as $cluster): ?>
                         <option value="<?= htmlspecialchars($cluster) ?>" <?= ($filters['cluster'] ?? '') === $cluster ? 'selected' : '' ?>>
@@ -335,5 +337,116 @@ ob_start();
 <?php
 $content = ob_get_clean();
 $title = 'Clients';
+
+// JavaScript pour les filtres en cascade
+$pageScripts = <<<'SCRIPTS'
+<script>
+/**
+ * Met à jour les clusters ET les représentants quand le pays change
+ */
+function updateCascadeFilters() {
+    const country = document.getElementById('country').value;
+
+    // Reset et désactiver les selects pendant le chargement
+    const clusterSelect = document.getElementById('cluster');
+    const repSelect = document.getElementById('rep_id');
+
+    clusterSelect.innerHTML = '<option value="">Chargement...</option>';
+    clusterSelect.disabled = true;
+    repSelect.innerHTML = '<option value="">Chargement...</option>';
+    repSelect.disabled = true;
+
+    // Charger les clusters
+    fetch('/stm/admin/customers/api/clusters?country=' + country)
+        .then(response => response.json())
+        .then(data => {
+            clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
+            if (data.success && data.clusters) {
+                data.clusters.forEach(cluster => {
+                    clusterSelect.innerHTML += '<option value="' + escapeHtml(cluster) + '">' + escapeHtml(cluster) + '</option>';
+                });
+            }
+            clusterSelect.disabled = false;
+        })
+        .catch(error => {
+            console.error('Erreur chargement clusters:', error);
+            clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
+            clusterSelect.disabled = false;
+        });
+
+    // Charger les représentants (tous, sans filtre cluster)
+    fetch('/stm/admin/customers/api/representatives?country=' + country)
+        .then(response => response.json())
+        .then(data => {
+            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+            if (data.success && data.representatives) {
+                data.representatives.forEach(rep => {
+                    let label = rep.rep_name;
+                    if (rep.cluster) {
+                        label += ' (' + rep.cluster + ')';
+                    }
+                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '">' + escapeHtml(label) + '</option>';
+                });
+            }
+            repSelect.disabled = false;
+        })
+        .catch(error => {
+            console.error('Erreur chargement représentants:', error);
+            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+            repSelect.disabled = false;
+        });
+}
+
+/**
+ * Met à jour les représentants quand le cluster change
+ */
+function updateRepresentatives() {
+    const country = document.getElementById('country').value;
+    const cluster = document.getElementById('cluster').value;
+    const repSelect = document.getElementById('rep_id');
+
+    repSelect.innerHTML = '<option value="">Chargement...</option>';
+    repSelect.disabled = true;
+
+    let url = '/stm/admin/customers/api/representatives?country=' + country;
+    if (cluster) {
+        url += '&cluster=' + encodeURIComponent(cluster);
+    }
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+            if (data.success && data.representatives) {
+                data.representatives.forEach(rep => {
+                    let label = rep.rep_name;
+                    if (rep.cluster && !cluster) {
+                        // Afficher le cluster seulement si pas de filtre cluster
+                        label += ' (' + rep.cluster + ')';
+                    }
+                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '">' + escapeHtml(label) + '</option>';
+                });
+            }
+            repSelect.disabled = false;
+        })
+        .catch(error => {
+            console.error('Erreur chargement représentants:', error);
+            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+            repSelect.disabled = false;
+        });
+}
+
+/**
+ * Échappe les caractères HTML
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+SCRIPTS;
+
 require __DIR__ . '/../../layouts/admin.php';
 ?>

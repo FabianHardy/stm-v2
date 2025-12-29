@@ -100,6 +100,46 @@ class CustomerController
     }
 
     /**
+     * API : Récupérer les clusters pour un pays (AJAX)
+     *
+     * @return void
+     */
+    public function getClustersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $country = $_GET['country'] ?? 'BE';
+        $clusters = $this->getClusters($country);
+
+        echo json_encode([
+            'success' => true,
+            'clusters' => $clusters
+        ]);
+        exit;
+    }
+
+    /**
+     * API : Récupérer les représentants pour un pays/cluster (AJAX)
+     *
+     * @return void
+     */
+    public function getRepresentativesApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $country = $_GET['country'] ?? 'BE';
+        $cluster = $_GET['cluster'] ?? '';
+
+        $representatives = $this->getRepresentatives($country, $cluster);
+
+        echo json_encode([
+            'success' => true,
+            'representatives' => $representatives
+        ]);
+        exit;
+    }
+
+    /**
      * API : Récupérer le détail d'une commande (AJAX)
      *
      * @return void

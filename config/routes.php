@@ -408,6 +408,24 @@ $router->get("/admin/customers/order-detail", function () {
     $controller->getOrderDetailApi();
 });
 
+// API - Clusters pour un pays (AJAX - filtres cascade)
+$router->get("/admin/customers/api/clusters", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->getClustersApi();
+});
+
+// API - Représentants pour un pays/cluster (AJAX - filtres cascade)
+$router->get("/admin/customers/api/representatives", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->getRepresentativesApi();
+});
+
 // ============================================
 // ROUTES COMMANDES ADMIN
 // ============================================
