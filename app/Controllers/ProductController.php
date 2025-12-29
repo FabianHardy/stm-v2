@@ -441,7 +441,7 @@ class ProductController
         $repStats = [];
 
         try {
-            $extDb = \Core\Database::getExternalInstance();
+            $extDb = \Core\ExternalDatabase::getInstance();
 
             // BE
             if (!empty($customersBE)) {
