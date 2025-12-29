@@ -259,7 +259,7 @@ ob_start();
                                     </td>
                                     <td class="px-3 py-2 text-center">
                                         <?php if (!empty($rep['user_id']) && !empty($product['campaign_id'])): ?>
-                                        <a href="/stm/admin/stats/campaigns?campaign_id=<?php echo $product['campaign_id']; ?>&rep_id=<?php echo $rep['user_id']; ?>&rep_country=<?php echo $rep['rep_country'] ?? 'BE'; ?>&country=<?php echo $rep['rep_country'] ?? 'BE'; ?>"
+                                        <a href="/stm/admin/stats/campaigns?campaign_id=<?php echo $product['campaign_id']; ?>&rep_id=<?php echo urlencode($rep['rep_id']); ?>&rep_country=<?php echo $rep['rep_country'] ?? 'BE'; ?>&country=<?php echo $rep['rep_country'] ?? 'BE'; ?>"
                                            class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition"
                                            title="Voir les stats de ce commercial">
                                             <i class="fas fa-chart-bar mr-1"></i>
