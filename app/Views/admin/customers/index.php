@@ -123,164 +123,210 @@ ob_start();
 
 <!-- Filtres -->
 <?php
-// Préparer les données pour Alpine.js (cascade côté client)
-$allClustersJson = json_encode($allClusters, JSON_HEX_APOS | JSON_HEX_QUOT);
-$allRepsJson = json_encode([
-    'BE' => array_map(function($r) {
-        return [
-            'rep_id' => (string)$r['rep_id'],
-            'rep_name' => $r['rep_name'],
-            'cluster' => $r['cluster'] ?? ''
-        ];
-    }, $allRepresentatives['BE']),
-    'LU' => array_map(function($r) {
-        return [
-            'rep_id' => (string)$r['rep_id'],
-            'rep_name' => $r['rep_name'],
-            'cluster' => $r['cluster'] ?? ''
-        ];
-    }, $allRepresentatives['LU'])
-], JSON_HEX_APOS | JSON_HEX_QUOT);
-
 $currentCountry = $filters['country'] ?? 'BE';
 $currentCluster = $filters['cluster'] ?? '';
 $currentRepId = (string)($filters['rep_id'] ?? '');
+$currentSort = $filters['sort'] ?? 'company_name';
+$currentOrder = $filters['order'] ?? 'asc';
 
-// Clusters et reps pour le pays actuel (pour les options PHP)
+// Clusters et reps pour le pays actuel
 $currentClusters = $allClusters[$currentCountry] ?? [];
 $currentReps = $allRepresentatives[$currentCountry] ?? [];
-// Filtrer les reps par cluster si sélectionné
-if (!empty($currentCluster)) {
-    $currentReps = array_filter($currentReps, fn($r) => ($r['cluster'] ?? '') === $currentCluster);
+
+// JSON pour la cascade JavaScript
+$allClustersJson = json_encode($allClusters, JSON_HEX_APOS | JSON_HEX_QUOT);
+$allRepsJson = json_encode([
+    'BE' => array_map(fn($r) => ['rep_id' => (string)$r['rep_id'], 'rep_name' => $r['rep_name'], 'cluster' => $r['cluster'] ?? ''], $allRepresentatives['BE']),
+    'LU' => array_map(fn($r) => ['rep_id' => (string)$r['rep_id'], 'rep_name' => $r['rep_name'], 'cluster' => $r['cluster'] ?? ''], $allRepresentatives['LU'])
+], JSON_HEX_APOS | JSON_HEX_QUOT);
+
+// Fonction pour générer l'URL de tri
+function sortUrl($column, $currentSort, $currentOrder, $filters, $pagination) {
+    $newOrder = ($currentSort === $column && $currentOrder === 'asc') ? 'desc' : 'asc';
+    $params = [
+        'country' => $filters['country'] ?? 'BE',
+        'cluster' => $filters['cluster'] ?? '',
+        'rep_id' => $filters['rep_id'] ?? '',
+        'search' => $filters['search'] ?? '',
+        'sort' => $column,
+        'order' => $newOrder,
+        'per_page' => $pagination['per_page']
+    ];
+    return '?' . http_build_query(array_filter($params, fn($v) => $v !== ''));
+}
+
+// Fonction pour l'icône de tri
+function sortIcon($column, $currentSort, $currentOrder) {
+    if ($currentSort !== $column) {
+        return '<i class="fas fa-sort text-gray-300 ml-1"></i>';
+    }
+    return $currentOrder === 'asc'
+        ? '<i class="fas fa-sort-up text-indigo-600 ml-1"></i>'
+        : '<i class="fas fa-sort-down text-indigo-600 ml-1"></i>';
 }
 ?>
 <div class="bg-white shadow rounded-lg p-4 mb-6">
-    <div x-data="customerFilters()" x-init="init()">
-        <form method="GET" action="/stm/admin/customers" id="filterForm">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                <!-- Pays -->
-                <div>
-                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                    <select id="country" name="country"
-                            x-model="country"
-                            @change="onCountryChange()"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="BE" <?= $currentCountry === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                        <option value="LU" <?= $currentCountry === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
-                    </select>
-                </div>
+    <form method="GET" action="/stm/admin/customers" id="filterForm">
+        <input type="hidden" name="sort" value="<?= htmlspecialchars($currentSort) ?>">
+        <input type="hidden" name="order" value="<?= htmlspecialchars($currentOrder) ?>">
+        <input type="hidden" name="per_page" id="hidden_per_page" value="<?= $pagination['per_page'] ?>">
 
-                <!-- Cluster -->
-                <div>
-                    <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
-                    <select id="cluster" name="cluster"
-                            x-model="cluster"
-                            @change="onClusterChange()"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="">Tous les clusters</option>
-                        <?php foreach ($currentClusters as $cl): ?>
-                            <option value="<?= htmlspecialchars($cl) ?>" <?= $currentCluster === $cl ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($cl) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Représentant -->
-                <div>
-                    <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
-                    <select id="rep_id" name="rep_id"
-                            x-model="repId"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="">Tous les représentants</option>
-                        <?php foreach ($currentReps as $rep): ?>
-                            <option value="<?= htmlspecialchars($rep['rep_id']) ?>"
-                                    data-cluster="<?= htmlspecialchars($rep['cluster'] ?? '') ?>"
-                                    <?= $currentRepId === (string)$rep['rep_id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($rep['rep_name']) ?>
-                                <?php if (!empty($rep['cluster']) && empty($currentCluster)): ?>
-                                    (<?= htmlspecialchars($rep['cluster']) ?>)
-                                <?php endif; ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Recherche -->
-                <div>
-                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-                    <input type="text" id="search" name="search"
-                           value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-                           placeholder="N° client ou nom..."
-                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                </div>
-
-                <!-- Boutons -->
-                <div class="flex items-end gap-2">
-                    <button type="submit"
-                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                        <i class="fas fa-search mr-2"></i>
-                        Rechercher
-                    </button>
-                    <a href="/stm/admin/customers"
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                        <i class="fas fa-times mr-2"></i>
-                        Reset
-                    </a>
-                </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <!-- Pays -->
+            <div>
+                <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                <select id="country" name="country"
+                        onchange="updateFiltersOnCountryChange()"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="BE" <?= $currentCountry === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                    <option value="LU" <?= $currentCountry === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
+                </select>
             </div>
-        </form>
-    </div>
+
+            <!-- Cluster -->
+            <div>
+                <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
+                <select id="cluster" name="cluster"
+                        onchange="updateFiltersOnClusterChange()"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="">Tous les clusters</option>
+                    <?php foreach ($currentClusters as $cl): ?>
+                        <option value="<?= htmlspecialchars($cl) ?>" <?= $currentCluster === $cl ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cl) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Représentant -->
+            <div>
+                <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
+                <select id="rep_id" name="rep_id"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="">Tous les représentants</option>
+                    <?php foreach ($currentReps as $rep): ?>
+                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>"
+                                data-cluster="<?= htmlspecialchars($rep['cluster'] ?? '') ?>"
+                                <?= $currentRepId === (string)$rep['rep_id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($rep['rep_name']) ?>
+                            <?php if (!empty($rep['cluster'])): ?>
+                                (<?= htmlspecialchars($rep['cluster']) ?>)
+                            <?php endif; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Recherche -->
+            <div>
+                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
+                <input type="text" id="search" name="search"
+                       value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
+                       placeholder="N° client ou nom..."
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+
+            <!-- Boutons -->
+            <div class="flex items-end gap-2">
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    <i class="fas fa-search mr-2"></i>
+                    Rechercher
+                </button>
+                <a href="/stm/admin/customers"
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <i class="fas fa-times mr-2"></i>
+                    Reset
+                </a>
+            </div>
+        </div>
+    </form>
 </div>
 
+<!-- JavaScript pour la cascade des filtres -->
 <script>
-function customerFilters() {
-    return {
-        // Valeurs actuelles
-        country: '<?= htmlspecialchars($currentCountry, ENT_QUOTES) ?>',
-        cluster: '<?= htmlspecialchars($currentCluster, ENT_QUOTES) ?>',
-        repId: '<?= htmlspecialchars($currentRepId, ENT_QUOTES) ?>',
+const allClusters = <?= $allClustersJson ?>;
+const allReps = <?= $allRepsJson ?>;
 
-        // Données brutes (tous les pays)
-        allClusters: <?= $allClustersJson ?>,
-        allReps: <?= $allRepsJson ?>,
+// Valeurs actuelles pour la restauration
+const currentCluster = '<?= htmlspecialchars($currentCluster, ENT_QUOTES) ?>';
+const currentRepId = '<?= htmlspecialchars($currentRepId, ENT_QUOTES) ?>';
 
-        init() {
-            // Options déjà rendues par PHP avec selected
-        },
+function updateFiltersOnCountryChange() {
+    const country = document.getElementById('country').value;
+    const clusterSelect = document.getElementById('cluster');
+    const repSelect = document.getElementById('rep_id');
 
-        // Quand le pays change → recharger la page pour avoir les bons clusters/reps
-        onCountryChange() {
-            // Soumettre avec le nouveau pays, reset cluster et rep
-            const form = document.getElementById('filterForm');
-            document.getElementById('cluster').value = '';
-            document.getElementById('rep_id').value = '';
-            form.submit();
-        },
+    // Mettre à jour les clusters
+    const clusters = allClusters[country] || [];
+    clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
+    clusters.forEach(cl => {
+        const option = document.createElement('option');
+        option.value = cl;
+        option.textContent = cl;
+        clusterSelect.appendChild(option);
+    });
 
-        // Quand le cluster change → filtrer les reps côté client
-        onClusterChange() {
-            const repSelect = document.getElementById('rep_id');
-            const selectedCluster = this.cluster;
-            const countryReps = this.allReps[this.country] || [];
-
-            // Reconstruire les options du select rep
-            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-
-            countryReps.forEach(rep => {
-                if (!selectedCluster || rep.cluster === selectedCluster) {
-                    const option = document.createElement('option');
-                    option.value = rep.rep_id;
-                    option.textContent = rep.rep_name + (!selectedCluster && rep.cluster ? ' (' + rep.cluster + ')' : '');
-                    option.setAttribute('data-cluster', rep.cluster || '');
-                    repSelect.appendChild(option);
-                }
-            });
-
-            this.repId = '';
-        }
-    };
+    // Mettre à jour les représentants
+    const reps = allReps[country] || [];
+    repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+    reps.forEach(rep => {
+        const option = document.createElement('option');
+        option.value = rep.rep_id;
+        option.textContent = rep.rep_name + (rep.cluster ? ' (' + rep.cluster + ')' : '');
+        option.setAttribute('data-cluster', rep.cluster || '');
+        repSelect.appendChild(option);
+    });
 }
+
+function updateFiltersOnClusterChange() {
+    const country = document.getElementById('country').value;
+    const cluster = document.getElementById('cluster').value;
+    const repSelect = document.getElementById('rep_id');
+
+    // Filtrer les représentants par cluster
+    const reps = allReps[country] || [];
+    repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+
+    reps.forEach(rep => {
+        if (!cluster || rep.cluster === cluster) {
+            const option = document.createElement('option');
+            option.value = rep.rep_id;
+            option.textContent = rep.rep_name + (!cluster && rep.cluster ? ' (' + rep.cluster + ')' : '');
+            option.setAttribute('data-cluster', rep.cluster || '');
+            repSelect.appendChild(option);
+        }
+    });
+}
+
+function changePerPage(value) {
+    // Mettre à jour le champ hidden et soumettre
+    document.getElementById('hidden_per_page').value = value;
+    document.getElementById('filterForm').submit();
+}
+
+// Fonction pour restaurer les filtres
+function restoreFilters() {
+    if (currentCluster) {
+        document.getElementById('cluster').value = currentCluster;
+    }
+    if (currentRepId) {
+        document.getElementById('rep_id').value = currentRepId;
+    }
+}
+
+// Désactiver filters-persist pour cette page
+window.skipFiltersPersist = true;
+
+// Restaurer immédiatement
+restoreFilters();
+
+// Restaurer après délais croissants (pour contrer tout script externe)
+setTimeout(restoreFilters, 10);
+setTimeout(restoreFilters, 50);
+setTimeout(restoreFilters, 100);
+setTimeout(restoreFilters, 200);
+setTimeout(restoreFilters, 500);
 </script>
 
 <!-- Tableau des clients -->
@@ -295,6 +341,15 @@ function customerFilters() {
                 Aucun client trouvé
             <?php endif; ?>
         </span>
+        <div class="flex items-center gap-2">
+            <label for="per_page_select" class="text-sm text-gray-600">Afficher :</label>
+            <select id="per_page_select" onchange="changePerPage(this.value)"
+                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1">
+                <?php foreach ([10, 25, 50, 100] as $pp): ?>
+                    <option value="<?= $pp ?>" <?= $pagination['per_page'] == $pp ? 'selected' : '' ?>><?= $pp ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
     </div>
 
     <div class="overflow-x-auto">
@@ -302,22 +357,34 @@ function customerFilters() {
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Client
+                        <a href="<?= sortUrl('company_name', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center hover:text-indigo-600">
+                            Client <?= sortIcon('company_name', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Représentant
+                        <a href="<?= sortUrl('rep_name', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center hover:text-indigo-600">
+                            Représentant <?= sortIcon('rep_name', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Dernière CMD
+                        <a href="<?= sortUrl('last_order_date', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center justify-center hover:text-indigo-600">
+                            Dernière CMD <?= sortIcon('last_order_date', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Campagnes
+                        <a href="<?= sortUrl('campaigns_count', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center justify-center hover:text-indigo-600">
+                            Campagnes <?= sortIcon('campaigns_count', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Commandes
+                        <a href="<?= sortUrl('orders_count', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center justify-center hover:text-indigo-600">
+                            Commandes <?= sortIcon('orders_count', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Promos
+                        <a href="<?= sortUrl('total_quantity', $currentSort, $currentOrder, $filters, $pagination) ?>" class="flex items-center justify-center hover:text-indigo-600">
+                            Promos <?= sortIcon('total_quantity', $currentSort, $currentOrder) ?>
+                        </a>
                     </th>
                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
@@ -433,8 +500,11 @@ function customerFilters() {
         'country' => $filters['country'] ?? '',
         'cluster' => $filters['cluster'] ?? '',
         'rep_id' => $filters['rep_id'] ?? '',
-        'search' => $filters['search'] ?? ''
-    ]));
+        'search' => $filters['search'] ?? '',
+        'sort' => $filters['sort'] ?? '',
+        'order' => $filters['order'] ?? '',
+        'per_page' => $pagination['per_page'] != 50 ? $pagination['per_page'] : ''
+    ], fn($v) => $v !== ''));
 ?>
 <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6 rounded-lg shadow">
     <!-- Mobile -->

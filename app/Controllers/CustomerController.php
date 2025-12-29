@@ -30,15 +30,25 @@ class CustomerController
     public function index(): void
     {
         // Pagination
+        $perPage = (int)($_GET['per_page'] ?? 50);
+        $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 50;
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $perPage = 50;
+
+        // Tri
+        $allowedSortColumns = ['company_name', 'customer_number', 'rep_name', 'cluster', 'last_order_date', 'campaigns_count', 'orders_count', 'total_quantity'];
+        $sort = $_GET['sort'] ?? 'last_order_date';
+        $sort = in_array($sort, $allowedSortColumns) ? $sort : 'last_order_date';
+        $order = $_GET['order'] ?? ($sort === 'last_order_date' ? 'desc' : 'asc');
+        $order = $order === 'desc' ? 'desc' : 'asc';
 
         // Récupérer les filtres
         $filters = [
             'country' => $_GET['country'] ?? 'BE',
             'cluster' => $_GET['cluster'] ?? '',
             'rep_id' => $_GET['rep_id'] ?? '',
-            'search' => $_GET['search'] ?? ''
+            'search' => $_GET['search'] ?? '',
+            'sort' => $sort,
+            'order' => $order
         ];
 
         // Récupérer les données selon le rôle
@@ -318,6 +328,12 @@ class CustomerController
             $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
             $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
 
+            // Colonnes qui peuvent être triées en SQL (DB externe)
+            $sqlSortableColumns = ['company_name', 'customer_number', 'rep_name', 'cluster'];
+            $sort = $filters['sort'] ?? 'last_order_date';
+            $order = $filters['order'] ?? 'desc';
+            $isSqlSort = in_array($sort, $sqlSortableColumns);
+
             // Construire la requête externe
             $query = "
                 SELECT
@@ -366,10 +382,25 @@ class CustomerController
                 $params = array_merge($params, $accessibleCustomerNumbers);
             }
 
-            $offset = ($page - 1) * $perPage;
-            $query .= " ORDER BY c.CLL_NOM ASC LIMIT {$perPage} OFFSET {$offset}";
+            // Si tri SQL, appliquer ORDER BY et LIMIT dans la requête
+            if ($isSqlSort) {
+                $sortMapping = [
+                    'company_name' => 'c.CLL_NOM',
+                    'customer_number' => 'c.CLL_NCLIXX',
+                    'rep_name' => 'r.REP_NOM',
+                    'cluster' => 'r.REP_CLU'
+                ];
+                $sortColumn = $sortMapping[$sort] ?? 'c.CLL_NOM';
+                $orderDir = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
+                $offset = ($page - 1) * $perPage;
+                $query .= " ORDER BY {$sortColumn} {$orderDir} LIMIT {$perPage} OFFSET {$offset}";
 
-            $externalCustomers = $extDb->query($query, $params);
+                $externalCustomers = $extDb->query($query, $params);
+            } else {
+                // Pour les colonnes stats, récupérer tous les clients puis trier en PHP
+                $query .= " ORDER BY c.CLL_NOM ASC";
+                $externalCustomers = $extDb->query($query, $params);
+            }
 
             if (empty($externalCustomers)) {
                 return [];
@@ -390,15 +421,38 @@ class CustomerController
 
                 if (isset($orderStats[$custNum])) {
                     $customer['last_order_date'] = $orderStats[$custNum]['last_order_date'];
-                    $customer['campaigns_count'] = $orderStats[$custNum]['campaigns_count'];
-                    $customer['orders_count'] = $orderStats[$custNum]['orders_count'];
-                    $customer['total_quantity'] = $orderStats[$custNum]['total_quantity'];
+                    $customer['campaigns_count'] = (int)$orderStats[$custNum]['campaigns_count'];
+                    $customer['orders_count'] = (int)$orderStats[$custNum]['orders_count'];
+                    $customer['total_quantity'] = (int)$orderStats[$custNum]['total_quantity'];
                 } else {
                     $customer['last_order_date'] = null;
                     $customer['campaigns_count'] = 0;
                     $customer['orders_count'] = 0;
                     $customer['total_quantity'] = 0;
                 }
+            }
+
+            // Si tri sur colonnes stats, trier en PHP puis paginer
+            if (!$isSqlSort) {
+                usort($externalCustomers, function($a, $b) use ($sort, $order) {
+                    $valA = $a[$sort] ?? null;
+                    $valB = $b[$sort] ?? null;
+
+                    // Gérer les valeurs null (les mettre à la fin)
+                    if ($valA === null && $valB === null) return 0;
+                    if ($valA === null) return 1;
+                    if ($valB === null) return -1;
+
+                    // Comparaison
+                    if ($valA == $valB) return 0;
+                    $result = ($valA < $valB) ? -1 : 1;
+
+                    return $order === 'desc' ? -$result : $result;
+                });
+
+                // Paginer
+                $offset = ($page - 1) * $perPage;
+                $externalCustomers = array_slice($externalCustomers, $offset, $perPage);
             }
 
             return $externalCustomers;
