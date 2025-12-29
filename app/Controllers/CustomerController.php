@@ -257,7 +257,7 @@ class CustomerController
             foreach ($externalCustomers as &$customer) {
                 $custNum = $customer['customer_number'];
                 $customer['country'] = $country;
-                $customer['rep_name'] = trim($customer['rep_name'] ?? '');
+                $customer['rep_name'] = trim((string)($customer['rep_name'] ?? ''));
                 if (empty($customer['rep_name'])) {
                     $customer['rep_name'] = $customer['rep_id'] ?? '-';
                 }
@@ -381,7 +381,7 @@ class CustomerController
 
             $customer = $result[0];
             $customer['country'] = $country;
-            $customer['rep_name'] = trim($customer['rep_name'] ?? '');
+            $customer['rep_name'] = trim((string)($customer['rep_name'] ?? ''));
             if (empty($customer['rep_name'])) {
                 $customer['rep_name'] = $customer['rep_id'] ?? '-';
             }
@@ -550,9 +550,9 @@ class CustomerController
 
             // Nettoyer les noms
             foreach ($results as &$rep) {
-                $rep['rep_name'] = trim($rep['rep_name']);
+                $rep['rep_name'] = trim((string)($rep['rep_name'] ?? ''));
                 if (empty($rep['rep_name'])) {
-                    $rep['rep_name'] = $rep['rep_id'];
+                    $rep['rep_name'] = $rep['rep_id'] ?? '-';
                 }
             }
 
