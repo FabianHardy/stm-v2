@@ -129,8 +129,7 @@ ob_start();
             <div>
                 <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                 <select id="country" name="country"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        onchange="this.form.submit()">
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="BE" <?= ($filters['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
                     <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
                 </select>
@@ -140,8 +139,7 @@ ob_start();
             <div>
                 <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
                 <select id="cluster" name="cluster"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        onchange="this.form.submit()">
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les clusters</option>
                     <?php foreach ($clusters as $cluster): ?>
                         <option value="<?= htmlspecialchars($cluster) ?>" <?= ($filters['cluster'] ?? '') === $cluster ? 'selected' : '' ?>>
@@ -155,8 +153,7 @@ ob_start();
             <div>
                 <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
                 <select id="rep_id" name="rep_id"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        onchange="this.form.submit()">
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les représentants</option>
                     <?php foreach ($representatives as $rep): ?>
                         <option value="<?= htmlspecialchars($rep['rep_id']) ?>" <?= ($filters['rep_id'] ?? '') === $rep['rep_id'] ? 'selected' : '' ?>>

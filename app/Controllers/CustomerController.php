@@ -488,7 +488,7 @@ class CustomerController
     }
 
     /**
-     * Récupérer les clusters pour un pays
+     * Récupérer les clusters pour un pays (uniquement ceux ayant des clients)
      *
      * @param string $country
      * @return array
@@ -497,13 +497,16 @@ class CustomerController
     {
         try {
             $extDb = ExternalDatabase::getInstance();
+            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
             $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
 
+            // Seulement les clusters qui ont des clients
             $query = "
-                SELECT DISTINCT REP_CLU as cluster
-                FROM {$repTable}
-                WHERE REP_CLU IS NOT NULL AND REP_CLU != ''
-                ORDER BY REP_CLU
+                SELECT DISTINCT r.REP_CLU as cluster
+                FROM {$repTable} r
+                INNER JOIN {$clientTable} c ON c.IDE_REP = r.IDE_REP
+                WHERE r.REP_CLU IS NOT NULL AND r.REP_CLU != ''
+                ORDER BY r.REP_CLU
             ";
 
             $results = $extDb->query($query);
@@ -516,7 +519,7 @@ class CustomerController
     }
 
     /**
-     * Récupérer les représentants pour un pays (et cluster optionnel)
+     * Récupérer les représentants pour un pays (uniquement ceux ayant des clients)
      *
      * @param string $country
      * @param string $cluster
@@ -526,25 +529,28 @@ class CustomerController
     {
         try {
             $extDb = ExternalDatabase::getInstance();
+            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
             $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
 
+            // Seulement les représentants qui ont des clients
             $query = "
-                SELECT
-                    IDE_REP as rep_id,
-                    CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name,
-                    REP_CLU as cluster
-                FROM {$repTable}
-                WHERE REP_NOM IS NOT NULL AND REP_NOM != ''
+                SELECT DISTINCT
+                    r.IDE_REP as rep_id,
+                    CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name,
+                    r.REP_CLU as cluster
+                FROM {$repTable} r
+                INNER JOIN {$clientTable} c ON c.IDE_REP = r.IDE_REP
+                WHERE r.REP_NOM IS NOT NULL AND r.REP_NOM != ''
             ";
 
             $params = [];
 
             if (!empty($cluster)) {
-                $query .= " AND REP_CLU = ?";
+                $query .= " AND r.REP_CLU = ?";
                 $params[] = $cluster;
             }
 
-            $query .= " ORDER BY REP_NOM, REP_PRENOM";
+            $query .= " ORDER BY r.REP_NOM, r.REP_PRENOM";
 
             $results = $extDb->query($query, $params);
 
