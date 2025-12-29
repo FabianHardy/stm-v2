@@ -7,6 +7,7 @@
  * @created 11/11/2025 22:30
  * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
  * @modified 19/12/2025 - Filtre par statut campagne + affichage statut basé sur campagne
+ * @modified 23/12/2025 - Conservation des filtres après suppression
  */
 
 use Core\Session;
@@ -538,6 +539,14 @@ function productFilters() {
                                           class="inline">
                                         <input type="hidden" name="_token" value="<?php echo Session::get('csrf_token'); ?>">
                                         <input type="hidden" name="_method" value="DELETE">
+                                        <!-- Conserver les filtres après suppression -->
+                                        <input type="hidden" name="redirect_filters" value="<?php echo htmlspecialchars(http_build_query([
+                                            'campaign_id' => $filters['campaign_id'] ?? '',
+                                            'category' => $filters['category'] ?? '',
+                                            'campaign_status' => $filters['campaign_status'] ?? 'active',
+                                            'country' => $filters['country'] ?? '',
+                                            'search' => $filters['search'] ?? ''
+                                        ])); ?>">
                                         <button type="submit"
                                                 class="text-red-600 hover:text-red-900"
                                                 title="Supprimer">

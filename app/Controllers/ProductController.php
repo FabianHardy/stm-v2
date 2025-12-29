@@ -6,6 +6,7 @@
  * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
  * @modified 18/12/2025 - Filtrage par campagnes accessibles selon le rôle
  * @modified 19/12/2025 - Filtre par défaut sur campagnes actives (campaign_status)
+ * @modified 23/12/2025 - Conservation des filtres après suppression
  */
 
 namespace App\Controllers;
@@ -433,13 +434,18 @@ class ProductController
      *
      * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
      * @modified 18/12/2025 - Vérification accès campagne
+     * @modified 23/12/2025 - Conservation des filtres après suppression
      */
     public function destroy(int $id): void
     {
+        // Récupérer les filtres pour la redirection
+        $redirectFilters = $_POST['redirect_filters'] ?? '';
+        $redirectUrl = '/stm/admin/products' . (!empty($redirectFilters) ? '?' . $redirectFilters : '');
+
         // Validation CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -448,14 +454,14 @@ class ProductController
 
         if (!$product) {
             Session::setFlash("error", "Promotion non trouvée");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
         // Vérifier l'accès à la campagne du produit
         if (!$this->canAccessProduct($product)) {
             Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -465,7 +471,7 @@ class ProductController
                 "error",
                 "Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.",
             );
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -482,7 +488,7 @@ class ProductController
             Session::setFlash("error", "Erreur lors de la suppression");
         }
 
-        header("Location: /stm/admin/products");
+        header("Location: " . $redirectUrl);
         exit();
     }
 
