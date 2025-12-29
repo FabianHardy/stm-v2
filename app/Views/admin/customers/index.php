@@ -144,7 +144,7 @@ ob_start();
                         onchange="updateRepresentatives()">
                     <option value="">Tous les clusters</option>
                     <?php foreach ($clusters as $cluster): ?>
-                        <option value="<?= htmlspecialchars($cluster) ?>" <?= ($filters['cluster'] ?? '') === $cluster ? 'selected' : '' ?>>
+                        <option value="<?= htmlspecialchars($cluster) ?>" <?= (string)($filters['cluster'] ?? '') === (string)$cluster ? 'selected' : '' ?>>
                             <?= htmlspecialchars($cluster) ?>
                         </option>
                     <?php endforeach; ?>
@@ -158,10 +158,10 @@ ob_start();
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les représentants</option>
                     <?php foreach ($representatives as $rep): ?>
-                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>" <?= ($filters['rep_id'] ?? '') === $rep['rep_id'] ? 'selected' : '' ?>>
+                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>" <?= (string)($filters['rep_id'] ?? '') === (string)$rep['rep_id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($rep['rep_name']) ?>
                             <?php if (!empty($rep['cluster'])): ?>
-                                <span class="text-gray-400">(<?= htmlspecialchars($rep['cluster']) ?>)</span>
+                                (<?= htmlspecialchars($rep['cluster']) ?>)
                             <?php endif; ?>
                         </option>
                     <?php endforeach; ?>
