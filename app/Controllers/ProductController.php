@@ -8,6 +8,7 @@
  * @modified 19/12/2025 - Filtre par défaut sur campagnes actives (campaign_status)
  * @modified 23/12/2025 - Conservation des filtres après suppression
  * @modified 23/12/2025 - Ajout stats de vente dans show() avec getProductSalesStats()
+ * @modified 29/12/2025 - Ajout API getProductCustomerOrdersApi() + user_id dans top reps
  */
 
 namespace App\Controllers;
@@ -461,10 +462,12 @@ class ProductController
                     $repName = trim($row['rep_name'] ?? '');
                     if (empty($repName)) $repName = $repId;
 
-                    if (!isset($repStats[$repId])) {
-                        $repStats[$repId] = [
+                    $repKey = $repId . '_BE';
+                    if (!isset($repStats[$repKey])) {
+                        $repStats[$repKey] = [
                             'rep_id' => $repId,
                             'rep_name' => $repName,
+                            'rep_country' => 'BE',
                             'total_quantity' => 0,
                             'orders_count' => 0,
                             'customers_count' => 0
@@ -472,9 +475,9 @@ class ProductController
                     }
 
                     if (isset($customersBE[$custNum])) {
-                        $repStats[$repId]['total_quantity'] += (int)$customersBE[$custNum]['total_quantity'];
-                        $repStats[$repId]['orders_count'] += (int)$customersBE[$custNum]['orders_count'];
-                        $repStats[$repId]['customers_count']++;
+                        $repStats[$repKey]['total_quantity'] += (int)$customersBE[$custNum]['total_quantity'];
+                        $repStats[$repKey]['orders_count'] += (int)$customersBE[$custNum]['orders_count'];
+                        $repStats[$repKey]['customers_count']++;
                     }
                 }
             }
@@ -497,10 +500,12 @@ class ProductController
                     $repName = trim($row['rep_name'] ?? '');
                     if (empty($repName)) $repName = $repId;
 
-                    if (!isset($repStats[$repId])) {
-                        $repStats[$repId] = [
+                    $repKey = $repId . '_LU';
+                    if (!isset($repStats[$repKey])) {
+                        $repStats[$repKey] = [
                             'rep_id' => $repId,
                             'rep_name' => $repName,
+                            'rep_country' => 'LU',
                             'total_quantity' => 0,
                             'orders_count' => 0,
                             'customers_count' => 0
@@ -508,9 +513,9 @@ class ProductController
                     }
 
                     if (isset($customersLU[$custNum])) {
-                        $repStats[$repId]['total_quantity'] += (int)$customersLU[$custNum]['total_quantity'];
-                        $repStats[$repId]['orders_count'] += (int)$customersLU[$custNum]['orders_count'];
-                        $repStats[$repId]['customers_count']++;
+                        $repStats[$repKey]['total_quantity'] += (int)$customersLU[$custNum]['total_quantity'];
+                        $repStats[$repKey]['orders_count'] += (int)$customersLU[$custNum]['orders_count'];
+                        $repStats[$repKey]['customers_count']++;
                     }
                 }
             }
@@ -523,7 +528,21 @@ class ProductController
             return $b['total_quantity'] - $a['total_quantity'];
         });
 
-        return array_slice($repStats, 0, 5);
+        $repStats = array_slice($repStats, 0, 5);
+
+        // Enrichir avec user_id depuis la table users
+        if (!empty($repStats)) {
+            foreach ($repStats as &$rep) {
+                $userQuery = "SELECT id FROM users WHERE rep_id = :rep_id AND rep_country = :rep_country LIMIT 1";
+                $userResult = $db->query($userQuery, [
+                    ':rep_id' => $rep['rep_id'],
+                    ':rep_country' => $rep['rep_country']
+                ]);
+                $rep['user_id'] = $userResult[0]['id'] ?? null;
+            }
+        }
+
+        return $repStats;
     }
 
     /**
@@ -851,5 +870,117 @@ class ProductController
 
         // Vérifier si la campagne du produit est dans la liste des campagnes accessibles
         return in_array($product['campaign_id'], $accessibleCampaignIds);
+    }
+
+    /**
+     * API : Récupère les commandes d'un client pour un produit spécifique (AJAX)
+     *
+     * @return void
+     * @created 2025/12/29
+     */
+    public function getProductCustomerOrdersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+        $customerNumber = $_GET['customer_number'] ?? '';
+        $country = $_GET['country'] ?? '';
+
+        if (!$productId || !$customerNumber || !$country) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Paramètres manquants'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au produit
+        $product = $this->productModel->findById($productId);
+        if (!$product || !$this->canAccessProduct($product)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce produit'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au client (selon le rôle)
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+        if ($accessibleCustomerNumbers !== null && !in_array($customerNumber, $accessibleCustomerNumbers)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce client'
+            ]);
+            exit();
+        }
+
+        try {
+            $db = \Core\Database::getInstance();
+
+            // Récupérer les commandes du client contenant ce produit
+            $query = "
+                SELECT
+                    o.id as order_id,
+                    o.created_at,
+                    ol.quantity
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                INNER JOIN order_lines ol ON o.id = ol.order_id
+                WHERE ol.product_id = :product_id
+                AND cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'validated'
+                ORDER BY o.created_at DESC
+            ";
+
+            $orders = $db->query($query, [
+                ':product_id' => $productId,
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            // Calculer le total
+            $totalQuantity = array_sum(array_column($orders, 'quantity'));
+
+            // Récupérer les infos du client
+            $customerQuery = "
+                SELECT company_name
+                FROM customers
+                WHERE customer_number = :customer_number
+                AND country = :country
+                LIMIT 1
+            ";
+
+            $customerInfo = $db->query($customerQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'product' => [
+                    'id' => $product['id'],
+                    'name' => $product['name_fr'],
+                    'code' => $product['product_code']
+                ],
+                'customer' => [
+                    'customer_number' => $customerNumber,
+                    'country' => $country,
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
+                ],
+                'orders' => $orders,
+                'total_orders' => count($orders),
+                'total_quantity' => $totalQuantity
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("getProductCustomerOrdersApi error: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Erreur lors de la récupération des commandes'
+            ]);
+        }
+
+        exit();
     }
 }

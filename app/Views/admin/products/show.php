@@ -7,6 +7,7 @@
  * @created 11/11/2025 22:50
  * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
  * @modified 23/12/2025 - Ajout section statistiques de vente
+ * @modified 29/12/2025 - Ajout modal détail client + liens stats reps
  */
 
 use Core\Session;
@@ -164,6 +165,7 @@ ob_start();
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase"></th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
@@ -189,6 +191,13 @@ ob_start();
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700">
                                             <?php echo number_format($customer['total_quantity'], 0, ',', ' '); ?>
                                         </span>
+                                    </td>
+                                    <td class="px-3 py-2 text-center">
+                                        <button type="button"
+                                                onclick="openProductCustomerModal('<?php echo htmlspecialchars($customer['customer_number']); ?>', '<?php echo $customer['country']; ?>', '<?php echo htmlspecialchars(addslashes($customer['company_name'])); ?>')"
+                                                class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -217,6 +226,7 @@ ob_start();
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Représentant</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Clients</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase"></th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
@@ -231,7 +241,10 @@ ob_start();
                                     </td>
                                     <td class="px-3 py-2">
                                         <p class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($rep['rep_name']); ?></p>
-                                        <p class="text-xs text-gray-500"><?php echo htmlspecialchars($rep['rep_id']); ?></p>
+                                        <p class="text-xs text-gray-500">
+                                            <?php echo ($rep['rep_country'] ?? 'BE') === 'BE' ? '🇧🇪' : '🇱🇺'; ?>
+                                            <?php echo htmlspecialchars($rep['rep_id']); ?>
+                                        </p>
                                     </td>
                                     <td class="px-3 py-2 text-right">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
@@ -243,12 +256,92 @@ ob_start();
                                             <?php echo number_format($rep['total_quantity'], 0, ',', ' '); ?>
                                         </span>
                                     </td>
+                                    <td class="px-3 py-2 text-center">
+                                        <?php if (!empty($rep['user_id']) && !empty($product['campaign_id'])): ?>
+                                        <a href="/stm/admin/stats/campaigns?campaign_id=<?php echo $product['campaign_id']; ?>&rep_id=<?php echo $rep['user_id']; ?>&rep_country=<?php echo $rep['rep_country'] ?? 'BE'; ?>&country=<?php echo $rep['rep_country'] ?? 'BE'; ?>"
+                                           class="text-indigo-600 hover:text-indigo-800 text-xs font-medium"
+                                           title="Voir les stats de ce commercial">
+                                            <i class="fas fa-chart-bar"></i>
+                                        </a>
+                                        <?php else: ?>
+                                        <span class="text-gray-300 text-xs"><i class="fas fa-chart-bar"></i></span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
                 <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal détail commandes client pour ce produit -->
+<div id="productCustomerModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+        <!-- Overlay -->
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeProductCustomerModal()"></div>
+
+        <!-- Modal content -->
+        <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-lg sm:w-full mx-auto">
+            <!-- Header -->
+            <div class="bg-indigo-600 px-6 py-4 rounded-t-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white" id="pcModalCustomerName">Détail client</h3>
+                        <p class="text-indigo-200 text-sm" id="pcModalProductName"></p>
+                    </div>
+                    <button type="button" onclick="closeProductCustomerModal()" class="text-white hover:text-indigo-200 transition">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="px-6 py-4 max-h-[60vh] overflow-y-auto">
+                <!-- Loading -->
+                <div id="pcModalLoading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-indigo-600 text-2xl"></i>
+                    <p class="text-gray-500 mt-2">Chargement...</p>
+                </div>
+
+                <!-- Error -->
+                <div id="pcModalError" class="hidden text-center py-8">
+                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-exclamation-triangle text-red-500"></i>
+                    </div>
+                    <p class="text-red-600" id="pcModalErrorText">Erreur</p>
+                </div>
+
+                <!-- Content -->
+                <div id="pcModalContent" class="hidden">
+                    <!-- Stats résumé -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-green-50 rounded-lg p-3 text-center">
+                            <p class="text-xl font-bold text-green-600" id="pcModalTotalOrders">0</p>
+                            <p class="text-xs text-green-700">Commandes</p>
+                        </div>
+                        <div class="bg-orange-50 rounded-lg p-3 text-center">
+                            <p class="text-xl font-bold text-orange-600" id="pcModalTotalQty">0</p>
+                            <p class="text-xs text-orange-700">Quantité totale</p>
+                        </div>
+                    </div>
+
+                    <!-- Liste des commandes -->
+                    <div id="pcModalOrdersList" class="space-y-2">
+                        <!-- Rempli par JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-3 rounded-b-lg flex justify-end">
+                <button type="button" onclick="closeProductCustomerModal()"
+                        class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
+                    Fermer
+                </button>
             </div>
         </div>
     </div>
@@ -531,5 +624,101 @@ ob_start();
 
 <?php
 $content = ob_get_clean();
+
+// JavaScript pour le modal
+$productId = $product['id'] ?? 0;
+$pageScripts = <<<SCRIPTS
+<script>
+const productId = {$productId};
+
+function openProductCustomerModal(customerNumber, country, companyName) {
+    const modal = document.getElementById('productCustomerModal');
+    const loading = document.getElementById('pcModalLoading');
+    const error = document.getElementById('pcModalError');
+    const content = document.getElementById('pcModalContent');
+
+    // Afficher le modal
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Reset
+    loading.classList.remove('hidden');
+    error.classList.add('hidden');
+    content.classList.add('hidden');
+
+    // Header
+    document.getElementById('pcModalCustomerName').textContent = companyName;
+    document.getElementById('pcModalProductName').textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
+
+    // Charger les données
+    fetch('/stm/admin/products/customer-orders?product_id=' + productId + '&customer_number=' + encodeURIComponent(customerNumber) + '&country=' + country)
+        .then(response => response.json())
+        .then(data => {
+            loading.classList.add('hidden');
+
+            if (!data.success) {
+                error.classList.remove('hidden');
+                document.getElementById('pcModalErrorText').textContent = data.error || 'Erreur inconnue';
+                return;
+            }
+
+            content.classList.remove('hidden');
+
+            // Stats
+            document.getElementById('pcModalTotalOrders').textContent = data.total_orders;
+            document.getElementById('pcModalTotalQty').textContent = new Intl.NumberFormat('fr-FR').format(data.total_quantity);
+
+            // Liste des commandes
+            const ordersList = document.getElementById('pcModalOrdersList');
+            ordersList.innerHTML = '';
+
+            if (data.orders.length === 0) {
+                ordersList.innerHTML = '<p class="text-center text-gray-500 py-4">Aucune commande</p>';
+                return;
+            }
+
+            data.orders.forEach(order => {
+                const date = new Date(order.created_at);
+                const formattedDate = date.toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                ordersList.innerHTML += '<div class="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2">' +
+                    '<div>' +
+                        '<span class="font-medium text-gray-900">Commande #' + order.order_id + '</span>' +
+                        '<span class="text-xs text-gray-500 ml-2">' + formattedDate + '</span>' +
+                    '</div>' +
+                    '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' +
+                        new Intl.NumberFormat('fr-FR').format(order.quantity) +
+                    '</span>' +
+                '</div>';
+            });
+        })
+        .catch(err => {
+            console.error('Erreur:', err);
+            loading.classList.add('hidden');
+            error.classList.remove('hidden');
+            document.getElementById('pcModalErrorText').textContent = 'Erreur de connexion';
+        });
+}
+
+function closeProductCustomerModal() {
+    document.getElementById('productCustomerModal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+// Fermer avec Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeProductCustomerModal();
+    }
+});
+</script>
+SCRIPTS;
+
 require_once __DIR__ . '/../../layouts/admin.php';
 ?>

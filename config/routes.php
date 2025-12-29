@@ -13,6 +13,7 @@
  * @modified   11/12/2025 - Ajout routes équipe campagne (assignees)
  * @modified   22/12/2025 - Ajout route API check-export-cache
  * @modified   23/12/2025 - Ajout route API customer-orders
+ * @modified   29/12/2025 - Ajout route API products/customer-orders
  */
 
 // ============================================
@@ -660,6 +661,15 @@ $router->get('/admin/stats/customer-orders', function () {
 
     $controller = new \App\Controllers\StatsController();
     $controller->getCustomerOrdersApi();
+});
+
+// API - Détail commandes d'un client pour un produit (AJAX)
+$router->get('/admin/products/customer-orders', function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\ProductController();
+    $controller->getProductCustomerOrdersApi();
 });
 
 // ============================================
