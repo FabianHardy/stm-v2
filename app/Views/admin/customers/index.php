@@ -339,8 +339,42 @@ $content = ob_get_clean();
 $title = 'Clients';
 
 // JavaScript pour les filtres en cascade
-$pageScripts = <<<'SCRIPTS'
+$currentCluster = htmlspecialchars($filters['cluster'] ?? '', ENT_QUOTES);
+$currentRepId = htmlspecialchars($filters['rep_id'] ?? '', ENT_QUOTES);
+
+$pageScripts = <<<SCRIPTS
 <script>
+// Valeurs actuelles des filtres (depuis PHP)
+const currentCluster = "{$currentCluster}";
+const currentRepId = "{$currentRepId}";
+
+/**
+ * Au chargement de la page, restaurer les sélections
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    // Restaurer la sélection du cluster
+    if (currentCluster) {
+        const clusterSelect = document.getElementById('cluster');
+        for (let option of clusterSelect.options) {
+            if (option.value.trim() === currentCluster.trim()) {
+                option.selected = true;
+                break;
+            }
+        }
+    }
+
+    // Restaurer la sélection du représentant
+    if (currentRepId) {
+        const repSelect = document.getElementById('rep_id');
+        for (let option of repSelect.options) {
+            if (option.value.trim() === currentRepId.trim()) {
+                option.selected = true;
+                break;
+            }
+        }
+    }
+});
+
 /**
  * Met à jour les clusters ET les représentants quand le pays change
  */
