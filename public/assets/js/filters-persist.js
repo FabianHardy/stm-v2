@@ -5,8 +5,9 @@
  * en utilisant sessionStorage (ne persiste pas après fermeture du navigateur)
  *
  * @author Fabian Hardy
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2025/11/27
+ * @modified 2025/12/29 - Ajout exclusion page customers (cascade serveur)
  *
  * Usage: Ajouter data-filter-persist="nom_page" sur les éléments <select> ou <input>
  * Exemple: <select data-filter-persist="stats_campaigns" name="country">
@@ -15,8 +16,24 @@
 (function() {
     'use strict';
 
+    // Pages à exclure de la persistance (gèrent leurs propres filtres)
+    const EXCLUDED_PAGES = [
+        '/stm/admin/customers'
+    ];
+
     // Préfixe pour les clés sessionStorage
     const STORAGE_PREFIX = 'stm_filters_';
+
+    /**
+     * Vérifie si la page courante doit être exclue
+     * @returns {boolean}
+     */
+    function isExcludedPage() {
+        const path = window.location.pathname;
+        return EXCLUDED_PAGES.some(function(excluded) {
+            return path.startsWith(excluded);
+        });
+    }
 
     /**
      * Récupère la clé de stockage basée sur la page actuelle
@@ -35,6 +52,9 @@
      * Sauvegarde tous les filtres de la page
      */
     function saveFilters() {
+        // Ne pas sauvegarder pour les pages exclues
+        if (isExcludedPage()) return;
+
         const pageKey = getPageKey();
         const filters = {};
 
@@ -73,6 +93,9 @@
      * Restaure les filtres sauvegardés
      */
     function restoreFilters() {
+        // Ne pas restaurer pour les pages exclues
+        if (isExcludedPage()) return;
+
         const pageKey = getPageKey();
 
         try {
@@ -137,6 +160,12 @@
      * Initialise les écouteurs d'événements
      */
     function init() {
+        // Ne pas initialiser pour les pages exclues
+        if (isExcludedPage()) {
+            console.log('STM Filters: Page exclue, persistance désactivée');
+            return;
+        }
+
         // Restaurer les filtres au chargement
         document.addEventListener('DOMContentLoaded', function() {
             // Petit délai pour laisser Alpine.js s'initialiser

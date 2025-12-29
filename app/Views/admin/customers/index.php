@@ -127,18 +127,14 @@ $currentCountry = $filters['country'] ?? 'BE';
 $currentCluster = $filters['cluster'] ?? '';
 $currentRepId = (string)($filters['rep_id'] ?? '');
 $currentSort = $filters['sort'] ?? 'company_name';
-$currentOrder = $filters['order'] ?? 'asc';
+$currentOrder = $filters['order'] ?? 'desc';
 
-// Clusters et reps pour le pays actuel
+// Clusters et reps pour le pays actuel (filtrés par cluster si sélectionné)
 $currentClusters = $allClusters[$currentCountry] ?? [];
 $currentReps = $allRepresentatives[$currentCountry] ?? [];
-
-// JSON pour la cascade JavaScript
-$allClustersJson = json_encode($allClusters, JSON_HEX_APOS | JSON_HEX_QUOT);
-$allRepsJson = json_encode([
-    'BE' => array_map(fn($r) => ['rep_id' => (string)$r['rep_id'], 'rep_name' => $r['rep_name'], 'cluster' => $r['cluster'] ?? ''], $allRepresentatives['BE']),
-    'LU' => array_map(fn($r) => ['rep_id' => (string)$r['rep_id'], 'rep_name' => $r['rep_name'], 'cluster' => $r['cluster'] ?? ''], $allRepresentatives['LU'])
-], JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!empty($currentCluster)) {
+    $currentReps = array_filter($currentReps, fn($r) => ($r['cluster'] ?? '') === $currentCluster);
+}
 
 // Fonction pour générer l'URL de tri
 function sortUrl($column, $currentSort, $currentOrder, $filters, $pagination) {
@@ -176,7 +172,7 @@ function sortIcon($column, $currentSort, $currentOrder) {
             <div>
                 <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                 <select id="country" name="country"
-                        onchange="updateFiltersOnCountryChange()"
+                        onchange="onCountryChange()"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="BE" <?= $currentCountry === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
                     <option value="LU" <?= $currentCountry === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
@@ -187,7 +183,7 @@ function sortIcon($column, $currentSort, $currentOrder) {
             <div>
                 <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
                 <select id="cluster" name="cluster"
-                        onchange="updateFiltersOnClusterChange()"
+                        onchange="onClusterChange()"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les clusters</option>
                     <?php foreach ($currentClusters as $cl): ?>
@@ -205,11 +201,9 @@ function sortIcon($column, $currentSort, $currentOrder) {
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les représentants</option>
                     <?php foreach ($currentReps as $rep): ?>
-                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>"
-                                data-cluster="<?= htmlspecialchars($rep['cluster'] ?? '') ?>"
-                                <?= $currentRepId === (string)$rep['rep_id'] ? 'selected' : '' ?>>
+                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>" <?= $currentRepId === (string)$rep['rep_id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($rep['rep_name']) ?>
-                            <?php if (!empty($rep['cluster'])): ?>
+                            <?php if (!empty($rep['cluster']) && empty($currentCluster)): ?>
                                 (<?= htmlspecialchars($rep['cluster']) ?>)
                             <?php endif; ?>
                         </option>
@@ -243,90 +237,32 @@ function sortIcon($column, $currentSort, $currentOrder) {
     </form>
 </div>
 
-<!-- JavaScript pour la cascade des filtres -->
+<!-- JavaScript pour les filtres -->
 <script>
-const allClusters = <?= $allClustersJson ?>;
-const allReps = <?= $allRepsJson ?>;
+// Effacer les filtres sessionStorage pour cette page (évite les conflits)
+try {
+    sessionStorage.removeItem('stm_filters_customers');
+} catch(e) {}
 
-// Valeurs actuelles pour la restauration
-const currentCluster = '<?= htmlspecialchars($currentCluster, ENT_QUOTES) ?>';
-const currentRepId = '<?= htmlspecialchars($currentRepId, ENT_QUOTES) ?>';
-
-function updateFiltersOnCountryChange() {
-    const country = document.getElementById('country').value;
-    const clusterSelect = document.getElementById('cluster');
-    const repSelect = document.getElementById('rep_id');
-
-    // Mettre à jour les clusters
-    const clusters = allClusters[country] || [];
-    clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
-    clusters.forEach(cl => {
-        const option = document.createElement('option');
-        option.value = cl;
-        option.textContent = cl;
-        clusterSelect.appendChild(option);
-    });
-
-    // Mettre à jour les représentants
-    const reps = allReps[country] || [];
-    repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-    reps.forEach(rep => {
-        const option = document.createElement('option');
-        option.value = rep.rep_id;
-        option.textContent = rep.rep_name + (rep.cluster ? ' (' + rep.cluster + ')' : '');
-        option.setAttribute('data-cluster', rep.cluster || '');
-        repSelect.appendChild(option);
-    });
-}
-
-function updateFiltersOnClusterChange() {
-    const country = document.getElementById('country').value;
-    const cluster = document.getElementById('cluster').value;
-    const repSelect = document.getElementById('rep_id');
-
-    // Filtrer les représentants par cluster
-    const reps = allReps[country] || [];
-    repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-
-    reps.forEach(rep => {
-        if (!cluster || rep.cluster === cluster) {
-            const option = document.createElement('option');
-            option.value = rep.rep_id;
-            option.textContent = rep.rep_name + (!cluster && rep.cluster ? ' (' + rep.cluster + ')' : '');
-            option.setAttribute('data-cluster', rep.cluster || '');
-            repSelect.appendChild(option);
-        }
-    });
-}
-
-function changePerPage(value) {
-    // Mettre à jour le champ hidden et soumettre
-    document.getElementById('hidden_per_page').value = value;
+// Soumettre le formulaire quand on change de pays (pour recharger les clusters/reps)
+function onCountryChange() {
+    // Reset cluster et rep car ils ne sont plus valides pour le nouveau pays
+    document.getElementById('cluster').value = '';
+    document.getElementById('rep_id').value = '';
     document.getElementById('filterForm').submit();
 }
 
-// Fonction pour restaurer les filtres
-function restoreFilters() {
-    if (currentCluster) {
-        document.getElementById('cluster').value = currentCluster;
-    }
-    if (currentRepId) {
-        document.getElementById('rep_id').value = currentRepId;
-    }
+// Soumettre le formulaire quand on change de cluster (pour filtrer les reps)
+function onClusterChange() {
+    // Reset rep car il n'est peut-être plus valide pour le nouveau cluster
+    document.getElementById('rep_id').value = '';
+    document.getElementById('filterForm').submit();
 }
 
-// Désactiver filters-persist pour cette page
-window.skipFiltersPersist = true;
-
-// Restaurer immédiatement
-restoreFilters();
-
-// Restaurer après délais croissants (pour contrer tout script externe)
-setTimeout(restoreFilters, 10);
-setTimeout(restoreFilters, 50);
-setTimeout(restoreFilters, 100);
-setTimeout(restoreFilters, 200);
-setTimeout(restoreFilters, 500);
+function changePerPage(value) {
+    document.getElementById('hidden_per_page').value = value;
+    document.getElementById('filterForm').submit();
+}
 </script>
 
 <!-- Tableau des clients -->
