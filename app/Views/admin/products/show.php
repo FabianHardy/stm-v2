@@ -6,6 +6,7 @@
  *
  * @created 11/11/2025 22:50
  * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
+ * @modified 23/12/2025 - Ajout section statistiques de vente
  */
 
 use Core\Session;
@@ -91,6 +92,168 @@ ob_start();
         </span>
     <?php endif; ?>
 </div>
+
+<!-- Section : Statistiques de vente -->
+<?php if (isset($productStats)): ?>
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+            📊 Statistiques de vente
+        </h3>
+    </div>
+    <div class="px-4 py-5 sm:p-6">
+        <!-- Cards résumé -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+            <!-- Total vendu -->
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center border border-orange-200">
+                <p class="text-3xl font-bold text-orange-600"><?php echo number_format($productStats['total_sold'], 0, ',', ' '); ?></p>
+                <p class="text-sm text-orange-700 mt-1">Promos vendues</p>
+            </div>
+            <!-- Commandes -->
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center border border-green-200">
+                <p class="text-3xl font-bold text-green-600"><?php echo number_format($productStats['orders_count'], 0, ',', ' '); ?></p>
+                <p class="text-sm text-green-700 mt-1">Commandes</p>
+            </div>
+            <!-- Clients -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center border border-blue-200">
+                <p class="text-3xl font-bold text-blue-600"><?php echo number_format($productStats['customers_count'], 0, ',', ' '); ?></p>
+                <p class="text-sm text-blue-700 mt-1">Clients</p>
+            </div>
+        </div>
+
+        <!-- Barre de progression quota si défini -->
+        <?php if (!empty($product['max_total']) && $product['max_total'] > 0): ?>
+        <?php
+            $quotaPercent = min(100, round(($productStats['total_sold'] / $product['max_total']) * 100));
+            $quotaColor = $quotaPercent >= 90 ? 'red' : ($quotaPercent >= 70 ? 'yellow' : 'green');
+        ?>
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Progression quota global</span>
+                <span class="text-sm font-bold text-<?php echo $quotaColor; ?>-600">
+                    <?php echo number_format($productStats['total_sold'], 0, ',', ' '); ?> / <?php echo number_format($product['max_total'], 0, ',', ' '); ?>
+                    (<?php echo $quotaPercent; ?>%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+                <div class="bg-<?php echo $quotaColor; ?>-500 h-4 rounded-full transition-all duration-300" style="width: <?php echo $quotaPercent; ?>%"></div>
+            </div>
+            <?php if ($quotaPercent >= 90): ?>
+            <p class="text-xs text-red-600 mt-1">⚠️ Quota presque atteint !</p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Top clients et Top reps côte à côte -->
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <!-- Top 5 Clients -->
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                    <span class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                        <i class="fas fa-building text-blue-600 text-xs"></i>
+                    </span>
+                    Top 5 Clients
+                </h4>
+                <?php if (empty($productStats['top_customers'])): ?>
+                    <p class="text-gray-500 text-sm italic">Aucune vente enregistrée</p>
+                <?php else: ?>
+                    <div class="overflow-hidden rounded-lg border border-gray-200">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                <?php foreach ($productStats['top_customers'] as $i => $customer): ?>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-2 text-sm">
+                                        <?php if ($i < 3): ?>
+                                            <span class="text-lg"><?php echo ['🥇', '🥈', '🥉'][$i]; ?></span>
+                                        <?php else: ?>
+                                            <span class="text-gray-500"><?php echo $i + 1; ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <p class="text-sm font-medium text-gray-900 truncate" title="<?php echo htmlspecialchars($customer['company_name']); ?>">
+                                            <?php echo htmlspecialchars(mb_substr($customer['company_name'], 0, 25)) . (mb_strlen($customer['company_name']) > 25 ? '...' : ''); ?>
+                                        </p>
+                                        <p class="text-xs text-gray-500">
+                                            <?php echo $customer['country'] === 'BE' ? '🇧🇪' : '🇱🇺'; ?>
+                                            <?php echo htmlspecialchars($customer['customer_number']); ?>
+                                        </p>
+                                    </td>
+                                    <td class="px-3 py-2 text-right">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700">
+                                            <?php echo number_format($customer['total_quantity'], 0, ',', ' '); ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Top 5 Représentants -->
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                    <span class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center mr-2">
+                        <i class="fas fa-user-tie text-indigo-600 text-xs"></i>
+                    </span>
+                    Top 5 Représentants
+                </h4>
+                <?php if (empty($productStats['top_reps'])): ?>
+                    <p class="text-gray-500 text-sm italic">Aucune vente enregistrée</p>
+                <?php else: ?>
+                    <div class="overflow-hidden rounded-lg border border-gray-200">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Représentant</th>
+                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Clients</th>
+                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                <?php foreach ($productStats['top_reps'] as $i => $rep): ?>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-2 text-sm">
+                                        <?php if ($i < 3): ?>
+                                            <span class="text-lg"><?php echo ['🥇', '🥈', '🥉'][$i]; ?></span>
+                                        <?php else: ?>
+                                            <span class="text-gray-500"><?php echo $i + 1; ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <p class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($rep['rep_name']); ?></p>
+                                        <p class="text-xs text-gray-500"><?php echo htmlspecialchars($rep['rep_id']); ?></p>
+                                    </td>
+                                    <td class="px-3 py-2 text-right">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                            <?php echo $rep['customers_count']; ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2 text-right">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700">
+                                            <?php echo number_format($rep['total_quantity'], 0, ',', ' '); ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 

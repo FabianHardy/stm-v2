@@ -7,6 +7,7 @@
  * @modified 18/12/2025 - Filtrage par campagnes accessibles selon le rôle
  * @modified 19/12/2025 - Filtre par défaut sur campagnes actives (campaign_status)
  * @modified 23/12/2025 - Conservation des filtres après suppression
+ * @modified 23/12/2025 - Ajout stats de vente dans show() avec getProductSalesStats()
  */
 
 namespace App\Controllers;
@@ -246,6 +247,7 @@ class ProductController
     /**
      * Afficher les détails d'un Promotion
      * @modified 18/12/2025 - Vérification accès campagne
+     * @modified 23/12/2025 - Ajout statistiques de vente filtrées par rôle
      */
     public function show(int $id): void
     {
@@ -265,8 +267,263 @@ class ProductController
             exit();
         }
 
+        // Récupérer les stats de vente filtrées par rôle
+        $productStats = $this->getProductSalesStats($id);
+
         // Charger la vue
         require_once __DIR__ . "/../Views/admin/products/show.php";
+    }
+
+    /**
+     * Récupérer les statistiques de vente d'un produit
+     * Filtrées selon le rôle de l'utilisateur connecté
+     *
+     * @param int $productId
+     * @return array
+     * @created 2025/12/23
+     */
+    private function getProductSalesStats(int $productId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Récupérer les clients accessibles selon le rôle
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $params = [':product_id' => $productId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = pas de stats
+                return [
+                    'total_sold' => 0,
+                    'orders_count' => 0,
+                    'customers_count' => 0,
+                    'top_customers' => [],
+                    'top_reps' => []
+                ];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Stats globales
+        $statsQuery = "
+            SELECT
+                COALESCE(SUM(ol.quantity), 0) as total_sold,
+                COUNT(DISTINCT o.id) as orders_count,
+                COUNT(DISTINCT cu.customer_number) as customers_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$customerFilter}
+        ";
+
+        $statsResult = $db->query($statsQuery, $params);
+        $stats = $statsResult[0] ?? ['total_sold' => 0, 'orders_count' => 0, 'customers_count' => 0];
+
+        // Top 5 clients
+        $topCustomersParams = [':product_id' => $productId];
+        $topCustomersFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":topc_{$i}";
+                $placeholders[] = $key;
+                $topCustomersParams[$key] = $num;
+            }
+            $topCustomersFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        $topCustomersQuery = "
+            SELECT
+                cu.customer_number,
+                cu.company_name,
+                cu.country,
+                SUM(ol.quantity) as total_quantity,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$topCustomersFilter}
+            GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
+            ORDER BY total_quantity DESC
+            LIMIT 5
+        ";
+
+        $topCustomers = $db->query($topCustomersQuery, $topCustomersParams);
+
+        // Top 5 représentants (avec enrichissement depuis DB externe)
+        $topReps = $this->getTopRepsForProduct($productId, $accessibleCustomerNumbers);
+
+        return [
+            'total_sold' => (int)$stats['total_sold'],
+            'orders_count' => (int)$stats['orders_count'],
+            'customers_count' => (int)$stats['customers_count'],
+            'top_customers' => $topCustomers,
+            'top_reps' => $topReps
+        ];
+    }
+
+    /**
+     * Top représentants pour un produit
+     *
+     * @param int $productId
+     * @param array|null $accessibleCustomerNumbers
+     * @return array
+     */
+    private function getTopRepsForProduct(int $productId, ?array $accessibleCustomerNumbers): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $params = [':product_id' => $productId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":rep_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Récupérer les ventes groupées par customer_number + country
+        $query = "
+            SELECT
+                cu.customer_number,
+                cu.country,
+                SUM(ol.quantity) as total_quantity,
+                COUNT(DISTINCT o.id) as orders_count,
+                COUNT(DISTINCT cu.id) as customers_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$customerFilter}
+            GROUP BY cu.customer_number, cu.country
+        ";
+
+        $salesByCustomer = $db->query($query, $params);
+
+        if (empty($salesByCustomer)) {
+            return [];
+        }
+
+        // Séparer par pays
+        $customersBE = [];
+        $customersLU = [];
+        foreach ($salesByCustomer as $row) {
+            if ($row['country'] === 'BE') {
+                $customersBE[$row['customer_number']] = $row;
+            } else {
+                $customersLU[$row['customer_number']] = $row;
+            }
+        }
+
+        // Récupérer les codes rep depuis la base externe
+        $repStats = [];
+
+        try {
+            $extDb = \Core\Database::getExternalInstance();
+
+            // BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
+                $beData = $extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number, cll.IDE_REP as rep_id,
+                            CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                     FROM BE_CLL cll
+                     LEFT JOIN BE_REP r ON cll.IDE_REP = r.IDE_REP
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+
+                foreach ($beData as $row) {
+                    $custNum = $row['customer_number'];
+                    $repId = $row['rep_id'] ?? 'N/A';
+                    $repName = trim($row['rep_name'] ?? '');
+                    if (empty($repName)) $repName = $repId;
+
+                    if (!isset($repStats[$repId])) {
+                        $repStats[$repId] = [
+                            'rep_id' => $repId,
+                            'rep_name' => $repName,
+                            'total_quantity' => 0,
+                            'orders_count' => 0,
+                            'customers_count' => 0
+                        ];
+                    }
+
+                    if (isset($customersBE[$custNum])) {
+                        $repStats[$repId]['total_quantity'] += (int)$customersBE[$custNum]['total_quantity'];
+                        $repStats[$repId]['orders_count'] += (int)$customersBE[$custNum]['orders_count'];
+                        $repStats[$repId]['customers_count']++;
+                    }
+                }
+            }
+
+            // LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
+                $luData = $extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number, cll.IDE_REP as rep_id,
+                            CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                     FROM LU_CLL cll
+                     LEFT JOIN LU_REP r ON cll.IDE_REP = r.IDE_REP
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+
+                foreach ($luData as $row) {
+                    $custNum = $row['customer_number'];
+                    $repId = $row['rep_id'] ?? 'N/A';
+                    $repName = trim($row['rep_name'] ?? '');
+                    if (empty($repName)) $repName = $repId;
+
+                    if (!isset($repStats[$repId])) {
+                        $repStats[$repId] = [
+                            'rep_id' => $repId,
+                            'rep_name' => $repName,
+                            'total_quantity' => 0,
+                            'orders_count' => 0,
+                            'customers_count' => 0
+                        ];
+                    }
+
+                    if (isset($customersLU[$custNum])) {
+                        $repStats[$repId]['total_quantity'] += (int)$customersLU[$custNum]['total_quantity'];
+                        $repStats[$repId]['orders_count'] += (int)$customersLU[$custNum]['orders_count'];
+                        $repStats[$repId]['customers_count']++;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("getTopRepsForProduct error: " . $e->getMessage());
+        }
+
+        // Trier par quantité et limiter à 5
+        usort($repStats, function($a, $b) {
+            return $b['total_quantity'] - $a['total_quantity'];
+        });
+
+        return array_slice($repStats, 0, 5);
     }
 
     /**
