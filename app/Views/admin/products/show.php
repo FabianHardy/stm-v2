@@ -23,8 +23,8 @@ ob_start();
 
 <!-- En-tête de la page -->
 <div class="mb-6">
-    <div class="flex items-center justify-between">
-        <div>
+    <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
             <h1 class="text-3xl font-bold text-gray-900">
                 <?php echo htmlspecialchars($product['name_fr']); ?>
             </h1>
@@ -32,14 +32,14 @@ ob_start();
                 Code: <span class="font-medium"><?php echo htmlspecialchars($product['product_code']); ?></span>
             </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-shrink-0">
             <a href="/stm/admin/products"
-               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 whitespace-nowrap">
                 ← Retour à la liste
             </a>
             <?php if ($canEdit): ?>
             <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
-               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 whitespace-nowrap">
                 ✏️ Modifier
             </a>
             <?php endif; ?>
