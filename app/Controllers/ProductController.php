@@ -6,6 +6,9 @@
  * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
  * @modified 18/12/2025 - Filtrage par campagnes accessibles selon le rôle
  * @modified 19/12/2025 - Filtre par défaut sur campagnes actives (campaign_status)
+ * @modified 23/12/2025 - Conservation des filtres après suppression
+ * @modified 23/12/2025 - Ajout stats de vente dans show() avec getProductSalesStats()
+ * @modified 29/12/2025 - Ajout API getProductCustomerOrdersApi() + user_id dans top reps
  */
 
 namespace App\Controllers;
@@ -245,6 +248,7 @@ class ProductController
     /**
      * Afficher les détails d'un Promotion
      * @modified 18/12/2025 - Vérification accès campagne
+     * @modified 23/12/2025 - Ajout statistiques de vente filtrées par rôle
      */
     public function show(int $id): void
     {
@@ -264,8 +268,281 @@ class ProductController
             exit();
         }
 
+        // Récupérer les stats de vente filtrées par rôle
+        $productStats = $this->getProductSalesStats($id);
+
         // Charger la vue
         require_once __DIR__ . "/../Views/admin/products/show.php";
+    }
+
+    /**
+     * Récupérer les statistiques de vente d'un produit
+     * Filtrées selon le rôle de l'utilisateur connecté
+     *
+     * @param int $productId
+     * @return array
+     * @created 2025/12/23
+     */
+    private function getProductSalesStats(int $productId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Récupérer les clients accessibles selon le rôle
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $params = [':product_id' => $productId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = pas de stats
+                return [
+                    'total_sold' => 0,
+                    'orders_count' => 0,
+                    'customers_count' => 0,
+                    'top_customers' => [],
+                    'top_reps' => []
+                ];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Stats globales
+        $statsQuery = "
+            SELECT
+                COALESCE(SUM(ol.quantity), 0) as total_sold,
+                COUNT(DISTINCT o.id) as orders_count,
+                COUNT(DISTINCT cu.customer_number) as customers_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$customerFilter}
+        ";
+
+        $statsResult = $db->query($statsQuery, $params);
+        $stats = $statsResult[0] ?? ['total_sold' => 0, 'orders_count' => 0, 'customers_count' => 0];
+
+        // Top 5 clients
+        $topCustomersParams = [':product_id' => $productId];
+        $topCustomersFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":topc_{$i}";
+                $placeholders[] = $key;
+                $topCustomersParams[$key] = $num;
+            }
+            $topCustomersFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        $topCustomersQuery = "
+            SELECT
+                cu.customer_number,
+                cu.company_name,
+                cu.country,
+                SUM(ol.quantity) as total_quantity,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$topCustomersFilter}
+            GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
+            ORDER BY total_quantity DESC
+            LIMIT 5
+        ";
+
+        $topCustomers = $db->query($topCustomersQuery, $topCustomersParams);
+
+        // Top 5 représentants (avec enrichissement depuis DB externe)
+        $topReps = $this->getTopRepsForProduct($productId, $accessibleCustomerNumbers);
+
+        return [
+            'total_sold' => (int)$stats['total_sold'],
+            'orders_count' => (int)$stats['orders_count'],
+            'customers_count' => (int)$stats['customers_count'],
+            'top_customers' => $topCustomers,
+            'top_reps' => $topReps
+        ];
+    }
+
+    /**
+     * Top représentants pour un produit
+     *
+     * @param int $productId
+     * @param array|null $accessibleCustomerNumbers
+     * @return array
+     */
+    private function getTopRepsForProduct(int $productId, ?array $accessibleCustomerNumbers): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $params = [':product_id' => $productId];
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":rep_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        // Récupérer les ventes groupées par customer_number + country
+        $query = "
+            SELECT
+                cu.customer_number,
+                cu.country,
+                SUM(ol.quantity) as total_quantity,
+                COUNT(DISTINCT o.id) as orders_count,
+                COUNT(DISTINCT cu.id) as customers_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'validated'
+            {$customerFilter}
+            GROUP BY cu.customer_number, cu.country
+        ";
+
+        $salesByCustomer = $db->query($query, $params);
+
+        if (empty($salesByCustomer)) {
+            return [];
+        }
+
+        // Séparer par pays
+        $customersBE = [];
+        $customersLU = [];
+        foreach ($salesByCustomer as $row) {
+            if ($row['country'] === 'BE') {
+                $customersBE[$row['customer_number']] = $row;
+            } else {
+                $customersLU[$row['customer_number']] = $row;
+            }
+        }
+
+        // Récupérer les codes rep depuis la base externe
+        $repStats = [];
+
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+
+            // BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(",", array_fill(0, count($customersBE), "?"));
+                $beData = $extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number, cll.IDE_REP as rep_id,
+                            CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                     FROM BE_CLL cll
+                     LEFT JOIN BE_REP r ON cll.IDE_REP = r.IDE_REP
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+
+                foreach ($beData as $row) {
+                    $custNum = $row['customer_number'];
+                    $repId = $row['rep_id'] ?? 'N/A';
+                    $repName = trim($row['rep_name'] ?? '');
+                    if (empty($repName)) $repName = $repId;
+
+                    $repKey = $repId . '_BE';
+                    if (!isset($repStats[$repKey])) {
+                        $repStats[$repKey] = [
+                            'rep_id' => $repId,
+                            'rep_name' => $repName,
+                            'rep_country' => 'BE',
+                            'total_quantity' => 0,
+                            'orders_count' => 0,
+                            'customers_count' => 0
+                        ];
+                    }
+
+                    if (isset($customersBE[$custNum])) {
+                        $repStats[$repKey]['total_quantity'] += (int)$customersBE[$custNum]['total_quantity'];
+                        $repStats[$repKey]['orders_count'] += (int)$customersBE[$custNum]['orders_count'];
+                        $repStats[$repKey]['customers_count']++;
+                    }
+                }
+            }
+
+            // LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(",", array_fill(0, count($customersLU), "?"));
+                $luData = $extDb->query(
+                    "SELECT cll.CLL_NCLIXX as customer_number, cll.IDE_REP as rep_id,
+                            CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                     FROM LU_CLL cll
+                     LEFT JOIN LU_REP r ON cll.IDE_REP = r.IDE_REP
+                     WHERE cll.CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+
+                foreach ($luData as $row) {
+                    $custNum = $row['customer_number'];
+                    $repId = $row['rep_id'] ?? 'N/A';
+                    $repName = trim($row['rep_name'] ?? '');
+                    if (empty($repName)) $repName = $repId;
+
+                    $repKey = $repId . '_LU';
+                    if (!isset($repStats[$repKey])) {
+                        $repStats[$repKey] = [
+                            'rep_id' => $repId,
+                            'rep_name' => $repName,
+                            'rep_country' => 'LU',
+                            'total_quantity' => 0,
+                            'orders_count' => 0,
+                            'customers_count' => 0
+                        ];
+                    }
+
+                    if (isset($customersLU[$custNum])) {
+                        $repStats[$repKey]['total_quantity'] += (int)$customersLU[$custNum]['total_quantity'];
+                        $repStats[$repKey]['orders_count'] += (int)$customersLU[$custNum]['orders_count'];
+                        $repStats[$repKey]['customers_count']++;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("getTopRepsForProduct error: " . $e->getMessage());
+        }
+
+        // Trier par quantité et limiter à 5
+        usort($repStats, function($a, $b) {
+            return $b['total_quantity'] - $a['total_quantity'];
+        });
+
+        $repStats = array_slice($repStats, 0, 5);
+
+        // Enrichir avec user_id depuis la table users
+        if (!empty($repStats)) {
+            foreach ($repStats as &$rep) {
+                $userQuery = "SELECT id FROM users WHERE rep_id = :rep_id AND rep_country = :rep_country LIMIT 1";
+                $userResult = $db->query($userQuery, [
+                    ':rep_id' => $rep['rep_id'],
+                    ':rep_country' => $rep['rep_country']
+                ]);
+                $rep['user_id'] = $userResult[0]['id'] ?? null;
+            }
+        }
+
+        return $repStats;
     }
 
     /**
@@ -433,13 +710,18 @@ class ProductController
      *
      * @modified 17/11/2025 - Ajout vérification hasOrders() avant suppression
      * @modified 18/12/2025 - Vérification accès campagne
+     * @modified 23/12/2025 - Conservation des filtres après suppression
      */
     public function destroy(int $id): void
     {
+        // Récupérer les filtres pour la redirection
+        $redirectFilters = $_POST['redirect_filters'] ?? '';
+        $redirectUrl = '/stm/admin/products' . (!empty($redirectFilters) ? '?' . $redirectFilters : '');
+
         // Validation CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -448,14 +730,14 @@ class ProductController
 
         if (!$product) {
             Session::setFlash("error", "Promotion non trouvée");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
         // Vérifier l'accès à la campagne du produit
         if (!$this->canAccessProduct($product)) {
             Session::setFlash("error", "Vous n'avez pas accès à cette promotion");
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -465,7 +747,7 @@ class ProductController
                 "error",
                 "Impossible de supprimer cette promotion car elle fait partie de commandes existantes. Pour la retirer du catalogue, désactivez-la plutôt.",
             );
-            header("Location: /stm/admin/products");
+            header("Location: " . $redirectUrl);
             exit();
         }
 
@@ -482,7 +764,7 @@ class ProductController
             Session::setFlash("error", "Erreur lors de la suppression");
         }
 
-        header("Location: /stm/admin/products");
+        header("Location: " . $redirectUrl);
         exit();
     }
 
@@ -588,5 +870,117 @@ class ProductController
 
         // Vérifier si la campagne du produit est dans la liste des campagnes accessibles
         return in_array($product['campaign_id'], $accessibleCampaignIds);
+    }
+
+    /**
+     * API : Récupère les commandes d'un client pour un produit spécifique (AJAX)
+     *
+     * @return void
+     * @created 2025/12/29
+     */
+    public function getProductCustomerOrdersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+        $customerNumber = $_GET['customer_number'] ?? '';
+        $country = $_GET['country'] ?? '';
+
+        if (!$productId || !$customerNumber || !$country) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Paramètres manquants'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au produit
+        $product = $this->productModel->findById($productId);
+        if (!$product || !$this->canAccessProduct($product)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce produit'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au client (selon le rôle)
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+        if ($accessibleCustomerNumbers !== null && !in_array($customerNumber, $accessibleCustomerNumbers)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce client'
+            ]);
+            exit();
+        }
+
+        try {
+            $db = \Core\Database::getInstance();
+
+            // Récupérer les commandes du client contenant ce produit
+            $query = "
+                SELECT
+                    o.id as order_id,
+                    o.created_at,
+                    ol.quantity
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                INNER JOIN order_lines ol ON o.id = ol.order_id
+                WHERE ol.product_id = :product_id
+                AND cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'validated'
+                ORDER BY o.created_at DESC
+            ";
+
+            $orders = $db->query($query, [
+                ':product_id' => $productId,
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            // Calculer le total
+            $totalQuantity = array_sum(array_column($orders, 'quantity'));
+
+            // Récupérer les infos du client
+            $customerQuery = "
+                SELECT company_name
+                FROM customers
+                WHERE customer_number = :customer_number
+                AND country = :country
+                LIMIT 1
+            ";
+
+            $customerInfo = $db->query($customerQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'product' => [
+                    'id' => $product['id'],
+                    'name' => $product['name_fr'],
+                    'code' => $product['product_code']
+                ],
+                'customer' => [
+                    'customer_number' => $customerNumber,
+                    'country' => $country,
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
+                ],
+                'orders' => $orders,
+                'total_orders' => count($orders),
+                'total_quantity' => $totalQuantity
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("getProductCustomerOrdersApi error: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Erreur lors de la récupération des commandes'
+            ]);
+        }
+
+        exit();
     }
 }
