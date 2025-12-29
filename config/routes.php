@@ -329,6 +329,16 @@ $router->post("/admin/products", function () {
     $controller->store();
 });
 
+// API - Détail commandes d'un client pour un produit (AJAX)
+// ⚠️ DOIT être AVANT /admin/products/{id}
+$router->get('/admin/products/customer-orders', function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new ProductController();
+    $controller->getProductCustomerOrdersApi();
+});
+
 // Détails d'un Promotion
 $router->get("/admin/products/{id}", function ($id) {
     $middleware = new AuthMiddleware();
@@ -661,15 +671,6 @@ $router->get('/admin/stats/customer-orders', function () {
 
     $controller = new \App\Controllers\StatsController();
     $controller->getCustomerOrdersApi();
-});
-
-// API - Détail commandes d'un client pour un produit (AJAX)
-$router->get('/admin/products/customer-orders', function () {
-    $middleware = new AuthMiddleware();
-    $middleware->handle();
-
-    $controller = new \App\Controllers\ProductController();
-    $controller->getProductCustomerOrdersApi();
 });
 
 // ============================================
