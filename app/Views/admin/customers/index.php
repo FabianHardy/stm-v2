@@ -123,162 +123,161 @@ ob_start();
 
 <!-- Filtres -->
 <?php
-// Préparer les données pour Alpine.js
-$clustersJson = json_encode($clusters, JSON_HEX_APOS | JSON_HEX_QUOT);
-$representativesJson = json_encode(array_map(function($r) {
-    return [
-        'rep_id' => (string)$r['rep_id'],
-        'rep_name' => $r['rep_name'],
-        'cluster' => $r['cluster'] ?? ''
-    ];
-}, $representatives), JSON_HEX_APOS | JSON_HEX_QUOT);
+// Préparer les données pour Alpine.js (cascade côté client)
+$allClustersJson = json_encode($allClusters, JSON_HEX_APOS | JSON_HEX_QUOT);
+$allRepsJson = json_encode([
+    'BE' => array_map(function($r) {
+        return [
+            'rep_id' => (string)$r['rep_id'],
+            'rep_name' => $r['rep_name'],
+            'cluster' => $r['cluster'] ?? ''
+        ];
+    }, $allRepresentatives['BE']),
+    'LU' => array_map(function($r) {
+        return [
+            'rep_id' => (string)$r['rep_id'],
+            'rep_name' => $r['rep_name'],
+            'cluster' => $r['cluster'] ?? ''
+        ];
+    }, $allRepresentatives['LU'])
+], JSON_HEX_APOS | JSON_HEX_QUOT);
+
+$currentCountry = $filters['country'] ?? 'BE';
+$currentCluster = $filters['cluster'] ?? '';
+$currentRepId = (string)($filters['rep_id'] ?? '');
+
+// Clusters et reps pour le pays actuel (pour les options PHP)
+$currentClusters = $allClusters[$currentCountry] ?? [];
+$currentReps = $allRepresentatives[$currentCountry] ?? [];
+// Filtrer les reps par cluster si sélectionné
+if (!empty($currentCluster)) {
+    $currentReps = array_filter($currentReps, fn($r) => ($r['cluster'] ?? '') === $currentCluster);
+}
 ?>
-<div class="bg-white shadow rounded-lg p-4 mb-6"
-     x-data="customerFilters()"
-     x-init="init()">
-    <form method="GET" action="/stm/admin/customers" id="filterForm">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <!-- Pays -->
-            <div>
-                <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                <select id="country" name="country"
-                        x-model="country"
-                        @change="onCountryChange()"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="BE">🇧🇪 Belgique</option>
-                    <option value="LU">🇱🇺 Luxembourg</option>
-                </select>
-            </div>
+<div class="bg-white shadow rounded-lg p-4 mb-6">
+    <div x-data="customerFilters()" x-init="init()">
+        <form method="GET" action="/stm/admin/customers" id="filterForm">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <!-- Pays -->
+                <div>
+                    <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                    <select id="country" name="country"
+                            x-model="country"
+                            @change="onCountryChange()"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="BE" <?= $currentCountry === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                        <option value="LU" <?= $currentCountry === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
+                    </select>
+                </div>
 
-            <!-- Cluster -->
-            <div>
-                <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
-                <select id="cluster" name="cluster"
-                        x-model="cluster"
-                        @change="onClusterChange()"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="">Tous les clusters</option>
-                    <template x-for="c in availableClusters" :key="c">
-                        <option :value="c" x-text="c"></option>
-                    </template>
-                </select>
-            </div>
+                <!-- Cluster -->
+                <div>
+                    <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
+                    <select id="cluster" name="cluster"
+                            x-model="cluster"
+                            @change="onClusterChange()"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Tous les clusters</option>
+                        <?php foreach ($currentClusters as $cl): ?>
+                            <option value="<?= htmlspecialchars($cl) ?>" <?= $currentCluster === $cl ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cl) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
 
-            <!-- Représentant -->
-            <div>
-                <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
-                <select id="rep_id" name="rep_id"
-                        x-model="repId"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="">Tous les représentants</option>
-                    <template x-for="rep in availableReps" :key="rep.rep_id">
-                        <option :value="rep.rep_id" x-text="rep.rep_name + (rep.cluster && !cluster ? ' (' + rep.cluster + ')' : '')"></option>
-                    </template>
-                </select>
-            </div>
+                <!-- Représentant -->
+                <div>
+                    <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
+                    <select id="rep_id" name="rep_id"
+                            x-model="repId"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Tous les représentants</option>
+                        <?php foreach ($currentReps as $rep): ?>
+                            <option value="<?= htmlspecialchars($rep['rep_id']) ?>"
+                                    data-cluster="<?= htmlspecialchars($rep['cluster'] ?? '') ?>"
+                                    <?= $currentRepId === (string)$rep['rep_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($rep['rep_name']) ?>
+                                <?php if (!empty($rep['cluster']) && empty($currentCluster)): ?>
+                                    (<?= htmlspecialchars($rep['cluster']) ?>)
+                                <?php endif; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
 
-            <!-- Recherche -->
-            <div>
-                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-                <input type="text" id="search" name="search"
-                       value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-                       placeholder="N° client ou nom..."
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-            </div>
+                <!-- Recherche -->
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
+                    <input type="text" id="search" name="search"
+                           value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
+                           placeholder="N° client ou nom..."
+                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
 
-            <!-- Boutons -->
-            <div class="flex items-end gap-2">
-                <button type="submit"
-                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                    <i class="fas fa-search mr-2"></i>
-                    Rechercher
-                </button>
-                <a href="/stm/admin/customers"
-                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i class="fas fa-times mr-2"></i>
-                    Reset
-                </a>
+                <!-- Boutons -->
+                <div class="flex items-end gap-2">
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                        <i class="fas fa-search mr-2"></i>
+                        Rechercher
+                    </button>
+                    <a href="/stm/admin/customers"
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        <i class="fas fa-times mr-2"></i>
+                        Reset
+                    </a>
+                </div>
             </div>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
 
 <script>
 function customerFilters() {
     return {
-        // Valeurs sélectionnées (depuis PHP/URL)
-        country: '<?= htmlspecialchars($filters['country'] ?? 'BE', ENT_QUOTES) ?>',
-        cluster: '<?= htmlspecialchars($filters['cluster'] ?? '', ENT_QUOTES) ?>',
-        repId: '<?= htmlspecialchars($filters['rep_id'] ?? '', ENT_QUOTES) ?>',
+        // Valeurs actuelles
+        country: '<?= htmlspecialchars($currentCountry, ENT_QUOTES) ?>',
+        cluster: '<?= htmlspecialchars($currentCluster, ENT_QUOTES) ?>',
+        repId: '<?= htmlspecialchars($currentRepId, ENT_QUOTES) ?>',
 
-        // Données brutes (chargées depuis PHP)
-        allClusters: <?= $clustersJson ?>,
-        allReps: <?= $representativesJson ?>,
-
-        // Listes filtrées
-        availableClusters: [],
-        availableReps: [],
+        // Données brutes (tous les pays)
+        allClusters: <?= $allClustersJson ?>,
+        allReps: <?= $allRepsJson ?>,
 
         init() {
-            this.updateAvailableClusters();
-            this.updateAvailableReps();
+            // Options déjà rendues par PHP avec selected
         },
 
-        // Quand le pays change → recharger clusters et reps via AJAX
+        // Quand le pays change → recharger la page pour avoir les bons clusters/reps
         onCountryChange() {
-            // Réinitialiser les sélections
-            this.cluster = '';
-            this.repId = '';
-
-            // Charger les nouveaux clusters
-            fetch('/stm/admin/customers/api/clusters?country=' + this.country)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        this.allClusters = data.clusters;
-                        this.updateAvailableClusters();
-                    }
-                });
-
-            // Charger les nouveaux représentants
-            fetch('/stm/admin/customers/api/representatives?country=' + this.country)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        this.allReps = data.representatives.map(r => ({
-                            rep_id: String(r.rep_id),
-                            rep_name: r.rep_name,
-                            cluster: r.cluster || ''
-                        }));
-                        this.updateAvailableReps();
-                    }
-                });
+            // Soumettre avec le nouveau pays, reset cluster et rep
+            const form = document.getElementById('filterForm');
+            document.getElementById('cluster').value = '';
+            document.getElementById('rep_id').value = '';
+            form.submit();
         },
 
-        // Quand le cluster change → filtrer les reps
+        // Quand le cluster change → filtrer les reps côté client
         onClusterChange() {
-            // Vérifier si le rep actuel est encore valide
-            if (this.repId && !this.availableReps.find(r => r.rep_id === this.repId)) {
-                this.repId = '';
-            }
-            this.updateAvailableReps();
-        },
+            const repSelect = document.getElementById('rep_id');
+            const selectedCluster = this.cluster;
+            const countryReps = this.allReps[this.country] || [];
 
-        // Mettre à jour les clusters disponibles
-        updateAvailableClusters() {
-            this.availableClusters = this.allClusters;
-        },
+            // Reconstruire les options du select rep
+            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
 
-        // Mettre à jour les représentants disponibles selon le cluster
-        updateAvailableReps() {
-            if (this.cluster) {
-                this.availableReps = this.allReps.filter(r => r.cluster === this.cluster);
-            } else {
-                this.availableReps = this.allReps;
-            }
+            countryReps.forEach(rep => {
+                if (!selectedCluster || rep.cluster === selectedCluster) {
+                    const option = document.createElement('option');
+                    option.value = rep.rep_id;
+                    option.textContent = rep.rep_name + (!selectedCluster && rep.cluster ? ' (' + rep.cluster + ')' : '');
+                    option.setAttribute('data-cluster', rep.cluster || '');
+                    repSelect.appendChild(option);
+                }
+            });
 
-            // Trier par prénom
-            this.availableReps.sort((a, b) => a.rep_name.localeCompare(b.rep_name));
+            this.repId = '';
         }
     };
 }
@@ -288,9 +287,12 @@ function customerFilters() {
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
         <span class="text-sm text-gray-600">
-            <?= count($customers) ?> client(s) affiché(s)
-            <?php if (count($customers) >= 500): ?>
-                <span class="text-orange-600">(limité à 500 résultats)</span>
+            <?php if ($pagination['total'] > 0): ?>
+                Affichage de <?= number_format((($pagination['current_page'] - 1) * $pagination['per_page']) + 1, 0, ',', ' ') ?>
+                à <?= number_format(min($pagination['current_page'] * $pagination['per_page'], $pagination['total']), 0, ',', ' ') ?>
+                sur <?= number_format($pagination['total'], 0, ',', ' ') ?> client(s)
+            <?php else: ?>
+                Aucun client trouvé
             <?php endif; ?>
         </span>
     </div>
@@ -423,6 +425,90 @@ function customerFilters() {
         </table>
     </div>
 </div>
+
+<!-- Pagination -->
+<?php if ($pagination['total_pages'] > 1):
+    // Construire les paramètres de filtre pour les liens de pagination
+    $filterParams = http_build_query(array_filter([
+        'country' => $filters['country'] ?? '',
+        'cluster' => $filters['cluster'] ?? '',
+        'rep_id' => $filters['rep_id'] ?? '',
+        'search' => $filters['search'] ?? ''
+    ]));
+?>
+<div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6 rounded-lg shadow">
+    <!-- Mobile -->
+    <div class="flex-1 flex justify-between sm:hidden">
+        <?php if ($pagination['current_page'] > 1): ?>
+            <a href="?page=<?= $pagination['current_page'] - 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+               class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                Précédent
+            </a>
+        <?php endif; ?>
+        <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
+            <a href="?page=<?= $pagination['current_page'] + 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+               class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                Suivant
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <!-- Desktop -->
+    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+        <div>
+            <p class="text-sm text-gray-700">
+                Page <span class="font-medium"><?= $pagination['current_page'] ?></span>
+                sur <span class="font-medium"><?= $pagination['total_pages'] ?></span>
+                (<?= number_format($pagination['total'], 0, ',', ' ') ?> résultats)
+            </p>
+        </div>
+        <div>
+            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <!-- Première page -->
+                <?php if ($pagination['current_page'] > 1): ?>
+                    <a href="?page=1<?= $filterParams ? '&' . $filterParams : '' ?>"
+                       class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                       title="Première page">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a href="?page=<?= $pagination['current_page'] - 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+                       class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                       title="Page précédente">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                <?php endif; ?>
+
+                <!-- Numéros de page -->
+                <?php
+                $startPage = max(1, $pagination['current_page'] - 2);
+                $endPage = min($pagination['total_pages'], $pagination['current_page'] + 2);
+
+                for ($i = $startPage; $i <= $endPage; $i++):
+                ?>
+                    <a href="?page=<?= $i ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+                       class="relative inline-flex items-center px-4 py-2 border text-sm font-medium <?= $i === $pagination['current_page'] ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50' ?>">
+                        <?= $i ?>
+                    </a>
+                <?php endfor; ?>
+
+                <!-- Dernière page -->
+                <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
+                    <a href="?page=<?= $pagination['current_page'] + 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+                       class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                       title="Page suivante">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a href="?page=<?= $pagination['total_pages'] ?><?= $filterParams ? '&' . $filterParams : '' ?>"
+                       class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                       title="Dernière page">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                <?php endif; ?>
+            </nav>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();

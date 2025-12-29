@@ -29,6 +29,10 @@ class CustomerController
      */
     public function index(): void
     {
+        // Pagination
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 50;
+
         // Récupérer les filtres
         $filters = [
             'country' => $_GET['country'] ?? 'BE',
@@ -40,17 +44,36 @@ class CustomerController
         // Récupérer les données selon le rôle
         $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
 
-        // Récupérer les clients avec stats
-        $customers = $this->getCustomersWithStats($filters, $accessibleCustomerNumbers);
+        // Compter le total de clients pour la pagination
+        $totalCustomers = $this->countCustomers($filters, $accessibleCustomerNumbers);
+        $totalPages = ceil($totalCustomers / $perPage);
+        $page = min($page, max(1, $totalPages)); // S'assurer que la page est valide
 
-        // Récupérer les clusters pour le filtre
-        $clusters = $this->getClusters($filters['country']);
+        // Récupérer les clients avec stats (paginés)
+        $customers = $this->getCustomersWithStats($filters, $accessibleCustomerNumbers, $page, $perPage);
 
-        // Récupérer les représentants pour le filtre (filtrés par cluster si sélectionné)
-        $representatives = $this->getRepresentatives($filters['country'], $filters['cluster']);
+        // Récupérer les clusters pour les DEUX pays (pour filtrage côté client)
+        $allClusters = [
+            'BE' => $this->getClusters('BE'),
+            'LU' => $this->getClusters('LU')
+        ];
+
+        // Récupérer les représentants pour les DEUX pays (pour filtrage côté client)
+        $allRepresentatives = [
+            'BE' => $this->getRepresentatives('BE', ''),
+            'LU' => $this->getRepresentatives('LU', '')
+        ];
 
         // Stats globales
         $stats = $this->getGlobalStats($filters['country'], $accessibleCustomerNumbers);
+
+        // Pagination info
+        $pagination = [
+            'current_page' => $page,
+            'per_page' => $perPage,
+            'total' => $totalCustomers,
+            'total_pages' => $totalPages
+        ];
 
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/customers/index.php';
@@ -217,13 +240,75 @@ class CustomerController
     }
 
     /**
+     * Compter le nombre total de clients selon les filtres
+     *
+     * @param array $filters
+     * @param array|null $accessibleCustomerNumbers
+     * @return int
+     */
+    private function countCustomers(array $filters, ?array $accessibleCustomerNumbers): int
+    {
+        try {
+            $extDb = ExternalDatabase::getInstance();
+
+            $country = $filters['country'];
+            $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
+
+            $query = "
+                SELECT COUNT(*) as total
+                FROM {$table} c
+                LEFT JOIN {$repTable} r ON c.IDE_REP = r.IDE_REP
+                WHERE 1=1
+            ";
+
+            $params = [];
+
+            if (!empty($filters['cluster'])) {
+                $query .= " AND r.REP_CLU = ?";
+                $params[] = $filters['cluster'];
+            }
+
+            if (!empty($filters['rep_id'])) {
+                $query .= " AND c.IDE_REP = ?";
+                $params[] = $filters['rep_id'];
+            }
+
+            if (!empty($filters['search'])) {
+                $query .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOM LIKE ?)";
+                $searchTerm = '%' . $filters['search'] . '%';
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+            }
+
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+                $placeholders = implode(',', array_fill(0, count($accessibleCustomerNumbers), '?'));
+                $query .= " AND c.CLL_NCLIXX IN ({$placeholders})";
+                $params = array_merge($params, $accessibleCustomerNumbers);
+            }
+
+            $result = $extDb->query($query, $params);
+            return (int)($result[0]['total'] ?? 0);
+
+        } catch (\Exception $e) {
+            error_log("countCustomers error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Récupérer les clients depuis la DB externe avec stats de commandes
      *
      * @param array $filters
      * @param array|null $accessibleCustomerNumbers
+     * @param int $page
+     * @param int $perPage
      * @return array
      */
-    private function getCustomersWithStats(array $filters, ?array $accessibleCustomerNumbers): array
+    private function getCustomersWithStats(array $filters, ?array $accessibleCustomerNumbers, int $page = 1, int $perPage = 50): array
     {
         try {
             $extDb = ExternalDatabase::getInstance();
@@ -281,7 +366,8 @@ class CustomerController
                 $params = array_merge($params, $accessibleCustomerNumbers);
             }
 
-            $query .= " ORDER BY c.CLL_NOM ASC LIMIT 500";
+            $offset = ($page - 1) * $perPage;
+            $query .= " ORDER BY c.CLL_NOM ASC LIMIT {$perPage} OFFSET {$offset}";
 
             $externalCustomers = $extDb->query($query, $params);
 
