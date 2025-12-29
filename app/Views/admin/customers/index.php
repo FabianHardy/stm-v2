@@ -122,17 +122,31 @@ ob_start();
 </div>
 
 <!-- Filtres -->
-<div class="bg-white shadow rounded-lg p-4 mb-6">
+<?php
+// Préparer les données pour Alpine.js
+$clustersJson = json_encode($clusters, JSON_HEX_APOS | JSON_HEX_QUOT);
+$representativesJson = json_encode(array_map(function($r) {
+    return [
+        'rep_id' => (string)$r['rep_id'],
+        'rep_name' => $r['rep_name'],
+        'cluster' => $r['cluster'] ?? ''
+    ];
+}, $representatives), JSON_HEX_APOS | JSON_HEX_QUOT);
+?>
+<div class="bg-white shadow rounded-lg p-4 mb-6"
+     x-data="customerFilters()"
+     x-init="init()">
     <form method="GET" action="/stm/admin/customers" id="filterForm">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <!-- Pays -->
             <div>
                 <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                 <select id="country" name="country"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        onchange="updateCascadeFilters()">
-                    <option value="BE" <?= ($filters['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                    <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
+                        x-model="country"
+                        @change="onCountryChange()"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
                 </select>
             </div>
 
@@ -140,14 +154,13 @@ ob_start();
             <div>
                 <label for="cluster" class="block text-sm font-medium text-gray-700 mb-1">Cluster</label>
                 <select id="cluster" name="cluster"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        onchange="updateRepresentatives()">
+                        x-model="cluster"
+                        @change="onClusterChange()"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les clusters</option>
-                    <?php foreach ($clusters as $cluster): ?>
-                        <option value="<?= htmlspecialchars($cluster) ?>" <?= (string)($filters['cluster'] ?? '') === (string)$cluster ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($cluster) ?>
-                        </option>
-                    <?php endforeach; ?>
+                    <template x-for="c in availableClusters" :key="c">
+                        <option :value="c" x-text="c"></option>
+                    </template>
                 </select>
             </div>
 
@@ -155,16 +168,12 @@ ob_start();
             <div>
                 <label for="rep_id" class="block text-sm font-medium text-gray-700 mb-1">Représentant</label>
                 <select id="rep_id" name="rep_id"
+                        x-model="repId"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Tous les représentants</option>
-                    <?php foreach ($representatives as $rep): ?>
-                        <option value="<?= htmlspecialchars($rep['rep_id']) ?>" <?= (string)($filters['rep_id'] ?? '') === (string)$rep['rep_id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($rep['rep_name']) ?>
-                            <?php if (!empty($rep['cluster'])): ?>
-                                (<?= htmlspecialchars($rep['cluster']) ?>)
-                            <?php endif; ?>
-                        </option>
-                    <?php endforeach; ?>
+                    <template x-for="rep in availableReps" :key="rep.rep_id">
+                        <option :value="rep.rep_id" x-text="rep.rep_name + (rep.cluster && !cluster ? ' (' + rep.cluster + ')' : '')"></option>
+                    </template>
                 </select>
             </div>
 
@@ -184,7 +193,7 @@ ob_start();
                     <i class="fas fa-search mr-2"></i>
                     Rechercher
                 </button>
-                <a href="/stm/admin/customers?country=<?= $filters['country'] ?? 'BE' ?>"
+                <a href="/stm/admin/customers"
                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <i class="fas fa-times mr-2"></i>
                     Reset
@@ -193,6 +202,87 @@ ob_start();
         </div>
     </form>
 </div>
+
+<script>
+function customerFilters() {
+    return {
+        // Valeurs sélectionnées (depuis PHP/URL)
+        country: '<?= htmlspecialchars($filters['country'] ?? 'BE', ENT_QUOTES) ?>',
+        cluster: '<?= htmlspecialchars($filters['cluster'] ?? '', ENT_QUOTES) ?>',
+        repId: '<?= htmlspecialchars($filters['rep_id'] ?? '', ENT_QUOTES) ?>',
+
+        // Données brutes (chargées depuis PHP)
+        allClusters: <?= $clustersJson ?>,
+        allReps: <?= $representativesJson ?>,
+
+        // Listes filtrées
+        availableClusters: [],
+        availableReps: [],
+
+        init() {
+            this.updateAvailableClusters();
+            this.updateAvailableReps();
+        },
+
+        // Quand le pays change → recharger clusters et reps via AJAX
+        onCountryChange() {
+            // Réinitialiser les sélections
+            this.cluster = '';
+            this.repId = '';
+
+            // Charger les nouveaux clusters
+            fetch('/stm/admin/customers/api/clusters?country=' + this.country)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        this.allClusters = data.clusters;
+                        this.updateAvailableClusters();
+                    }
+                });
+
+            // Charger les nouveaux représentants
+            fetch('/stm/admin/customers/api/representatives?country=' + this.country)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        this.allReps = data.representatives.map(r => ({
+                            rep_id: String(r.rep_id),
+                            rep_name: r.rep_name,
+                            cluster: r.cluster || ''
+                        }));
+                        this.updateAvailableReps();
+                    }
+                });
+        },
+
+        // Quand le cluster change → filtrer les reps
+        onClusterChange() {
+            // Vérifier si le rep actuel est encore valide
+            if (this.repId && !this.availableReps.find(r => r.rep_id === this.repId)) {
+                this.repId = '';
+            }
+            this.updateAvailableReps();
+        },
+
+        // Mettre à jour les clusters disponibles
+        updateAvailableClusters() {
+            this.availableClusters = this.allClusters;
+        },
+
+        // Mettre à jour les représentants disponibles selon le cluster
+        updateAvailableReps() {
+            if (this.cluster) {
+                this.availableReps = this.allReps.filter(r => r.cluster === this.cluster);
+            } else {
+                this.availableReps = this.allReps;
+            }
+
+            // Trier par prénom
+            this.availableReps.sort((a, b) => a.rep_name.localeCompare(b.rep_name));
+        }
+    };
+}
+</script>
 
 <!-- Tableau des clients -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
@@ -337,140 +427,5 @@ ob_start();
 <?php
 $content = ob_get_clean();
 $title = 'Clients';
-
-// JavaScript pour les filtres en cascade
-$currentCluster = htmlspecialchars($filters['cluster'] ?? '', ENT_QUOTES);
-$currentRepId = htmlspecialchars($filters['rep_id'] ?? '', ENT_QUOTES);
-
-$pageScripts = <<<SCRIPTS
-<script>
-// Valeurs actuelles des filtres (depuis PHP/URL)
-const currentCluster = "{$currentCluster}";
-const currentRepId = "{$currentRepId}";
-
-/**
- * Force la restauration des filtres après un court délai
- * pour contrer d'éventuels scripts qui écrasent les valeurs
- */
-setTimeout(function() {
-    if (currentCluster) {
-        document.getElementById('cluster').value = currentCluster;
-    }
-    if (currentRepId) {
-        document.getElementById('rep_id').value = currentRepId;
-    }
-}, 100);
-
-/**
- * Met à jour les clusters ET les représentants quand le pays change
- * Réinitialise les filtres cluster et rep
- */
-function updateCascadeFilters() {
-    const country = document.getElementById('country').value;
-
-    // Reset et désactiver les selects pendant le chargement
-    const clusterSelect = document.getElementById('cluster');
-    const repSelect = document.getElementById('rep_id');
-
-    clusterSelect.innerHTML = '<option value="">Chargement...</option>';
-    clusterSelect.disabled = true;
-    repSelect.innerHTML = '<option value="">Chargement...</option>';
-    repSelect.disabled = true;
-
-    // Charger les clusters
-    fetch('/stm/admin/customers/api/clusters?country=' + country)
-        .then(response => response.json())
-        .then(data => {
-            clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
-            if (data.success && data.clusters) {
-                data.clusters.forEach(cluster => {
-                    clusterSelect.innerHTML += '<option value="' + escapeHtml(cluster) + '">' + escapeHtml(cluster) + '</option>';
-                });
-            }
-            clusterSelect.disabled = false;
-        })
-        .catch(error => {
-            console.error('Erreur chargement clusters:', error);
-            clusterSelect.innerHTML = '<option value="">Tous les clusters</option>';
-            clusterSelect.disabled = false;
-        });
-
-    // Charger les représentants (tous, sans filtre cluster)
-    fetch('/stm/admin/customers/api/representatives?country=' + country)
-        .then(response => response.json())
-        .then(data => {
-            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-            if (data.success && data.representatives) {
-                data.representatives.forEach(rep => {
-                    let label = rep.rep_name;
-                    if (rep.cluster) {
-                        label += ' (' + rep.cluster + ')';
-                    }
-                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '">' + escapeHtml(label) + '</option>';
-                });
-            }
-            repSelect.disabled = false;
-        })
-        .catch(error => {
-            console.error('Erreur chargement représentants:', error);
-            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-            repSelect.disabled = false;
-        });
-}
-
-/**
- * Met à jour les représentants quand le cluster change
- * Conserve le rep_id actuel si possible
- */
-function updateRepresentatives() {
-    const country = document.getElementById('country').value;
-    const cluster = document.getElementById('cluster').value;
-    const repSelect = document.getElementById('rep_id');
-    const previousRepId = repSelect.value; // Garder la valeur actuelle
-
-    repSelect.innerHTML = '<option value="">Chargement...</option>';
-    repSelect.disabled = true;
-
-    let url = '/stm/admin/customers/api/representatives?country=' + country;
-    if (cluster) {
-        url += '&cluster=' + encodeURIComponent(cluster);
-    }
-
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-
-            if (data.success && data.representatives) {
-                data.representatives.forEach(rep => {
-                    let label = rep.rep_name;
-                    if (rep.cluster && !cluster) {
-                        label += ' (' + rep.cluster + ')';
-                    }
-                    const selected = (rep.rep_id === previousRepId) ? ' selected' : '';
-                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '"' + selected + '>' + escapeHtml(label) + '</option>';
-                });
-            }
-            repSelect.disabled = false;
-        })
-        .catch(error => {
-            console.error('Erreur chargement représentants:', error);
-            repSelect.innerHTML = '<option value="">Tous les représentants</option>';
-            repSelect.disabled = false;
-        });
-}
-
-/**
- * Échappe les caractères HTML
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-</script>
-SCRIPTS;
-
 require __DIR__ . '/../../layouts/admin.php';
 ?>
