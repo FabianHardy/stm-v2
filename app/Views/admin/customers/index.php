@@ -344,39 +344,26 @@ $currentRepId = htmlspecialchars($filters['rep_id'] ?? '', ENT_QUOTES);
 
 $pageScripts = <<<SCRIPTS
 <script>
-// Valeurs actuelles des filtres (depuis PHP)
+// Valeurs actuelles des filtres (depuis PHP/URL)
 const currentCluster = "{$currentCluster}";
 const currentRepId = "{$currentRepId}";
 
 /**
- * Au chargement de la page, restaurer les sélections
+ * Force la restauration des filtres après un court délai
+ * pour contrer d'éventuels scripts qui écrasent les valeurs
  */
-document.addEventListener('DOMContentLoaded', function() {
-    // Restaurer la sélection du cluster
+setTimeout(function() {
     if (currentCluster) {
-        const clusterSelect = document.getElementById('cluster');
-        for (let option of clusterSelect.options) {
-            if (option.value.trim() === currentCluster.trim()) {
-                option.selected = true;
-                break;
-            }
-        }
+        document.getElementById('cluster').value = currentCluster;
     }
-
-    // Restaurer la sélection du représentant
     if (currentRepId) {
-        const repSelect = document.getElementById('rep_id');
-        for (let option of repSelect.options) {
-            if (option.value.trim() === currentRepId.trim()) {
-                option.selected = true;
-                break;
-            }
-        }
+        document.getElementById('rep_id').value = currentRepId;
     }
-});
+}, 100);
 
 /**
  * Met à jour les clusters ET les représentants quand le pays change
+ * Réinitialise les filtres cluster et rep
  */
 function updateCascadeFilters() {
     const country = document.getElementById('country').value;
@@ -433,11 +420,13 @@ function updateCascadeFilters() {
 
 /**
  * Met à jour les représentants quand le cluster change
+ * Conserve le rep_id actuel si possible
  */
 function updateRepresentatives() {
     const country = document.getElementById('country').value;
     const cluster = document.getElementById('cluster').value;
     const repSelect = document.getElementById('rep_id');
+    const previousRepId = repSelect.value; // Garder la valeur actuelle
 
     repSelect.innerHTML = '<option value="">Chargement...</option>';
     repSelect.disabled = true;
@@ -451,14 +440,15 @@ function updateRepresentatives() {
         .then(response => response.json())
         .then(data => {
             repSelect.innerHTML = '<option value="">Tous les représentants</option>';
+
             if (data.success && data.representatives) {
                 data.representatives.forEach(rep => {
                     let label = rep.rep_name;
                     if (rep.cluster && !cluster) {
-                        // Afficher le cluster seulement si pas de filtre cluster
                         label += ' (' + rep.cluster + ')';
                     }
-                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '">' + escapeHtml(label) + '</option>';
+                    const selected = (rep.rep_id === previousRepId) ? ' selected' : '';
+                    repSelect.innerHTML += '<option value="' + escapeHtml(rep.rep_id) + '"' + selected + '>' + escapeHtml(label) + '</option>';
                 });
             }
             repSelect.disabled = false;
