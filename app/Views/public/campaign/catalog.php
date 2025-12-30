@@ -483,6 +483,10 @@ ob_start();
                 showCartMobile: false,
                 showLightbox: false,
                 lightboxImage: '',
+                // Variables pour la modal footer (pages statiques)
+                footerModalOpen: false,
+                footerModalUrl: '',
+                footerModalTitle: '',
 
                 get cartItemCount() {
                     return this.cart.items ? this.cart.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
