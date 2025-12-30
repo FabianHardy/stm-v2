@@ -324,7 +324,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
         ";
 
@@ -355,7 +355,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$topCustomersFilter}
             GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
             ORDER BY total_quantity DESC
@@ -416,7 +416,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
             GROUP BY cu.customer_number, cu.country
         ";
@@ -930,7 +930,7 @@ class ProductController
                 WHERE ol.product_id = :product_id
                 AND cu.customer_number = :customer_number
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 ORDER BY o.created_at DESC
             ";
 
