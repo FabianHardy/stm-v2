@@ -305,11 +305,10 @@ class CustomerController
             $query = "
                 SELECT
                     c.CLL_NCLIXX as customer_number,
-                    c.CLL_NOMS as company_name,
-                    c.CLL_ADRS as address,
-                    c.CLL_CDPS as postal_code,
-                    c.CLL_LOCA as city,
-                    c.CLL_TEL as phone,
+                    c.CLL_NOM as company_name,
+                    c.CLL_ADRESSE1 as address,
+                    c.CLL_CPOSTAL as postal_code,
+                    c.CLL_LOCALITE as city,
                     c.IDE_REP as rep_id,
                     r.REP_CLU as cluster,
                     CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
@@ -320,7 +319,16 @@ class CustomerController
             ";
 
             $result = $extDb->query($query, [$customerNumber]);
-            return $result[0] ?? null;
+
+            // S'assurer que c'est un array
+            if (!is_array($result) || empty($result)) {
+                return null;
+            }
+
+            // Ajouter le pays (déterminé par la table utilisée)
+            $result[0]['country'] = $country;
+
+            return $result[0];
 
         } catch (\Exception $e) {
             error_log("getCustomerFromExternal error: " . $e->getMessage());
@@ -330,6 +338,7 @@ class CustomerController
 
     /**
      * Récupérer les clients avec stats (paginés)
+     * Gère le tri par colonnes externes (company_name, etc.) OU par stats locales (last_order_date, etc.)
      *
      * @param array $filters
      * @param array|null $accessibleCustomerNumbers
@@ -338,6 +347,165 @@ class CustomerController
      * @return array
      */
     private function getCustomersWithStats(array $filters, ?array $accessibleCustomerNumbers, int $page, int $perPage): array
+    {
+        $country = $filters['country'];
+        $sort = $filters['sort'] ?? 'last_order_date';
+        $order = strtoupper($filters['order'] ?? 'DESC');
+
+        // Colonnes de tri qui viennent des stats (DB locale)
+        $statsColumns = ['last_order_date', 'orders_count', 'campaigns_count', 'total_quantity'];
+
+        // Si tri par colonne de stats, on récupère d'abord les customer_numbers triés depuis la DB locale
+        if (in_array($sort, $statsColumns)) {
+            return $this->getCustomersSortedByStats($filters, $accessibleCustomerNumbers, $page, $perPage);
+        }
+
+        // Sinon, tri par colonne de la DB externe (company_name, customer_number, etc.)
+        return $this->getCustomersSortedByExternal($filters, $accessibleCustomerNumbers, $page, $perPage);
+    }
+
+    /**
+     * Récupérer les clients triés par une colonne de stats (DB locale en premier)
+     *
+     * @param array $filters
+     * @param array|null $accessibleCustomerNumbers
+     * @param int $page
+     * @param int $perPage
+     * @return array
+     */
+    private function getCustomersSortedByStats(array $filters, ?array $accessibleCustomerNumbers, int $page, int $perPage): array
+    {
+        try {
+            $db = Database::getInstance();
+            $extDb = ExternalDatabase::getInstance();
+
+            $country = $filters['country'];
+            $sort = $filters['sort'] ?? 'last_order_date';
+            $order = strtoupper($filters['order'] ?? 'DESC') === 'DESC' ? 'DESC' : 'ASC';
+            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
+            $offset = ($page - 1) * $perPage;
+
+            // Mapping des colonnes de tri
+            $sortColumn = match($sort) {
+                'last_order_date' => 'last_order_date',
+                'orders_count' => 'orders_count',
+                'campaigns_count' => 'campaigns_count',
+                'total_quantity' => 'total_quantity',
+                default => 'last_order_date'
+            };
+
+            // Construire la requête pour récupérer les customer_numbers triés par stats
+            $sql = "
+                SELECT
+                    cu.customer_number,
+                    COUNT(DISTINCT o.id) as orders_count,
+                    COUNT(DISTINCT o.campaign_id) as campaigns_count,
+                    COALESCE(SUM(o.total_items), 0) as total_quantity,
+                    MAX(o.created_at) as last_order_date
+                FROM customers cu
+                LEFT JOIN orders o ON cu.id = o.customer_id AND o.status = 'synced'
+                WHERE cu.country = ?
+            ";
+            $params = [$country];
+
+            // Filtrer par numéros accessibles (scope)
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return [];
+                }
+                $placeholders = implode(',', array_fill(0, count($accessibleCustomerNumbers), '?'));
+                $sql .= " AND cu.customer_number IN ({$placeholders})";
+                $params = array_merge($params, $accessibleCustomerNumbers);
+            }
+
+            // Sous-requête pour les filtres de la DB externe
+            $externalFilters = $this->buildExternalFiltersSubquery($filters, $country);
+            if (!empty($externalFilters['customer_numbers'])) {
+                $placeholders = implode(',', array_fill(0, count($externalFilters['customer_numbers']), '?'));
+                $sql .= " AND cu.customer_number IN ({$placeholders})";
+                $params = array_merge($params, $externalFilters['customer_numbers']);
+            } elseif ($externalFilters['has_filters']) {
+                // Si on a des filtres externes mais aucun résultat
+                return [];
+            }
+
+            $sql .= " GROUP BY cu.customer_number";
+            $sql .= " ORDER BY {$sortColumn} {$order}";
+            $sql .= " LIMIT {$perPage} OFFSET {$offset}";
+
+            $statsResults = $db->query($sql, $params);
+
+            if (!is_array($statsResults) || empty($statsResults)) {
+                return [];
+            }
+
+            // Récupérer les infos clients depuis la DB externe
+            $customerNumbers = array_column($statsResults, 'customer_number');
+            $placeholders = implode(',', array_fill(0, count($customerNumbers), '?'));
+
+            $extSql = "
+                SELECT
+                    c.CLL_NCLIXX as customer_number,
+                    c.CLL_NOM as company_name,
+                    c.IDE_REP as rep_id,
+                    r.REP_CLU as cluster,
+                    CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
+                FROM {$clientTable} c
+                LEFT JOIN {$repTable} r ON c.IDE_REP = r.IDE_REP
+                WHERE c.CLL_NCLIXX IN ({$placeholders})
+            ";
+
+            $extResults = $extDb->query($extSql, $customerNumbers);
+
+            if (!is_array($extResults)) {
+                $extResults = [];
+            }
+
+            // Créer un map des infos externes
+            $extMap = [];
+            foreach ($extResults as $row) {
+                $extMap[$row['customer_number']] = $row;
+            }
+
+            // Fusionner les résultats (garder l'ordre des stats)
+            $customers = [];
+            foreach ($statsResults as $stat) {
+                $num = $stat['customer_number'];
+                $ext = $extMap[$num] ?? [];
+
+                $customers[] = [
+                    'customer_number' => $num,
+                    'company_name' => $ext['company_name'] ?? 'Client ' . $num,
+                    'rep_id' => $ext['rep_id'] ?? null,
+                    'cluster' => $ext['cluster'] ?? null,
+                    'rep_name' => $ext['rep_name'] ?? null,
+                    'country' => $country,
+                    'orders_count' => (int)$stat['orders_count'],
+                    'campaigns_count' => (int)$stat['campaigns_count'],
+                    'total_quantity' => (int)$stat['total_quantity'],
+                    'last_order_date' => $stat['last_order_date']
+                ];
+            }
+
+            return $customers;
+
+        } catch (\Exception $e) {
+            error_log("getCustomersSortedByStats error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Récupérer les clients triés par une colonne externe (DB externe en premier)
+     *
+     * @param array $filters
+     * @param array|null $accessibleCustomerNumbers
+     * @param int $page
+     * @param int $perPage
+     * @return array
+     */
+    private function getCustomersSortedByExternal(array $filters, ?array $accessibleCustomerNumbers, int $page, int $perPage): array
     {
         try {
             $extDb = ExternalDatabase::getInstance();
@@ -351,7 +519,7 @@ class CustomerController
             $sql = "
                 SELECT
                     c.CLL_NCLIXX as customer_number,
-                    c.CLL_NOMS as company_name,
+                    c.CLL_NOM as company_name,
                     c.IDE_REP as rep_id,
                     r.REP_CLU as cluster,
                     CONCAT(r.REP_PRENOM, ' ', r.REP_NOM) as rep_name
@@ -384,7 +552,7 @@ class CustomerController
             }
 
             if (!empty($filters['search'])) {
-                $sql .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOMS LIKE ?)";
+                $sql .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOM LIKE ?)";
                 $params[] = '%' . $filters['search'] . '%';
                 $params[] = '%' . $filters['search'] . '%';
             }
@@ -392,10 +560,10 @@ class CustomerController
             // Tri
             $sortColumn = match($filters['sort']) {
                 'customer_number' => 'c.CLL_NCLIXX',
-                'company_name' => 'c.CLL_NOMS',
+                'company_name' => 'c.CLL_NOM',
                 'rep_name' => 'r.REP_NOM',
                 'cluster' => 'r.REP_CLU',
-                default => 'c.CLL_NOMS'
+                default => 'c.CLL_NOM'
             };
             $sortOrder = strtoupper($filters['order']) === 'DESC' ? 'DESC' : 'ASC';
             $sql .= " ORDER BY {$sortColumn} {$sortOrder}";
@@ -405,6 +573,17 @@ class CustomerController
             $sql .= " LIMIT {$perPage} OFFSET {$offset}";
 
             $customers = $extDb->query($sql, $params);
+
+            // S'assurer que c'est un array (query peut retourner false)
+            if (!is_array($customers)) {
+                return [];
+            }
+
+            // Ajouter le pays à chaque client (déterminé par la table utilisée)
+            foreach ($customers as &$customer) {
+                $customer['country'] = $country;
+            }
+            unset($customer);
 
             // Enrichir avec les stats de commandes depuis la DB locale
             if (!empty($customers)) {
@@ -423,19 +602,158 @@ class CustomerController
             return $customers;
 
         } catch (\Exception $e) {
-            error_log("getCustomersWithStats error: " . $e->getMessage());
+            error_log("getCustomersSortedByExternal error: " . $e->getMessage());
             return [];
         }
     }
 
     /**
+     * Construire une sous-requête pour les filtres de la DB externe
+     * Retourne les customer_numbers qui matchent les filtres
+     *
+     * @param array $filters
+     * @param string $country
+     * @return array ['customer_numbers' => [], 'has_filters' => bool]
+     */
+    private function buildExternalFiltersSubquery(array $filters, string $country): array
+    {
+        $hasFilters = !empty($filters['cluster']) || !empty($filters['rep_id']) || !empty($filters['search']);
+
+        if (!$hasFilters) {
+            return ['customer_numbers' => null, 'has_filters' => false];
+        }
+
+        try {
+            $extDb = ExternalDatabase::getInstance();
+            $clientTable = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+            $repTable = $country === 'BE' ? 'BE_REP' : 'LU_REP';
+
+            $sql = "
+                SELECT c.CLL_NCLIXX as customer_number
+                FROM {$clientTable} c
+                LEFT JOIN {$repTable} r ON c.IDE_REP = r.IDE_REP
+                WHERE 1=1
+            ";
+            $params = [];
+
+            if (!empty($filters['cluster'])) {
+                $sql .= " AND r.REP_CLU = ?";
+                $params[] = $filters['cluster'];
+            }
+
+            if (!empty($filters['rep_id'])) {
+                $sql .= " AND c.IDE_REP = ?";
+                $params[] = $filters['rep_id'];
+            }
+
+            if (!empty($filters['search'])) {
+                $sql .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOM LIKE ?)";
+                $params[] = '%' . $filters['search'] . '%';
+                $params[] = '%' . $filters['search'] . '%';
+            }
+
+            $results = $extDb->query($sql, $params);
+
+            if (!is_array($results)) {
+                return ['customer_numbers' => [], 'has_filters' => true];
+            }
+
+            return [
+                'customer_numbers' => array_column($results, 'customer_number'),
+                'has_filters' => true
+            ];
+
+        } catch (\Exception $e) {
+            error_log("buildExternalFiltersSubquery error: " . $e->getMessage());
+            return ['customer_numbers' => [], 'has_filters' => true];
+        }
+    }
+
+    /**
      * Compter les clients avec filtres
+     * Gère le cas où on trie par stats (seuls les clients avec commandes sont comptés)
      *
      * @param array $filters
      * @param array|null $accessibleCustomerNumbers
      * @return int
      */
     private function countCustomers(array $filters, ?array $accessibleCustomerNumbers): int
+    {
+        $sort = $filters['sort'] ?? 'last_order_date';
+        $statsColumns = ['last_order_date', 'orders_count', 'campaigns_count', 'total_quantity'];
+
+        // Si tri par colonne de stats, on compte depuis la DB locale
+        if (in_array($sort, $statsColumns)) {
+            return $this->countCustomersByStats($filters, $accessibleCustomerNumbers);
+        }
+
+        // Sinon, on compte depuis la DB externe
+        return $this->countCustomersByExternal($filters, $accessibleCustomerNumbers);
+    }
+
+    /**
+     * Compter les clients depuis la DB locale (ceux qui ont des commandes)
+     *
+     * @param array $filters
+     * @param array|null $accessibleCustomerNumbers
+     * @return int
+     */
+    private function countCustomersByStats(array $filters, ?array $accessibleCustomerNumbers): int
+    {
+        try {
+            $db = Database::getInstance();
+            $country = $filters['country'];
+
+            $sql = "
+                SELECT COUNT(DISTINCT cu.customer_number) as total
+                FROM customers cu
+                LEFT JOIN orders o ON cu.id = o.customer_id AND o.status = 'synced'
+                WHERE cu.country = ?
+            ";
+            $params = [$country];
+
+            // Filtrer par numéros accessibles (scope)
+            if ($accessibleCustomerNumbers !== null) {
+                if (empty($accessibleCustomerNumbers)) {
+                    return 0;
+                }
+                $placeholders = implode(',', array_fill(0, count($accessibleCustomerNumbers), '?'));
+                $sql .= " AND cu.customer_number IN ({$placeholders})";
+                $params = array_merge($params, $accessibleCustomerNumbers);
+            }
+
+            // Sous-requête pour les filtres de la DB externe
+            $externalFilters = $this->buildExternalFiltersSubquery($filters, $country);
+            if (!empty($externalFilters['customer_numbers'])) {
+                $placeholders = implode(',', array_fill(0, count($externalFilters['customer_numbers']), '?'));
+                $sql .= " AND cu.customer_number IN ({$placeholders})";
+                $params = array_merge($params, $externalFilters['customer_numbers']);
+            } elseif ($externalFilters['has_filters']) {
+                return 0;
+            }
+
+            $result = $db->query($sql, $params);
+
+            if (!is_array($result) || empty($result)) {
+                return 0;
+            }
+
+            return (int)($result[0]['total'] ?? 0);
+
+        } catch (\Exception $e) {
+            error_log("countCustomersByStats error: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Compter les clients depuis la DB externe
+     *
+     * @param array $filters
+     * @param array|null $accessibleCustomerNumbers
+     * @return int
+     */
+    private function countCustomersByExternal(array $filters, ?array $accessibleCustomerNumbers): int
     {
         try {
             $extDb = ExternalDatabase::getInstance();
@@ -474,16 +792,22 @@ class CustomerController
             }
 
             if (!empty($filters['search'])) {
-                $sql .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOMS LIKE ?)";
+                $sql .= " AND (c.CLL_NCLIXX LIKE ? OR c.CLL_NOM LIKE ?)";
                 $params[] = '%' . $filters['search'] . '%';
                 $params[] = '%' . $filters['search'] . '%';
             }
 
             $result = $extDb->query($sql, $params);
+
+            // S'assurer que c'est un array
+            if (!is_array($result) || empty($result)) {
+                return 0;
+            }
+
             return (int)($result[0]['total'] ?? 0);
 
         } catch (\Exception $e) {
-            error_log("countCustomers error: " . $e->getMessage());
+            error_log("countCustomersByExternal error: " . $e->getMessage());
             return 0;
         }
     }
@@ -523,6 +847,11 @@ class CustomerController
             ";
 
             $results = $db->query($query, $params);
+
+            // S'assurer que c'est un array
+            if (!is_array($results)) {
+                return [];
+            }
 
             $map = [];
             foreach ($results as $row) {
@@ -568,13 +897,18 @@ class CustomerController
                 ':country' => $country
             ]);
 
-            return $result[0] ?? [
-                'orders_count' => 0,
-                'campaigns_count' => 0,
-                'total_quantity' => 0,
-                'first_order_date' => null,
-                'last_order_date' => null
-            ];
+            // S'assurer que c'est un array
+            if (!is_array($result) || empty($result)) {
+                return [
+                    'orders_count' => 0,
+                    'campaigns_count' => 0,
+                    'total_quantity' => 0,
+                    'first_order_date' => null,
+                    'last_order_date' => null
+                ];
+            }
+
+            return $result[0];
 
         } catch (\Exception $e) {
             error_log("getCustomerStats error: " . $e->getMessage());
@@ -652,6 +986,12 @@ class CustomerController
             ";
 
             $results = $extDb->query($query);
+
+            // S'assurer que c'est un array
+            if (!is_array($results)) {
+                return [];
+            }
+
             return array_column($results, 'cluster');
 
         } catch (\Exception $e) {
@@ -695,6 +1035,11 @@ class CustomerController
             $query .= " ORDER BY r.REP_PRENOM, r.REP_NOM, r.REP_CLU";
 
             $results = $extDb->query($query, $params);
+
+            // S'assurer que c'est un array
+            if (!is_array($results)) {
+                return [];
+            }
 
             // Nettoyer les noms
             foreach ($results as &$rep) {
@@ -741,7 +1086,10 @@ class CustomerController
                 $totalResult = $extDb->query($totalQuery);
             }
 
-            $totalExternal = $totalResult[0]['total'] ?? 0;
+            // S'assurer que c'est un array
+            $totalExternal = (is_array($totalResult) && isset($totalResult[0]['total']))
+                ? $totalResult[0]['total']
+                : 0;
 
             // Clients avec commandes
             $ordersQuery = "
@@ -772,10 +1120,18 @@ class CustomerController
                 $ordersResult = $db->query($ordersQuery, [':country' => $country]);
             }
 
+            // S'assurer que c'est un array
+            $customersWithOrders = (is_array($ordersResult) && isset($ordersResult[0]['customers_with_orders']))
+                ? $ordersResult[0]['customers_with_orders']
+                : 0;
+            $totalOrders = (is_array($ordersResult) && isset($ordersResult[0]['total_orders']))
+                ? $ordersResult[0]['total_orders']
+                : 0;
+
             return [
                 'total_external' => (int)$totalExternal,
-                'total_with_orders' => (int)($ordersResult[0]['customers_with_orders'] ?? 0),
-                'total_orders' => (int)($ordersResult[0]['total_orders'] ?? 0)
+                'total_with_orders' => (int)$customersWithOrders,
+                'total_orders' => (int)$totalOrders
             ];
 
         } catch (\Exception $e) {
