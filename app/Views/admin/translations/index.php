@@ -1,7 +1,7 @@
 <?php
 /**
  * Vue Admin : Liste des traductions
- * 
+ *
  * @package    App\Views\admin\translations
  * @author     Fabian Hardy
  * @version    1.0.0
@@ -25,26 +25,26 @@ ob_start();
                 Gérez les traductions FR/NL du front client
             </p>
         </div>
-        
+
         <div class="flex flex-wrap gap-2">
             <!-- Bouton régénérer cache -->
-            <a href="/stm/admin/translations/rebuild-cache" 
+            <a href="/stm/admin/translations/rebuild-cache"
                class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
                onclick="return confirm('Régénérer le cache des traductions ?')">
                 <i class="fas fa-sync-alt mr-2"></i>
                 Régénérer cache
             </a>
-            
+
             <!-- Bouton export -->
-            <a href="/stm/admin/translations/export" 
+            <a href="/stm/admin/translations/export"
                class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
                 <i class="fas fa-download mr-2"></i>
                 Exporter JSON
             </a>
-            
+
             <?php if (!isset($showMissingOnly) && $missingCount > 0): ?>
             <!-- Bouton traductions manquantes -->
-            <a href="/stm/admin/translations/missing" 
+            <a href="/stm/admin/translations/missing"
                class="inline-flex items-center px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition">
                 <i class="fas fa-exclamation-triangle mr-2"></i>
                 <?= $missingCount ?> manquante(s)
@@ -52,7 +52,7 @@ ob_start();
             <?php endif; ?>
         </div>
     </div>
-    
+
     <!-- Messages flash -->
     <?php if (isset($_SESSION['success'])): ?>
     <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
@@ -62,7 +62,7 @@ ob_start();
         </div>
     </div>
     <?php unset($_SESSION['success']); endif; ?>
-    
+
     <?php if (isset($_SESSION['error'])): ?>
     <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
         <div class="flex items-center">
@@ -71,32 +71,32 @@ ob_start();
         </div>
     </div>
     <?php unset($_SESSION['error']); endif; ?>
-    
+
     <!-- Statistiques par catégorie -->
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <a href="/stm/admin/translations" 
+        <a href="/stm/admin/translations"
            class="p-3 rounded-lg text-center transition <?= empty($category) && !isset($showMissingOnly) ? 'bg-purple-100 ring-2 ring-purple-500' : 'bg-white hover:bg-gray-50' ?>">
             <p class="text-2xl font-bold text-purple-600"><?= array_sum(array_column($countByCategory, 'count')) ?></p>
             <p class="text-xs text-gray-600 uppercase">Toutes</p>
         </a>
         <?php foreach ($countByCategory as $cat): ?>
-        <a href="/stm/admin/translations?category=<?= urlencode($cat['category']) ?>" 
+        <a href="/stm/admin/translations?category=<?= urlencode($cat['category']) ?>"
            class="p-3 rounded-lg text-center transition <?= ($category ?? '') === $cat['category'] ? 'bg-purple-100 ring-2 ring-purple-500' : 'bg-white hover:bg-gray-50' ?>">
             <p class="text-2xl font-bold text-gray-800"><?= $cat['count'] ?></p>
             <p class="text-xs text-gray-600 uppercase"><?= htmlspecialchars($cat['category']) ?></p>
         </a>
         <?php endforeach; ?>
     </div>
-    
+
     <!-- Filtres et recherche -->
     <?php if (!isset($showMissingOnly)): ?>
     <div class="bg-white rounded-lg shadow-sm p-4">
-        <form method="GET" action="/stm/admin/translations" class="flex flex-col sm:flex-row gap-4">
+        <form method="GET" action="/stm/admin/translations" class="flex flex-col sm:flex-row gap-4" id="filterForm">
             <!-- Filtre catégorie -->
             <div class="flex-1">
-                <select name="category" 
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        onchange="this.form.submit()">
+                <select name="category"
+                        id="categorySelect"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">Toutes les catégories</option>
                     <?php foreach ($categories as $cat): ?>
                     <option value="<?= htmlspecialchars($cat) ?>" <?= ($category ?? '') === $cat ? 'selected' : '' ?>>
@@ -105,26 +105,26 @@ ob_start();
                     <?php endforeach; ?>
                 </select>
             </div>
-            
+
             <!-- Recherche -->
             <div class="flex-1">
                 <div class="relative">
-                    <input type="text" 
-                           name="search" 
+                    <input type="text"
+                           name="search"
                            value="<?= htmlspecialchars($search ?? '') ?>"
                            placeholder="Rechercher (clé, texte FR/NL)..."
                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 </div>
             </div>
-            
+
             <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
                 <i class="fas fa-filter mr-2"></i>
                 Filtrer
             </button>
-            
+
             <?php if (!empty($category) || !empty($search)): ?>
-            <a href="/stm/admin/translations" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+            <a href="/stm/admin/translations" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-center">
                 <i class="fas fa-times mr-2"></i>
                 Réinitialiser
             </a>
@@ -146,7 +146,7 @@ ob_start();
         </div>
     </div>
     <?php endif; ?>
-    
+
     <!-- Tableau des traductions -->
     <div class="bg-white rounded-lg shadow-sm overflow-hidden">
         <?php if (empty($translations)): ?>
@@ -177,9 +177,9 @@ ob_start();
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                    <?php 
+                    <?php
                     $currentCategory = '';
-                    foreach ($translations as $trans): 
+                    foreach ($translations as $trans):
                         // Afficher un séparateur de catégorie
                         if ($trans['category'] !== $currentCategory && empty($category) && !isset($showMissingOnly)):
                             $currentCategory = $trans['category'];
@@ -193,7 +193,7 @@ ob_start();
                         </td>
                     </tr>
                     <?php endif; ?>
-                    
+
                     <tr class="hover:bg-gray-50 transition" data-id="<?= $trans['id'] ?>">
                         <!-- Clé -->
                         <td class="px-4 py-3">
@@ -206,7 +206,7 @@ ob_start();
                             </p>
                             <?php endif; ?>
                         </td>
-                        
+
                         <!-- FR -->
                         <td class="px-4 py-3">
                             <div class="text-sm text-gray-900 max-w-xs overflow-hidden"
@@ -217,7 +217,7 @@ ob_start();
                                 <?= htmlspecialchars(mb_substr(strip_tags($trans['text_fr']), 0, 80)) ?><?= mb_strlen(strip_tags($trans['text_fr'])) > 80 ? '...' : '' ?>
                             </div>
                         </td>
-                        
+
                         <!-- NL -->
                         <td class="px-4 py-3">
                             <?php if (!empty($trans['text_nl'])): ?>
@@ -232,7 +232,7 @@ ob_start();
                             </span>
                             <?php endif; ?>
                         </td>
-                        
+
                         <!-- HTML -->
                         <td class="px-4 py-3 text-center">
                             <?php if ($trans['is_html']): ?>
@@ -243,10 +243,10 @@ ob_start();
                             <span class="text-gray-300">-</span>
                             <?php endif; ?>
                         </td>
-                        
+
                         <!-- Actions -->
                         <td class="px-4 py-3 text-center">
-                            <a href="/stm/admin/translations/<?= $trans['id'] ?>/edit" 
+                            <a href="/stm/admin/translations/<?= $trans['id'] ?>/edit"
                                class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition"
                                title="Modifier">
                                 <i class="fas fa-edit"></i>
@@ -257,7 +257,7 @@ ob_start();
                 </tbody>
             </table>
         </div>
-        
+
         <!-- Compteur -->
         <div class="px-4 py-3 bg-gray-50 border-t text-sm text-gray-600">
             <i class="fas fa-list mr-2"></i>
@@ -265,7 +265,7 @@ ob_start();
         </div>
         <?php endif; ?>
     </div>
-    
+
     <!-- Légende -->
     <div class="bg-blue-50 rounded-lg p-4">
         <h4 class="font-semibold text-blue-800 mb-2">
