@@ -7,7 +7,7 @@
  *
  * Règles d'accès :
  * - superadmin/admin : accès à tout
- * - createur : uniquement ses campagnes (via content_ownership)
+ * - createur : uniquement ses campagnes (via campaign_assignees)
  * - manager_reps : campagnes où ses reps ont des clients assignés
  * - rep : aucun accès aux stats
  *
@@ -40,16 +40,15 @@ class StatsAccessHelper
 
         $db = Database::getInstance();
 
-        // Créateur : uniquement ses campagnes via content_ownership
+        // Créateur : uniquement ses campagnes via campaign_assignees
         if ($role === "createur") {
             $query = "
-                SELECT content_id
-                FROM content_ownership
+                SELECT campaign_id
+                FROM campaign_assignees
                 WHERE user_id = :user_id
-                AND content_type = 'campaign'
             ";
             $results = $db->query($query, [":user_id" => $userId]);
-            return array_column($results, "content_id");
+            return array_column($results, "campaign_id");
         }
 
         // Manager_reps : campagnes où ses reps ont des clients assignés
