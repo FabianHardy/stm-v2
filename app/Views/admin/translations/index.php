@@ -63,6 +63,15 @@ ob_start();
     </div>
     <?php unset($_SESSION['success']); endif; ?>
 
+    <?php if (isset($_SESSION['warning'])): ?>
+    <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-lg">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-orange-500 mr-3"></i>
+            <p class="text-orange-700"><?= htmlspecialchars($_SESSION['warning']) ?></p>
+        </div>
+    </div>
+    <?php unset($_SESSION['warning']); endif; ?>
+
     <?php if (isset($_SESSION['error'])): ?>
     <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
         <div class="flex items-center">
