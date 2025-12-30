@@ -19,6 +19,7 @@
  * @modified 15/12/2025 - Correction logique filtrage : menu parent affiché si sous-menu accessible
  * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
  * @modified 30/12/2025 - Ajout menu Traductions (gestion FR/NL front client)
+ * @modified 30/12/2025 - Ajout menus Pages statiques et Email templates
  */
 
 use App\Helpers\PermissionHelper;
@@ -218,6 +219,18 @@ $settingsItems = [
         "label" => "Traductions",
         "icon" => "fa-language",
         "route" => "/stm/admin/translations",
+        "permission" => "settings.view",
+    ],
+    [
+        "label" => "Pages statiques",
+        "icon" => "fa-file-alt",
+        "route" => "/stm/admin/static-pages",
+        "permission" => "settings.view",
+    ],
+    [
+        "label" => "Email templates",
+        "icon" => "fa-envelope",
+        "route" => "/stm/admin/email-templates",
         "permission" => "settings.view",
     ],
 ];
