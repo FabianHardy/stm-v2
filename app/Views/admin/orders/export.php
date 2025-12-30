@@ -166,7 +166,8 @@ ob_start();
                     </tr>
                 <?php else: ?>
                     <?php foreach ($orders as $order):
-                        $hasFile = !empty($order['file_path']);
+                        // Fichier disponible si path existe OU contenu stocké en DB
+                        $hasFile = !empty($order['file_path']) || !empty($order['file_content']);
                     ?>
                         <tr class="hover:bg-gray-50">
                             <!-- Checkbox -->

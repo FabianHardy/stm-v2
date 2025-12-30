@@ -46,8 +46,10 @@ $repName = htmlspecialchars($order["rep_name"] ?? "");
 $customerLanguage = $order["customer_language"] ?? "fr";
 $country = $order["customer_country"] ?? ($order["campaign_country"] ?? "BE");
 
-// Vérifier si le fichier TXT existe
-$fileExists = !empty($order['file_path']) && file_exists(__DIR__ . '/../../../../public/' . $order['file_path']);
+// Vérifier si le fichier TXT existe (physiquement OU stocké en DB)
+$fileExistsPhysically = !empty($order['file_path']) && file_exists(__DIR__ . '/../../../../public/' . $order['file_path']);
+$hasFileContent = !empty($order['file_content']);
+$fileExists = $fileExistsPhysically || $hasFileContent;
 
 // Titre de la page : "Commande - N° Client - Nom Campagne"
 $pageTitle = "Commande - {$customerNumber} - {$campaignName}";

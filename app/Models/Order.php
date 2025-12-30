@@ -399,11 +399,11 @@ class Order
             return ['success' => false, 'message' => 'Impossible d\'écrire le fichier', 'filename' => null];
         }
 
-        // Mettre à jour en base
+        // Mettre à jour en base (path ET contenu)
         $relativePath = 'commande_' . $country . '/' . $filename;
         $this->db->execute(
-            "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), updated_at = NOW() WHERE id = :id",
-            [':file_path' => $relativePath, ':id' => $orderId]
+            "UPDATE orders SET file_path = :file_path, file_content = :file_content, file_generated_at = NOW(), updated_at = NOW() WHERE id = :id",
+            [':file_path' => $relativePath, ':file_content' => $content, ':id' => $orderId]
         );
 
         return ['success' => true, 'message' => 'Fichier généré avec succès', 'filename' => $filename];

@@ -360,9 +360,14 @@ class OrderController
     }
 
     /**
-     * Télécharger le fichier TXT existant d'une commande
+     * Télécharger le fichier TXT d'une commande
+     *
+     * Priorité :
+     * 1. Fichier physique si existe
+     * 2. Contenu stocké en DB (file_content)
      *
      * @return void
+     * @modified 2025/12/30 - Support téléchargement depuis file_content si fichier supprimé
      */
     public function downloadFile(): void
     {
@@ -375,31 +380,48 @@ class OrderController
         }
 
         $order = $this->db->queryOne(
-            "SELECT id, order_number, file_path FROM orders WHERE id = :id",
+            "SELECT id, order_number, file_path, file_content FROM orders WHERE id = :id",
             [':id' => $id]
         );
 
-        if (!$order || empty($order['file_path'])) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Fichier introuvable.'];
-            header('Location: /stm/admin/orders/' . $id);
+        if (!$order) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Commande introuvable.'];
+            header('Location: /stm/admin/orders');
             exit;
         }
 
-        $fullPath = __DIR__ . '/../../public/' . $order['file_path'];
+        // Déterminer le nom du fichier
+        $filename = !empty($order['file_path'])
+            ? basename($order['file_path'])
+            : 'commande_' . $order['order_number'] . '.txt';
 
-        if (!file_exists($fullPath)) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Le fichier n\'existe plus sur le serveur.'];
-            header('Location: /stm/admin/orders/' . $id);
+        // Option 1 : Fichier physique existe
+        if (!empty($order['file_path'])) {
+            $fullPath = __DIR__ . '/../../public/' . $order['file_path'];
+
+            if (file_exists($fullPath)) {
+                header('Content-Type: text/plain; charset=utf-8');
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
+                header('Content-Length: ' . filesize($fullPath));
+                header('Cache-Control: no-cache, no-store, must-revalidate');
+                readfile($fullPath);
+                exit;
+            }
+        }
+
+        // Option 2 : Contenu stocké en DB
+        if (!empty($order['file_content'])) {
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Content-Length: ' . strlen($order['file_content']));
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            echo $order['file_content'];
             exit;
         }
 
-        // Téléchargement
-        $filename = basename($order['file_path']);
-        header('Content-Type: text/plain; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . filesize($fullPath));
-        header('Cache-Control: no-cache, no-store, must-revalidate');
-        readfile($fullPath);
+        // Aucun contenu disponible
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Aucun fichier disponible pour cette commande.'];
+        header('Location: /stm/admin/orders/' . $id);
         exit;
     }
 
@@ -496,11 +518,11 @@ class OrderController
             exit;
         }
 
-        // Mettre à jour le chemin en base
+        // Mettre à jour le chemin ET le contenu en base
         $relativePath = 'commande_' . $country . '/' . $filename;
         $this->db->execute(
-            "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), updated_at = NOW() WHERE id = :id",
-            [':file_path' => $relativePath, ':id' => $id]
+            "UPDATE orders SET file_path = :file_path, file_content = :file_content, file_generated_at = NOW(), updated_at = NOW() WHERE id = :id",
+            [':file_path' => $relativePath, ':file_content' => $content, ':id' => $id]
         );
 
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Fichier régénéré avec succès : ' . $filename];

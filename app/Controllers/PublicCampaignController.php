@@ -1603,7 +1603,7 @@ class PublicCampaignController
 
             // 6. Générer le fichier TXT pour l'ERP
 
-            $filePath = $this->generateOrderFile(
+            $fileData = $this->generateOrderFile(
                 $orderId,
 
                 $campaign,
@@ -1615,12 +1615,12 @@ class PublicCampaignController
                 $cart["items"],
             );
 
-            // Mettre à jour le chemin du fichier dans la commande
+            // Mettre à jour le chemin du fichier ET le contenu dans la commande
 
             $this->db->execute(
-                "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), status = 'synced' WHERE id = :id",
+                "UPDATE orders SET file_path = :file_path, file_content = :file_content, file_generated_at = NOW(), status = 'synced' WHERE id = :id",
 
-                [":file_path" => $filePath, ":id" => $orderId],
+                [":file_path" => $fileData['path'], ":file_content" => $fileData['content'], ":id" => $orderId],
             );
 
             // 7. Valider la transaction
@@ -1821,7 +1821,7 @@ class PublicCampaignController
         string $country,
 
         array $items,
-    ): string {
+    ): array {
         $today = date("dmy"); // Format: 171125
 
         // Ligne I00 : Date commande + date livraison (si applicable)
@@ -1883,9 +1883,12 @@ class PublicCampaignController
 
         file_put_contents($filepath, $content);
 
-        // Retourner chemin relatif pour stockage en DB
+        // Retourner chemin relatif ET contenu pour stockage en DB
 
-        return "/" . $directory . "/" . $filename;
+        return [
+            'path' => "/" . $directory . "/" . $filename,
+            'content' => $content
+        ];
     }
 
     /**
