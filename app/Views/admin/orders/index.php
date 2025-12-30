@@ -1,414 +1,299 @@
 <?php
 /**
- * Vue Admin - Liste des commandes
- * 
- * @created  2025/12/29 15:00
+ * Vue : Liste des commandes admin
+ *
+ * Affiche toutes les commandes avec :
+ * - Statistiques (total, aujourd'hui, en attente, erreurs)
+ * - Filtres (campagne, statut, pays, dates, recherche)
+ * - Pagination
+ *
+ * @package    App\Views\admin\orders
+ * @author     Fabian Hardy
+ * @version    1.0.0
+ * @created    2025/12/30
  */
 
-use App\Models\Order;
-
 ob_start();
+
+// Variables par défaut
+$orders = $orders ?? [];
+$stats = $stats ?? ['total_orders' => 0, 'today_count' => 0, 'pending_count' => 0, 'error_count' => 0];
+$campaigns = $campaigns ?? [];
+$statuses = $statuses ?? [];
+$pagination = $pagination ?? ['current_page' => 1, 'per_page' => 50, 'total' => 0, 'total_pages' => 1];
+$filters = $filters ?? [];
+$pageTitle = $pageTitle ?? 'Toutes les commandes';
+$isToday = $isToday ?? false;
+$isPending = $isPending ?? false;
+
+// Construire l'URL avec les filtres
+function buildFilterUrl($newParams = []) {
+    $params = $_GET;
+    foreach ($newParams as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($params[$key]);
+        } else {
+            $params[$key] = $value;
+        }
+    }
+    return '/stm/admin/orders' . ($params ? '?' . http_build_query($params) : '');
+}
 ?>
 
-<!-- En-tête avec stats -->
+<!-- En-tête -->
 <div class="mb-6">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900"><?= htmlspecialchars($pageTitle) ?></h1>
-            <p class="mt-1 text-sm text-gray-500">Gestion des commandes clients</p>
-        </div>
-    </div>
+    <h1 class="text-2xl font-bold text-gray-900"><?= htmlspecialchars($pageTitle) ?></h1>
+    <p class="text-sm text-gray-500">Gestion des commandes clients</p>
 </div>
 
 <!-- Cartes statistiques -->
 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
     <!-- Total commandes -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center">
-            <div class="flex-shrink-0 bg-indigo-100 rounded-lg p-3">
-                <i class="fas fa-shopping-cart text-indigo-600 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Total commandes</p>
-                <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['total_orders'], 0, ',', ' ') ?></p>
-            </div>
-        </div>
+    <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-indigo-500">
+        <div class="text-sm font-medium text-gray-500">Total commandes</div>
+        <div class="text-2xl font-bold text-indigo-600"><?= number_format($stats['total_orders'] ?? 0, 0, ',', ' ') ?></div>
     </div>
 
     <!-- Aujourd'hui -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center">
-            <div class="flex-shrink-0 bg-blue-100 rounded-lg p-3">
-                <i class="fas fa-calendar-day text-blue-600 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Aujourd'hui</p>
-                <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['today_count'], 0, ',', ' ') ?></p>
-            </div>
-        </div>
+    <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
+        <div class="text-sm font-medium text-gray-500">Aujourd'hui</div>
+        <div class="text-2xl font-bold text-blue-600"><?= number_format($stats['today_count'] ?? 0, 0, ',', ' ') ?></div>
     </div>
 
     <!-- En attente -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center">
-            <div class="flex-shrink-0 bg-yellow-100 rounded-lg p-3">
-                <i class="fas fa-clock text-yellow-600 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">En attente</p>
-                <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['pending_count'], 0, ',', ' ') ?></p>
-            </div>
-        </div>
+    <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-yellow-500">
+        <div class="text-sm font-medium text-gray-500">En attente</div>
+        <div class="text-2xl font-bold text-yellow-600"><?= number_format($stats['pending_count'] ?? 0, 0, ',', ' ') ?></div>
     </div>
 
     <!-- Erreurs -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center">
-            <div class="flex-shrink-0 bg-red-100 rounded-lg p-3">
-                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Erreurs</p>
-                <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['error_count'], 0, ',', ' ') ?></p>
-            </div>
-        </div>
+    <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-red-500">
+        <div class="text-sm font-medium text-gray-500">Erreurs</div>
+        <div class="text-2xl font-bold text-red-600"><?= number_format($stats['error_count'] ?? 0, 0, ',', ' ') ?></div>
     </div>
 </div>
 
 <!-- Filtres -->
-<?php if (empty($isToday) && empty($isPending)): ?>
-<div class="bg-white shadow rounded-lg p-4 mb-6">
-    <form method="GET" action="" id="filterForm">
-        <input type="hidden" name="per_page" id="hidden_per_page" value="<?= $pagination['per_page'] ?>">
-        
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-7">
-            <!-- Campagne -->
-            <div>
-                <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
-                <select id="campaign_id" name="campaign_id" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="">Toutes</option>
-                    <?php foreach ($campaigns as $campaign): ?>
-                        <option value="<?= $campaign['id'] ?>" <?= ($filters['campaign_id'] ?? '') == $campaign['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($campaign['name']) ?> (<?= $campaign['country'] ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+<?php if (!$isToday && !$isPending): ?>
+<div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <form method="GET" action="/stm/admin/orders" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <!-- Campagne -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Campagne</label>
+            <select name="campaign_id" class="w-full rounded-md border-gray-300 text-sm">
+                <option value="">Toutes</option>
+                <?php foreach ($campaigns as $camp): ?>
+                <option value="<?= $camp['id'] ?>" <?= ($filters['campaign_id'] ?? '') == $camp['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($camp['name']) ?> (<?= $camp['country'] ?>)
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
 
-            <!-- Statut -->
-            <div>
-                <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-                <select id="status" name="status" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="">Tous</option>
-                    <?php foreach ($statuses as $key => $label): ?>
-                        <option value="<?= $key ?>" <?= ($filters['status'] ?? '') === $key ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($label) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+        <!-- Statut -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Statut</label>
+            <select name="status" class="w-full rounded-md border-gray-300 text-sm">
+                <option value="">Tous</option>
+                <?php foreach ($statuses as $key => $label): ?>
+                <option value="<?= $key ?>" <?= ($filters['status'] ?? '') === $key ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($label) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
 
-            <!-- Pays -->
-            <div>
-                <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                <select id="country" name="country" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="">Tous</option>
-                    <option value="BE" <?= ($filters['country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
-                    <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
-                </select>
-            </div>
+        <!-- Pays -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Pays</label>
+            <select name="country" class="w-full rounded-md border-gray-300 text-sm">
+                <option value="">Tous</option>
+                <option value="BE" <?= ($filters['country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
+                <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
+            </select>
+        </div>
 
-            <!-- Date début -->
-            <div>
-                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Du</label>
-                <input type="date" id="date_from" name="date_from" 
-                       value="<?= htmlspecialchars($filters['date_from'] ?? '') ?>"
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-            </div>
+        <!-- Date début -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Du</label>
+            <input type="date" name="date_from" value="<?= htmlspecialchars($filters['date_from'] ?? '') ?>"
+                   class="w-full rounded-md border-gray-300 text-sm">
+        </div>
 
-            <!-- Date fin -->
-            <div>
-                <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Au</label>
-                <input type="date" id="date_to" name="date_to" 
-                       value="<?= htmlspecialchars($filters['date_to'] ?? '') ?>"
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-            </div>
+        <!-- Date fin -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Au</label>
+            <input type="date" name="date_to" value="<?= htmlspecialchars($filters['date_to'] ?? '') ?>"
+                   class="w-full rounded-md border-gray-300 text-sm">
+        </div>
 
-            <!-- Recherche -->
-            <div>
-                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-                <input type="text" id="search" name="search" 
-                       value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-                       placeholder="N° commande, client..."
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-            </div>
+        <!-- Recherche -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
+            <input type="text" name="search" value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
+                   placeholder="N° commande, client..."
+                   class="w-full rounded-md border-gray-300 text-sm">
+        </div>
 
-            <!-- Boutons -->
-            <div class="flex items-end gap-2">
-                <button type="submit" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                    <i class="fas fa-search mr-2"></i>
-                    Filtrer
-                </button>
-                <a href="<?= $_SERVER['PHP_SELF'] ?>" 
-                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i class="fas fa-times mr-2"></i>
-                    Reset
-                </a>
-            </div>
+        <!-- Boutons -->
+        <div class="md:col-span-6 flex gap-2">
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                <i class="fas fa-search mr-1"></i> Filtrer
+            </button>
+            <a href="/stm/admin/orders" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">
+                Reset
+            </a>
         </div>
     </form>
 </div>
 <?php endif; ?>
 
+<!-- Info pagination -->
+<div class="flex justify-between items-center mb-4">
+    <div class="text-sm text-gray-500">
+        Affichage de <?= (($pagination['current_page'] - 1) * $pagination['per_page']) + 1 ?>
+        à <?= min($pagination['current_page'] * $pagination['per_page'], $pagination['total']) ?>
+        sur <?= number_format($pagination['total'], 0, ',', ' ') ?> commande(s)
+    </div>
+    <div>
+        <label class="text-sm text-gray-500 mr-2">Afficher</label>
+        <select onchange="window.location.href=this.value" class="rounded-md border-gray-300 text-sm">
+            <?php foreach ([10, 25, 50, 100] as $pp): ?>
+            <option value="<?= buildFilterUrl(['per_page' => $pp, 'page' => 1]) ?>" <?= $pagination['per_page'] == $pp ? 'selected' : '' ?>>
+                <?= $pp ?>
+            </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</div>
+
 <!-- Tableau des commandes -->
-<div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-        <span class="text-sm text-gray-600">
-            <?php if ($pagination['total'] > 0): ?>
-                Affichage de <?= number_format((($pagination['current_page'] - 1) * $pagination['per_page']) + 1, 0, ',', ' ') ?>
-                à <?= number_format(min($pagination['current_page'] * $pagination['per_page'], $pagination['total']), 0, ',', ' ') ?>
-                sur <?= number_format($pagination['total'], 0, ',', ' ') ?> commande(s)
+<div class="bg-white rounded-lg shadow-sm overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">N° Commande</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campagne</th>
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Articles</th>
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Statut</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            <?php if (empty($orders)): ?>
+            <tr>
+                <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                    <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
+                    <p>Aucune commande trouvée</p>
+                </td>
+            </tr>
             <?php else: ?>
-                Aucune commande trouvée
+            <?php foreach ($orders as $order): ?>
+            <?php
+                $country = $order['customer_country'] ?? ($order['campaign_country'] ?? 'BE');
+                $statusColors = [
+                    'pending_sync' => 'bg-yellow-100 text-yellow-800',
+                    'synced' => 'bg-green-100 text-green-800',
+                    'error' => 'bg-red-100 text-red-800',
+                    // Rétrocompatibilité
+                    'pending' => 'bg-yellow-100 text-yellow-800',
+                    'validated' => 'bg-green-100 text-green-800',
+                    'cancelled' => 'bg-red-100 text-red-800',
+                ];
+                $statusLabels = [
+                    'pending_sync' => 'En attente',
+                    'synced' => 'Synced',
+                    'error' => 'Erreur',
+                    'pending' => 'En attente',
+                    'validated' => 'Validée',
+                    'cancelled' => 'Annulée',
+                ];
+                $statusClass = $statusColors[$order['status']] ?? 'bg-gray-100 text-gray-800';
+                $statusLabel = $statusLabels[$order['status']] ?? $order['status'];
+            ?>
+            <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?= $country === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800' ?> mr-2">
+                            <?= $country ?>
+                        </span>
+                        <span class="font-mono text-sm"><?= htmlspecialchars($order['order_number'] ?? 'N/A') ?></span>
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($order['company_name'] ?? 'N/A') ?></div>
+                    <div class="text-xs text-gray-500 font-mono"><?= htmlspecialchars($order['customer_number'] ?? '') ?></div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <?= htmlspecialchars($order['campaign_name'] ?? 'N/A') ?>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        <?= (int)($order['total_items'] ?? 0) ?>
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $statusClass ?>">
+                        <?= $statusLabel ?>
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <?= date('d/m/Y H:i', strtotime($order['created_at'])) ?>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <a href="/stm/admin/orders/<?= $order['id'] ?>"
+                       class="inline-flex items-center px-3 py-1 border border-indigo-300 rounded text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
+                        <i class="fas fa-eye mr-1"></i> Voir
+                    </a>
+                </td>
+            </tr>
+            <?php endforeach; ?>
             <?php endif; ?>
-        </span>
-        <div class="flex items-center gap-2">
-            <label for="per_page_select" class="text-sm text-gray-600">Afficher :</label>
-            <select id="per_page_select" onchange="changePerPage(this.value)"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1">
-                <?php foreach ([10, 25, 50, 100] as $pp): ?>
-                    <option value="<?= $pp ?>" <?= $pagination['per_page'] == $pp ? 'selected' : '' ?>><?= $pp ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-    </div>
-
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        N° Commande
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Client
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Campagne
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Articles
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Statut
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                    </th>
-                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                <?php if (empty($orders)): ?>
-                    <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                            <i class="fas fa-inbox text-4xl mb-2"></i>
-                            <p>Aucune commande trouvée</p>
-                        </td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($orders as $order): ?>
-                        <tr class="hover:bg-gray-50">
-                            <!-- N° Commande -->
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold
-                                        <?= $order['customer_country'] === 'BE' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800' ?>">
-                                        <?= $order['customer_country'] ?? 'BE' ?>
-                                    </span>
-                                    <div class="ml-3">
-                                        <p class="text-sm font-medium text-gray-900">
-                                            <?= htmlspecialchars($order['order_number']) ?>
-                                        </p>
-                                        <p class="text-xs text-gray-500">
-                                            #<?= $order['id'] ?>
-                                        </p>
-                                    </div>
-                                </div>
-                            </td>
-
-                            <!-- Client -->
-                            <td class="px-4 py-3">
-                                <p class="text-sm font-medium text-gray-900">
-                                    <?= htmlspecialchars($order['company_name'] ?? '-') ?>
-                                </p>
-                                <p class="text-xs text-gray-500">
-                                    <?= htmlspecialchars($order['customer_number'] ?? '-') ?>
-                                </p>
-                            </td>
-
-                            <!-- Campagne -->
-                            <td class="px-4 py-3">
-                                <p class="text-sm text-gray-900">
-                                    <?= htmlspecialchars($order['campaign_name'] ?? '-') ?>
-                                </p>
-                            </td>
-
-                            <!-- Articles -->
-                            <td class="px-4 py-3 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-700">
-                                    <?= number_format($order['total_items'], 0, ',', ' ') ?>
-                                </span>
-                            </td>
-
-                            <!-- Statut -->
-                            <td class="px-4 py-3 text-center">
-                                <?php
-                                $statusColor = Order::STATUS_COLORS[$order['status']] ?? 'gray';
-                                $statusLabel = Order::STATUSES[$order['status']] ?? $order['status'];
-                                ?>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                                    <?php if ($statusColor === 'green'): ?>bg-green-100 text-green-800
-                                    <?php elseif ($statusColor === 'yellow'): ?>bg-yellow-100 text-yellow-800
-                                    <?php elseif ($statusColor === 'red'): ?>bg-red-100 text-red-800
-                                    <?php else: ?>bg-gray-100 text-gray-800<?php endif; ?>">
-                                    <?= htmlspecialchars($statusLabel) ?>
-                                </span>
-                            </td>
-
-                            <!-- Date -->
-                            <td class="px-4 py-3 text-center">
-                                <p class="text-sm text-gray-900">
-                                    <?= date('d/m/Y', strtotime($order['created_at'])) ?>
-                                </p>
-                                <p class="text-xs text-gray-500">
-                                    <?= date('H:i', strtotime($order['created_at'])) ?>
-                                </p>
-                            </td>
-
-                            <!-- Actions -->
-                            <td class="px-4 py-3 text-center">
-                                <a href="/stm/admin/orders/show?id=<?= $order['id'] ?>"
-                                   class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition">
-                                    <i class="fas fa-eye mr-1"></i>
-                                    Détail
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
+        </tbody>
+    </table>
 </div>
 
 <!-- Pagination -->
-<?php if ($pagination['total_pages'] > 1): 
-    $filterParams = http_build_query(array_filter([
-        'campaign_id' => $filters['campaign_id'] ?? '',
-        'status' => $filters['status'] ?? '',
-        'country' => $filters['country'] ?? '',
-        'date_from' => $filters['date_from'] ?? '',
-        'date_to' => $filters['date_to'] ?? '',
-        'search' => $filters['search'] ?? '',
-        'per_page' => $pagination['per_page'] != 50 ? $pagination['per_page'] : ''
-    ], fn($v) => $v !== ''));
-?>
-<div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6 rounded-lg shadow">
-    <!-- Mobile -->
-    <div class="flex-1 flex justify-between sm:hidden">
+<?php if ($pagination['total_pages'] > 1): ?>
+<div class="mt-4 flex justify-center">
+    <nav class="inline-flex rounded-md shadow-sm -space-x-px">
         <?php if ($pagination['current_page'] > 1): ?>
-            <a href="?page=<?= $pagination['current_page'] - 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-               class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                Précédent
-            </a>
+        <a href="<?= buildFilterUrl(['page' => 1]) ?>" class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+            <i class="fas fa-angle-double-left"></i>
+        </a>
+        <a href="<?= buildFilterUrl(['page' => $pagination['current_page'] - 1]) ?>" class="px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+            <i class="fas fa-angle-left"></i>
+        </a>
         <?php endif; ?>
+
+        <?php
+        $start = max(1, $pagination['current_page'] - 2);
+        $end = min($pagination['total_pages'], $pagination['current_page'] + 2);
+        for ($i = $start; $i <= $end; $i++):
+        ?>
+        <a href="<?= buildFilterUrl(['page' => $i]) ?>"
+           class="px-4 py-2 border border-gray-300 text-sm font-medium <?= $i === $pagination['current_page'] ? 'bg-indigo-50 text-indigo-600 border-indigo-500' : 'bg-white text-gray-700 hover:bg-gray-50' ?>">
+            <?= $i ?>
+        </a>
+        <?php endfor; ?>
+
         <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
-            <a href="?page=<?= $pagination['current_page'] + 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-               class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                Suivant
-            </a>
+        <a href="<?= buildFilterUrl(['page' => $pagination['current_page'] + 1]) ?>" class="px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+            <i class="fas fa-angle-right"></i>
+        </a>
+        <a href="<?= buildFilterUrl(['page' => $pagination['total_pages']]) ?>" class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+            <i class="fas fa-angle-double-right"></i>
+        </a>
         <?php endif; ?>
-    </div>
-
-    <!-- Desktop -->
-    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-        <div>
-            <p class="text-sm text-gray-700">
-                Page <span class="font-medium"><?= $pagination['current_page'] ?></span>
-                sur <span class="font-medium"><?= $pagination['total_pages'] ?></span>
-            </p>
-        </div>
-        <div>
-            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <!-- Première page -->
-                <?php if ($pagination['current_page'] > 2): ?>
-                    <a href="?page=1<?= $filterParams ? '&' . $filterParams : '' ?>"
-                       class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <i class="fas fa-angle-double-left"></i>
-                    </a>
-                <?php endif; ?>
-
-                <!-- Précédent -->
-                <?php if ($pagination['current_page'] > 1): ?>
-                    <a href="?page=<?= $pagination['current_page'] - 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-                       class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <i class="fas fa-angle-left"></i>
-                    </a>
-                <?php endif; ?>
-
-                <!-- Pages -->
-                <?php
-                $start = max(1, $pagination['current_page'] - 2);
-                $end = min($pagination['total_pages'], $pagination['current_page'] + 2);
-                for ($i = $start; $i <= $end; $i++):
-                ?>
-                    <a href="?page=<?= $i ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-                       class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                           <?= $i === $pagination['current_page'] 
-                               ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
-                               : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50' ?>">
-                        <?= $i ?>
-                    </a>
-                <?php endfor; ?>
-
-                <!-- Suivant -->
-                <?php if ($pagination['current_page'] < $pagination['total_pages']): ?>
-                    <a href="?page=<?= $pagination['current_page'] + 1 ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-                       class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <i class="fas fa-angle-right"></i>
-                    </a>
-                <?php endif; ?>
-
-                <!-- Dernière page -->
-                <?php if ($pagination['current_page'] < $pagination['total_pages'] - 1): ?>
-                    <a href="?page=<?= $pagination['total_pages'] ?><?= $filterParams ? '&' . $filterParams : '' ?>"
-                       class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <i class="fas fa-angle-double-right"></i>
-                    </a>
-                <?php endif; ?>
-            </nav>
-        </div>
-    </div>
+    </nav>
 </div>
 <?php endif; ?>
-
-<script>
-function changePerPage(value) {
-    document.getElementById('hidden_per_page').value = value;
-    document.getElementById('filterForm').submit();
-}
-</script>
 
 <?php
 $content = ob_get_clean();
 $title = $pageTitle;
-
+$pageScripts = "";
 require __DIR__ . '/../../layouts/admin.php';
 ?>
