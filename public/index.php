@@ -12,6 +12,7 @@ error_reporting(E_ALL);
  *
  * @package STM
  * @version 2.0
+ * @modified 30/12/2025 - Ajout chargement TranslationHelper
  */
 
 // Définir le chemin de base de l'application
@@ -55,28 +56,37 @@ if ($debug) {
 date_default_timezone_set('Europe/Brussels');
 
 // =============================================
-// 4. DÉMARRER LA SESSION
+// 4. CHARGER LES HELPERS GLOBAUX
+// =============================================
+
+// Helper de traductions FR/NL (fonctions trans(), trans_e(), trans_cgv(), etc.)
+if (file_exists(BASE_PATH . '/app/Helpers/TranslationHelper.php')) {
+    require_once BASE_PATH . '/app/Helpers/TranslationHelper.php';
+}
+
+// =============================================
+// 5. DÉMARRER LA SESSION
 // =============================================
 
 use Core\Session;
 Session::start();
 
 // =============================================
-// 5. CRÉER LE ROUTER
+// 6. CRÉER LE ROUTER
 // =============================================
 
 use Core\Router;
 $router = new Router();
 
 // =============================================
-// 6. CHARGER LES ROUTES
+// 7. CHARGER LES ROUTES
 // =============================================
 
 // Le fichier routes.php va utiliser la variable $router
 require_once BASE_PATH . '/config/routes.php';
 
 // =============================================
-// 7. GÉRER LA REQUÊTE
+// 8. GÉRER LA REQUÊTE
 // =============================================
 
 use Core\Request;
@@ -99,7 +109,7 @@ if (empty($uri) || $uri === '/') {
 }
 */
 // =============================================
-// 8. DISPATCHER LA ROUTE
+// 9. DISPATCHER LA ROUTE
 // =============================================
 
 try {

@@ -117,13 +117,13 @@ ob_start();
                     <div class="flex items-center justify-center gap-2">
                         <!-- Prévisualiser (Modal) -->
                         <button type="button"
-                                onclick="openPreviewModal(<?= $page['id'] ?>, 'fr', '<?= htmlspecialchars($page['title_fr']) ?>')"
+                                onclick='openPreviewModal(<?= $page["id"] ?>, "fr", <?= json_encode($page["title_fr"], JSON_HEX_APOS) ?>)'
                                 class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
                                 title="Prévisualiser (FR)">
                             <i class="fas fa-eye mr-1"></i> FR
                         </button>
                         <button type="button"
-                                onclick="openPreviewModal(<?= $page['id'] ?>, 'nl', '<?= htmlspecialchars($page['title_nl'] ?? $page['title_fr']) ?>')"
+                                onclick='openPreviewModal(<?= $page["id"] ?>, "nl", <?= json_encode($page["title_nl"] ?? $page["title_fr"], JSON_HEX_APOS) ?>)'
                                 class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
                                 title="Prévisualiser (NL)">
                             <i class="fas fa-eye mr-1"></i> NL
@@ -160,14 +160,9 @@ ob_start();
 </div>
 
 <!-- Modal Aperçu -->
-<div id="previewModal"
-     class="fixed inset-0 z-50 hidden"
-     x-data="{ open: false }"
-     x-show="open"
-     x-cloak>
+<div id="previewModal" class="fixed inset-0 z-50 hidden">
     <!-- Overlay -->
-    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm"
-         @click="open = false; document.getElementById('previewModal').classList.add('hidden')"></div>
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm" onclick="closePreviewModal()"></div>
 
     <!-- Modal Content -->
     <div class="fixed inset-4 md:inset-10 bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">

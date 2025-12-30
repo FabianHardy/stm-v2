@@ -1291,3 +1291,71 @@ $router->post('/admin/settings/agent/tools/delete', function () {
     $controller = new \App\Controllers\AgentConfigController();
     $controller->deleteTool();
 });
+
+// ========================================
+// ROUTES TRADUCTIONS (gestion FR/NL)
+// À AJOUTER À LA FIN DE config/routes.php
+// ========================================
+
+// Liste des traductions
+$router->get('/admin/translations', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->index();
+});
+
+// Traductions manquantes (NL vide)
+$router->get('/admin/translations/missing', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->missing();
+});
+
+// Régénérer le cache
+$router->get('/admin/translations/rebuild-cache', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->rebuildCache();
+});
+
+// Exporter en JSON
+$router->get('/admin/translations/export', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->export();
+});
+
+// Éditer une traduction (GET)
+$router->get('/admin/translations/{id}/edit', function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->edit((int) $id);
+});
+
+// Mettre à jour une traduction (POST)
+$router->post('/admin/translations/{id}/update', function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->update((int) $id);
+});
+
+// Mise à jour rapide AJAX (inline edit)
+$router->post('/admin/translations/quick-update', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->quickUpdate();
+});
