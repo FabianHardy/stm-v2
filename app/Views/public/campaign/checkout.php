@@ -20,7 +20,7 @@ $uuid = $campaign['uuid'];
 // Titre de la page
 $title = trans('checkout.title', $lang) . ' - ' . htmlspecialchars($campaign['name']);
 $useAlpine = true;
-$bodyAttrs = '';
+$bodyAttrs = 'x-data="{ modalOpen: false, modalUrl: \'\', modalTitle: \'\' }"';
 $pageStyles = '';
 
 // Récupérer les pages statiques pour le footer
@@ -271,21 +271,31 @@ ob_start();
                                 </div>
                             <?php endif; ?>
 
-                            <!-- Conditions Générales de Vente (checkboxes via trans()) -->
+                            <!-- Conditions Générales de Vente (checkboxes avec modals) -->
                             <div class="mb-6 space-y-3">
                                 <p class="text-sm font-medium text-gray-700 mb-3">
                                     <?= trans('checkout.conditions_label', $lang) ?>
                                     <span class="text-red-500">*</span>
                                 </p>
 
-                                <!-- CGV 1 : CGU + Vie privée (avec liens dynamiques) -->
+                                <!-- CGV 1 : CGU + Vie privée (avec liens ouvrant modal) -->
                                 <label class="flex items-start cursor-pointer">
                                     <input type="checkbox"
                                            name="cgv_1"
                                            required
                                            class="mt-1 h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
                                     <span class="ml-3 text-sm text-gray-700">
-                                        <?= trans('checkout.cgv_1', $lang, $transLinks) ?>
+                                        <?php if ($lang === 'nl'): ?>
+                                            Ik aanvaard de
+                                            <button type="button" @click="modalOpen = true; modalUrl = '/stm/c/<?= $uuid ?>/page/cgu'; modalTitle = 'Algemene Gebruiksvoorwaarden'" class="text-blue-600 hover:text-blue-800 underline font-medium">Algemene Gebruiksvoorwaarden</button>
+                                            en het
+                                            <button type="button" @click="modalOpen = true; modalUrl = '/stm/c/<?= $uuid ?>/page/confidentialite'; modalTitle = 'Privacybeleid'" class="text-blue-600 hover:text-blue-800 underline font-medium">Privacybeleid</button>
+                                        <?php else: ?>
+                                            J'accepte les
+                                            <button type="button" @click="modalOpen = true; modalUrl = '/stm/c/<?= $uuid ?>/page/cgu'; modalTitle = 'Conditions Générales d\'Utilisation'" class="text-blue-600 hover:text-blue-800 underline font-medium">Conditions Générales d'Utilisation</button>
+                                            et la
+                                            <button type="button" @click="modalOpen = true; modalUrl = '/stm/c/<?= $uuid ?>/page/confidentialite'; modalTitle = 'Politique Vie Privée'" class="text-blue-600 hover:text-blue-800 underline font-medium">Politique Vie Privée</button>
+                                        <?php endif; ?>
                                     </span>
                                 </label>
 
@@ -363,6 +373,62 @@ ob_start();
         </div>
     </footer>
     <?php endif; ?>
+
+    <!-- Modal pour afficher CGU/Politique -->
+    <div x-show="modalOpen"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="display: none;">
+
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modalOpen = false"></div>
+
+        <!-- Modal Content -->
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div x-show="modalOpen"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="relative bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden"
+                 @click.away="modalOpen = false">
+
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-800" x-text="modalTitle"></h3>
+                    <button @click="modalOpen = false"
+                            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Body avec iframe -->
+                <div class="overflow-y-auto" style="max-height: calc(85vh - 130px);">
+                    <iframe :src="modalUrl + '?embed=1'"
+                            class="w-full border-0"
+                            style="min-height: 400px; height: 60vh;"
+                            @load="$el.style.height = $el.contentWindow.document.body.scrollHeight + 'px'"></iframe>
+                </div>
+
+                <!-- Footer -->
+                <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 text-right">
+                    <button @click="modalOpen = false"
+                            class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium">
+                        <?= $lang === 'fr' ? 'Fermer' : 'Sluiten' ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Script de validation côté client -->
     <script>
