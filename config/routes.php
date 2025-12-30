@@ -14,6 +14,8 @@
  * @modified   22/12/2025 - Ajout route API check-export-cache
  * @modified   23/12/2025 - Ajout route API customer-orders
  * @modified   29/12/2025 - Ajout route API products/customer-orders
+ * @modified   30/12/2025 - Ajout routes Email Templates (Sprint 8)
+ * @modified   30/12/2025 - Ajout routes Pages Fixes (Sprint 9)
  */
 
 // ============================================
@@ -464,13 +466,67 @@ $router->post("/admin/customers/{id}/delete", function ($id) {
 // ROUTES COMMANDES ADMIN
 // ============================================
 
-// Liste des commandes (placeholder pour l'instant)
+// Liste des commandes
 $router->get("/admin/orders", function () {
     $middleware = new AuthMiddleware();
     $middleware->handle();
 
     $controller = new OrderController();
     $controller->index();
+});
+
+// Commandes du jour
+$router->get("/admin/orders/today", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->today();
+});
+
+// Commandes en attente de synchronisation
+$router->get("/admin/orders/pending", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->pending();
+});
+
+// Page export fichiers TXT
+$router->get("/admin/orders/export", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->export();
+});
+
+// Télécharger fichier TXT existant (GET avec ?id=)
+$router->get("/admin/orders/download", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->downloadFile();
+});
+
+// Mettre à jour le statut de synchronisation (POST)
+$router->post("/admin/orders/status", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->updateStatus();
+});
+
+// Régénérer le fichier TXT (POST)
+$router->post("/admin/orders/regenerate", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->regenerateFile();
 });
 
 // Exporter le fichier TXT d'une commande (AVANT la route générique {id})
@@ -557,6 +613,12 @@ $router->post("/c/{uuid}/order/submit", function ($uuid) {
 $router->get("/c/{uuid}/order/confirmation", function ($uuid) {
     $controller = new PublicCampaignController();
     $controller->orderConfirmation($uuid);
+});
+
+// Page fixe (CGU, CGV, mentions légales, etc.)
+$router->get("/c/{uuid}/page/{slug}", function ($uuid, $slug) {
+    $controller = new PublicCampaignController();
+    $controller->showStaticPage($uuid, $slug);
 });
 
 // =============================================
@@ -671,6 +733,133 @@ $router->get('/admin/stats/customer-orders', function () {
 
     $controller = new \App\Controllers\StatsController();
     $controller->getCustomerOrdersApi();
+});
+
+// ============================================
+// ROUTES EMAIL TEMPLATES
+// ============================================
+// Ajouté le 30/12/2025 - Sprint 8 : Gestion Email Templates Admin
+
+// Liste des templates
+$router->get("/admin/email-templates", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->index();
+});
+
+// Formulaire d'édition
+$router->get("/admin/email-templates/{id}/edit", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour un template
+$router->post("/admin/email-templates/{id}/update", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->update((int)$id);
+});
+
+// Prévisualisation HTML (iframe)
+$router->get("/admin/email-templates/{id}/preview", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->previewHtml((int)$id);
+});
+
+// Envoyer un email de test
+$router->post("/admin/email-templates/{id}/send-test", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->sendTest((int)$id);
+});
+
+// ============================================
+// ROUTES PAGES FIXES (STATIC PAGES)
+// ============================================
+// Ajouté le 30/12/2025 - Sprint 9 : Gestion Pages Fixes Admin
+
+// Liste des pages fixes
+$router->get("/admin/static-pages", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->index();
+});
+
+// Formulaire d'édition
+$router->get("/admin/static-pages/{id}/edit", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour une page
+$router->post("/admin/static-pages/{id}/update", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->update((int)$id);
+});
+
+// Prévisualisation HTML
+$router->get("/admin/static-pages/{id}/preview", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->preview((int)$id);
+});
+
+// Liste des surcharges pour une page
+$router->get("/admin/static-pages/{id}/overrides", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->overrides((int)$id);
+});
+
+// Créer une surcharge
+$router->post("/admin/static-pages/create-override", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->createOverride();
+});
+
+// Supprimer une surcharge
+$router->get("/admin/static-pages/{id}/delete", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->delete((int)$id);
+});
+
+// Toggle actif/inactif (AJAX)
+$router->post("/admin/static-pages/{id}/toggle", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->toggleActive((int)$id);
 });
 
 // ============================================
@@ -1101,4 +1290,72 @@ $router->post('/admin/settings/agent/tools/delete', function () {
 
     $controller = new \App\Controllers\AgentConfigController();
     $controller->deleteTool();
+});
+
+// ========================================
+// ROUTES TRADUCTIONS (gestion FR/NL)
+// À AJOUTER À LA FIN DE config/routes.php
+// ========================================
+
+// Liste des traductions
+$router->get('/admin/translations', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->index();
+});
+
+// Traductions manquantes (NL vide)
+$router->get('/admin/translations/missing', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->missing();
+});
+
+// Régénérer le cache
+$router->get('/admin/translations/rebuild-cache', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->rebuildCache();
+});
+
+// Exporter en JSON
+$router->get('/admin/translations/export', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->export();
+});
+
+// Éditer une traduction (GET)
+$router->get('/admin/translations/{id}/edit', function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->edit((int) $id);
+});
+
+// Mettre à jour une traduction (POST)
+$router->post('/admin/translations/{id}/update', function ($id) {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->update((int) $id);
+});
+
+// Mise à jour rapide AJAX (inline edit)
+$router->post('/admin/translations/quick-update', function () {
+    $middleware = new \Middleware\AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\TranslationController();
+    $controller->quickUpdate();
 });

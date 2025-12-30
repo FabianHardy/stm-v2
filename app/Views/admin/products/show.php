@@ -23,8 +23,8 @@ ob_start();
 
 <!-- En-tête de la page -->
 <div class="mb-6">
-    <div class="flex items-center justify-between">
-        <div>
+    <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
             <h1 class="text-3xl font-bold text-gray-900">
                 <?php echo htmlspecialchars($product['name_fr']); ?>
             </h1>
@@ -32,14 +32,14 @@ ob_start();
                 Code: <span class="font-medium"><?php echo htmlspecialchars($product['product_code']); ?></span>
             </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-shrink-0">
             <a href="/stm/admin/products"
-               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 whitespace-nowrap">
                 ← Retour à la liste
             </a>
             <?php if ($canEdit): ?>
             <a href="/stm/admin/products/<?php echo $product['id']; ?>/edit"
-               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 whitespace-nowrap">
                 ✏️ Modifier
             </a>
             <?php endif; ?>
@@ -165,7 +165,7 @@ ob_start();
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
-                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase"></th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
@@ -195,8 +195,9 @@ ob_start();
                                     <td class="px-3 py-2 text-center">
                                         <button type="button"
                                                 onclick="openProductCustomerModal('<?php echo htmlspecialchars($customer['customer_number']); ?>', '<?php echo $customer['country']; ?>', '<?php echo htmlspecialchars(addslashes($customer['company_name'])); ?>')"
-                                                class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
-                                            <i class="fas fa-eye"></i>
+                                                class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition">
+                                            <i class="fas fa-eye mr-1"></i>
+                                            Détail
                                         </button>
                                     </td>
                                 </tr>
@@ -226,7 +227,7 @@ ob_start();
                                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Représentant</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Clients</th>
                                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qté</th>
-                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase"></th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
@@ -258,13 +259,17 @@ ob_start();
                                     </td>
                                     <td class="px-3 py-2 text-center">
                                         <?php if (!empty($rep['user_id']) && !empty($product['campaign_id'])): ?>
-                                        <a href="/stm/admin/stats/campaigns?campaign_id=<?php echo $product['campaign_id']; ?>&rep_id=<?php echo $rep['user_id']; ?>&rep_country=<?php echo $rep['rep_country'] ?? 'BE'; ?>&country=<?php echo $rep['rep_country'] ?? 'BE'; ?>"
-                                           class="text-indigo-600 hover:text-indigo-800 text-xs font-medium"
+                                        <a href="/stm/admin/stats/campaigns?campaign_id=<?php echo $product['campaign_id']; ?>&rep_id=<?php echo urlencode($rep['rep_id']); ?>&rep_country=<?php echo $rep['rep_country'] ?? 'BE'; ?>&country=<?php echo $rep['rep_country'] ?? 'BE'; ?>"
+                                           class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition"
                                            title="Voir les stats de ce commercial">
-                                            <i class="fas fa-chart-bar"></i>
+                                            <i class="fas fa-chart-bar mr-1"></i>
+                                            Stats
                                         </a>
                                         <?php else: ?>
-                                        <span class="text-gray-300 text-xs"><i class="fas fa-chart-bar"></i></span>
+                                        <span class="inline-flex items-center px-2 py-1 bg-gray-200 text-gray-400 rounded text-xs cursor-not-allowed" title="Pas de compte STM">
+                                            <i class="fas fa-chart-bar mr-1"></i>
+                                            Stats
+                                        </span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -285,13 +290,13 @@ ob_start();
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeProductCustomerModal()"></div>
 
         <!-- Modal content -->
-        <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-lg sm:w-full mx-auto">
+        <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-4xl sm:w-full mx-auto">
             <!-- Header -->
             <div class="bg-indigo-600 px-6 py-4 rounded-t-lg">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-white" id="pcModalCustomerName">Détail client</h3>
-                        <p class="text-indigo-200 text-sm" id="pcModalProductName"></p>
+                        <p class="text-indigo-200 text-sm" id="pcModalCustomerNumber"></p>
                     </div>
                     <button type="button" onclick="closeProductCustomerModal()" class="text-white hover:text-indigo-200 transition">
                         <i class="fas fa-times text-xl"></i>
@@ -300,11 +305,11 @@ ob_start();
             </div>
 
             <!-- Body -->
-            <div class="px-6 py-4 max-h-[60vh] overflow-y-auto">
+            <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
                 <!-- Loading -->
                 <div id="pcModalLoading" class="text-center py-8">
                     <i class="fas fa-spinner fa-spin text-indigo-600 text-2xl"></i>
-                    <p class="text-gray-500 mt-2">Chargement...</p>
+                    <p class="text-gray-500 mt-2">Chargement des commandes...</p>
                 </div>
 
                 <!-- Error -->
@@ -312,25 +317,34 @@ ob_start();
                     <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
                         <i class="fas fa-exclamation-triangle text-red-500"></i>
                     </div>
-                    <p class="text-red-600" id="pcModalErrorText">Erreur</p>
+                    <p class="text-red-600" id="pcModalErrorText">Erreur lors du chargement</p>
                 </div>
 
                 <!-- Content -->
                 <div id="pcModalContent" class="hidden">
-                    <!-- Stats résumé -->
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div class="bg-green-50 rounded-lg p-3 text-center">
-                            <p class="text-xl font-bold text-green-600" id="pcModalTotalOrders">0</p>
-                            <p class="text-xs text-green-700">Commandes</p>
+                    <!-- Info produit -->
+                    <div class="bg-indigo-50 rounded-lg p-3 mb-4 flex items-center gap-3">
+                        <i class="fas fa-tag text-indigo-500"></i>
+                        <div>
+                            <p class="font-medium text-indigo-900" id="pcModalProductName"></p>
+                            <p class="text-xs text-indigo-600" id="pcModalProductCode"></p>
                         </div>
-                        <div class="bg-orange-50 rounded-lg p-3 text-center">
-                            <p class="text-xl font-bold text-orange-600" id="pcModalTotalQty">0</p>
-                            <p class="text-xs text-orange-700">Quantité totale</p>
+                    </div>
+
+                    <!-- Stats résumé -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-green-50 rounded-lg p-4 text-center">
+                            <p class="text-2xl font-bold text-green-600" id="pcModalTotalOrders">0</p>
+                            <p class="text-sm text-green-700">Commandes</p>
+                        </div>
+                        <div class="bg-orange-50 rounded-lg p-4 text-center">
+                            <p class="text-2xl font-bold text-orange-600" id="pcModalTotalQty">0</p>
+                            <p class="text-sm text-orange-700">Promos vendues</p>
                         </div>
                     </div>
 
                     <!-- Liste des commandes -->
-                    <div id="pcModalOrdersList" class="space-y-2">
+                    <div id="pcModalOrdersList" class="space-y-3">
                         <!-- Rempli par JavaScript -->
                     </div>
                 </div>
@@ -627,59 +641,91 @@ $content = ob_get_clean();
 
 // JavaScript pour le modal
 $productId = $product['id'] ?? 0;
+$productName = addslashes($product['name_fr'] ?? '');
+$productCode = addslashes($product['product_code'] ?? '');
 $pageScripts = <<<SCRIPTS
 <script>
 const productId = {$productId};
+const productName = "{$productName}";
+const productCode = "{$productCode}";
+
+function formatNumberFr(num) {
+    return new Intl.NumberFormat('fr-FR').format(num);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function toggleOrderDetail(index) {
+    const detail = document.getElementById('pcOrderDetail' + index);
+    const chevron = document.getElementById('pcOrderChevron' + index);
+
+    if (detail.style.display === 'none') {
+        detail.style.display = 'block';
+        chevron.classList.add('rotate-180');
+    } else {
+        detail.style.display = 'none';
+        chevron.classList.remove('rotate-180');
+    }
+}
 
 function openProductCustomerModal(customerNumber, country, companyName) {
     const modal = document.getElementById('productCustomerModal');
-    const loading = document.getElementById('pcModalLoading');
-    const error = document.getElementById('pcModalError');
-    const content = document.getElementById('pcModalContent');
+    const modalLoading = document.getElementById('pcModalLoading');
+    const modalError = document.getElementById('pcModalError');
+    const modalContent = document.getElementById('pcModalContent');
 
     // Afficher le modal
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 
-    // Reset
-    loading.classList.remove('hidden');
-    error.classList.add('hidden');
-    content.classList.add('hidden');
+    // Reset état
+    modalLoading.classList.remove('hidden');
+    modalError.classList.add('hidden');
+    modalContent.classList.add('hidden');
 
-    // Header
+    // Mettre à jour le header
     document.getElementById('pcModalCustomerName').textContent = companyName;
-    document.getElementById('pcModalProductName').textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
+    document.getElementById('pcModalCustomerNumber').textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
 
-    // Charger les données
+    // Charger les données via API
     fetch('/stm/admin/products/customer-orders?product_id=' + productId + '&customer_number=' + encodeURIComponent(customerNumber) + '&country=' + country)
         .then(response => response.json())
         .then(data => {
-            loading.classList.add('hidden');
+            modalLoading.classList.add('hidden');
 
             if (!data.success) {
-                error.classList.remove('hidden');
+                modalError.classList.remove('hidden');
                 document.getElementById('pcModalErrorText').textContent = data.error || 'Erreur inconnue';
                 return;
             }
 
-            content.classList.remove('hidden');
+            // Afficher le contenu
+            modalContent.classList.remove('hidden');
+
+            // Info produit
+            document.getElementById('pcModalProductName').textContent = data.product.name;
+            document.getElementById('pcModalProductCode').textContent = 'Code: ' + data.product.code;
 
             // Stats
             document.getElementById('pcModalTotalOrders').textContent = data.total_orders;
-            document.getElementById('pcModalTotalQty').textContent = new Intl.NumberFormat('fr-FR').format(data.total_quantity);
+            document.getElementById('pcModalTotalQty').textContent = formatNumberFr(data.total_quantity);
 
             // Liste des commandes
             const ordersList = document.getElementById('pcModalOrdersList');
             ordersList.innerHTML = '';
 
             if (data.orders.length === 0) {
-                ordersList.innerHTML = '<p class="text-center text-gray-500 py-4">Aucune commande</p>';
+                ordersList.innerHTML = '<div class="text-center py-4 text-gray-500">Aucune commande trouvée</div>';
                 return;
             }
 
-            data.orders.forEach(order => {
-                const date = new Date(order.created_at);
-                const formattedDate = date.toLocaleDateString('fr-FR', {
+            data.orders.forEach((order, index) => {
+                const orderDate = new Date(order.created_at);
+                const formattedDate = orderDate.toLocaleDateString('fr-FR', {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric',
@@ -687,21 +733,66 @@ function openProductCustomerModal(customerNumber, country, companyName) {
                     minute: '2-digit'
                 });
 
-                ordersList.innerHTML += '<div class="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2">' +
-                    '<div>' +
-                        '<span class="font-medium text-gray-900">Commande #' + order.order_id + '</span>' +
-                        '<span class="text-xs text-gray-500 ml-2">' + formattedDate + '</span>' +
+                // Construire le tableau des lignes de commande
+                let linesHtml = '<table class="min-w-full table-fixed">' +
+                    '<thead class="bg-gray-100">' +
+                        '<tr class="text-left text-xs text-gray-500 uppercase">' +
+                            '<th class="py-2 px-3 w-16">Image</th>' +
+                            '<th class="py-2 px-3 text-left">Promotion</th>' +
+                            '<th class="py-2 px-3 w-28">Code</th>' +
+                            '<th class="py-2 px-3 w-24 text-right">Quantité</th>' +
+                        '</tr>' +
+                    '</thead>' +
+                    '<tbody class="text-sm divide-y divide-gray-100">';
+
+                order.lines.forEach(line => {
+                    const imageUrl = line.product_image || '/stm/assets/images/no-image.png';
+                    linesHtml += '<tr class="hover:bg-gray-50">' +
+                        '<td class="py-2 px-3 w-16">' +
+                            '<img src="' + imageUrl + '" alt="" class="w-12 h-12 object-contain rounded border border-gray-200 bg-white">' +
+                        '</td>' +
+                        '<td class="py-2 px-3 text-left">' +
+                            '<p class="font-medium text-gray-900 text-left">' + escapeHtml(line.product_name) + '</p>' +
+                        '</td>' +
+                        '<td class="py-2 px-3 w-28">' +
+                            '<span class="text-gray-500 font-mono text-xs">' + escapeHtml(line.product_code) + '</span>' +
+                        '</td>' +
+                        '<td class="py-2 px-3 w-24 text-right">' +
+                            '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' + formatNumberFr(line.quantity) + '</span>' +
+                        '</td>' +
+                    '</tr>';
+                });
+
+                linesHtml += '</tbody></table>';
+
+                const orderHtml = '<div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">' +
+                    '<div class="bg-gradient-to-r from-indigo-50 to-white px-4 py-3 flex items-center justify-between cursor-pointer border-b border-gray-200" onclick="toggleOrderDetail(' + index + ')">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<i class="fas fa-chevron-down text-indigo-400 transition-transform duration-200" id="pcOrderChevron' + index + '"></i>' +
+                            '<div>' +
+                                '<span class="font-semibold text-gray-900">Commande #' + order.order_id + '</span>' +
+                                '<span class="text-sm text-gray-500 ml-3"><i class="far fa-calendar-alt mr-1"></i>' + formattedDate + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-4">' +
+                            '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">' +
+                                '<i class="fas fa-box mr-1"></i>' + order.lines.length + ' produit(s)' +
+                            '</span>' +
+                            '<span class="inline-flex items-center px-3 py-1 bg-orange-500 text-white rounded font-bold">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
+                        '</div>' +
                     '</div>' +
-                    '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' +
-                        new Intl.NumberFormat('fr-FR').format(order.quantity) +
-                    '</span>' +
+                    '<div class="p-0" id="pcOrderDetail' + index + '">' +
+                        linesHtml +
+                    '</div>' +
                 '</div>';
+
+                ordersList.innerHTML += orderHtml;
             });
         })
-        .catch(err => {
-            console.error('Erreur:', err);
-            loading.classList.add('hidden');
-            error.classList.remove('hidden');
+        .catch(error => {
+            console.error('Erreur chargement commandes:', error);
+            modalLoading.classList.add('hidden');
+            modalError.classList.remove('hidden');
             document.getElementById('pcModalErrorText').textContent = 'Erreur de connexion';
         });
 }

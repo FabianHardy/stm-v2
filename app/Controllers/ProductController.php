@@ -324,7 +324,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
         ";
 
@@ -355,7 +355,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$topCustomersFilter}
             GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
             ORDER BY total_quantity DESC
@@ -416,7 +416,7 @@ class ProductController
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             WHERE ol.product_id = :product_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
             GROUP BY cu.customer_number, cu.country
         ";
@@ -874,6 +874,7 @@ class ProductController
 
     /**
      * API : Récupère les commandes d'un client pour un produit spécifique (AJAX)
+     * Retourne le détail complet de chaque commande (toutes les lignes)
      *
      * @return void
      * @created 2025/12/29
@@ -917,30 +918,59 @@ class ProductController
         try {
             $db = \Core\Database::getInstance();
 
-            // Récupérer les commandes du client contenant ce produit
-            $query = "
-                SELECT
+            // Récupérer les commandes du client qui contiennent ce produit
+            $ordersQuery = "
+                SELECT DISTINCT
                     o.id as order_id,
                     o.created_at,
-                    ol.quantity
+                    o.total_items
                 FROM orders o
                 INNER JOIN customers cu ON o.customer_id = cu.id
                 INNER JOIN order_lines ol ON o.id = ol.order_id
                 WHERE ol.product_id = :product_id
                 AND cu.customer_number = :customer_number
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 ORDER BY o.created_at DESC
             ";
 
-            $orders = $db->query($query, [
+            $orders = $db->query($ordersQuery, [
                 ':product_id' => $productId,
                 ':customer_number' => $customerNumber,
                 ':country' => $country
             ]);
 
-            // Calculer le total
-            $totalQuantity = array_sum(array_column($orders, 'quantity'));
+            // Pour chaque commande, récupérer TOUTES les lignes (pas seulement ce produit)
+            $ordersWithLines = [];
+            $totalQuantity = 0;
+
+            foreach ($orders as $order) {
+                $linesQuery = "
+                    SELECT
+                        ol.quantity,
+                        p.product_code,
+                        p.name_fr as product_name,
+                        p.image_fr as product_image
+                    FROM order_lines ol
+                    INNER JOIN products p ON ol.product_id = p.id
+                    WHERE ol.order_id = :order_id
+                    ORDER BY ol.quantity DESC, p.name_fr ASC
+                ";
+
+                $lines = $db->query($linesQuery, [':order_id' => $order['order_id']]);
+
+                // Calculer le total de cette commande
+                $orderTotal = array_sum(array_column($lines, 'quantity'));
+                $totalQuantity += $orderTotal;
+
+                $ordersWithLines[] = [
+                    'order_id' => $order['order_id'],
+                    'created_at' => $order['created_at'],
+                    'total_items' => $order['total_items'],
+                    'total_quantity' => $orderTotal,
+                    'lines' => $lines
+                ];
+            }
 
             // Récupérer les infos du client
             $customerQuery = "
@@ -968,8 +998,8 @@ class ProductController
                     'country' => $country,
                     'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
                 ],
-                'orders' => $orders,
-                'total_orders' => count($orders),
+                'orders' => $ordersWithLines,
+                'total_orders' => count($ordersWithLines),
                 'total_quantity' => $totalQuantity
             ]);
 

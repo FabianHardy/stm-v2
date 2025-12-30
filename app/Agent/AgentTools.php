@@ -35,9 +35,9 @@ Colonnes: id, customer_number, email, company_name, country (BE/LU), language (f
 Note: Se remplit à la volée lors des commandes. Pour les infos complètes des clients/reps, utiliser la BASE EXTERNE.
 
 ### Table: orders
-Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items (nombre total d'articles), total_products (nombre de produits différents), status (pending/validated/cancelled), notes, created_at
+Colonnes: id, uuid, order_number, campaign_id (FK campaigns), customer_id (FK customers), customer_email, total_items (nombre total d'articles), total_products (nombre de produits différents), status (pending_sync/synced/error), notes, created_at
 Clé primaire: id
-⚠️ IMPORTANT: Toujours filtrer par status = 'validated' pour les stats ! Les commandes pending ou cancelled ne comptent pas.
+⚠️ IMPORTANT: Toujours filtrer par status = 'synced' pour les stats ! Les commandes pending_sync ou error ne comptent pas.
 Note: Pour compter les promos vendues, utiliser SUM depuis order_lines.quantity
 
 ### Table: order_lines
@@ -436,7 +436,7 @@ SCHEMA;
             // Chercher toutes les campagnes qui matchent avec leur nombre de commandes
             $allMatches = $this->db->query(
                 "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
-                        (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
+                        (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'synced') as order_count
                  FROM campaigns c
                  WHERE c.name LIKE :name
                  AND c.country = :country
@@ -502,7 +502,7 @@ SCHEMA;
                 $log("Fallback: searching without country filter");
                 $allMatches = $this->db->query(
                     "SELECT c.id, c.name, c.country, c.start_date, c.end_date,
-                            (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'validated') as order_count
+                            (SELECT COUNT(*) FROM orders o WHERE o.campaign_id = c.id AND o.status = 'synced') as order_count
                      FROM campaigns c
                      WHERE c.name LIKE :name
                      ORDER BY order_count DESC, c.start_date DESC
@@ -542,7 +542,7 @@ SCHEMA;
                  JOIN order_lines ol ON o.id = ol.order_id
                  JOIN {$extClientTable} ext ON ext.CLL_NCLIXX = c.customer_number
                  WHERE o.campaign_id = :campaign_id
-                 AND o.status = 'validated'
+                 AND o.status = 'synced'
                  AND ext.IDE_REP = :rep_id";
 
             $log("Executing SQL with campaign_id={$campaign['id']}, rep_id={$ideRep}");
@@ -594,7 +594,7 @@ SCHEMA;
              INNER JOIN orders o ON o.customer_id = c.id AND o.campaign_id = :campaign_id
              LEFT JOIN order_lines ol ON ol.order_id = o.id
              WHERE c.rep_name LIKE :rep_name
-             AND o.status = 'validated'
+             AND o.status = 'synced'
              GROUP BY c.rep_name
              LIMIT 1",
             [':campaign_id' => $campaign['id'], ':rep_name' => '%' . $repName . '%']
