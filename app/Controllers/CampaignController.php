@@ -389,7 +389,7 @@ class CampaignController
                 // Gérer la liste de clients si mode manual
                 if ($data["customer_assignment_mode"] === "manual") {
                     // Supprimer les anciens clients
-                    $this->campaignModel->removeAllCustomersFromCampaign($id);
+                    $this->campaignModel->removeAllCustomers($id);
 
                     // Ajouter les nouveaux clients
                     if (!empty($_POST["customer_list"])) {
@@ -600,7 +600,8 @@ class CampaignController
         try {
             $db = Database::getInstance();
             return $db->query(
-                "SELECT u.id, u.name, u.email, u.role as user_role, ca.role as assignment_role, ca.assigned_at
+                "SELECT u.id as user_id, u.name as user_name, u.email as user_email,
+                        u.role as user_role, ca.role as role, ca.assigned_at
                  FROM campaign_assignees ca
                  JOIN users u ON u.id = ca.user_id
                  WHERE ca.campaign_id = :campaign_id

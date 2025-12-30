@@ -5,6 +5,7 @@
  * @package STM
  * @created 2025/11/14
  * @modified 2025/11/21 - Adaptation au layout public centralisé
+ * @modified 2025/12/30 - Migration vers système trans() centralisé
  */
 
 // ========================================
@@ -32,6 +33,10 @@ $uuid = $campaign['uuid'];
 // Variables pour le layout
 $title = $campaignTitle;
 $useAlpine = false;
+
+// Récupérer les pages statiques pour le footer (utilisé par le layout)
+$staticPageModel = new \App\Models\StaticPage();
+$footerPages = $staticPageModel->getFooterPages($campaign['id']);
 
 // ========================================
 // CONTENU DE LA PAGE
@@ -66,13 +71,13 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                     <i class="fas fa-user-check text-3xl text-blue-600"></i>
                 </div>
                 <h3 class="text-2xl font-bold text-gray-900 mb-2">
-                    <?= $lang === 'fr' ? 'Accès client' : 'Toegang klant' ?>
+                    <?= trans('show.client_access', $lang) ?>
                 </h3>
                 <p class="text-gray-600">
                     <?php if ($promotionsCount === 1): ?>
-                        <?= $lang === 'fr' ? 'Identifiez-vous pour accéder à la promotion' : 'Log in om toegang te krijgen tot de promotie' ?>
+                        <?= trans('show.identify_single', $lang) ?>
                     <?php else: ?>
-                        <?= $lang === 'fr' ? 'Identifiez-vous pour accéder aux promotions' : 'Log in om toegang te krijgen tot promoties' ?>
+                        <?= trans('show.identify_plural', $lang) ?>
                     <?php endif; ?>
                 </p>
             </div>
@@ -94,15 +99,15 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                 <div>
                     <label for="customer_number" class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-id-card mr-2 text-blue-600"></i>
-                        <?= $lang === 'fr' ? 'Numéro client' : 'Klantnummer' ?>
+                        <?= trans('show.customer_number', $lang) ?>
                         <span class="text-red-500">*</span>
                     </label>
                     <input type="text" id="customer_number" name="customer_number" required
-                        placeholder="<?= $lang === 'fr' ? 'Ex: 123456' : 'Bijv: 123456' ?>"
+                        placeholder="<?= trans('show.customer_placeholder', $lang) ?>"
                         class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                     <p class="mt-2 text-sm text-gray-500">
                         <i class="fas fa-info-circle mr-1"></i>
-                        <?= $lang === 'fr' ? 'Entrez votre numéro de client livraison' : 'Voer uw leveringsklantnummer in' ?>
+                        <?= trans('show.customer_hint', $lang) ?>
                     </p>
                 </div>
 
@@ -111,13 +116,13 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                 <div>
                     <label for="country" class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-flag mr-2 text-blue-600"></i>
-                        <?= $lang === 'fr' ? 'Pays' : 'Land' ?>
+                        <?= trans('show.country', $lang) ?>
                         <span class="text-red-500">*</span>
                     </label>
                     <select id="country" name="country" required
                         class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-                        <option value="BE"><?= $lang === 'fr' ? 'Belgique' : 'België' ?></option>
-                        <option value="LU"><?= $lang === 'fr' ? 'Luxembourg' : 'Luxemburg' ?></option>
+                        <option value="BE"><?= trans('show.belgium', $lang) ?></option>
+                        <option value="LU"><?= trans('show.luxembourg', $lang) ?></option>
                     </select>
                 </div>
                 <?php else: ?>
@@ -127,7 +132,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                 <!-- Bouton submit -->
                 <button type="submit" 
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-                    <span><?= $lang === 'fr' ? 'Accéder aux promotions' : 'Toegang tot promoties' ?></span>
+                    <span><?= trans('show.access_promotions', $lang) ?></span>
                     <i class="fas fa-arrow-right"></i>
                 </button>
             </form>
