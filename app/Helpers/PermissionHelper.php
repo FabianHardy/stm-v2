@@ -9,9 +9,17 @@
  * - Table `role_permissions` : liaison role <-> permission_id avec granted (0/1)
  * - Table `permission_audit_log` : historique des modifications
  *
+ * HÉRITAGE DES DONNÉES (SCOPE) :
+ * - superadmin : Voit TOUT
+ * - admin : Voit TOUT
+ * - createur : Voit uniquement SES campagnes et données liées
+ * - manager_reps : Voit SES reps + leurs clients
+ * - rep : Voit uniquement SES clients
+ *
  * @package STM
  * @created 2025/12/10
  * @modified 2025/12/12 - Permissions dynamiques en base de données (structure normalisée)
+ * @modified 2025/12/30 - Ajout méthodes de scope pour Orders, refactoring général
  */
 
 namespace App\Helpers;
@@ -31,6 +39,11 @@ class PermissionHelper
      * Cache des campagnes accessibles
      */
     private static ?array $campaignsCache = null;
+
+    /**
+     * Cache des clients accessibles
+     */
+    private static ?array $customersCache = null;
 
     /**
      * Hiérarchie des rôles (1 = plus haut niveau)
@@ -280,17 +293,37 @@ class PermissionHelper
 
         } catch (\PDOException $e) {
             error_log("PermissionHelper::getPermissionMatrix - Erreur : " . $e->getMessage());
-            return [
-                'roles' => $roles,
-                'permissions' => [],
-                'matrix' => [],
-                'permission_ids' => []
-            ];
+            return ['roles' => $roles, 'permissions' => [], 'matrix' => [], 'permission_ids' => []];
         }
     }
 
     /**
-     * Récupère les catégories de permissions pour l'affichage groupé
+     * Mapping des catégories (code => label)
+     * Alias: getCategories() pour compatibilité avec SettingsController
+     *
+     * @return array
+     */
+    public static function getCategoryMapping(): array
+    {
+        return [
+            'agent' => 'Agent / Chatbot',
+            'dashboard' => 'Dashboard',
+            'campaigns' => 'Campagnes',
+            'categories' => 'Catégories',
+            'products' => 'Promotions',
+            'customers' => 'Clients',
+            'stats' => 'Statistiques',
+            'orders' => 'Commandes',
+            'admin' => 'Administration',
+            'translations' => 'Traductions',
+            'static_pages' => 'Pages statiques',
+            'email_templates' => 'Email templates',
+            'internal_accounts' => 'Comptes internes',
+        ];
+    }
+
+    /**
+     * Alias de getCategoryMapping() pour compatibilité
      *
      * @return array
      */
@@ -300,164 +333,23 @@ class PermissionHelper
     }
 
     /**
-     * Mapping des catégories avec labels et icônes
-     *
-     * @return array
-     */
-    private static function getCategoryMapping(): array
-    {
-        return [
-            'dashboard' => [
-                'label' => 'Dashboard',
-                'icon' => 'fa-tachometer-alt'
-            ],
-            'campaigns' => [
-                'label' => 'Campagnes',
-                'icon' => 'fa-bullhorn'
-            ],
-            'categories' => [
-                'label' => 'Catégories',
-                'icon' => 'fa-folder'
-            ],
-            'products' => [
-                'label' => 'Promotions',
-                'icon' => 'fa-tags'
-            ],
-            'customers' => [
-                'label' => 'Clients',
-                'icon' => 'fa-users'
-            ],
-            'orders' => [
-                'label' => 'Commandes',
-                'icon' => 'fa-shopping-cart'
-            ],
-            'stats' => [
-                'label' => 'Statistiques',
-                'icon' => 'fa-chart-bar'
-            ],
-            'admin' => [
-                'label' => 'Administration',
-                'icon' => 'fa-user-cog'
-            ]
-        ];
-    }
-
-    /**
-     * Sauvegarde la matrice de permissions en base de données
-     * Avec journalisation dans la table d'audit
-     *
-     * @param array $matrix ['role' => ['permission_code' => bool, ...], ...]
-     * @return bool
-     */
-    public static function savePermissionMatrix(array $matrix): bool
-    {
-        $user = self::getCurrentUser();
-        $userId = $user['id'] ?? null;
-        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
-
-        try {
-            $db = Database::getInstance();
-
-            // Récupérer le mapping code => id des permissions
-            $permissionIds = [];
-            $results = $db->query("SELECT id, code FROM permissions");
-            foreach ($results as $row) {
-                $permissionIds[$row['code']] = $row['id'];
-            }
-
-            // Charger les valeurs actuelles pour comparaison (audit)
-            $currentPermissions = self::loadPermissionsFromDB();
-
-            foreach ($matrix as $role => $permissions) {
-                // Ne pas modifier superadmin
-                if (self::isProtectedRole($role)) {
-                    continue;
-                }
-
-                foreach ($permissions as $permCode => $granted) {
-                    // Vérifier que la permission existe
-                    if (!isset($permissionIds[$permCode])) {
-                        continue;
-                    }
-
-                    $permissionId = $permissionIds[$permCode];
-                    $grantedValue = $granted ? 1 : 0;
-                    $oldValue = isset($currentPermissions[$role][$permCode])
-                        ? ($currentPermissions[$role][$permCode] ? 1 : 0)
-                        : null;
-
-                    // Ne rien faire si la valeur n'a pas changé
-                    if ($oldValue === $grantedValue) {
-                        continue;
-                    }
-
-                    // Mettre à jour ou insérer la permission
-                    $db->query(
-                        "INSERT INTO role_permissions (role, permission_id, granted, updated_by, updated_at)
-                         VALUES (:role, :permission_id, :granted, :updated_by, NOW())
-                         ON DUPLICATE KEY UPDATE
-                            granted = VALUES(granted),
-                            updated_by = VALUES(updated_by),
-                            updated_at = NOW()",
-                        [
-                            ':role' => $role,
-                            ':permission_id' => $permissionId,
-                            ':granted' => $grantedValue,
-                            ':updated_by' => $userId
-                        ]
-                    );
-
-                    // Enregistrer dans l'audit log
-                    $db->query(
-                        "INSERT INTO permission_audit_log
-                            (role, permission_code, old_value, new_value, changed_by, changed_at, ip_address)
-                         VALUES
-                            (:role, :permission_code, :old_value, :new_value, :changed_by, NOW(), :ip_address)",
-                        [
-                            ':role' => $role,
-                            ':permission_code' => $permCode,
-                            ':old_value' => $oldValue,
-                            ':new_value' => $grantedValue,
-                            ':changed_by' => $userId,
-                            ':ip_address' => $ipAddress
-                        ]
-                    );
-                }
-            }
-
-            // Vider le cache pour forcer le rechargement
-            self::clearCache();
-
-            return true;
-
-        } catch (\PDOException $e) {
-            error_log("PermissionHelper::savePermissionMatrix - Erreur : " . $e->getMessage());
-            return false;
-        }
-    }
-
-    // ========================================
-    // GESTION HIÉRARCHIQUE DES PERMISSIONS
-    // ========================================
-
-    /**
-     * Récupère le niveau hiérarchique d'un rôle
+     * Récupère le niveau d'un rôle
      *
      * @param string $role
      * @return int
      */
     public static function getRoleLevel(string $role): int
     {
-        return self::ROLE_HIERARCHY[$role] ?? 99;
+        return self::ROLE_HIERARCHY[$role] ?? 999;
     }
 
     /**
-     * Vérifie si l'utilisateur courant peut gérer un rôle cible
+     * Vérifie si l'utilisateur peut gérer un rôle
      *
-     * @param string $targetRole
+     * @param string $role
      * @return bool
      */
-    public static function canManageRole(string $targetRole): bool
+    public static function canManageRole(string $role): bool
     {
         $user = self::getCurrentUser();
 
@@ -466,7 +358,7 @@ class PermissionHelper
         }
 
         $userLevel = self::getRoleLevel($user['role']);
-        $targetLevel = self::getRoleLevel($targetRole);
+        $targetLevel = self::getRoleLevel($role);
 
         return $targetLevel > $userLevel;
     }
@@ -474,21 +366,21 @@ class PermissionHelper
     /**
      * Vérifie si l'utilisateur peut accorder une permission
      *
-     * @param string $permission
+     * @param string $permissionCode
      * @return bool
      */
-    public static function canGrantPermission(string $permission): bool
+    public static function canGrantPermission(string $permissionCode): bool
     {
-        return self::can($permission);
+        return self::can($permissionCode);
     }
 
     /**
-     * Filtre les modifications de permissions autorisées
+     * Valide les changements de permissions demandés
      *
      * @param array $requestedChanges
      * @return array
      */
-    public static function filterAllowedPermissionChanges(array $requestedChanges): array
+    public static function validatePermissionChanges(array $requestedChanges): array
     {
         $user = self::getCurrentUser();
         $allowed = [];
@@ -738,37 +630,346 @@ class PermissionHelper
     }
 
     // ========================================
+    // SCOPE : ACCÈS AUX COMMANDES
+    // ========================================
+
+    /**
+     * Vérifie si l'utilisateur peut voir une commande
+     *
+     * @param int $orderId
+     * @return bool
+     */
+    public static function canViewOrder(int $orderId): bool
+    {
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return false;
+        }
+
+        // Admin et superadmin voient tout
+        if (in_array($user['role'], ['superadmin', 'admin'])) {
+            return true;
+        }
+
+        $db = Database::getInstance();
+
+        // Récupérer la commande avec infos client et campagne
+        $order = $db->queryOne("
+            SELECT o.campaign_id, cu.customer_number, cu.country
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.id = :id
+        ", [':id' => $orderId]);
+
+        if (!$order) {
+            return false;
+        }
+
+        // Créateur : vérifier qu'il est assigné à la campagne
+        if ($user['role'] === 'createur') {
+            return self::isAssignedToCampaign($user['id'], $order['campaign_id']);
+        }
+
+        // Manager/Rep : vérifier l'accès au client
+        if (in_array($user['role'], ['manager_reps', 'rep'])) {
+            $accessibleCustomers = self::getAccessibleCustomerNumbers();
+            if ($accessibleCustomers === null) {
+                return true; // Accès illimité
+            }
+            return in_array($order['customer_number'], $accessibleCustomers);
+        }
+
+        return false;
+    }
+
+    /**
+     * Récupère les numéros clients accessibles par l'utilisateur
+     * Délègue à StatsAccessHelper pour cohérence avec l'existant
+     *
+     * @return array|null Liste des customer_number accessibles ou null si tout accessible
+     */
+    public static function getAccessibleCustomerNumbers(): ?array
+    {
+        if (self::$customersCache !== null) {
+            return self::$customersCache;
+        }
+
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return [];
+        }
+
+        // Admin et superadmin : pas de restriction
+        if (in_array($user['role'], ['superadmin', 'admin'])) {
+            self::$customersCache = null; // null = tout accessible
+            return null;
+        }
+
+        // Utiliser StatsAccessHelper qui gère déjà toute la logique
+        // pour créateur, manager_reps et rep
+        if (class_exists('App\Helpers\StatsAccessHelper')) {
+            $result = \App\Helpers\StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+            self::$customersCache = $result;
+            return $result;
+        }
+
+        // Fallback si StatsAccessHelper n'est pas disponible
+        return self::getAccessibleCustomerNumbersFallback();
+    }
+
+    /**
+     * Fallback pour récupérer les clients accessibles si StatsAccessHelper n'est pas disponible
+     *
+     * @return array
+     */
+    private static function getAccessibleCustomerNumbersFallback(): array
+    {
+        $user = self::getCurrentUser();
+        $db = Database::getInstance();
+
+        // Créateur : clients des campagnes auxquelles il est assigné
+        if ($user['role'] === 'createur') {
+            $campaignIds = self::getAccessibleCampaignIds();
+            if (empty($campaignIds)) {
+                return [];
+            }
+
+            $placeholders = implode(',', array_fill(0, count($campaignIds), '?'));
+            $result = $db->query("
+                SELECT DISTINCT cu.customer_number
+                FROM customers cu
+                INNER JOIN orders o ON cu.id = o.customer_id
+                WHERE o.campaign_id IN ({$placeholders})
+            ", $campaignIds);
+
+            return array_column($result, 'customer_number');
+        }
+
+        // Manager_reps : clients de ses reps
+        if ($user['role'] === 'manager_reps') {
+            $reps = $db->query("
+                SELECT rep_id, rep_country
+                FROM manager_reps
+                WHERE manager_id = :manager_id
+            ", [':manager_id' => $user['id']]);
+
+            if (empty($reps)) {
+                return [];
+            }
+
+            $customerNumbers = [];
+            foreach ($reps as $rep) {
+                $repCustomers = self::getCustomersForRep($rep['rep_id'], $rep['rep_country']);
+                $customerNumbers = array_merge($customerNumbers, $repCustomers);
+            }
+
+            return array_unique($customerNumbers);
+        }
+
+        // Rep : ses propres clients
+        if ($user['role'] === 'rep') {
+            $repInfo = $db->queryOne("
+                SELECT rep_id, rep_country
+                FROM users
+                WHERE id = :user_id
+            ", [':user_id' => $user['id']]);
+
+            if (!$repInfo || empty($repInfo['rep_id'])) {
+                return [];
+            }
+
+            return self::getCustomersForRep($repInfo['rep_id'], $repInfo['rep_country']);
+        }
+
+        return [];
+    }
+
+    /**
+     * Récupère les clients d'un représentant depuis la DB externe (BE_CLL/LU_CLL)
+     *
+     * @param string $repId IDE_REP dans la table BE_REP/LU_REP
+     * @param string $country 'BE' ou 'LU'
+     * @return array Liste des CLL_NCLIXX
+     */
+    private static function getCustomersForRep(string $repId, string $country): array
+    {
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+            $table = $country === 'BE' ? 'BE_CLL' : 'LU_CLL';
+
+            $result = $extDb->query("
+                SELECT CLL_NCLIXX as customer_number
+                FROM {$table}
+                WHERE IDE_REP = ?
+            ", [$repId]);
+
+            return array_column($result, 'customer_number');
+        } catch (\Exception $e) {
+            error_log("PermissionHelper::getCustomersForRep - Erreur : " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Vérifie si l'utilisateur a accès illimité aux données
+     * (superadmin ou admin)
+     *
+     * @return bool
+     */
+    public static function hasFullAccess(): bool
+    {
+        $user = self::getCurrentUser();
+        return $user && in_array($user['role'], ['superadmin', 'admin']);
+    }
+
+    /**
+     * Retourne la clause SQL WHERE pour filtrer les commandes selon le scope
+     *
+     * @param string $orderAlias Alias de la table orders (ex: 'o')
+     * @param string $customerAlias Alias de la table customers (ex: 'cu')
+     * @return array ['sql' => string, 'params' => array]
+     */
+    public static function getOrderScopeFilter(string $orderAlias = 'o', string $customerAlias = 'cu'): array
+    {
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return ['sql' => '1=0', 'params' => []]; // Aucun accès
+        }
+
+        // Admin et superadmin : pas de restriction
+        if (in_array($user['role'], ['superadmin', 'admin'])) {
+            return ['sql' => '1=1', 'params' => []];
+        }
+
+        // Créateur : ses campagnes
+        if ($user['role'] === 'createur') {
+            $campaignIds = self::getAccessibleCampaignIds();
+            if (empty($campaignIds)) {
+                return ['sql' => '1=0', 'params' => []];
+            }
+            $placeholders = implode(',', array_fill(0, count($campaignIds), '?'));
+            return [
+                'sql' => "{$orderAlias}.campaign_id IN ({$placeholders})",
+                'params' => $campaignIds
+            ];
+        }
+
+        // Manager_reps et rep : leurs clients
+        if (in_array($user['role'], ['manager_reps', 'rep'])) {
+            $customerNumbers = self::getAccessibleCustomerNumbers();
+            if ($customerNumbers === null) {
+                return ['sql' => '1=1', 'params' => []]; // Accès illimité
+            }
+            if (empty($customerNumbers)) {
+                return ['sql' => '1=0', 'params' => []];
+            }
+            $placeholders = implode(',', array_fill(0, count($customerNumbers), '?'));
+            return [
+                'sql' => "{$customerAlias}.customer_number IN ({$placeholders})",
+                'params' => $customerNumbers
+            ];
+        }
+
+        return ['sql' => '1=0', 'params' => []];
+    }
+
+    // ========================================
     // HELPERS INTERNES
     // ========================================
 
+    /**
+     * Récupère l'utilisateur courant (prend en compte l'impersonation)
+     *
+     * @return array|null
+     */
     private static function getCurrentUser(): ?array
     {
+        // Si impersonation active, utiliser l'utilisateur impersoné
+        if (Session::get('impersonate_original_user') !== null) {
+            return Session::get('user');
+        }
         return Session::get('user');
     }
 
+    /**
+     * Récupère l'ID de l'utilisateur courant
+     *
+     * @return int|null
+     */
+    public static function getUserId(): ?int
+    {
+        $user = self::getCurrentUser();
+        return $user['id'] ?? null;
+    }
+
+    /**
+     * Récupère les données de l'utilisateur courant (méthode publique)
+     *
+     * @return array|null
+     */
+    public static function getUser(): ?array
+    {
+        return self::getCurrentUser();
+    }
+
+    /**
+     * Efface tous les caches
+     *
+     * @return void
+     */
     public static function clearCache(): void
     {
         self::$permissionsCache = null;
         self::$campaignsCache = null;
+        self::$customersCache = null;
     }
 
+    /**
+     * Récupère le rôle courant
+     *
+     * @return string|null
+     */
     public static function getCurrentRole(): ?string
     {
         $user = self::getCurrentUser();
         return $user['role'] ?? null;
     }
 
+    /**
+     * Vérifie si l'utilisateur a un des rôles spécifiés
+     *
+     * @param array $roles
+     * @return bool
+     */
     public static function hasRole(array $roles): bool
     {
         $currentRole = self::getCurrentRole();
         return $currentRole && in_array($currentRole, $roles);
     }
 
+    /**
+     * Retourne les classes CSS selon la permission
+     *
+     * @param string $permission
+     * @param string $enabledClasses
+     * @param string $disabledClasses
+     * @return string
+     */
     public static function linkClasses(string $permission, string $enabledClasses = '', string $disabledClasses = 'opacity-50 cursor-not-allowed pointer-events-none'): string
     {
         return self::can($permission) ? $enabledClasses : $disabledClasses;
     }
 
+    /**
+     * Retourne l'URL ou # selon la permission
+     *
+     * @param string $permission
+     * @param string $url
+     * @return string
+     */
     public static function linkUrl(string $permission, string $url): string
     {
         return self::can($permission) ? $url : '#';

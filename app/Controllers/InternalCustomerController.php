@@ -5,11 +5,13 @@
  * Contrôleur pour la gestion des comptes internes
  *
  * @created  2025/12/03 14:00
+ * @modified 2025/12/30 - Ajout vérifications de permissions
  */
 
 namespace App\Controllers;
 
 use App\Models\InternalCustomer;
+use App\Helpers\PermissionHelper;
 use Core\Session;
 
 class InternalCustomerController
@@ -22,10 +24,40 @@ class InternalCustomerController
     }
 
     /**
+     * Vérifie la permission de visualisation
+     *
+     * @return void
+     */
+    private function requireViewPermission(): void
+    {
+        if (!PermissionHelper::can('internal_accounts.view')) {
+            Session::setFlash('error', 'Vous n\'avez pas accès à cette fonctionnalité.');
+            header('Location: /stm/admin/dashboard');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission de gestion (create/edit/delete)
+     *
+     * @return void
+     */
+    private function requireManagePermission(): void
+    {
+        if (!PermissionHelper::can('internal_accounts.manage')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de gérer les comptes internes.');
+            header('Location: /stm/admin/config/internal-customers');
+            exit;
+        }
+    }
+
+    /**
      * Liste des comptes internes
      */
     public function index(): void
     {
+        $this->requireViewPermission();
+
         // Récupérer le filtre pays
         $filters = [];
         if (!empty($_GET["country"])) {
@@ -35,6 +67,9 @@ class InternalCustomerController
         $customers = $this->model->getAll($filters);
         $stats = $this->model->countByCountry();
 
+        // Permission de gestion pour la vue
+        $canManage = PermissionHelper::can('internal_accounts.manage');
+
         require_once __DIR__ . "/../Views/admin/config/internal_customers_index.php";
     }
 
@@ -43,6 +78,8 @@ class InternalCustomerController
      */
     public function create(): void
     {
+        $this->requireManagePermission();
+
         $errors = Session::getFlash("errors", []);
         $old = Session::getFlash("old", []);
 
@@ -54,6 +91,8 @@ class InternalCustomerController
      */
     public function store(): void
     {
+        $this->requireManagePermission();
+
         // Vérifier CSRF
         if (!$this->validateCSRF()) {
             Session::setFlash("error", "Token de sécurité invalide");
@@ -98,6 +137,8 @@ class InternalCustomerController
      */
     public function edit(int $id): void
     {
+        $this->requireManagePermission();
+
         $customer = $this->model->findById($id);
 
         if (!$customer) {
@@ -117,6 +158,8 @@ class InternalCustomerController
      */
     public function update(int $id): void
     {
+        $this->requireManagePermission();
+
         // Vérifier que le compte existe
         $customer = $this->model->findById($id);
 
@@ -167,6 +210,8 @@ class InternalCustomerController
      */
     public function destroy(int $id): void
     {
+        $this->requireManagePermission();
+
         // Vérifier que le compte existe
         $customer = $this->model->findById($id);
 
@@ -199,6 +244,12 @@ class InternalCustomerController
     public function toggleActive(int $id): void
     {
         header("Content-Type: application/json");
+
+        // Vérifier la permission
+        if (!PermissionHelper::can('internal_accounts.manage')) {
+            echo json_encode(["success" => false, "message" => "Permission refusée"]);
+            exit();
+        }
 
         $customer = $this->model->findById($id);
 

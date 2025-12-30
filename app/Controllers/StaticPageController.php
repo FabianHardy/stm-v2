@@ -6,14 +6,16 @@
  * 
  * @package    App\Controllers
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.1.0
  * @created    2025/12/30
+ * @modified   2025/12/30 - Ajout vérifications de permissions
  */
 
 namespace App\Controllers;
 
 use App\Models\StaticPage;
 use App\Models\Campaign;
+use App\Helpers\PermissionHelper;
 use Core\Session;
 
 class StaticPageController
@@ -31,10 +33,68 @@ class StaticPageController
     }
 
     /**
+     * Vérifie la permission de visualisation
+     *
+     * @return void
+     */
+    private function requireViewPermission(): void
+    {
+        if (!PermissionHelper::can('static_pages.view')) {
+            Session::setFlash('error', 'Vous n\'avez pas accès à cette fonctionnalité.');
+            header('Location: /stm/admin/dashboard');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission d'édition
+     *
+     * @return void
+     */
+    private function requireEditPermission(): void
+    {
+        if (!PermissionHelper::can('static_pages.edit')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de modifier les pages.');
+            header('Location: /stm/admin/static-pages');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission de création
+     *
+     * @return void
+     */
+    private function requireCreatePermission(): void
+    {
+        if (!PermissionHelper::can('static_pages.create')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de créer des pages.');
+            header('Location: /stm/admin/static-pages');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission de suppression
+     *
+     * @return void
+     */
+    private function requireDeletePermission(): void
+    {
+        if (!PermissionHelper::can('static_pages.delete')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de supprimer des pages.');
+            header('Location: /stm/admin/static-pages');
+            exit;
+        }
+    }
+
+    /**
      * Liste des pages fixes
      */
     public function index(): void
     {
+        $this->requireViewPermission();
+
         // Récupérer les pages globales
         $pages = $this->staticPage->getAll();
 
@@ -47,6 +107,11 @@ class StaticPageController
                 $overrideCounts[$slug] = ($overrideCounts[$slug] ?? 0) + 1;
             }
         }
+
+        // Permissions pour la vue
+        $canEdit = PermissionHelper::can('static_pages.edit');
+        $canCreate = PermissionHelper::can('static_pages.create');
+        $canDelete = PermissionHelper::can('static_pages.delete');
 
         // Variables pour la vue
         $pageTitle = 'Pages fixes';
@@ -63,6 +128,8 @@ class StaticPageController
      */
     public function edit(int $id): void
     {
+        $this->requireEditPermission();
+
         $page = $this->staticPage->findById($id);
 
         if (!$page) {
@@ -90,6 +157,8 @@ class StaticPageController
      */
     public function update(int $id): void
     {
+        $this->requireEditPermission();
+
         // Vérifier CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== Session::get('csrf_token')) {
             Session::setFlash('error', 'Token de sécurité invalide.');
@@ -149,6 +218,8 @@ class StaticPageController
      */
     public function preview(int $id): void
     {
+        $this->requireViewPermission();
+
         $page = $this->staticPage->findById($id);
 
         if (!$page) {
@@ -229,6 +300,8 @@ class StaticPageController
      */
     public function createOverride(): void
     {
+        $this->requireCreatePermission();
+
         // Vérifier CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== Session::get('csrf_token')) {
             Session::setFlash('error', 'Token de sécurité invalide.');
@@ -264,6 +337,8 @@ class StaticPageController
      */
     public function overrides(int $id): void
     {
+        $this->requireViewPermission();
+
         $page = $this->staticPage->findById($id);
 
         if (!$page || $page['campaign_id'] !== null) {
@@ -281,6 +356,11 @@ class StaticPageController
         // Récupérer les campagnes pour le formulaire de création
         $campaigns = $this->campaign->getAll();
 
+        // Permissions pour la vue
+        $canEdit = PermissionHelper::can('static_pages.edit');
+        $canCreate = PermissionHelper::can('static_pages.create');
+        $canDelete = PermissionHelper::can('static_pages.delete');
+
         // Variables pour la vue
         $pageTitle = 'Surcharges : ' . $page['title_fr'];
         $page = $page;
@@ -297,7 +377,8 @@ class StaticPageController
      */
     public function delete(int $id): void
     {
-        // Vérifier CSRF via GET (simple pour delete link)
+        $this->requireDeletePermission();
+
         $page = $this->staticPage->findById($id);
 
         if (!$page) {
@@ -331,6 +412,12 @@ class StaticPageController
     public function toggleActive(int $id): void
     {
         header('Content-Type: application/json');
+
+        // Vérifier la permission
+        if (!PermissionHelper::can('static_pages.edit')) {
+            echo json_encode(['success' => false, 'message' => 'Permission refusée']);
+            exit;
+        }
 
         $page = $this->staticPage->findById($id);
         if (!$page) {

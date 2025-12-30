@@ -7,14 +7,17 @@
  *
  * @package    App\Controllers
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.1.0
  * @created    2025/12/30
+ * @modified   2025/12/30 - Ajout vérifications de permissions
  */
 
 namespace App\Controllers;
 
 use App\Models\EmailTemplate;
+use App\Helpers\PermissionHelper;
 use Core\Database;
+use Core\Session;
 
 class EmailTemplateController
 {
@@ -31,13 +34,46 @@ class EmailTemplateController
     }
 
     /**
+     * Vérifie la permission de visualisation
+     *
+     * @return void
+     */
+    private function requireViewPermission(): void
+    {
+        if (!PermissionHelper::can('email_templates.view')) {
+            Session::setFlash('error', 'Vous n\'avez pas accès à cette fonctionnalité.');
+            header('Location: /stm/admin/dashboard');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission d'édition
+     *
+     * @return void
+     */
+    private function requireEditPermission(): void
+    {
+        if (!PermissionHelper::can('email_templates.edit')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de modifier les templates.');
+            header('Location: /stm/admin/email-templates');
+            exit;
+        }
+    }
+
+    /**
      * Liste des templates d'emails
      *
      * @return void
      */
     public function index(): void
     {
+        $this->requireViewPermission();
+
         $templates = $this->emailTemplate->getAll();
+
+        // Permission d'édition pour la vue
+        $canEdit = PermissionHelper::can('email_templates.edit');
 
         $pageTitle = 'Templates d\'emails';
 
@@ -52,10 +88,12 @@ class EmailTemplateController
      */
     public function edit(int $id): void
     {
+        $this->requireEditPermission();
+
         $template = $this->emailTemplate->findById($id);
 
         if (!$template) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Template introuvable.'];
+            Session::setFlash('error', 'Template introuvable.');
             header('Location: /stm/admin/email-templates');
             exit;
         }
@@ -77,9 +115,11 @@ class EmailTemplateController
      */
     public function update(int $id): void
     {
+        $this->requireEditPermission();
+
         // Vérifier le token CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF invalide.'];
+            Session::setFlash('error', 'Token CSRF invalide.');
             header('Location: /stm/admin/email-templates/' . $id . '/edit');
             exit;
         }
@@ -95,7 +135,7 @@ class EmailTemplateController
         }
 
         if (!empty($errors)) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => implode('<br>', $errors)];
+            Session::setFlash('error', implode('<br>', $errors));
             header('Location: /stm/admin/email-templates/' . $id . '/edit');
             exit;
         }
@@ -111,9 +151,9 @@ class EmailTemplateController
         $result = $this->emailTemplate->update($id, $data);
 
         if ($result) {
-            $_SESSION['flash'] = ['type' => 'success', 'message' => 'Template mis à jour avec succès.'];
+            Session::setFlash('success', 'Template mis à jour avec succès.');
         } else {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Erreur lors de la mise à jour.'];
+            Session::setFlash('error', 'Erreur lors de la mise à jour.');
         }
 
         header('Location: /stm/admin/email-templates');
@@ -128,6 +168,8 @@ class EmailTemplateController
      */
     public function preview(int $id): void
     {
+        $this->requireViewPermission();
+
         $template = $this->emailTemplate->findById($id);
 
         if (!$template) {
@@ -146,6 +188,7 @@ class EmailTemplateController
             'total_items' => '15',
             'total_products' => '5',
             'delivery_date' => date('d/m/Y', strtotime('+7 days')),
+            'delivery_info' => 'Livraison différée prévue le ' . date('d/m/Y', strtotime('+7 days')),
             'order_lines' => $this->getTestOrderLines($_GET['lang'] ?? 'fr')
         ];
 
@@ -176,6 +219,8 @@ class EmailTemplateController
      */
     public function previewHtml(int $id): void
     {
+        $this->requireViewPermission();
+
         $template = $this->emailTemplate->findById($id);
 
         if (!$template) {
@@ -195,6 +240,7 @@ class EmailTemplateController
             'total_items' => '15',
             'total_products' => '5',
             'delivery_date' => date('d/m/Y', strtotime('+7 days')),
+            'delivery_info' => 'Livraison différée prévue le ' . date('d/m/Y', strtotime('+7 days')),
             'order_lines' => $this->getTestOrderLines($language)
         ];
 
@@ -216,6 +262,13 @@ class EmailTemplateController
      */
     public function toggleActive(int $id): void
     {
+        // Vérifier la permission
+        if (!PermissionHelper::can('email_templates.edit')) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Permission refusée']);
+            exit;
+        }
+
         // Vérifier le token CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
             http_response_code(403);
@@ -250,9 +303,11 @@ class EmailTemplateController
      */
     public function sendTest(int $id): void
     {
+        $this->requireEditPermission();
+
         // Vérifier le token CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF invalide.'];
+            Session::setFlash('error', 'Token CSRF invalide.');
             header('Location: /stm/admin/email-templates/' . $id . '/edit');
             exit;
         }
@@ -260,7 +315,7 @@ class EmailTemplateController
         $template = $this->emailTemplate->findById($id);
 
         if (!$template) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Template introuvable.'];
+            Session::setFlash('error', 'Template introuvable.');
             header('Location: /stm/admin/email-templates');
             exit;
         }
@@ -269,7 +324,7 @@ class EmailTemplateController
         $language = $_POST['test_language'] ?? 'fr';
 
         if (empty($testEmail) || !filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Email de test invalide.'];
+            Session::setFlash('error', 'Email de test invalide.');
             header('Location: /stm/admin/email-templates/' . $id . '/edit');
             exit;
         }
@@ -284,13 +339,14 @@ class EmailTemplateController
             'total_items' => '15',
             'total_products' => '5',
             'delivery_date' => date('d/m/Y', strtotime('+7 days')),
+            'delivery_info' => 'Livraison différée prévue le ' . date('d/m/Y', strtotime('+7 days')),
             'order_lines' => $this->getTestOrderLines($language)
         ];
 
         $rendered = $this->emailTemplate->render($template['code'], $language, $testData);
 
         if (!$rendered) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Erreur de rendu du template.'];
+            Session::setFlash('error', 'Erreur de rendu du template.');
             header('Location: /stm/admin/email-templates/' . $id . '/edit');
             exit;
         }
@@ -311,9 +367,9 @@ class EmailTemplateController
         );
 
         if ($sent) {
-            $_SESSION['flash'] = ['type' => 'success', 'message' => 'Email de test envoyé à ' . $testEmail];
+            Session::setFlash('success', 'Email de test envoyé à ' . $testEmail);
         } else {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Échec de l\'envoi de l\'email de test.'];
+            Session::setFlash('error', 'Échec de l\'envoi de l\'email de test.');
         }
 
         header('Location: /stm/admin/email-templates/' . $id . '/edit');
