@@ -495,7 +495,7 @@ class CustomerController
                 LEFT JOIN order_lines ol ON o.id = ol.order_id
                 WHERE cu.customer_number IN ({$placeholders})
                 AND cu.country = ?
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 GROUP BY cu.customer_number
             ";
 
@@ -598,7 +598,7 @@ class CustomerController
                 LEFT JOIN order_lines ol ON o.id = ol.order_id
                 WHERE cu.customer_number = :customer_number
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
             ";
 
             $result = $db->query($query, [
@@ -652,7 +652,7 @@ class CustomerController
                 LEFT JOIN campaigns c ON o.campaign_id = c.id
                 WHERE cu.customer_number = :customer_number
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 ORDER BY o.created_at DESC
             ";
 
@@ -789,7 +789,7 @@ class CustomerController
                 FROM customers cu
                 INNER JOIN orders o ON cu.id = o.customer_id
                 WHERE cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
             ";
 
             if ($accessibleCustomerNumbers !== null) {
@@ -801,7 +801,7 @@ class CustomerController
                     FROM customers cu
                     INNER JOIN orders o ON cu.id = o.customer_id
                     WHERE cu.country = ?
-                    AND o.status = 'validated'
+                    AND o.status = 'synced'
                     AND cu.customer_number IN ({$placeholders})
                 ";
                 $params = array_merge([$country], $accessibleCustomerNumbers);

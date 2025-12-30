@@ -429,7 +429,7 @@ class StatsController
             FROM categories c
             INNER JOIN products p ON c.id = p.category_id AND p.campaign_id = :campaign_id
             LEFT JOIN order_lines ol ON p.id = ol.product_id
-            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'synced'
             {$customerJoin}
             WHERE 1=1
             {$customerFilter}
@@ -674,7 +674,7 @@ class StatsController
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             ORDER BY o.created_at DESC, cu.customer_number
@@ -705,7 +705,7 @@ class StatsController
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
             WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             ORDER BY cu.customer_number, p.product_code
         ";
 
@@ -1223,7 +1223,7 @@ class StatsController
                 INNER JOIN customers cu ON o.customer_id = cu.id
                 INNER JOIN order_lines ol ON o.id = ol.order_id
                 WHERE o.campaign_id = :campaign_id
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 AND cu.customer_number IN ({$inClause})
                 AND cu.country = :country
                 GROUP BY cu.customer_number, ol.product_id
@@ -1338,7 +1338,7 @@ class StatsController
             FROM orders o
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
         ";
 
         $result = $db->query($query, $params);
@@ -1688,7 +1688,7 @@ class StatsController
                 WHERE o.campaign_id = :campaign_id
                 AND cu.customer_number = :customer_number
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 ORDER BY o.created_at DESC
             ";
 

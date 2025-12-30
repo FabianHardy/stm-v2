@@ -123,7 +123,7 @@ class Stats
                    SUM(o.total_items) as total_items
             FROM orders o
             LEFT JOIN customers cu ON o.customer_id = cu.id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
@@ -138,7 +138,7 @@ class Stats
             FROM order_lines ol
             INNER JOIN orders o ON ol.order_id = o.id
             LEFT JOIN customers cu ON o.customer_id = cu.id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
@@ -171,7 +171,7 @@ class Stats
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilterCountry}
             {$accessFilterCountry}
@@ -261,7 +261,7 @@ class Stats
             FROM orders o
             {$customerJoin}
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND DATE(o.created_at) BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$accessFilter}
@@ -322,7 +322,7 @@ class Stats
             INNER JOIN orders o ON ol.order_id = o.id
             INNER JOIN products p ON ol.product_id = p.id
             INNER JOIN campaigns camp ON o.campaign_id = camp.id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
@@ -392,7 +392,7 @@ class Stats
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             {$countryFilter}
@@ -569,7 +569,7 @@ class Stats
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
         ";
 
@@ -585,7 +585,7 @@ class Stats
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
             GROUP BY cu.country
         ";
@@ -779,7 +779,7 @@ class Stats
                        COUNT(DISTINCT o.id) as orders_count,
                        COUNT(DISTINCT o.customer_id) as customers_count
                 FROM order_lines ol
-                INNER JOIN orders o ON ol.order_id = o.id AND o.status = 'validated'
+                INNER JOIN orders o ON ol.order_id = o.id AND o.status = 'synced'
                 INNER JOIN customers cu ON o.customer_id = cu.id
                 WHERE o.campaign_id = :campaign_id_stats
                 {$customerFilter}
@@ -818,7 +818,7 @@ class Stats
             "SELECT DISTINCT cu.customer_number, cu.country
              FROM orders o
              INNER JOIN customers cu ON o.customer_id = cu.id
-             WHERE o.campaign_id = :id AND o.status = 'validated'",
+             WHERE o.campaign_id = :id AND o.status = 'synced'",
             [":id" => $campaignId],
         );
 
@@ -1077,7 +1077,7 @@ class Stats
                 LEFT JOIN order_lines ol ON o.id = ol.order_id
                 WHERE cu.customer_number IN ({$inClause})
                 AND cu.country = :country
-                AND o.status = 'validated'
+                AND o.status = 'synced'
                 {$campaignFilter}
             ";
 
@@ -1332,7 +1332,7 @@ class Stats
                  INNER JOIN customers cu ON o.customer_id = cu.id
                  LEFT JOIN order_lines ol ON o.id = ol.order_id
                  WHERE cu.country = :country
-                 AND o.status = 'validated'
+                 AND o.status = 'synced'
                  {$campaignFilter}
                  GROUP BY cu.customer_number",
                 $params,
@@ -1418,7 +1418,7 @@ class Stats
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE o.campaign_id = :campaign_id
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$customerFilter}
             GROUP BY cu.id, cu.customer_number, cu.company_name, cu.country
             HAVING total_quantity > 0

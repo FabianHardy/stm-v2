@@ -123,7 +123,7 @@ if ($canViewCustomers) {
             SELECT COUNT(DISTINCT o.customer_id) as total
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND DATE(o.created_at) BETWEEN ? AND ?
             {$customerFilter}
             {$campaignFilterClients}
@@ -180,7 +180,7 @@ if ($canViewOrders) {
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
-            WHERE o.status = 'validated'
+            WHERE o.status = 'synced'
             AND DATE(o.created_at) BETWEEN ? AND ?
             {$campaignFilter}
             {$customerFilterOrders}
@@ -330,7 +330,7 @@ if ($canViewStats && $canViewCampaigns) {
                 COUNT(DISTINCT o.id) as orders_count,
                 COALESCE(SUM(ol.quantity), 0) as quantity_count
             FROM campaigns c
-            INNER JOIN orders o ON c.id = o.campaign_id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
+            INNER JOIN orders o ON c.id = o.campaign_id AND o.status = 'synced' AND DATE(o.created_at) BETWEEN ? AND ?
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE 1=1
@@ -389,7 +389,7 @@ if ($canViewStats && $canViewProducts) {
             FROM categories cat
             LEFT JOIN products p ON cat.id = p.category_id AND p.is_active = 1
             LEFT JOIN order_lines ol ON p.id = ol.product_id
-            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'validated' AND DATE(o.created_at) BETWEEN ? AND ?
+            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'synced' AND DATE(o.created_at) BETWEEN ? AND ?
             LEFT JOIN customers cu ON o.customer_id = cu.id
             WHERE 1=1
             {$catCampaignFilter}
@@ -447,7 +447,7 @@ if ($canViewStats && $canViewOrders) {
             INNER JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN order_lines ol ON o.id = ol.order_id
             WHERE DATE(o.created_at) BETWEEN ? AND ?
-            AND o.status = 'validated'
+            AND o.status = 'synced'
             {$dailyCampaignFilter}
             {$dailyCustomerFilter}
             GROUP BY DATE(o.created_at), DATE_FORMAT(o.created_at, '%a %d/%m')

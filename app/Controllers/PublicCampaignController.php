@@ -1618,7 +1618,7 @@ class PublicCampaignController
             // Mettre à jour le chemin du fichier dans la commande
 
             $this->db->execute(
-                "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), status = 'validated' WHERE id = :id",
+                "UPDATE orders SET file_path = :file_path, file_generated_at = NOW(), status = 'synced' WHERE id = :id",
 
                 [":file_path" => $filePath, ":id" => $orderId],
             );
