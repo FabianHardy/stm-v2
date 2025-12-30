@@ -303,8 +303,15 @@ ob_start();
 
                         <template x-for="item in cart.items" :key="item.product_id">
                             <div class="p-3 bg-gray-50 rounded-lg">
-                                <!-- Nom du produit bien visible -->
-                                <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $lang ?>"></p>
+                                <!-- Vignette + Nom du produit -->
+                                <div class="flex items-start gap-2 mb-2">
+                                    <template x-if="item.image_<?= $lang ?>">
+                                        <img :src="item.image_<?= $lang ?>"
+                                             :alt="item.name_<?= $lang ?>"
+                                             class="w-12 h-12 object-contain rounded bg-white flex-shrink-0">
+                                    </template>
+                                    <p class="text-sm font-medium text-gray-800 line-clamp-2" x-text="item.name_<?= $lang ?>"></p>
+                                </div>
 
                                 <!-- Contrôles quantité + poubelle -->
                                 <div class="flex items-center justify-between">
@@ -394,8 +401,15 @@ ob_start();
             <div class="space-y-4">
                 <template x-for="item in cart.items" :key="item.product_id">
                     <div class="bg-white border rounded-lg p-4">
-                        <!-- Nom du produit bien visible -->
-                        <p class="font-bold text-gray-800 mb-3" x-text="item.name_<?= $lang ?>"></p>
+                        <!-- Vignette + Nom du produit -->
+                        <div class="flex items-start gap-3 mb-3">
+                            <template x-if="item.image_<?= $lang ?>">
+                                <img :src="item.image_<?= $lang ?>"
+                                     :alt="item.name_<?= $lang ?>"
+                                     class="w-16 h-16 object-contain rounded bg-gray-50 flex-shrink-0">
+                            </template>
+                            <p class="text-sm font-medium text-gray-800" x-text="item.name_<?= $lang ?>"></p>
+                        </div>
 
                         <!-- Contrôles quantité + poubelle -->
                         <div class="flex items-center justify-between">
