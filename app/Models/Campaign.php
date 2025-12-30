@@ -762,6 +762,27 @@ class Campaign
     }
 
     /**
+     * Récupérer les clients assignés à une campagne (données complètes)
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array Liste des clients avec customer_number et country
+     */
+    public function getCampaignCustomers(int $campaignId): array
+    {
+        $query = "SELECT id, customer_number, country, created_at
+                  FROM campaign_customers
+                  WHERE campaign_id = :campaign_id
+                  ORDER BY customer_number ASC";
+
+        try {
+            return $this->db->query($query, [":campaign_id" => $campaignId]);
+        } catch (\PDOException $e) {
+            error_log("Erreur getCampaignCustomers: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Supprimer tous les clients d'une campagne
      *
      * @param int $campaignId ID de la campagne
