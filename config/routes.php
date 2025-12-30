@@ -426,7 +426,44 @@ $router->post("/admin/customers", function () {
     $controller->store();
 });
 
-// Détails d'un client
+// ⭐ ROUTES SPÉCIFIQUES (avant {id}) - Consultation DB externe
+// Page détail client (via query params)
+$router->get("/admin/customers/show", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->show();
+});
+
+// API : Détail d'une commande (AJAX)
+$router->get("/admin/customers/order-detail", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->getOrderDetailApi();
+});
+
+// API : Liste des clusters (AJAX)
+$router->get("/admin/customers/clusters", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->getClustersApi();
+});
+
+// API : Liste des représentants (AJAX)
+$router->get("/admin/customers/representatives", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new CustomerController();
+    $controller->getRepresentativesApi();
+});
+
+// Détails d'un client (ancien système par ID - garde pour compatibilité)
 $router->get("/admin/customers/{id}", function ($id) {
     $middleware = new AuthMiddleware();
     $middleware->handle();

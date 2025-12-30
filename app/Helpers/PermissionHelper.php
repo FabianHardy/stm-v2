@@ -298,6 +298,72 @@ class PermissionHelper
     }
 
     /**
+     * Sauvegarde la matrice des permissions
+     *
+     * @param array $matrix ['role' => ['permission_code' => bool, ...], ...]
+     * @return bool
+     */
+    public static function savePermissionMatrix(array $matrix): bool
+    {
+        try {
+            $db = Database::getInstance();
+
+            // Récupérer le mapping code => id des permissions
+            $permResults = $db->query("SELECT id, code FROM permissions");
+            $permissionIds = [];
+            foreach ($permResults as $row) {
+                $permissionIds[$row['code']] = $row['id'];
+            }
+
+            // Pour chaque rôle et permission, mettre à jour
+            foreach ($matrix as $role => $permissions) {
+                // Superadmin ne doit pas être modifié (toujours tout)
+                if ($role === 'superadmin') {
+                    continue;
+                }
+
+                foreach ($permissions as $permCode => $granted) {
+                    if (!isset($permissionIds[$permCode])) {
+                        continue; // Permission inconnue
+                    }
+
+                    $permId = $permissionIds[$permCode];
+                    $grantedValue = $granted ? 1 : 0;
+
+                    // Vérifier si l'entrée existe
+                    $existing = $db->query(
+                        "SELECT id FROM role_permissions WHERE role = ? AND permission_id = ?",
+                        [$role, $permId]
+                    );
+
+                    if (!empty($existing)) {
+                        // Update
+                        $db->query(
+                            "UPDATE role_permissions SET granted = ?, updated_at = NOW() WHERE role = ? AND permission_id = ?",
+                            [$grantedValue, $role, $permId]
+                        );
+                    } else {
+                        // Insert
+                        $db->query(
+                            "INSERT INTO role_permissions (role, permission_id, granted, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+                            [$role, $permId, $grantedValue]
+                        );
+                    }
+                }
+            }
+
+            // Vider le cache des permissions
+            self::$permissionsCache = null;
+
+            return true;
+
+        } catch (\PDOException $e) {
+            error_log("PermissionHelper::savePermissionMatrix - Erreur : " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Mapping des catégories (code => label)
      * Alias: getCategories() pour compatibilité avec SettingsController
      *
@@ -973,5 +1039,104 @@ class PermissionHelper
     public static function linkUrl(string $permission, string $url): string
     {
         return self::can($permission) ? $url : '#';
+    }
+
+    /**
+     * Filtre les changements de permissions autorisés
+     * Un utilisateur ne peut modifier que les permissions des rôles de niveau inférieur
+     * et ne peut accorder que les permissions qu'il possède lui-même
+     *
+     * @param array $changes Array de changements ['role' => ['permission' => bool, ...], ...]
+     * @return array ['allowed' => [...], 'denied' => [...], 'errors' => [...]]
+     */
+    public static function filterAllowedPermissionChanges(array $changes): array
+    {
+        $user = self::getCurrentUser();
+        $result = [
+            'allowed' => [],
+            'denied' => [],
+            'errors' => []
+        ];
+
+        if (!$user) {
+            $result['errors'][] = 'Utilisateur non connecté';
+            return $result;
+        }
+
+        $userRole = $user['role'] ?? null;
+        $manageableRoles = self::getManageableRoles();
+
+        foreach ($changes as $role => $permissions) {
+            // Vérifier si l'utilisateur peut gérer ce rôle
+            if (!in_array($role, $manageableRoles)) {
+                $result['denied'][$role] = $permissions;
+                $result['errors'][] = "Vous ne pouvez pas modifier les permissions du rôle '{$role}'";
+                continue;
+            }
+
+            $allowedPerms = [];
+            $deniedPerms = [];
+
+            foreach ($permissions as $permCode => $value) {
+                // Superadmin peut tout modifier
+                if ($userRole === 'superadmin') {
+                    $allowedPerms[$permCode] = $value;
+                    continue;
+                }
+
+                // Admin peut modifier si ce n'est pas pour superadmin
+                if ($userRole === 'admin') {
+                    // Un admin ne peut accorder que les permissions qu'il possède
+                    if ($value && !self::can($permCode)) {
+                        $deniedPerms[$permCode] = $value;
+                        $result['errors'][] = "Vous ne pouvez pas accorder la permission '{$permCode}' que vous ne possédez pas";
+                    } else {
+                        $allowedPerms[$permCode] = $value;
+                    }
+                    continue;
+                }
+
+                // Autres rôles : refuser
+                $deniedPerms[$permCode] = $value;
+            }
+
+            if (!empty($allowedPerms)) {
+                $result['allowed'][$role] = $allowedPerms;
+            }
+            if (!empty($deniedPerms)) {
+                $result['denied'][$role] = $deniedPerms;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Vérifie si l'utilisateur peut modifier les permissions d'un rôle
+     *
+     * @param string $targetRole Le rôle dont on veut modifier les permissions
+     * @return bool
+     */
+    public static function canEditRolePermissions(string $targetRole): bool
+    {
+        $user = self::getCurrentUser();
+
+        if (!$user) {
+            return false;
+        }
+
+        $userRole = $user['role'] ?? null;
+
+        // Superadmin peut tout modifier
+        if ($userRole === 'superadmin') {
+            return true;
+        }
+
+        // Admin peut modifier tous sauf superadmin
+        if ($userRole === 'admin' && $targetRole !== 'superadmin') {
+            return true;
+        }
+
+        return false;
     }
 }

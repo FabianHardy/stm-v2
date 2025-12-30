@@ -46,6 +46,14 @@ $fileExistsPhysically = !empty($order['file_path']) && file_exists(__DIR__ . '/.
 $hasFileContent = !empty($order['file_content']);
 $fileExists = $fileExistsPhysically || $hasFileContent;
 
+// Calculer la quantité totale à partir des lignes de commande
+$totalQuantity = 0;
+if (!empty($orderLines) && is_array($orderLines)) {
+    foreach ($orderLines as $line) {
+        $totalQuantity += (int)($line['quantity'] ?? 0);
+    }
+}
+
 // Titre de la page : "Commande - N° Client - Nom Campagne"
 $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
 ?>
