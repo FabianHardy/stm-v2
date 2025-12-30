@@ -6,14 +6,17 @@
  *
  * @package    App\Controllers
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.1.0
  * @created    2025/12/30
+ * @modified   2025/12/30 - Ajout vérifications de permissions
  */
 
 namespace App\Controllers;
 
 use App\Models\Translation;
+use App\Helpers\PermissionHelper;
 use Core\Database;
+use Core\Session;
 
 class TranslationController
 {
@@ -30,12 +33,42 @@ class TranslationController
     }
 
     /**
+     * Vérifie la permission de visualisation
+     *
+     * @return void
+     */
+    private function requireViewPermission(): void
+    {
+        if (!PermissionHelper::can('translations.view')) {
+            Session::setFlash('error', 'Vous n\'avez pas accès à cette fonctionnalité.');
+            header('Location: /stm/admin/dashboard');
+            exit;
+        }
+    }
+
+    /**
+     * Vérifie la permission d'édition
+     *
+     * @return void
+     */
+    private function requireEditPermission(): void
+    {
+        if (!PermissionHelper::can('translations.edit')) {
+            Session::setFlash('error', 'Vous n\'avez pas la permission de modifier les traductions.');
+            header('Location: /stm/admin/translations');
+            exit;
+        }
+    }
+
+    /**
      * Liste des traductions avec filtres
      *
      * @return void
      */
     public function index(): void
     {
+        $this->requireViewPermission();
+
         // Récupérer les filtres
         $category = $_GET['category'] ?? null;
         $search = $_GET['search'] ?? null;
@@ -52,6 +85,9 @@ class TranslationController
         // Traductions manquantes (NL vide)
         $missingCount = count($this->translationModel->getMissingTranslations());
 
+        // Permission d'édition pour la vue
+        $canEdit = PermissionHelper::can('translations.edit');
+
         // Charger la vue
         require __DIR__ . '/../Views/admin/translations/index.php';
     }
@@ -64,10 +100,12 @@ class TranslationController
      */
     public function edit(int $id): void
     {
+        $this->requireEditPermission();
+
         $translation = $this->translationModel->findById($id);
 
         if (!$translation) {
-            $_SESSION['error'] = "Traduction introuvable.";
+            Session::setFlash('error', 'Traduction introuvable.');
             header('Location: /stm/admin/translations');
             exit;
         }
@@ -83,9 +121,11 @@ class TranslationController
      */
     public function update(int $id): void
     {
+        $this->requireEditPermission();
+
         // Vérification CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-            $_SESSION['error'] = "Token CSRF invalide.";
+            Session::setFlash('error', 'Token CSRF invalide.');
             header('Location: /stm/admin/translations/' . $id . '/edit');
             exit;
         }
@@ -94,7 +134,7 @@ class TranslationController
         $translation = $this->translationModel->findById($id);
 
         if (!$translation) {
-            $_SESSION['error'] = "Traduction introuvable.";
+            Session::setFlash('error', 'Traduction introuvable.');
             header('Location: /stm/admin/translations');
             exit;
         }
@@ -106,7 +146,7 @@ class TranslationController
         $isHtml = isset($_POST['is_html']) ? 1 : 0;
 
         if (empty($textFr)) {
-            $_SESSION['error'] = "Le texte français est obligatoire.";
+            Session::setFlash('error', 'Le texte français est obligatoire.');
             header('Location: /stm/admin/translations/' . $id . '/edit');
             exit;
         }
@@ -119,7 +159,7 @@ class TranslationController
             'is_html' => $isHtml
         ]);
 
-        $_SESSION['success'] = "Traduction mise à jour avec succès.";
+        Session::setFlash('success', 'Traduction mise à jour avec succès.');
 
         // Rediriger vers la liste avec le même filtre de catégorie
         $redirectUrl = '/stm/admin/translations';
@@ -139,6 +179,12 @@ class TranslationController
     public function quickUpdate(): void
     {
         header('Content-Type: application/json');
+
+        // Vérifier la permission
+        if (!PermissionHelper::can('translations.edit')) {
+            echo json_encode(['success' => false, 'error' => 'Permission refusée']);
+            exit;
+        }
 
         // Récupérer les données JSON
         $input = json_decode(file_get_contents('php://input'), true);
@@ -187,6 +233,8 @@ class TranslationController
      */
     public function rebuildCache(): void
     {
+        $this->requireEditPermission();
+
         $count = $this->translationModel->rebuildCache();
 
         // Vérifier si le fichier cache a été créé
@@ -195,9 +243,9 @@ class TranslationController
             : dirname(__DIR__, 2) . '/storage/cache/translations.json';
 
         if (file_exists($cacheFile)) {
-            $_SESSION['success'] = "Cache régénéré avec succès ({$count} traductions). Fichier : " . basename($cacheFile);
+            Session::setFlash('success', "Cache régénéré avec succès ({$count} traductions). Fichier : " . basename($cacheFile));
         } else {
-            $_SESSION['warning'] = "Cache mémoire régénéré ({$count} traductions) mais le fichier cache n'a pas pu être créé. Vérifiez le dossier /storage/cache/";
+            Session::setFlash('warning', "Cache mémoire régénéré ({$count} traductions) mais le fichier cache n'a pas pu être créé. Vérifiez le dossier /storage/cache/");
         }
 
         header('Location: /stm/admin/translations');
@@ -211,6 +259,8 @@ class TranslationController
      */
     public function export(): void
     {
+        $this->requireViewPermission();
+
         $json = $this->translationModel->exportJson();
 
         header('Content-Type: application/json');
@@ -227,10 +277,15 @@ class TranslationController
      */
     public function missing(): void
     {
+        $this->requireViewPermission();
+
         $translations = $this->translationModel->getMissingTranslations();
         $categories = $this->translationModel->getCategories();
         $countByCategory = $this->translationModel->countByCategory();
         $missingCount = count($translations);
+
+        // Permission d'édition pour la vue
+        $canEdit = PermissionHelper::can('translations.edit');
 
         // Utiliser la même vue avec un flag
         $showMissingOnly = true;
