@@ -5,6 +5,7 @@
  * @package STM
  * @created 2025/11/17
  * @modified 2025/11/21 - Adaptation au layout public centralisé
+ * @modified 2025/12/30 - Migration vers système trans() centralisé
  */
 
 // ========================================
@@ -49,8 +50,12 @@ if (!$campaign) {
 }
 
 // Variables pour le layout
-$title = $lang === 'fr' ? 'Commande validée' : 'Bestelling bevestigd';
+$title = trans('confirmation.title', $lang);
 $useAlpine = false;
+
+// Récupérer les pages statiques pour le footer (utilisé par le layout)
+$staticPageModel = new \App\Models\StaticPage();
+$footerPages = $staticPageModel->getFooterPages($campaign['id']);
 
 // ========================================
 // CONTENU DE LA PAGE
@@ -63,7 +68,7 @@ ob_start();
 
 <!-- Bande confirmation (verte) -->
 <?php
-$barTitle = $lang === 'fr' ? 'Confirmation de commande' : 'Bevestiging bestelling';
+$barTitle = trans('confirmation.bar_title', $lang);
 $barColor = 'green';
 $barIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>';
 include __DIR__ . '/../../components/public/campaign_bar.php';
@@ -84,19 +89,15 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
             </div>
 
             <h2 class="text-3xl font-bold text-gray-800 mb-4">
-                <?= $lang === 'fr' ? 'Merci pour votre commande !' : 'Bedankt voor uw bestelling!' ?>
+                <?= trans('confirmation.thank_you', $lang) ?>
             </h2>
 
             <div class="text-gray-600 space-y-3 mb-8">
                 <p class="text-lg">
-                    <?= $lang === 'fr' 
-                        ? 'Votre commande a été enregistrée et sera traitée dans les plus brefs délais.' 
-                        : 'Uw bestelling is geregistreerd en wordt zo spoedig mogelijk verwerkt.' ?>
+                    <?= trans('confirmation.order_registered', $lang) ?>
                 </p>
                 <p>
-                    <?= $lang === 'fr' 
-                        ? 'Vous recevrez un email de confirmation à l\'adresse indiquée.' 
-                        : 'U ontvangt een bevestigingsmail op het opgegeven adres.' ?>
+                    <?= trans('confirmation.email_sent', $lang) ?>
                 </p>
                 
                 <?php if ($campaign['deferred_delivery'] == 1 && !empty($campaign['delivery_date'])): ?>
@@ -106,7 +107,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                         </svg>
                         <span class="font-semibold text-blue-900">
-                            <?= $lang === 'fr' ? 'Livraison à partir du' : 'Levering vanaf' ?>
+                            <?= trans('confirmation.delivery_from', $lang) ?>
                         </span>
                     </div>
                     <p class="text-2xl font-bold text-blue-700">
@@ -128,7 +129,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
-                    <?= $lang === 'fr' ? 'Retour au catalogue' : 'Terug naar catalogus' ?>
+                    <?= trans('confirmation.back_to_catalog', $lang) ?>
                 </a>
             </div>
         </div>
@@ -140,10 +141,8 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 <div class="text-sm text-blue-800">
-                    <p class="font-semibold mb-1"><?= $lang === 'fr' ? 'Besoin d\'aide ?' : 'Hulp nodig?' ?></p>
-                    <p><?= $lang === 'fr' 
-                        ? 'Pour toute question concernant votre commande, contactez votre représentant.' 
-                        : 'Voor vragen over uw bestelling kunt u contact opnemen met uw vaste vertegenwoordiger.' ?></p>
+                    <p class="font-semibold mb-1"><?= trans('confirmation.need_help', $lang) ?></p>
+                    <p><?= trans('confirmation.contact_rep', $lang) ?></p>
                 </div>
             </div>
         </div>

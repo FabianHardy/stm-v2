@@ -24,10 +24,10 @@ if ($isEmbed):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($title) ?></title>
-
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-
+    
     <style>
         body {
             background: white;
@@ -106,13 +106,13 @@ else:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($title) ?> - Trendy Foods</title>
-
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-
+    
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
+    
     <style>
         /* Styles pour le contenu HTML */
         .page-content h2 {
@@ -181,11 +181,11 @@ else:
                 <!-- Sélecteur de langue (Belgique uniquement) -->
                 <?php if ($showLanguageSwitch): ?>
                 <div class="flex items-center gap-2">
-                    <a href="?lang=fr"
+                    <a href="?lang=fr" 
                        class="px-3 py-1.5 rounded text-sm font-medium <?= $currentLanguage === 'fr' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-100' ?>">
                         🇫🇷 FR
                     </a>
-                    <a href="?lang=nl"
+                    <a href="?lang=nl" 
                        class="px-3 py-1.5 rounded text-sm font-medium <?= $currentLanguage === 'nl' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-100' ?>">
                         🇳🇱 NL
                     </a>
@@ -220,7 +220,7 @@ else:
                 <?php if (!empty($footerPages)): ?>
                 <nav class="flex flex-wrap gap-4 text-sm">
                     <?php foreach ($footerPages as $footerPage): ?>
-                    <a href="/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/page/<?= htmlspecialchars($footerPage['slug']) ?>"
+                    <a href="/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/page/<?= htmlspecialchars($footerPage['slug']) ?>" 
                        class="text-gray-500 hover:text-orange-600 <?= $footerPage['slug'] === $slug ? 'text-orange-600 font-medium' : '' ?>">
                         <?= htmlspecialchars($currentLanguage === 'nl' && !empty($footerPage['title_nl']) ? $footerPage['title_nl'] : $footerPage['title_fr']) ?>
                     </a>
