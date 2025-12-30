@@ -299,6 +299,7 @@ class PermissionHelper
 
     /**
      * Mapping des catégories (code => label)
+     * Alias: getCategories() pour compatibilité avec SettingsController
      *
      * @return array
      */
@@ -319,6 +320,16 @@ class PermissionHelper
             'email_templates' => 'Email templates',
             'internal_accounts' => 'Comptes internes',
         ];
+    }
+
+    /**
+     * Alias de getCategoryMapping() pour compatibilité
+     *
+     * @return array
+     */
+    public static function getCategories(): array
+    {
+        return self::getCategoryMapping();
     }
 
     /**
