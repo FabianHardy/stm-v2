@@ -19,7 +19,7 @@
  * @modified 2025/11/18 10:00 - Ajout envoi email confirmation (Sprint 7.3.2)
 
  * @modified 2025/11/19 19:30 - Ajout gestion singulier/pluriel pour libellé promotions
-
+ * @modified 2025/12/30 - Ajout méthode showStaticPage() pour pages fixes (Sprint 9)
  */
 
 namespace App\Controllers;
@@ -2097,5 +2097,63 @@ class PublicCampaignController
         // Charger la vraie vue de confirmation
 
         require_once __DIR__ . "/../Views/public/campaign/confirmation.php";
+    }
+
+    /**
+     * Afficher une page fixe (CGU, CGV, mentions légales, etc.)
+     *
+     * Route: GET /c/{uuid}/page/{slug}
+     *
+     * @param string $uuid UUID de la campagne
+     * @param string $slug Slug de la page (cgu, cgv, mentions-legales, etc.)
+     */
+    public function showStaticPage(string $uuid, string $slug): void
+    {
+        // Récupérer la campagne
+        $campaign = $this->db->query(
+            "SELECT * FROM campaigns WHERE uuid = :uuid",
+            [":uuid" => $uuid]
+        );
+
+        if (empty($campaign)) {
+            http_response_code(404);
+            echo "<h1>Campagne introuvable</h1>";
+            exit;
+        }
+
+        $campaign = $campaign[0];
+
+        // Récupérer le model StaticPage
+        $staticPageModel = new \App\Models\StaticPage();
+
+        // Déterminer la langue
+        $language = $_SESSION['public_customer']['language'] ?? 'fr';
+        if (isset($_GET['lang']) && in_array($_GET['lang'], ['fr', 'nl'])) {
+            $language = $_GET['lang'];
+        }
+        // Luxembourg = toujours français
+        if ($campaign['country'] === 'LU') {
+            $language = 'fr';
+        }
+
+        // Récupérer la page avec surcharge éventuelle
+        $pageContent = $staticPageModel->render($slug, $language, (int)$campaign['id']);
+
+        if (!$pageContent) {
+            http_response_code(404);
+            echo "<h1>Page introuvable</h1>";
+            exit;
+        }
+
+        // Récupérer les pages pour le footer
+        $footerPages = $staticPageModel->getFooterPages((int)$campaign['id']);
+
+        // Variables pour la vue
+        $title = $pageContent['title'];
+        $content = $pageContent['content'];
+        $currentLanguage = $language;
+        $showLanguageSwitch = ($campaign['country'] === 'BE');
+
+        require __DIR__ . "/../Views/public/static_page.php";
     }
 }

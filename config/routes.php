@@ -15,6 +15,7 @@
  * @modified   23/12/2025 - Ajout route API customer-orders
  * @modified   29/12/2025 - Ajout route API products/customer-orders
  * @modified   30/12/2025 - Ajout routes Email Templates (Sprint 8)
+ * @modified   30/12/2025 - Ajout routes Pages Fixes (Sprint 9)
  */
 
 // ============================================
@@ -614,6 +615,12 @@ $router->get("/c/{uuid}/order/confirmation", function ($uuid) {
     $controller->orderConfirmation($uuid);
 });
 
+// Page fixe (CGU, CGV, mentions légales, etc.)
+$router->get("/c/{uuid}/page/{slug}", function ($uuid, $slug) {
+    $controller = new PublicCampaignController();
+    $controller->showStaticPage($uuid, $slug);
+});
+
 // =============================================
 // OUTILS DE DÉVELOPPEMENT (Mode DEV uniquement)
 // =============================================
@@ -776,6 +783,83 @@ $router->post("/admin/email-templates/{id}/send-test", function ($id) {
 
     $controller = new \App\Controllers\EmailTemplateController();
     $controller->sendTest((int)$id);
+});
+
+// ============================================
+// ROUTES PAGES FIXES (STATIC PAGES)
+// ============================================
+// Ajouté le 30/12/2025 - Sprint 9 : Gestion Pages Fixes Admin
+
+// Liste des pages fixes
+$router->get("/admin/static-pages", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->index();
+});
+
+// Formulaire d'édition
+$router->get("/admin/static-pages/{id}/edit", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour une page
+$router->post("/admin/static-pages/{id}/update", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->update((int)$id);
+});
+
+// Prévisualisation HTML
+$router->get("/admin/static-pages/{id}/preview", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->preview((int)$id);
+});
+
+// Liste des surcharges pour une page
+$router->get("/admin/static-pages/{id}/overrides", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->overrides((int)$id);
+});
+
+// Créer une surcharge
+$router->post("/admin/static-pages/create-override", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->createOverride();
+});
+
+// Supprimer une surcharge
+$router->get("/admin/static-pages/{id}/delete", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->delete((int)$id);
+});
+
+// Toggle actif/inactif (AJAX)
+$router->post("/admin/static-pages/{id}/toggle", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\StaticPageController();
+    $controller->toggleActive((int)$id);
 });
 
 // ============================================

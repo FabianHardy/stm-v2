@@ -19,6 +19,7 @@
  * @modified 15/12/2025 - Correction logique filtrage : menu parent affiché si sous-menu accessible
  * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
  * @modified 30/12/2025 - Ajout menu Templates emails (Sprint 8)
+ * @modified 30/12/2025 - Ajout menu Pages fixes (Sprint 9)
  */
 
 use App\Helpers\PermissionHelper;
@@ -212,6 +213,12 @@ $settingsItems = [
         "label" => "Templates emails",
         "icon" => "fa-envelope",
         "route" => "/stm/admin/email-templates",
+        "permission" => "settings.view",
+    ],
+    [
+        "label" => "Pages fixes",
+        "icon" => "fa-file-alt",
+        "route" => "/stm/admin/static-pages",
         "permission" => "settings.view",
     ],
     [
