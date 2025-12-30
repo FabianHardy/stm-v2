@@ -349,19 +349,21 @@ ob_start();
         </div>
     </div>
 
-    <!-- Footer avec liens vers pages statiques -->
+    <!-- Footer avec liens vers pages statiques (ouvrent dans modal) -->
     <?php if (!empty($footerPages)): ?>
     <footer class="bg-white border-t border-gray-200 mt-8">
         <div class="container mx-auto px-4 py-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <!-- Liens pages statiques -->
+                <!-- Liens pages statiques (ouvrent modal) -->
                 <nav class="flex flex-wrap justify-center md:justify-start gap-4 text-sm">
-                    <?php foreach ($footerPages as $footerPage): ?>
-                    <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/page/<?= htmlspecialchars($footerPage['slug']) ?>"
-                       target="_blank"
-                       class="text-gray-500 hover:text-orange-600 transition">
-                        <?= htmlspecialchars($lang === 'nl' && !empty($footerPage['title_nl']) ? $footerPage['title_nl'] : $footerPage['title_fr']) ?>
-                    </a>
+                    <?php foreach ($footerPages as $footerPage):
+                        $pageTitle = $lang === 'nl' && !empty($footerPage['title_nl']) ? $footerPage['title_nl'] : $footerPage['title_fr'];
+                    ?>
+                    <button type="button"
+                            @click="modalOpen = true; modalUrl = '/stm/c/<?= htmlspecialchars($uuid) ?>/page/<?= htmlspecialchars($footerPage['slug']) ?>'; modalTitle = '<?= htmlspecialchars(addslashes($pageTitle)) ?>'"
+                            class="text-gray-500 hover:text-orange-600 transition cursor-pointer">
+                        <?= htmlspecialchars($pageTitle) ?>
+                    </button>
                     <?php endforeach; ?>
                 </nav>
 
