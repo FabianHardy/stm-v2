@@ -14,6 +14,7 @@
  * @modified   22/12/2025 - Ajout route API check-export-cache
  * @modified   23/12/2025 - Ajout route API customer-orders
  * @modified   29/12/2025 - Ajout route API products/customer-orders
+ * @modified   30/12/2025 - Ajout routes Email Templates (Sprint 8)
  */
 
 // ============================================
@@ -725,6 +726,56 @@ $router->get('/admin/stats/customer-orders', function () {
 
     $controller = new \App\Controllers\StatsController();
     $controller->getCustomerOrdersApi();
+});
+
+// ============================================
+// ROUTES EMAIL TEMPLATES
+// ============================================
+// Ajouté le 30/12/2025 - Sprint 8 : Gestion Email Templates Admin
+
+// Liste des templates
+$router->get("/admin/email-templates", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->index();
+});
+
+// Formulaire d'édition
+$router->get("/admin/email-templates/{id}/edit", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->edit((int)$id);
+});
+
+// Mettre à jour un template
+$router->post("/admin/email-templates/{id}/update", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->update((int)$id);
+});
+
+// Prévisualisation HTML (iframe)
+$router->get("/admin/email-templates/{id}/preview", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->previewHtml((int)$id);
+});
+
+// Envoyer un email de test
+$router->post("/admin/email-templates/{id}/send-test", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new \App\Controllers\EmailTemplateController();
+    $controller->sendTest((int)$id);
 });
 
 // ============================================

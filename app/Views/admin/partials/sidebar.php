@@ -18,6 +18,7 @@
  * @modified 15/12/2025 - Ajout permission agent.view pour Agent STM
  * @modified 15/12/2025 - Correction logique filtrage : menu parent affiché si sous-menu accessible
  * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
+ * @modified 30/12/2025 - Ajout menu Templates emails (Sprint 8)
  */
 
 use App\Helpers\PermissionHelper;
@@ -206,6 +207,18 @@ $settingsItems = [
         "icon" => "fa-robot",
         "route" => "/stm/admin/settings/agent",
         "permission" => "agent.view", // Permission ajoutée
+    ],
+    [
+        "label" => "Agent STM",
+        "icon" => "fa-robot",
+        "route" => "/stm/admin/settings/agent",
+        "permission" => "agent.view",
+    ],
+    [
+        "label" => "Templates emails",
+        "icon" => "fa-envelope",
+        "route" => "/stm/admin/email-templates",
+        "permission" => "settings.view",
     ],
     [
         "label" => "Configuration",
