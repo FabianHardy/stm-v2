@@ -206,12 +206,6 @@ $settingsItems = [
         "label" => "Agent STM",
         "icon" => "fa-robot",
         "route" => "/stm/admin/settings/agent",
-        "permission" => "agent.view", // Permission ajoutée
-    ],
-    [
-        "label" => "Agent STM",
-        "icon" => "fa-robot",
-        "route" => "/stm/admin/settings/agent",
         "permission" => "agent.view",
     ],
     [

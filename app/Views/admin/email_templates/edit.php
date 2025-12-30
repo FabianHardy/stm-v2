@@ -2,19 +2,26 @@
 /**
  * Vue Admin - Édition d'un template d'email
  *
- * Éditeur WYSIWYG TinyMCE configuré pour les emails HTML
- * - Pas de scripts
- * - Styles inline
- * - Tables pour layout
+ * Éditeur WYSIWYG Summernote pour les emails HTML
  *
  * @package    App\Views\admin\email_templates
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.1.0
  * @created    2025/12/30
+ * @modified   2025/12/30 - Remplacement CKEditor par Summernote
  */
 
 ob_start();
 ?>
+
+<!-- CSS Summernote -->
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.css" rel="stylesheet">
+<style>
+[x-cloak] { display: none !important; }
+.note-editor { border: 1px solid #d1d5db !important; border-radius: 0.375rem !important; }
+.note-editor .note-toolbar { background-color: #f9fafb !important; border-bottom: 1px solid #e5e7eb !important; }
+.note-editable { min-height: 400px !important; font-family: Arial, Helvetica, sans-serif !important; }
+</style>
 
 <!-- En-tête -->
 <div class="mb-6">
@@ -76,7 +83,7 @@ ob_start();
                             Sujet de l'email <span class="text-red-500">*</span>
                         </label>
                         <input type="text" id="subject_fr" name="subject_fr"
-                               value="<?= htmlspecialchars($template['subject_fr']) ?>"
+                               value="<?= htmlspecialchars($template['subject_fr'] ?? '') ?>"
                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                placeholder="Ex: Confirmation de votre commande - {campaign_name}"
                                required>
@@ -87,7 +94,7 @@ ob_start();
                         <label for="body_fr" class="block text-sm font-medium text-gray-700 mb-1">
                             Contenu de l'email <span class="text-red-500">*</span>
                         </label>
-                        <textarea id="body_fr" name="body_fr"><?= htmlspecialchars($template['body_fr']) ?></textarea>
+                        <textarea id="body_fr" name="body_fr" class="summernote-editor"><?= htmlspecialchars($template['body_fr'] ?? '') ?></textarea>
                     </div>
                 </div>
 
@@ -95,7 +102,7 @@ ob_start();
                 <div x-show="activeTab === 'nl'" x-cloak class="p-6">
                     <div class="mb-4">
                         <label for="subject_nl" class="block text-sm font-medium text-gray-700 mb-1">
-                            Onderwerp van de e-mail
+                            Sujet de l'email
                         </label>
                         <input type="text" id="subject_nl" name="subject_nl"
                                value="<?= htmlspecialchars($template['subject_nl'] ?? '') ?>"
@@ -106,9 +113,9 @@ ob_start();
 
                     <div>
                         <label for="body_nl" class="block text-sm font-medium text-gray-700 mb-1">
-                            Inhoud van de e-mail
+                            Contenu de l'email
                         </label>
-                        <textarea id="body_nl" name="body_nl"><?= htmlspecialchars($template['body_nl'] ?? '') ?></textarea>
+                        <textarea id="body_nl" name="body_nl" class="summernote-editor"><?= htmlspecialchars($template['body_nl'] ?? '') ?></textarea>
                     </div>
                 </div>
             </div>
@@ -138,6 +145,18 @@ ob_start();
             </h3>
             <p class="text-xs text-gray-500 mb-3">Cliquez pour copier</p>
             <div class="space-y-2">
+                <?php
+                $defaultVariables = [
+                    'campaign_name' => 'Nom de la campagne',
+                    'company_name' => 'Nom de la société',
+                    'customer_number' => 'Numéro client',
+                    'order_date' => 'Date de la commande',
+                    'total_items' => 'Nombre d\'articles',
+                    'order_lines' => 'Liste des produits (HTML)',
+                    'delivery_date' => 'Date de livraison',
+                ];
+                $availableVariables = $availableVariables ?? $defaultVariables;
+                ?>
                 <?php if (!empty($availableVariables)): ?>
                     <?php foreach ($availableVariables as $var => $description): ?>
                     <div class="group">
@@ -219,74 +238,37 @@ ob_start();
     </div>
 </div>
 
-<?php
-$content = ob_get_clean();
-$title = $pageTitle;
+<!-- jQuery (requis pour Summernote) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-// Scripts spécifiques à la page (TinyMCE)
-$pageScripts = <<<'HTML'
-<!-- CKEditor 4 CDN (gratuit, pas de clé API) -->
-<script src="https://cdn.ckeditor.com/4.22.1/full/ckeditor.js"></script>
-
+<!-- Scripts Summernote -->
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/lang/summernote-fr-FR.min.js"></script>
 <script>
-// Configuration CKEditor pour les emails
-const editorConfig = {
-    height: 450,
-    language: 'fr',
-    // Toolbar adaptée aux emails
-    toolbar: [
-        { name: 'document', items: ['Source'] },
-        { name: 'clipboard', items: ['Undo', 'Redo'] },
-        { name: 'editing', items: ['Find', 'Replace'] },
-        '/',
-        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'RemoveFormat'] },
-        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight'] },
-        { name: 'links', items: ['Link', 'Unlink'] },
-        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'SpecialChar'] },
-        '/',
-        { name: 'styles', items: ['Format', 'FontSize'] },
-        { name: 'colors', items: ['TextColor', 'BGColor'] },
-        { name: 'tools', items: ['Maximize', 'Preview'] }
-    ],
-    // Configuration email-friendly
-    allowedContent: true,
-    extraAllowedContent: 'style;*[id,class,style]',
-    contentsCss: [],
-    bodyClass: 'email-body',
-    // Désactiver les fonctionnalités non compatibles email
-    removePlugins: 'elementspath,save,flash,iframe,pagebreak',
-    // Options pour les emails
-    emailProtection: '',
-    // Style de base pour l'éditeur
-    contentsCss: 'body { font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; padding: 20px; max-width: 600px; margin: 0 auto; }',
-    // Pas de redimensionnement
-    resize_enabled: false
-};
-
-// Initialiser les éditeurs
-document.addEventListener('DOMContentLoaded', function() {
-    // Éditeur FR
-    if (document.getElementById('body_fr')) {
-        CKEDITOR.replace('body_fr', editorConfig);
-    }
-    // Éditeur NL
-    if (document.getElementById('body_nl')) {
-        CKEDITOR.replace('body_nl', editorConfig);
-    }
-});
-
-// Synchroniser avant soumission
-document.getElementById('templateForm').addEventListener('submit', function(e) {
-    // CKEditor synchronise automatiquement, mais on force au cas où
-    for (var instance in CKEDITOR.instances) {
-        CKEDITOR.instances[instance].updateElement();
-    }
+$(document).ready(function() {
+    $('.summernote-editor').summernote({
+        height: 400,
+        lang: 'fr-FR',
+        toolbar: [
+            ['style', ['style']],
+            ['font', ['bold', 'italic', 'underline', 'strikethrough', 'clear']],
+            ['fontsize', ['fontsize']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['table', ['table']],
+            ['insert', ['link', 'picture', 'hr']],
+            ['view', ['fullscreen', 'codeview', 'help']]
+        ],
+        fontSizes: ['8', '10', '12', '14', '16', '18', '20', '24', '28', '32', '36'],
+        styleTags: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+        codeviewFilter: false,
+        codeviewIframeFilter: true
+    });
 });
 
 // Copier une variable dans le presse-papier
 function copyVariable(variable) {
     navigator.clipboard.writeText(variable).then(function() {
-        // Notification
         const toast = document.createElement('div');
         toast.className = 'fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50';
         toast.innerHTML = '<i class="fas fa-check mr-2"></i>Variable copiée !';
@@ -294,22 +276,11 @@ function copyVariable(variable) {
         setTimeout(() => toast.remove(), 2000);
     });
 }
-
-// Insérer une variable dans l'éditeur actif
-function insertVariable(variable, editorId) {
-    var editor = CKEDITOR.instances[editorId];
-    if (editor) {
-        editor.insertText(variable);
-        editor.focus();
-    }
-}
 </script>
 
-<style>
-[x-cloak] { display: none !important; }
-.cke_editable { font-family: Arial, Helvetica, sans-serif !important; }
-</style>
-HTML;
+<?php
+$content = ob_get_clean();
+$title = $pageTitle ?? 'Modifier le template';
 
 require __DIR__ . '/../../layouts/admin.php';
 ?>
