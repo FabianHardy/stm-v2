@@ -1,7 +1,7 @@
 <?php
 /**
  * Vue Admin - Export fichiers TXT
- * 
+ *
  * @created  2025/12/29 15:00
  */
 
@@ -14,7 +14,7 @@ ob_start();
 <div class="mb-6">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900"><?= htmlspecialchars($pageTitle) ?></h1>
+            <h1 class="text-2xl font-bold text-gray-900"><?= htmlspecialchars($pageTitle ?? 'Export fichiers TXT') ?></h1>
             <p class="mt-1 text-sm text-gray-500">Télécharger les fichiers TXT pour l'ERP</p>
         </div>
     </div>
@@ -23,18 +23,19 @@ ob_start();
 <!-- Filtres -->
 <div class="bg-white shadow rounded-lg p-4 mb-6">
     <form method="GET" action="/stm/admin/orders/export" id="filterForm">
-        <input type="hidden" name="per_page" id="hidden_per_page" value="<?= $pagination['per_page'] ?>">
-        
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-7">
+        <input type="hidden" name="per_page" id="hidden_per_page" value="<?= $pagination['per_page'] ?? 50 ?>">
+
+        <!-- Ligne 1 : Filtres principaux -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
             <!-- Campagne -->
-            <div>
-                <label for="campaign_id" class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
-                <select id="campaign_id" name="campaign_id" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            <div class="col-span-2 md:col-span-1">
+                <label for="campaign_id" class="block text-xs font-medium text-gray-700 mb-1">Campagne</label>
+                <select id="campaign_id" name="campaign_id"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     <option value="">Toutes</option>
                     <?php foreach ($campaigns as $campaign): ?>
                         <option value="<?= $campaign['id'] ?>" <?= ($filters['campaign_id'] ?? '') == $campaign['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($campaign['name']) ?> (<?= $campaign['country'] ?>)
+                            <?= htmlspecialchars($campaign['name'] ?? '') ?> (<?= $campaign['country'] ?? '' ?>)
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -42,13 +43,13 @@ ob_start();
 
             <!-- Statut -->
             <div>
-                <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Statut synchro</label>
-                <select id="status" name="status" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <label for="status" class="block text-xs font-medium text-gray-700 mb-1">Statut synchro</label>
+                <select id="status" name="status"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     <option value="">Tous</option>
                     <?php foreach ($statuses as $key => $label): ?>
                         <option value="<?= $key ?>" <?= ($filters['status'] ?? '') === $key ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($label) ?>
+                            <?= htmlspecialchars($label ?? '') ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -56,9 +57,9 @@ ob_start();
 
             <!-- Pays -->
             <div>
-                <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                <select id="country" name="country" 
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <label for="country" class="block text-xs font-medium text-gray-700 mb-1">Pays</label>
+                <select id="country" name="country"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     <option value="">Tous</option>
                     <option value="BE" <?= ($filters['country'] ?? '') === 'BE' ? 'selected' : '' ?>>🇧🇪 Belgique</option>
                     <option value="LU" <?= ($filters['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
@@ -67,42 +68,42 @@ ob_start();
 
             <!-- Date début -->
             <div>
-                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Du</label>
-                <input type="date" id="date_from" name="date_from" 
+                <label for="date_from" class="block text-xs font-medium text-gray-700 mb-1">Du</label>
+                <input type="date" id="date_from" name="date_from"
                        value="<?= htmlspecialchars($filters['date_from'] ?? '') ?>"
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
             </div>
 
             <!-- Date fin -->
             <div>
-                <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Au</label>
-                <input type="date" id="date_to" name="date_to" 
+                <label for="date_to" class="block text-xs font-medium text-gray-700 mb-1">Au</label>
+                <input type="date" id="date_to" name="date_to"
                        value="<?= htmlspecialchars($filters['date_to'] ?? '') ?>"
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
             </div>
 
             <!-- Recherche -->
             <div>
-                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-                <input type="text" id="search" name="search" 
+                <label for="search" class="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
+                <input type="text" id="search" name="search"
                        value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
                        placeholder="N° commande, client..."
-                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
             </div>
+        </div>
 
-            <!-- Boutons -->
-            <div class="flex items-end gap-2">
-                <button type="submit" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                    <i class="fas fa-search mr-2"></i>
-                    Filtrer
-                </button>
-                <a href="/stm/admin/orders/export" 
-                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i class="fas fa-times mr-2"></i>
-                    Reset
-                </a>
-            </div>
+        <!-- Ligne 2 : Boutons -->
+        <div class="flex items-center gap-2">
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                <i class="fas fa-search mr-2"></i>
+                Filtrer
+            </button>
+            <a href="/stm/admin/orders/export"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <i class="fas fa-times mr-2"></i>
+                Reset
+            </a>
         </div>
     </form>
 </div>
@@ -164,14 +165,14 @@ ob_start();
                         </td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($orders as $order): 
+                    <?php foreach ($orders as $order):
                         $hasFile = !empty($order['file_path']);
                     ?>
                         <tr class="hover:bg-gray-50">
                             <!-- Checkbox -->
                             <td class="px-4 py-3">
                                 <?php if ($hasFile): ?>
-                                    <input type="checkbox" name="order_ids[]" value="<?= $order['id'] ?>" 
+                                    <input type="checkbox" name="order_ids[]" value="<?= $order['id'] ?>"
                                            class="order-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 <?php endif; ?>
                             </td>
@@ -185,7 +186,7 @@ ob_start();
                                     </span>
                                     <div class="ml-3">
                                         <p class="text-sm font-medium text-gray-900">
-                                            <?= htmlspecialchars($order['order_number']) ?>
+                                            <?= htmlspecialchars($order['order_number'] ?? '') ?>
                                         </p>
                                         <p class="text-xs text-gray-500">
                                             <?= date('d/m/Y H:i', strtotime($order['created_at'])) ?>
@@ -208,7 +209,7 @@ ob_start();
                             <td class="px-4 py-3">
                                 <?php if ($hasFile): ?>
                                     <p class="text-xs text-gray-600 font-mono">
-                                        <?= htmlspecialchars(basename($order['file_path'])) ?>
+                                        <?= htmlspecialchars(basename($order['file_path'] ?? '')) ?>
                                     </p>
                                 <?php else: ?>
                                     <span class="text-xs text-gray-400">Non généré</span>
@@ -254,7 +255,7 @@ ob_start();
                                             <i class="fas fa-download"></i>
                                         </a>
                                     <?php endif; ?>
-                                    <a href="/stm/admin/orders/show?id=<?= $order['id'] ?>"
+                                    <a href="/stm/admin/orders/<?= $order['id'] ?>"
                                        class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition"
                                        title="Voir détails">
                                         <i class="fas fa-eye"></i>
@@ -270,7 +271,7 @@ ob_start();
 </div>
 
 <!-- Pagination -->
-<?php if ($pagination['total_pages'] > 1): 
+<?php if ($pagination['total_pages'] > 1):
     $filterParams = http_build_query(array_filter([
         'campaign_id' => $filters['campaign_id'] ?? '',
         'status' => $filters['status'] ?? '',
@@ -305,8 +306,8 @@ ob_start();
                 ?>
                     <a href="?page=<?= $i ?><?= $filterParams ? '&' . $filterParams : '' ?>"
                        class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                           <?= $i === $pagination['current_page'] 
-                               ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
+                           <?= $i === $pagination['current_page']
+                               ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50' ?>">
                         <?= $i ?>
                     </a>
