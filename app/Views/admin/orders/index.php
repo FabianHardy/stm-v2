@@ -172,7 +172,7 @@ function buildFilterUrl($newParams = []) {
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">N° Commande</th>
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pays</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campagne</th>
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Articles</th>
@@ -214,13 +214,10 @@ function buildFilterUrl($newParams = []) {
                 $statusLabel = $statusLabels[$order['status']] ?? $order['status'];
             ?>
             <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <?= $country === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800' ?> mr-2">
-                            <?= $country ?>
-                        </span>
-                        <span class="font-mono text-sm"><?= htmlspecialchars($order['order_number'] ?? 'N/A') ?></span>
-                    </div>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium <?= $country === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800' ?>">
+                        <?= $country === 'BE' ? '🇧🇪 BE' : '🇱🇺 LU' ?>
+                    </span>
                 </td>
                 <td class="px-6 py-4">
                     <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($order['company_name'] ?? 'N/A') ?></div>

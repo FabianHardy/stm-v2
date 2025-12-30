@@ -3,24 +3,20 @@
  * Vue : Détail d'une commande
  *
  * Affiche les informations complètes d'une commande :
- * - Infos générales (numéro, date, statut)
  * - Infos client
  * - Infos campagne
  * - Lignes de commande (produits, quantités)
- * - Gestion statut synchro ERP
  * - Gestion fichier TXT
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.1.0
+ * @version    1.2.0
  * @created    2025/11/27
- * @modified   2025/12/29 - Ajout statuts synchro ERP + gestion fichier TXT
+ * @modified   2025/12/30 - Suppression N° commande et section statut synchro
  */
 
-use App\Helpers\PermissionHelper;
-
-// Permissions pour les boutons
-$canExport = PermissionHelper::can('orders.export');
+// Permissions pour les boutons (à remplacer par PermissionHelper quand disponible)
+$canExport = true;
 
 ob_start();
 
@@ -37,7 +33,6 @@ $statusLabels = [
 $currentStatus = $statusLabels[$order["status"] ?? "pending_sync"] ?? $statusLabels["pending_sync"];
 
 // Sécurisation des données
-$orderNumber = htmlspecialchars($order["order_number"] ?? "N/A");
 $campaignName = htmlspecialchars($order["campaign_name"] ?? "N/A");
 $companyName = htmlspecialchars($order["company_name"] ?? "N/A");
 $customerNumber = htmlspecialchars($order["customer_number"] ?? "N/A");
@@ -190,7 +185,7 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
             <?php endif; ?>
         </dl>
         <div class="mt-4 pt-4 border-t border-gray-200">
-            <a href="/stm/admin/campaigns/show?id=<?= $order['campaign_id'] ?>"
+            <a href="/stm/admin/campaigns/<?= $order['campaign_id'] ?>"
                class="text-sm text-indigo-600 hover:text-indigo-800">
                 <i class="fas fa-external-link-alt mr-1"></i>
                 Voir la campagne
@@ -205,10 +200,6 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
             Récapitulatif
         </h3>
         <dl class="space-y-3">
-            <div class="flex justify-between items-center">
-                <dt class="text-sm text-gray-500">N° Commande</dt>
-                <dd class="text-sm font-mono font-bold text-gray-900"><?php echo $orderNumber; ?></dd>
-            </div>
             <div class="flex justify-between items-center">
                 <dt class="text-sm text-gray-500">Produits</dt>
                 <dd class="text-sm font-medium text-gray-900"><?php echo count($orderLines); ?></dd>
@@ -275,44 +266,6 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
             <?php endif; ?>
         </dl>
     </div>
-</div>
-
-<!-- Changer le statut -->
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-        <i class="fas fa-exchange-alt text-indigo-500 mr-2"></i>
-        Changer le statut de synchronisation
-    </h3>
-    <form method="POST" action="/stm/admin/orders/status" class="flex flex-wrap items-end gap-4">
-        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
-        <input type="hidden" name="id" value="<?= $order['id'] ?>">
-
-        <div class="flex-1 min-w-[200px]">
-            <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Nouveau statut</label>
-            <select id="status" name="status"
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="pending_sync" <?= $order['status'] === 'pending_sync' ? 'selected' : '' ?>>En attente de synchro</option>
-                <option value="synced" <?= $order['status'] === 'synced' ? 'selected' : '' ?>>Synchronisée</option>
-                <option value="error" <?= $order['status'] === 'error' ? 'selected' : '' ?>>Erreur</option>
-            </select>
-        </div>
-
-        <div class="flex-1 min-w-[300px]">
-            <label for="error_message" class="block text-sm font-medium text-gray-700 mb-1">
-                Message d'erreur (si statut = Erreur)
-            </label>
-            <input type="text" id="error_message" name="error_message"
-                   value="<?= htmlspecialchars($order['sync_error_message'] ?? '') ?>"
-                   placeholder="Optionnel - uniquement si erreur"
-                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-        </div>
-
-        <button type="submit"
-                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-            <i class="fas fa-save mr-2"></i>
-            Mettre à jour
-        </button>
-    </form>
 </div>
 
 <!-- Lignes de commande -->
