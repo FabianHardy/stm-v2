@@ -6,6 +6,7 @@
  * @author     Fabian Hardy
  * @version    1.0.0
  * @created    2025/12/30
+ * @modified   2025/12/30 - Aperçu en modal au lieu de nouvelle page
  */
 
 ob_start();
@@ -104,7 +105,7 @@ ob_start();
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     <?php $count = $overrideCounts[$page['slug']] ?? 0; ?>
                     <?php if ($count > 0): ?>
-                    <a href="/stm/admin/static-pages/<?= $page['id'] ?>/overrides" 
+                    <a href="/stm/admin/static-pages/<?= $page['id'] ?>/overrides"
                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 hover:bg-orange-200">
                         <i class="fas fa-layer-group mr-1"></i> <?= $count ?>
                     </a>
@@ -114,26 +115,26 @@ ob_start();
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     <div class="flex items-center justify-center gap-2">
-                        <!-- Prévisualiser -->
-                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/preview?lang=fr" 
-                           target="_blank"
-                           class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
-                           title="Prévisualiser (FR)">
+                        <!-- Prévisualiser (Modal) -->
+                        <button type="button"
+                                onclick="openPreviewModal(<?= $page['id'] ?>, 'fr', '<?= htmlspecialchars($page['title_fr']) ?>')"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                title="Prévisualiser (FR)">
                             <i class="fas fa-eye mr-1"></i> FR
-                        </a>
-                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/preview?lang=nl" 
-                           target="_blank"
-                           class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
-                           title="Prévisualiser (NL)">
+                        </button>
+                        <button type="button"
+                                onclick="openPreviewModal(<?= $page['id'] ?>, 'nl', '<?= htmlspecialchars($page['title_nl'] ?? $page['title_fr']) ?>')"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                title="Prévisualiser (NL)">
                             <i class="fas fa-eye mr-1"></i> NL
-                        </a>
+                        </button>
                         <!-- Modifier -->
-                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/edit" 
+                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/edit"
                            class="inline-flex items-center px-3 py-1.5 border border-purple-300 rounded text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100">
                             <i class="fas fa-edit mr-1"></i> Modifier
                         </a>
                         <!-- Surcharges -->
-                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/overrides" 
+                        <a href="/stm/admin/static-pages/<?= $page['id'] ?>/overrides"
                            class="inline-flex items-center px-3 py-1.5 border border-orange-300 rounded text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100"
                            title="Gérer les surcharges par campagne">
                             <i class="fas fa-layer-group mr-1"></i> Surcharges
@@ -157,6 +158,110 @@ ob_start();
         <div><i class="fas fa-layer-group text-orange-500 mr-2"></i><strong>Surcharges</strong> : Versions personnalisées par campagne</div>
     </div>
 </div>
+
+<!-- Modal Aperçu -->
+<div id="previewModal"
+     class="fixed inset-0 z-50 hidden"
+     x-data="{ open: false }"
+     x-show="open"
+     x-cloak>
+    <!-- Overlay -->
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm"
+         @click="open = false; document.getElementById('previewModal').classList.add('hidden')"></div>
+
+    <!-- Modal Content -->
+    <div class="fixed inset-4 md:inset-10 bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-center gap-4">
+                <h3 id="previewModalTitle" class="text-lg font-semibold text-gray-900">Aperçu</h3>
+                <!-- Sélecteur de langue -->
+                <div class="flex items-center gap-1 bg-white rounded-lg border border-gray-200 p-1">
+                    <button type="button" id="btnPreviewFr" onclick="switchPreviewLang('fr')"
+                            class="px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700">
+                        🇫🇷 FR
+                    </button>
+                    <button type="button" id="btnPreviewNl" onclick="switchPreviewLang('nl')"
+                            class="px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100">
+                        🇳🇱 NL
+                    </button>
+                </div>
+            </div>
+            <button type="button" onclick="closePreviewModal()"
+                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Iframe -->
+        <div class="flex-1 overflow-hidden bg-gray-100 p-4">
+            <iframe id="previewIframe"
+                    src="about:blank"
+                    class="w-full h-full bg-white rounded-lg shadow-inner border border-gray-200"></iframe>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <button type="button" onclick="closePreviewModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Fermer
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPreviewId = null;
+let currentPreviewLang = 'fr';
+
+function openPreviewModal(id, lang, title) {
+    currentPreviewId = id;
+    currentPreviewLang = lang;
+
+    // Mettre à jour le titre
+    document.getElementById('previewModalTitle').textContent = 'Aperçu : ' + title;
+
+    // Mettre à jour les boutons de langue
+    updateLangButtons(lang);
+
+    // Charger l'iframe
+    document.getElementById('previewIframe').src = '/stm/admin/static-pages/' + id + '/preview?lang=' + lang;
+
+    // Afficher la modal
+    document.getElementById('previewModal').classList.remove('hidden');
+}
+
+function closePreviewModal() {
+    document.getElementById('previewModal').classList.add('hidden');
+    document.getElementById('previewIframe').src = 'about:blank';
+}
+
+function switchPreviewLang(lang) {
+    currentPreviewLang = lang;
+    updateLangButtons(lang);
+    document.getElementById('previewIframe').src = '/stm/admin/static-pages/' + currentPreviewId + '/preview?lang=' + lang;
+}
+
+function updateLangButtons(lang) {
+    const btnFr = document.getElementById('btnPreviewFr');
+    const btnNl = document.getElementById('btnPreviewNl');
+
+    if (lang === 'fr') {
+        btnFr.className = 'px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700';
+        btnNl.className = 'px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100';
+    } else {
+        btnFr.className = 'px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100';
+        btnNl.className = 'px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700';
+    }
+}
+
+// Fermer avec Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePreviewModal();
+    }
+});
+</script>
 
 <?php
 $content = ob_get_clean();

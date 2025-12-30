@@ -43,7 +43,7 @@ ob_start();
 </div>
 
 <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
-    
+
     <!-- Formulaire principal (3/4) -->
     <div class="xl:col-span-3">
         <form method="POST" action="/stm/admin/static-pages/<?= $page['id'] ?>/update" id="pageForm">
@@ -55,13 +55,13 @@ ob_start();
                     <i class="fas fa-info-circle text-gray-400 mr-2"></i>
                     Informations générales
                 </h2>
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label for="title_fr" class="block text-sm font-medium text-gray-700 mb-1">
                             Titre (FR) <span class="text-red-500">*</span>
                         </label>
-                        <input type="text" id="title_fr" name="title_fr" 
+                        <input type="text" id="title_fr" name="title_fr"
                                value="<?= htmlspecialchars($page['title_fr']) ?>"
                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                                required>
@@ -70,7 +70,7 @@ ob_start();
                         <label for="title_nl" class="block text-sm font-medium text-gray-700 mb-1">
                             Titre (NL)
                         </label>
-                        <input type="text" id="title_nl" name="title_nl" 
+                        <input type="text" id="title_nl" name="title_nl"
                                value="<?= htmlspecialchars($page['title_nl'] ?? '') ?>"
                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                                placeholder="Laisser vide pour utiliser le titre FR">
@@ -81,7 +81,7 @@ ob_start();
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                         <label class="inline-flex items-center mt-2">
-                            <input type="checkbox" name="is_active" value="1" 
+                            <input type="checkbox" name="is_active" value="1"
                                    <?= $page['is_active'] ? 'checked' : '' ?>
                                    class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
                             <span class="ml-2 text-sm text-gray-600">Page active</span>
@@ -90,7 +90,7 @@ ob_start();
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Affichage</label>
                         <label class="inline-flex items-center mt-2">
-                            <input type="checkbox" name="show_in_footer" value="1" 
+                            <input type="checkbox" name="show_in_footer" value="1"
                                    <?= $page['show_in_footer'] ? 'checked' : '' ?>
                                    class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
                             <span class="ml-2 text-sm text-gray-600">Afficher dans le footer</span>
@@ -100,7 +100,7 @@ ob_start();
                         <label for="sort_order" class="block text-sm font-medium text-gray-700 mb-1">
                             Ordre d'affichage
                         </label>
-                        <input type="number" id="sort_order" name="sort_order" 
+                        <input type="number" id="sort_order" name="sort_order"
                                value="<?= (int)($page['sort_order'] ?? 0) ?>"
                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                                min="0" max="100">
@@ -113,13 +113,13 @@ ob_start();
                 <!-- Tabs -->
                 <div class="border-b border-gray-200">
                     <nav class="flex -mb-px">
-                        <button type="button" 
+                        <button type="button"
                                 @click="activeTab = 'fr'"
                                 :class="activeTab === 'fr' ? 'border-purple-500 text-purple-600 bg-purple-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                                 class="py-3 px-6 border-b-2 font-medium text-sm transition-colors">
                             🇫🇷 Contenu FR
                         </button>
-                        <button type="button" 
+                        <button type="button"
                                 @click="activeTab = 'nl'"
                                 :class="activeTab === 'nl' ? 'border-purple-500 text-purple-600 bg-purple-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                                 class="py-3 px-6 border-b-2 font-medium text-sm transition-colors">
@@ -148,11 +148,11 @@ ob_start();
 
             <!-- Boutons -->
             <div class="mt-6 flex items-center justify-between">
-                <a href="/stm/admin/static-pages" 
+                <a href="/stm/admin/static-pages"
                    class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <i class="fas fa-times mr-2"></i> Annuler
                 </a>
-                <button type="submit" 
+                <button type="submit"
                         class="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
                     <i class="fas fa-save mr-2"></i> Enregistrer
                 </button>
@@ -162,7 +162,7 @@ ob_start();
 
     <!-- Sidebar (1/4) -->
     <div class="xl:col-span-1 space-y-6">
-        
+
         <!-- Prévisualisation -->
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-semibold text-gray-900 mb-3">
@@ -170,16 +170,16 @@ ob_start();
                 Prévisualiser
             </h3>
             <div class="space-y-2">
-                <a href="/stm/admin/static-pages/<?= $page['id'] ?>/preview?lang=fr" 
-                   target="_blank"
-                   class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <button type="button"
+                        onclick="openPreviewModal('fr')"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     🇫🇷 Aperçu FR
-                </a>
-                <a href="/stm/admin/static-pages/<?= $page['id'] ?>/preview?lang=nl" 
-                   target="_blank"
-                   class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                </button>
+                <button type="button"
+                        onclick="openPreviewModal('nl')"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     🇳🇱 Aperçu NL
-                </a>
+                </button>
             </div>
         </div>
 
@@ -241,7 +241,7 @@ ob_start();
             <p class="text-xs text-red-700 mb-3">
                 Supprimer cette surcharge restaurera la page globale pour cette campagne.
             </p>
-            <a href="/stm/admin/static-pages/<?= $page['id'] ?>/delete" 
+            <a href="/stm/admin/static-pages/<?= $page['id'] ?>/delete"
                onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette surcharge ?')"
                class="w-full inline-flex items-center justify-center px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50">
                 <i class="fas fa-trash mr-2"></i> Supprimer
@@ -278,7 +278,94 @@ $(document).ready(function() {
         codeviewIframeFilter: true
     });
 });
+
+// Modal Aperçu
+let currentPreviewLang = 'fr';
+const pageId = <?= $page['id'] ?>;
+
+function openPreviewModal(lang) {
+    currentPreviewLang = lang;
+    updateLangButtons(lang);
+    document.getElementById('previewIframe').src = '/stm/admin/static-pages/' + pageId + '/preview?lang=' + lang;
+    document.getElementById('previewModal').classList.remove('hidden');
+}
+
+function closePreviewModal() {
+    document.getElementById('previewModal').classList.add('hidden');
+    document.getElementById('previewIframe').src = 'about:blank';
+}
+
+function switchPreviewLang(lang) {
+    currentPreviewLang = lang;
+    updateLangButtons(lang);
+    document.getElementById('previewIframe').src = '/stm/admin/static-pages/' + pageId + '/preview?lang=' + lang;
+}
+
+function updateLangButtons(lang) {
+    const btnFr = document.getElementById('btnPreviewFr');
+    const btnNl = document.getElementById('btnPreviewNl');
+
+    if (lang === 'fr') {
+        btnFr.className = 'px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700';
+        btnNl.className = 'px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100';
+    } else {
+        btnFr.className = 'px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100';
+        btnNl.className = 'px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700';
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePreviewModal();
+    }
+});
 </script>
+
+<!-- Modal Aperçu -->
+<div id="previewModal" class="fixed inset-0 z-50 hidden">
+    <!-- Overlay -->
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm" onclick="closePreviewModal()"></div>
+
+    <!-- Modal Content -->
+    <div class="fixed inset-4 md:inset-10 bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-center gap-4">
+                <h3 class="text-lg font-semibold text-gray-900">Aperçu : <?= htmlspecialchars($page['title_fr']) ?></h3>
+                <!-- Sélecteur de langue -->
+                <div class="flex items-center gap-1 bg-white rounded-lg border border-gray-200 p-1">
+                    <button type="button" id="btnPreviewFr" onclick="switchPreviewLang('fr')"
+                            class="px-3 py-1 text-sm font-medium rounded transition-colors bg-purple-100 text-purple-700">
+                        🇫🇷 FR
+                    </button>
+                    <button type="button" id="btnPreviewNl" onclick="switchPreviewLang('nl')"
+                            class="px-3 py-1 text-sm font-medium rounded transition-colors text-gray-500 hover:bg-gray-100">
+                        🇳🇱 NL
+                    </button>
+                </div>
+            </div>
+            <button type="button" onclick="closePreviewModal()"
+                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Iframe -->
+        <div class="flex-1 overflow-hidden bg-gray-100 p-4">
+            <iframe id="previewIframe"
+                    src="about:blank"
+                    class="w-full h-full bg-white rounded-lg shadow-inner border border-gray-200"></iframe>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <button type="button" onclick="closePreviewModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Fermer
+            </button>
+        </div>
+    </div>
+</div>
 
 <?php
 $content = ob_get_clean();
