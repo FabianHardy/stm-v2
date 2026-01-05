@@ -6,6 +6,7 @@
  * @created 2025/11/14
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
+ * @modified 2026/01/05 - Sprint 14 : Affichage prix conditionnel pour reps
  */
 
 // ========================================
@@ -17,6 +18,89 @@ $uuid = $campaign["uuid"];
 $title = htmlspecialchars($campaign["name"]) . " - " . trans('catalog.title', $lang);
 $useAlpine = true;
 $bodyAttrs = 'x-data="cartManager()" x-init="init()"';
+
+// ========================================
+// SPRINT 14 : Détection mode rep et affichage prix
+// ========================================
+$isRepOrder = $customer["is_rep_order"] ?? false;
+$showPrices = ($campaign["show_prices"] ?? 1) == 1;
+$orderType = $campaign["order_type"] ?? "W"; // W = normal, V = prospection
+
+/**
+ * Formater un prix pour affichage
+ * @param float|null $price Prix à formater
+ * @return string Prix formaté ou chaîne vide
+ */
+function formatPrice(?float $price): string {
+    if ($price === null || $price <= 0) {
+        return '';
+    }
+    return number_format($price, 2, ',', ' ') . ' €';
+}
+
+/**
+ * Générer le bloc HTML d'affichage des prix selon les règles métier
+ *
+ * Règles :
+ * - Client direct : jamais de prix
+ * - Rep + show_prices OFF : pas de prix
+ * - Rep + show_prices ON + Type W : prix promo + prix normal barré (si promo)
+ * - Rep + show_prices ON + Type V : prix normal seul (jamais barré)
+ *
+ * @param array $product Données du produit (avec api_prix, api_prix_promo)
+ * @param bool $isRepOrder Est-ce une commande rep ?
+ * @param bool $showPrices Option show_prices de la campagne
+ * @param string $orderType Type de commande (W/V)
+ * @return string HTML du bloc prix
+ */
+function renderPriceBlock(array $product, bool $isRepOrder, bool $showPrices, string $orderType): string {
+    // Pas de prix pour les clients directs ou si show_prices désactivé
+    if (!$isRepOrder || !$showPrices) {
+        return '';
+    }
+
+    $prixNormal = $product["api_prix"] ?? null;
+    $prixPromo = $product["api_prix_promo"] ?? null;
+
+    // Pas de prix disponible
+    if (!$prixNormal && !$prixPromo) {
+        return '';
+    }
+
+    $html = '<div class="mt-3 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">';
+
+    if ($orderType === 'V') {
+        // Type V (prospection) : prix normal seul, jamais barré
+        $displayPrice = $prixNormal ?: $prixPromo;
+        if ($displayPrice) {
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($displayPrice) . '</span>';
+            $html .= '</div>';
+        }
+    } else {
+        // Type W (normal) : prix promo + prix normal barré si différent
+        if ($prixPromo && $prixNormal && $prixPromo < $prixNormal) {
+            // Promo active : afficher promo + normal barré
+            $html .= '<div class="flex items-center justify-center gap-2">';
+            $html .= '<span class="text-lg font-bold text-green-600">' . formatPrice($prixPromo) . '</span>';
+            $html .= '<span class="text-sm text-gray-400 line-through">' . formatPrice($prixNormal) . '</span>';
+            $html .= '</div>';
+        } elseif ($prixPromo) {
+            // Seulement prix promo
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($prixPromo) . '</span>';
+            $html .= '</div>';
+        } elseif ($prixNormal) {
+            // Seulement prix normal
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($prixNormal) . '</span>';
+            $html .= '</div>';
+        }
+    }
+
+    $html .= '</div>';
+    return $html;
+}
 
 // Récupérer les pages statiques pour le footer (utilisé par le layout)
 $staticPageModel = new \App\Models\StaticPage();
@@ -58,6 +142,14 @@ ob_start();
                 </div>
 
                 <div class="flex items-center gap-4">
+                    <?php // SPRINT 14 : Badge mode rep ?>
+                    <?php if ($isRepOrder): ?>
+                    <div class="hidden lg:flex items-center bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full text-sm font-medium">
+                        <i class="fas fa-user-tie mr-2"></i>
+                        <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger modus' ?>
+                    </div>
+                    <?php endif; ?>
+
                     <!-- Switch langue FR/NL (visible uniquement pour campagnes BE) -->
                     <?php if ($campaign["country"] === "BE"): ?>
                     <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
@@ -85,10 +177,16 @@ ob_start();
                         </span>
                     </button>
 
-                    <!-- Déconnexion desktop -->
+                    <!-- Déconnexion / Changer client (rep) -->
+                    <?php if ($isRepOrder): ?>
+                    <a href="/stm/c/<?= $uuid ?>/rep/select-client" class="hidden lg:block text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-exchange-alt mr-2"></i><?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
+                    </a>
+                    <?php else: ?>
                     <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">
                         <i class="fas fa-sign-out-alt mr-2"></i><?= trans('common.logout', $lang) ?>
                     </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -200,6 +298,9 @@ ob_start();
                                 <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
                                     <?= htmlspecialchars($productName) ?>
                                 </h3>
+
+                                <!-- SPRINT 14 : Bloc prix (uniquement pour reps) -->
+                                <?= renderPriceBlock($product, $isRepOrder, $showPrices, $orderType) ?>
 
                                 <!-- Quotas sur 1 SEULE LIGNE -->
                                 <?php if (!is_null($product["max_per_customer"]) && $product["is_orderable"]): ?>

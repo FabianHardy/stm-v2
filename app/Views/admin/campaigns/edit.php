@@ -5,12 +5,13 @@
  * Permet de modifier une campagne existante avec :
  * - Informations de base (nom, pays, dates, statut)
  * - Attribution clients (automatic/manual/protected)
- * - Paramètres de commande (type, livraison)
+ * - Paramètres de commande (type, livraison, affichage prix)
  * - Équipe (collaborateurs assignés)
  * - Contenu multilingue (FR/NL)
  *
  * @created  2025/11/14 02:00
  * @modified 2025/12/11 - Ajout section Équipe avec gestion AJAX
+ * @modified 2026/01/05 - Sprint 14 : Ajout option show_prices pour reps
  */
 
 ob_start();
@@ -381,6 +382,35 @@ if (!isset($availableUsers)) $availableUsers = [];
                                 </span>
                             </div>
                         </label>
+                    </div>
+                </div>
+
+                <!-- SPRINT 14 : Affichage prix pour représentants -->
+                <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <label class="flex items-start cursor-pointer">
+                        <input type="checkbox"
+                               name="show_prices"
+                               value="1"
+                               <?= ($old['show_prices'] ?? $campaign['show_prices'] ?? 1) ? 'checked' : '' ?>
+                               class="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 rounded">
+                        <div class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">
+                                💰 Afficher les prix aux représentants
+                            </span>
+                            <span class="block text-sm text-gray-600 mt-1">
+                                Les représentants verront les prix des produits dans le catalogue.
+                                Les clients directs ne voient jamais les prix.
+                            </span>
+                        </div>
+                    </label>
+
+                    <!-- Info-bulle règles de prix -->
+                    <div class="mt-3 p-3 bg-white rounded border border-purple-100">
+                        <p class="text-xs text-gray-600">
+                            <strong>📋 Règles d'affichage des prix :</strong><br>
+                            • <strong>Type W</strong> : Prix promo + prix normal barré (si différent)<br>
+                            • <strong>Type V</strong> : Prix normal uniquement (jamais barré)
+                        </p>
                     </div>
                 </div>
 
