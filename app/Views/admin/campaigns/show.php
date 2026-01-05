@@ -131,21 +131,29 @@ $canViewOrders = PermissionHelper::can('orders.view');
 <?php if ($activeTab === 'details'): ?>
     <!-- ==================== ONGLET DÉTAILS ==================== -->
 
-    <!-- SECTION : Lien de la campagne -->
+    <?php
+    // URLs de la campagne
+    $baseUrl = $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm";
+    $clientUrl = $baseUrl . "/c/" . htmlspecialchars($campaign["uuid"]);
+    $repUrl = $baseUrl . "/c/" . htmlspecialchars($campaign["uuid"]) . "/rep";
+    ?>
+
+    <!-- SECTION : Liens de la campagne -->
     <div class="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-lg p-6 mb-8 text-white">
-        <div class="flex items-center justify-between">
-            <div class="flex-1">
+        <div class="space-y-4">
+            <!-- Lien Client -->
+            <div>
                 <h3 class="text-sm font-semibold uppercase tracking-wide mb-2 opacity-90">
-                    🔗 Lien public de la campagne
+                    🔗 Lien public de la campagne (Clients)
                 </h3>
                 <div class="flex items-center space-x-3">
                     <div class="flex-1 bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
                         <code id="campaign-url" class="text-white font-mono text-sm break-all">
-                            <?= $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm" ?>/c/<?= htmlspecialchars($campaign["unique_url"]) ?>
+                            <?= $clientUrl ?>
                         </code>
                     </div>
                     <button type="button"
-                            onclick="copyToClipboard()"
+                            onclick="copyToClipboard('campaign-url', 'copy-text', 'copy-icon')"
                             class="flex-shrink-0 inline-flex items-center px-4 py-3 bg-white text-indigo-600 rounded-lg font-medium text-sm hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-indigo-600 transition">
                         <svg id="copy-icon" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -153,18 +161,43 @@ $canViewOrders = PermissionHelper::can('orders.view');
                         <span id="copy-text">Copier</span>
                     </button>
                 </div>
-                <p class="mt-3 text-sm opacity-90">
+                <p class="mt-2 text-sm opacity-90">
                     💡 Partagez ce lien avec vos clients pour qu'ils accèdent directement à la campagne
+                </p>
+            </div>
+
+            <!-- Lien Représentants -->
+            <div class="pt-4 border-t border-white border-opacity-30">
+                <h3 class="text-sm font-semibold uppercase tracking-wide mb-2 opacity-90">
+                    🧑‍💼 Lien représentants (SSO Microsoft)
+                </h3>
+                <div class="flex items-center space-x-3">
+                    <div class="flex-1 bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
+                        <code id="rep-url" class="text-white font-mono text-sm break-all">
+                            <?= $repUrl ?>
+                        </code>
+                    </div>
+                    <button type="button"
+                            onclick="copyToClipboard('rep-url', 'copy-text-rep', 'copy-icon-rep')"
+                            class="flex-shrink-0 inline-flex items-center px-4 py-3 bg-white text-purple-600 rounded-lg font-medium text-sm hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-purple-600 transition">
+                        <svg id="copy-icon-rep" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <span id="copy-text-rep">Copier</span>
+                    </button>
+                </div>
+                <p class="mt-2 text-sm opacity-90">
+                    🔐 Les représentants se connectent via leur compte Microsoft et peuvent commander pour un client
                 </p>
             </div>
         </div>
     </div>
 
     <script>
-        function copyToClipboard() {
-            const url = document.getElementById('campaign-url').textContent.trim();
-            const copyText = document.getElementById('copy-text');
-            const copyIcon = document.getElementById('copy-icon');
+        function copyToClipboard(urlId, textId, iconId) {
+            const url = document.getElementById(urlId).textContent.trim();
+            const copyText = document.getElementById(textId);
+            const copyIcon = document.getElementById(iconId);
 
             navigator.clipboard.writeText(url).then(function() {
                 copyText.textContent = 'Copié !';

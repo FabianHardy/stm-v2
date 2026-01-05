@@ -188,7 +188,7 @@ ob_start();
                         Statistiques
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        URL Publique
+                        URLs
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Statut
@@ -285,27 +285,54 @@ ob_start();
                                 </div>
                             </td>
 
-                            <!-- URL Publique -->
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <!-- URLs (Client + Reps) -->
+                            <td class="px-6 py-4 text-sm">
                                 <?php if (!empty($campaign["uuid"])): ?>
                                     <?php
-                                    $publicUrl = "https://actions.trendyfoods.com/stm/c/" . $campaign["uuid"];
+                                    $baseUrl = $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm";
+                                    $clientUrl = $baseUrl . "/c/" . $campaign["uuid"];
+                                    $repUrl = $baseUrl . "/c/" . $campaign["uuid"] . "/rep";
                                     $shortUuid = "..." . substr($campaign["uuid"], -8);
                                     ?>
-                                    <div class="flex items-center gap-2">
-                                        <a href="<?= $publicUrl ?>"
-                                           target="_blank"
-                                           class="text-purple-600 hover:text-purple-800 font-mono text-xs"
-                                           title="<?= $publicUrl ?>">
-                                            <?= $shortUuid ?>
-                                        </a>
-                                        <button onclick="copyToClipboard('<?= $publicUrl ?>', this)"
-                                                class="inline-flex items-center gap-1 text-gray-400 hover:text-gray-600"
-                                                title="Copier l'URL">
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                                            </svg>
-                                        </button>
+                                    <div class="flex flex-col gap-1.5">
+                                        <!-- URL Client -->
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700" title="Accès client direct">
+                                                👤
+                                            </span>
+                                            <a href="<?= $clientUrl ?>"
+                                               target="_blank"
+                                               class="text-purple-600 hover:text-purple-800 font-mono text-xs"
+                                               title="<?= $clientUrl ?>">
+                                                <?= $shortUuid ?>
+                                            </a>
+                                            <button onclick="copyToClipboard('<?= $clientUrl ?>', this)"
+                                                    class="text-gray-400 hover:text-gray-600"
+                                                    title="Copier URL Client">
+                                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <!-- URL Reps -->
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700" title="Accès représentant (SSO)">
+                                                🧑‍💼
+                                            </span>
+                                            <a href="<?= $repUrl ?>"
+                                               target="_blank"
+                                               class="text-purple-600 hover:text-purple-800 font-mono text-xs"
+                                               title="<?= $repUrl ?>">
+                                                <?= $shortUuid ?>/rep
+                                            </a>
+                                            <button onclick="copyToClipboard('<?= $repUrl ?>', this)"
+                                                    class="text-gray-400 hover:text-gray-600"
+                                                    title="Copier URL Reps">
+                                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 <?php else: ?>
                                     <span class="text-gray-400">-</span>
