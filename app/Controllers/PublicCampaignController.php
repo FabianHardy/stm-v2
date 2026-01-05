@@ -12,6 +12,7 @@
  * @modified 2025/11/19 19:30 - Ajout gestion singulier/pluriel pour libellé promotions
  * @modified 2025/12/30 - Ajout méthode showStaticPage() pour pages fixes (Sprint 9)
  * @modified 2025/01/05 - Intégration API Trendy Foods pour éligibilité produits
+ * @modified 2026/01/05 - Sprint 14 : Mode Représentant (commande pour client)
  */
 
 namespace App\Controllers;
@@ -214,6 +215,11 @@ class PublicCampaignController
                 "campaign_id" => $campaign["id"],
                 "language" => $selectedLanguage,
                 "logged_at" => date("Y-m-d H:i:s"),
+                // Par défaut, ce n'est PAS une commande rep
+                "is_rep_order" => false,
+                "rep_id" => null,
+                "rep_name" => null,
+                "rep_email" => null,
             ]);
 
             // Initialiser le panier vide
@@ -314,7 +320,7 @@ class PublicCampaignController
             // Codes produits autorisés
             $authorizedCodes = $eligibilityCheck['authorized_codes'];
 
-            // Infos produits (pour les prix futurs)
+            // Infos produits (pour les prix)
             $productsApiInfo = $eligibilityCheck['products_info'];
 
             // Récupérer toutes les catégories actives avec leurs produits
@@ -377,7 +383,7 @@ class PublicCampaignController
                     $product["max_orderable"] = $quotas["max_orderable"];
                     $product["is_orderable"] = $quotas["is_orderable"];
 
-                    // Ajouter les infos de l'API (prix pour usage futur)
+                    // Ajouter les infos de l'API (prix)
                     if (isset($productsApiInfo[$product["product_code"]])) {
                         $product["api_prix"] = $productsApiInfo[$product["product_code"]]["prix"];
                         $product["api_prix_promo"] = $productsApiInfo[$product["product_code"]]["prix_promo"];
@@ -508,7 +514,7 @@ class PublicCampaignController
 
             $product = $product[0];
 
-            // Vérifier les quotas disponibles
+            // Calculer les quotas disponibles
             $quotas = $this->calculateAvailableQuotas(
                 $productId,
                 $customer["customer_number"],
@@ -517,64 +523,71 @@ class PublicCampaignController
                 $product["max_total"],
             );
 
-            if (!$quotas["is_orderable"]) {
-                echo json_encode(["success" => false, "error" => "Produit plus disponible"]);
-                exit();
-            }
-
-            // Récupérer le panier
+            // Récupérer le panier actuel
             $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
-            // Chercher si le produit existe déjà dans le panier
-            $existingIndex = null;
-            foreach ($cart["items"] as $index => $item) {
-                if ($item["product_id"] == $productId) {
-                    $existingIndex = $index;
+            // Calculer la quantité déjà dans le panier
+            $currentInCart = 0;
+            foreach ($cart["items"] as $item) {
+                if ($item["product_id"] === $productId) {
+                    $currentInCart = $item["quantity"];
                     break;
                 }
             }
 
-            // Calculer la nouvelle quantité totale
-            $currentQtyInCart = $existingIndex !== null ? $cart["items"][$existingIndex]["quantity"] : 0;
-            $newTotalQty = $currentQtyInCart + $quantity;
+            // Vérifier si on peut ajouter la quantité demandée
+            $newTotal = $currentInCart + $quantity;
 
-            // Vérifier que la nouvelle quantité ne dépasse pas les quotas
-            if ($newTotalQty > $quotas["max_orderable"]) {
+            if ($newTotal > $quotas["max_orderable"]) {
+                $lang = $customer["language"] ?? "fr";
+                $errorMsg =
+                    $lang === "fr"
+                        ? "Quantité maximum atteinte. Vous pouvez commander jusqu'à " . $quotas["max_orderable"] . " unités."
+                        : "Maximum aantal bereikt. U kunt tot " . $quotas["max_orderable"] . " eenheden bestellen.";
+
                 echo json_encode([
                     "success" => false,
-                    "error" => "Quantité maximale : {$quotas["max_orderable"]}",
+                    "error" => $errorMsg,
+                    "max_available" => $quotas["max_orderable"],
                 ]);
                 exit();
             }
 
             // Ajouter ou mettre à jour le produit dans le panier
-            if ($existingIndex !== null) {
-                // Mise à jour quantité
-                $cart["items"][$existingIndex]["quantity"] = $newTotalQty;
-            } else {
-                // Nouveau produit - Stocker FR et NL pour le switch langue
+            $found = false;
+            foreach ($cart["items"] as &$item) {
+                if ($item["product_id"] === $productId) {
+                    $item["quantity"] = $newTotal;
+                    $found = true;
+                    break;
+                }
+            }
+            unset($item);
+
+            if (!$found) {
                 $cart["items"][] = [
                     "product_id" => $productId,
                     "code" => $product["product_code"],
                     "name_fr" => $product["name_fr"],
                     "name_nl" => $product["name_nl"] ?? $product["name_fr"],
-                    "image_fr" => $product["image_fr"] ?? null,
-                    "image_nl" => $product["image_nl"] ?? $product["image_fr"],
                     "quantity" => $quantity,
+                    "image_fr" => $product["image_fr"],
                 ];
             }
 
-            // Sauvegarder le panier en session
+            // Sauvegarder le panier
             Session::set("cart", $cart);
 
-            // Retourner le succès avec le panier mis à jour
+            // Calculer le total d'articles
+            $totalItems = array_sum(array_column($cart["items"], "quantity"));
+
             echo json_encode([
                 "success" => true,
                 "cart" => $cart,
-                "message" => "Produit ajouté au panier",
+                "totalItems" => $totalItems,
             ]);
-        } catch (\Exception $e) {
-            error_log("Erreur addToCart() : " . $e->getMessage());
+        } catch (\PDOException $e) {
+            error_log("Erreur addToCart : " . $e->getMessage());
             echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
@@ -593,7 +606,6 @@ class PublicCampaignController
         header("Content-Type: application/json");
 
         try {
-            // Vérifier session client
             $customer = Session::get("public_customer");
 
             if (!$customer || $customer["campaign_uuid"] !== $uuid) {
@@ -604,61 +616,61 @@ class PublicCampaignController
             $productId = (int) ($_POST["product_id"] ?? 0);
             $quantity = (int) ($_POST["quantity"] ?? 0);
 
-            if ($productId <= 0) {
-                echo json_encode(["success" => false, "error" => "Données invalides"]);
-                exit();
-            }
-
             $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
             // Si quantité = 0, supprimer le produit
             if ($quantity <= 0) {
-                $cart["items"] = array_values(
-                    array_filter($cart["items"], function ($item) use ($productId) {
-                        return $item["product_id"] != $productId;
-                    }),
-                );
+                $cart["items"] = array_filter($cart["items"], function ($item) use ($productId) {
+                    return $item["product_id"] !== $productId;
+                });
+                $cart["items"] = array_values($cart["items"]);
             } else {
                 // Vérifier les quotas
-                $product = $this->db->query("SELECT * FROM products WHERE id = :id", [":id" => $productId]);
+                $productQuery = "SELECT * FROM products WHERE id = :id";
+                $product = $this->db->query($productQuery, [":id" => $productId]);
 
-                if (empty($product)) {
-                    echo json_encode(["success" => false, "error" => "Produit introuvable"]);
-                    exit();
-                }
+                if (!empty($product)) {
+                    $product = $product[0];
 
-                $product = $product[0];
+                    $quotas = $this->calculateAvailableQuotas(
+                        $productId,
+                        $customer["customer_number"],
+                        $customer["country"],
+                        $product["max_per_customer"],
+                        $product["max_total"],
+                    );
 
-                $quotas = $this->calculateAvailableQuotas(
-                    $productId,
-                    $customer["customer_number"],
-                    $customer["country"],
-                    $product["max_per_customer"],
-                    $product["max_total"],
-                );
-
-                if ($quantity > $quotas["max_orderable"]) {
-                    echo json_encode([
-                        "success" => false,
-                        "error" => "Quantité maximale : {$quotas["max_orderable"]}",
-                    ]);
-                    exit();
+                    if ($quantity > $quotas["max_orderable"]) {
+                        echo json_encode([
+                            "success" => false,
+                            "error" => "Quantité maximum dépassée",
+                            "max_available" => $quotas["max_orderable"],
+                        ]);
+                        exit();
+                    }
                 }
 
                 // Mettre à jour la quantité
                 foreach ($cart["items"] as &$item) {
-                    if ($item["product_id"] == $productId) {
+                    if ($item["product_id"] === $productId) {
                         $item["quantity"] = $quantity;
                         break;
                     }
                 }
+                unset($item);
             }
 
             Session::set("cart", $cart);
 
-            echo json_encode(["success" => true, "cart" => $cart]);
-        } catch (\Exception $e) {
-            error_log("Erreur updateCart() : " . $e->getMessage());
+            $totalItems = array_sum(array_column($cart["items"], "quantity"));
+
+            echo json_encode([
+                "success" => true,
+                "cart" => $cart,
+                "totalItems" => $totalItems,
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur updateCart : " . $e->getMessage());
             echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
@@ -666,7 +678,7 @@ class PublicCampaignController
     }
 
     /**
-     * Retirer un produit du panier
+     * Supprimer un produit du panier
      * Route : POST /c/{uuid}/cart/remove
      *
      * @param string $uuid UUID de la campagne
@@ -688,18 +700,22 @@ class PublicCampaignController
 
             $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
-            // Retirer le produit
-            $cart["items"] = array_values(
-                array_filter($cart["items"], function ($item) use ($productId) {
-                    return $item["product_id"] != $productId;
-                }),
-            );
+            $cart["items"] = array_filter($cart["items"], function ($item) use ($productId) {
+                return $item["product_id"] !== $productId;
+            });
+            $cart["items"] = array_values($cart["items"]);
 
             Session::set("cart", $cart);
 
-            echo json_encode(["success" => true, "cart" => $cart]);
-        } catch (\Exception $e) {
-            error_log("Erreur removeFromCart() : " . $e->getMessage());
+            $totalItems = array_sum(array_column($cart["items"], "quantity"));
+
+            echo json_encode([
+                "success" => true,
+                "cart" => $cart,
+                "totalItems" => $totalItems,
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur removeFromCart : " . $e->getMessage());
             echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
@@ -707,7 +723,7 @@ class PublicCampaignController
     }
 
     /**
-     * Vider complètement le panier
+     * Vider le panier
      * Route : POST /c/{uuid}/cart/clear
      *
      * @param string $uuid UUID de la campagne
@@ -725,14 +741,15 @@ class PublicCampaignController
                 exit();
             }
 
-            Session::set("cart", [
-                "campaign_uuid" => $uuid,
-                "items" => [],
-            ]);
+            Session::set("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
-            echo json_encode(["success" => true, "cart" => Session::get("cart")]);
-        } catch (\Exception $e) {
-            error_log("Erreur clearCart() : " . $e->getMessage());
+            echo json_encode([
+                "success" => true,
+                "cart" => ["campaign_uuid" => $uuid, "items" => []],
+                "totalItems" => 0,
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur clearCart : " . $e->getMessage());
             echo json_encode(["success" => false, "error" => "Erreur serveur"]);
         }
 
@@ -740,14 +757,14 @@ class PublicCampaignController
     }
 
     /**
-     * Calculer les quotas disponibles pour un produit
+     * Calculer les quotas disponibles pour un produit/client
      *
      * @param int $productId ID du produit
      * @param string $customerNumber Numéro client
      * @param string $country Pays
-     * @param int|null $maxPerCustomer Quota max par client
-     * @param int|null $maxTotal Quota max global
-     * @return array ['customer' => int, 'global' => int, 'max_orderable' => int, 'is_orderable' => bool]
+     * @param int|null $maxPerCustomer Quota max par client (null = illimité)
+     * @param int|null $maxTotal Quota global (null = illimité)
+     * @return array Quotas calculés
      */
     private function calculateAvailableQuotas(
         int $productId,
@@ -756,43 +773,40 @@ class PublicCampaignController
         ?int $maxPerCustomer,
         ?int $maxTotal,
     ): array {
-        // Quota utilisé par le client (commandes validées uniquement)
+        // Quota client
         $customerUsed = $this->getCustomerQuotaUsed($productId, $customerNumber, $country);
+        $customerAvailable = $maxPerCustomer !== null ? max(0, $maxPerCustomer - $customerUsed) : PHP_INT_MAX;
 
-        // Quota utilisé globalement (toutes commandes validées)
+        // Quota global
         $globalUsed = $this->getGlobalQuotaUsed($productId);
+        $globalAvailable = $maxTotal !== null ? max(0, $maxTotal - $globalUsed) : PHP_INT_MAX;
 
-        // Calculer disponibles
-        $availableForCustomer = is_null($maxPerCustomer) ? PHP_INT_MAX : $maxPerCustomer - $customerUsed;
-        $availableGlobal = is_null($maxTotal) ? PHP_INT_MAX : $maxTotal - $globalUsed;
-
-        // Maximum commandable = minimum des 2
-        $maxOrderable = min($availableForCustomer, $availableGlobal);
-        $isOrderable = $maxOrderable > 0;
+        // Maximum commandable (le plus restrictif)
+        $maxOrderable = min($customerAvailable, $globalAvailable);
 
         return [
-            "customer" => max(0, $availableForCustomer),
-            "global" => max(0, $availableGlobal),
-            "max_orderable" => max(0, $maxOrderable),
-            "is_orderable" => $isOrderable,
+            "customer" => $customerAvailable,
+            "global" => $globalAvailable,
+            "max_orderable" => $maxOrderable,
+            "is_orderable" => $maxOrderable > 0,
         ];
     }
 
     /**
-     * Récupérer la connexion à la base externe
+     * Obtenir une connexion à la base de données externe (trendyblog_sig)
      *
-     * @return \PDO
+     * @return \PDO Connexion PDO
      */
     private function getExternalDatabase(): \PDO
     {
         $host = $_ENV["DB_HOST"] ?? "localhost";
-        $dbname = "trendyblog_sig"; // DB externe
-        $user = $_ENV["DB_USER"] ?? "";
-        $password = $_ENV["DB_PASS"] ?? "";
+        $dbname = "trendyblog_sig";
+        $username = $_ENV["DB_USER"] ?? "";
+        $password = $_ENV["DB_PASSWORD"] ?? "";
 
         $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
 
-        return new \PDO($dsn, $user, $password, [
+        return new \PDO($dsn, $username, $password, [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ]);
@@ -1098,7 +1112,7 @@ class PublicCampaignController
      * 1. Validation email + CGV
      * 2. Validation quotas finale
      * 3. Création/récupération client dans table customers
-     * 4. Création commande dans table orders
+     * 4. Création commande dans table orders (avec traçabilité rep si applicable)
      * 5. Création lignes dans table order_lines
      * 6. Génération fichier TXT pour ERP
      * 7. Vidage panier
@@ -1107,6 +1121,7 @@ class PublicCampaignController
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 17/11/2025
+     * @modified 05/01/2026 - Sprint 14 : Ajout traçabilité rep (ordered_by_rep_id, order_source)
      */
     public function submitOrder(string $uuid): void
     {
@@ -1225,15 +1240,25 @@ class PublicCampaignController
             );
 
             // 4. Créer la commande dans table orders
+            // ========================================
+            // SPRINT 14 : Traçabilité rep
+            // ========================================
             $orderUuid = $this->generateUuid();
             $totalItems = array_sum(array_column($cart["items"], "quantity"));
             $totalProducts = count($cart["items"]);
 
+            // Déterminer la source et le rep si applicable
+            $isRepOrder = $customer["is_rep_order"] ?? false;
+            $orderSource = $isRepOrder ? 'rep' : 'client';
+            $orderedByRepId = $isRepOrder ? ($customer["rep_id"] ?? null) : null;
+
             $queryOrder = "INSERT INTO orders (
                 uuid, campaign_id, customer_id, customer_email,
+                ordered_by_rep_id, order_source,
                 total_items, total_products, status, created_at
             ) VALUES (
                 :uuid, :campaign_id, :customer_id, :customer_email,
+                :ordered_by_rep_id, :order_source,
                 :total_items, :total_products, 'pending', NOW()
             )";
 
@@ -1242,6 +1267,8 @@ class PublicCampaignController
                 ":campaign_id" => $campaign["id"],
                 ":customer_id" => $customerId,
                 ":customer_email" => $customerEmail,
+                ":ordered_by_rep_id" => $orderedByRepId,
+                ":order_source" => $orderSource,
                 ":total_items" => $totalItems,
                 ":total_products" => $totalProducts,
             ]);
@@ -1296,6 +1323,9 @@ class PublicCampaignController
                     : "Uw bestelling is succesvol gevalideerd!";
 
             // 11. Préparer les données email pour envoi asynchrone
+            // ========================================
+            // SPRINT 14 : Ajout infos rep pour copie email
+            // ========================================
             $_SESSION["pending_email"] = [
                 "customer_email" => $customerEmail,
                 "order_id" => $orderId,
@@ -1309,6 +1339,10 @@ class PublicCampaignController
                 "delivery_date" => $campaign["delivery_date"] ?? null,
                 "language" => $customer["language"] ?? "fr",
                 "lines" => $cart["items"],
+                // SPRINT 14 : Infos rep pour copie email
+                "is_rep_order" => $isRepOrder,
+                "rep_email" => $customer["rep_email"] ?? null,
+                "rep_name" => $customer["rep_name"] ?? null,
             ];
 
             // Horodatage de la validation (protection double soumission)
@@ -1384,24 +1418,25 @@ class PublicCampaignController
             ":email" => $email,
         ]);
 
-        return $this->db->lastInsertId();
+        return (int) $this->db->lastInsertId();
     }
 
     /**
      * Générer le fichier TXT pour l'ERP
      *
-     * Format traitement.php :
-     * I00{DDMMYY}{DDMMYY_livraison}
-     * H{numClient8}{V/W}{NomCampagne}
-     * D{numProduit}{qte10digits}
+     * Format :
+     * - Ligne I : Entête avec dates
+     * - Ligne H : Header client/campagne
+     * - Lignes D : Détail produits
      *
      * @param int $orderId ID de la commande
      * @param array $campaign Données campagne
      * @param string $customerNumber Numéro client
-     * @param string $country Pays (BE/LU)
-     * @param array $items Produits du panier
-     * @return array Chemin relatif du fichier généré + contenu
+     * @param string $country Pays
+     * @param array $items Lignes du panier
+     * @return array ['path' => string, 'content' => string]
      * @created 17/11/2025
+     * @modified 25/11/2025 - Utiliser formatCustomerNumberForFilename pour noms fichiers
      */
     private function generateOrderFile(
         int $orderId,
@@ -1410,64 +1445,90 @@ class PublicCampaignController
         string $country,
         array $items,
     ): array {
-        $today = date("dmy"); // Format: 171125
+        // Format dates
+        $orderDate = date("dmy");
 
-        // Ligne I00 : Date commande + date livraison (si applicable)
-        if ($campaign["deferred_delivery"] == 1 && !empty($campaign["delivery_date"])) {
+        // Date de livraison
+        if (($campaign["deferred_delivery"] ?? 0) == 1 && !empty($campaign["delivery_date"])) {
             $deliveryDate = date("dmy", strtotime($campaign["delivery_date"]));
-            $lineI = "I00{$today}{$deliveryDate}\n";
         } else {
-            $lineI = "I00{$today}\n";
+            $deliveryDate = $orderDate;
         }
 
-        // Formater numéro client sur 8 caractères
-        $customerNumber8 = $this->formatCustomerNumber($customerNumber);
+        // Numéro client formaté (8 caractères)
+        $customerFormatted = $this->formatCustomerNumber($customerNumber);
 
-        // Ligne H : Numéro client + Type commande + Nom campagne
-        $orderType = $campaign["order_type"]; // V ou W
-        $campaignName = str_replace([" ", "-", "_"], "", $campaign["name"]); // Enlever espaces et tirets
-        $lineH = "H{$customerNumber8}{$orderType}{$campaignName}\n";
+        // Type commande (V ou W)
+        $orderType = $campaign["order_type"] ?? "W";
 
-        // Lignes D : Détails produits
-        $linesD = "";
+        // Nom campagne (20 caractères max, sans accents)
+        $campaignName = $this->sanitizeForTxt($campaign["name"] ?? "CAMPAGNE", 20);
+
+        // Contenu du fichier
+        $content = "";
+
+        // Ligne I : Entête
+        $content .= "I00{$orderDate}{$deliveryDate}\r\n";
+
+        // Ligne H : Header
+        $content .= "H{$customerFormatted}{$orderType}{$campaignName}\r\n";
+
+        // Lignes D : Détail produits
         foreach ($items as $item) {
-            $productCode = $item["code"];
-            $quantity = sprintf("%'.010d", $item["quantity"]); // Padding 10 digits avec 0
-            $linesD .= "D{$productCode}{$quantity}\n";
+            $productCode = str_pad($item["code"], 6, "0", STR_PAD_LEFT);
+            $quantity = str_pad((string) $item["quantity"], 10, "0", STR_PAD_LEFT);
+            $content .= "D{$productCode}{$quantity}\r\n";
         }
 
-        // Contenu complet du fichier
-        $content = $lineI . $lineH . $linesD;
+        // Déterminer le répertoire
+        $baseDir = $_ENV["STORAGE_PATH"] ?? dirname(__DIR__, 2) . "/public";
+        $countryDir = strtolower($country);
+        $directory = "{$baseDir}/commande_{$countryDir}";
 
-        // Créer le répertoire si nécessaire
-        $directory = $country === "BE" ? "commande_BE" : "commande_LU";
-        $fullPath = __DIR__ . "/../../public/" . $directory;
-
-        if (!is_dir($fullPath)) {
-            mkdir($fullPath, 0755, true);
+        // Créer le répertoire s'il n'existe pas
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
         }
 
-        // Nom du fichier : WebAction_{Ymd-His}_{numClient8}.txt
-        // Utiliser formatCustomerNumberForFilename() pour remplacer * par x (Windows)
-        $customerNumberFilename = $this->formatCustomerNumberForFilename($customerNumber);
-        $filename = "WebAction_" . date("Ymd-His") . "_" . $customerNumberFilename . ".txt";
-
-        $filepath = $fullPath . "/" . $filename;
+        // Nom de fichier unique (utiliser format compatible Windows)
+        $customerFilename = $this->formatCustomerNumberForFilename($customerNumber);
+        $filename = "{$customerFilename}_{$orderId}_{$orderDate}.txt";
+        $filepath = "{$directory}/{$filename}";
 
         // Écrire le fichier
         file_put_contents($filepath, $content);
 
-        // Retourner chemin relatif ET contenu pour stockage en DB
+        // Retourner le chemin relatif et le contenu
         return [
-            'path' => "/" . $directory . "/" . $filename,
+            'path' => "/commande_{$countryDir}/{$filename}",
             'content' => $content
         ];
     }
 
     /**
-     * Formater un numéro client sur 8 caractères (pour contenu fichier)
+     * Nettoyer une chaîne pour fichier TXT (ASCII uniquement)
      *
-     * Règles :
+     * @param string $text Texte à nettoyer
+     * @param int $maxLength Longueur maximale
+     * @return string Texte nettoyé
+     * @created 17/11/2025
+     */
+    private function sanitizeForTxt(string $text, int $maxLength): string
+    {
+        // Remplacer les accents
+        $text = iconv("UTF-8", "ASCII//TRANSLIT//IGNORE", $text);
+
+        // Garder uniquement alphanumérique et espaces
+        $text = preg_replace("/[^A-Za-z0-9 ]/", "", $text);
+
+        // Tronquer et uppercase
+        return strtoupper(substr($text, 0, $maxLength));
+    }
+
+    /**
+     * Formater le numéro client sur 8 caractères
+     *
+     * Règles définies :
      * - Numéro de base (6 car.) : Ajouter "00" → 8 caractères
      *   Ex: 802412 → 80241200, *12345 → *1234500, DE1234 → DE123400
      * - Numéro livraison (6 + "-" + 2 = 9 car.) : Supprimer le tiret → 8 caractères
@@ -1534,6 +1595,7 @@ class PublicCampaignController
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 19/11/2025
+     * @modified 05/01/2026 - Sprint 14 : Ajout envoi copie email au rep
      */
     public function orderConfirmation(string $uuid): void
     {
@@ -1558,6 +1620,9 @@ class PublicCampaignController
                         "deferred_delivery" => $data["deferred_delivery"],
                         "delivery_date" => $data["delivery_date"],
                         "lines" => [],
+                        // SPRINT 14 : Info si commande rep
+                        "is_rep_order" => $data["is_rep_order"] ?? false,
+                        "rep_name" => $data["rep_name"] ?? null,
                     ];
 
                     foreach ($data["lines"] as $item) {
@@ -1571,6 +1636,7 @@ class PublicCampaignController
 
                     $mailchimpService = new \App\Services\MailchimpEmailService();
 
+                    // Email au client
                     $emailSent = @$mailchimpService->sendOrderConfirmation(
                         $data["customer_email"],
                         $orderData,
@@ -1586,6 +1652,31 @@ class PublicCampaignController
                             "Échec envoi email confirmation via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
                         );
                     }
+
+                    // ========================================
+                    // SPRINT 14 : Copie email au rep
+                    // ========================================
+                    if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
+                        // Marquer comme copie rep
+                        $orderData["is_rep_copy"] = true;
+
+                        $repEmailSent = @$mailchimpService->sendOrderConfirmation(
+                            $data["rep_email"],
+                            $orderData,
+                            $data["language"],
+                        );
+
+                        if ($repEmailSent) {
+                            error_log(
+                                "Copie email confirmation envoyée au rep: {$data["rep_email"]} (Commande: {$data["order_number"]})",
+                            );
+                        } else {
+                            error_log(
+                                "Échec envoi copie email rep à: {$data["rep_email"]} (Commande: {$data["order_number"]})",
+                            );
+                        }
+                    }
+
                 } catch (\Exception $e) {
                     error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
                 }
@@ -1685,5 +1776,499 @@ class PublicCampaignController
         $showLanguageSwitch = ($campaign['country'] === 'BE');
 
         require __DIR__ . "/../Views/public/static_page.php";
+    }
+
+    // ============================================================================
+    // SPRINT 14 : MÉTHODES MODE REPRÉSENTANT
+    // ============================================================================
+
+    /**
+     * Point d'entrée pour l'accès représentant
+     * Redirige vers SSO Microsoft si pas connecté
+     *
+     * Route : GET /c/{uuid}/rep
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 05/01/2026 - Sprint 14
+     */
+    public function repAccess(string $uuid): void
+    {
+        try {
+            // Récupérer la campagne
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
+
+            if (empty($campaign)) {
+                $this->renderAccessDenied("campaign_not_found", $uuid);
+                return;
+            }
+
+            $campaign = $campaign[0];
+
+            // Vérifier statut campagne
+            $now = date('Y-m-d');
+            if ($now < $campaign['start_date']) {
+                $this->renderAccessDenied("upcoming", $uuid, $campaign);
+                return;
+            }
+            if ($now > $campaign['end_date']) {
+                $this->renderAccessDenied("ended", $uuid, $campaign);
+                return;
+            }
+
+            // Vérifier si le rep est déjà connecté en session
+            if ($this->isRepAuthenticated()) {
+                // Rediriger vers la sélection de client
+                header("Location: /stm/c/{$uuid}/rep/select-client");
+                exit();
+            }
+
+            // Stocker l'UUID de la campagne pour le callback SSO
+            Session::set('rep_campaign_uuid', $uuid);
+
+            // Rediriger vers l'authentification Microsoft SSO
+            $redirectUri = urlencode($_ENV['APP_URL'] . '/auth/microsoft/callback-rep');
+            $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
+
+            header("Location: {$authUrl}");
+            exit();
+
+        } catch (\PDOException $e) {
+            error_log("Erreur repAccess() : " . $e->getMessage());
+            $this->renderAccessDenied("error", $uuid);
+        }
+    }
+
+    /**
+     * Callback Microsoft SSO pour les représentants
+     *
+     * Route : GET /auth/microsoft/callback-rep
+     *
+     * @return void
+     * @created 05/01/2026 - Sprint 14
+     */
+    public function repMicrosoftCallback(): void
+    {
+        try {
+            $code = $_GET['code'] ?? null;
+            $error = $_GET['error'] ?? null;
+
+            $uuid = Session::get('rep_campaign_uuid');
+
+            if (!$uuid) {
+                header("Location: /stm/admin/login");
+                exit();
+            }
+
+            if ($error || !$code) {
+                error_log("[Rep SSO] Erreur: " . ($error ?? 'No code'));
+                Session::set('error', 'Échec de l\'authentification Microsoft.');
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
+
+            // Échanger le code contre un token
+            $tokenData = $this->exchangeMicrosoftCode($code, 'callback-rep');
+
+            if (!$tokenData || !isset($tokenData['access_token'])) {
+                Session::set('error', 'Erreur lors de l\'authentification.');
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
+
+            // Récupérer les infos utilisateur
+            $userInfo = $this->getMicrosoftUserInfo($tokenData['access_token']);
+
+            if (!$userInfo || !isset($userInfo['id'])) {
+                Session::set('error', 'Impossible de récupérer les informations utilisateur.');
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
+
+            // Vérifier que l'utilisateur existe dans notre base ET est un rep
+            $query = "SELECT * FROM users WHERE microsoft_id = :microsoft_id AND is_active = 1";
+            $user = $this->db->query($query, [":microsoft_id" => $userInfo['id']]);
+
+            if (empty($user)) {
+                // Utilisateur non trouvé, essayer par email
+                $query = "SELECT * FROM users WHERE email = :email AND is_active = 1";
+                $user = $this->db->query($query, [":email" => $userInfo['mail'] ?? $userInfo['userPrincipalName']]);
+            }
+
+            if (empty($user)) {
+                Session::set('error', 'Vous n\'êtes pas autorisé à accéder à cette fonctionnalité.');
+                header("Location: /stm/c/{$uuid}");
+                exit();
+            }
+
+            $user = $user[0];
+
+            // Vérifier que c'est bien un rôle autorisé (rep, manager_reps, admin, superadmin)
+            $allowedRoles = ['rep', 'manager_reps', 'admin', 'superadmin'];
+            if (!in_array($user['role'], $allowedRoles)) {
+                Session::set('error', 'Votre rôle ne permet pas d\'utiliser cette fonctionnalité.');
+                header("Location: /stm/c/{$uuid}");
+                exit();
+            }
+
+            // Stocker les infos rep en session
+            Session::set('rep_session', [
+                'rep_id' => $user['id'],
+                'rep_name' => $user['name'],
+                'rep_email' => $user['email'],
+                'rep_role' => $user['role'],
+                'rep_country' => $user['rep_country'],
+                'campaign_uuid' => $uuid,
+                'authenticated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // Nettoyer
+            Session::remove('rep_campaign_uuid');
+
+            // Rediriger vers la sélection de client
+            header("Location: /stm/c/{$uuid}/rep/select-client");
+            exit();
+
+        } catch (\Exception $e) {
+            error_log("Erreur repMicrosoftCallback: " . $e->getMessage());
+            $uuid = Session::get('rep_campaign_uuid') ?? '';
+            Session::set('error', 'Une erreur est survenue lors de l\'authentification.');
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+    }
+
+    /**
+     * Page de sélection du client par le rep
+     *
+     * Route : GET /c/{uuid}/rep/select-client
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 05/01/2026 - Sprint 14
+     */
+    public function repSelectClient(string $uuid): void
+    {
+        // Vérifier que le rep est authentifié
+        if (!$this->isRepAuthenticated() || !$this->isRepOnCampaign($uuid)) {
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
+        try {
+            // Récupérer la campagne
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
+
+            if (empty($campaign)) {
+                $this->renderAccessDenied("campaign_not_found", $uuid);
+                return;
+            }
+
+            $campaign = $campaign[0];
+            $rep = Session::get('rep_session');
+            $error = Session::get('error');
+            Session::remove('error');
+
+            // Afficher la vue
+            require __DIR__ . "/../Views/public/campaign/rep_select_client.php";
+
+        } catch (\PDOException $e) {
+            error_log("Erreur repSelectClient: " . $e->getMessage());
+            $this->renderAccessDenied("error", $uuid);
+        }
+    }
+
+    /**
+     * Identifier le rep en tant que client
+     *
+     * Route : POST /c/{uuid}/rep/identify
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 05/01/2026 - Sprint 14
+     */
+    public function repIdentifyAs(string $uuid): void
+    {
+        // Vérifier que le rep est authentifié
+        if (!$this->isRepAuthenticated() || !$this->isRepOnCampaign($uuid)) {
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
+        try {
+            // Récupérer la campagne
+            $query = "SELECT * FROM campaigns WHERE uuid = :uuid AND is_active = 1";
+            $campaign = $this->db->query($query, [":uuid" => $uuid]);
+
+            if (empty($campaign)) {
+                $this->renderAccessDenied("campaign_not_found", $uuid);
+                return;
+            }
+
+            $campaign = $campaign[0];
+
+            // Récupérer les données du formulaire
+            $customerNumber = trim($_POST["customer_number"] ?? "");
+            $country = $_POST["country"] ?? ($campaign["country"] === "BOTH" ? "BE" : $campaign["country"]);
+            $language = $_POST["language"] ?? "fr";
+
+            // Validation
+            if (empty($customerNumber)) {
+                Session::set("error", "Le numéro client est obligatoire.");
+                header("Location: /stm/c/{$uuid}/rep/select-client");
+                exit();
+            }
+
+            // Vérifier que le client existe dans la DB externe
+            $externalDb = $this->getExternalDatabase();
+            $customerData = $this->getCustomerFromExternal($externalDb, $customerNumber, $country);
+
+            if (!$customerData) {
+                Session::set("error", "Numéro client introuvable dans la base de données.");
+                header("Location: /stm/c/{$uuid}/rep/select-client");
+                exit();
+            }
+
+            // Vérifier les droits selon le mode de la campagne
+            $hasAccess = $this->checkCustomerAccessForRep($campaign, $customerNumber, $country);
+
+            if (!$hasAccess) {
+                Session::set("error", "Ce client n'est pas autorisé pour cette campagne.");
+                header("Location: /stm/c/{$uuid}/rep/select-client");
+                exit();
+            }
+
+            // Vérifier l'éligibilité produits via API Trendy Foods
+            $eligibilityCheck = $this->checkProductsEligibility($campaign["id"], $customerNumber, $country);
+
+            if ($eligibilityCheck['api_error']) {
+                Session::set("error", "Service temporairement indisponible. Veuillez réessayer.");
+                header("Location: /stm/c/{$uuid}/rep/select-client");
+                exit();
+            }
+
+            if (empty($eligibilityCheck['authorized_codes'])) {
+                $this->renderAccessDenied("no_products_authorized", $uuid, $campaign);
+                return;
+            }
+
+            // Vérifier les quotas disponibles
+            $hasAvailableProducts = $this->checkAvailableProducts($campaign["id"], $customerNumber, $country);
+
+            if (!$hasAvailableProducts) {
+                $this->renderAccessDenied("quotas_reached", $uuid, $campaign);
+                return;
+            }
+
+            // Récupérer les infos du rep
+            $rep = Session::get('rep_session');
+
+            // Créer la session client (avec flag rep)
+            Session::set("public_customer", [
+                "customer_number" => $customerNumber,
+                "country" => $country,
+                "company_name" => $customerData["company_name"],
+                "campaign_uuid" => $uuid,
+                "campaign_id" => $campaign["id"],
+                "language" => $language,
+                "logged_at" => date("Y-m-d H:i:s"),
+                // Flags mode rep
+                "is_rep_order" => true,
+                "rep_id" => $rep['rep_id'],
+                "rep_name" => $rep['rep_name'],
+                "rep_email" => $rep['rep_email']
+            ]);
+
+            // Initialiser le panier vide
+            Session::set("cart", [
+                "campaign_uuid" => $uuid,
+                "items" => [],
+            ]);
+
+            // Rediriger vers le catalogue
+            header("Location: /stm/c/{$uuid}/catalog");
+            exit();
+
+        } catch (\PDOException $e) {
+            error_log("Erreur repIdentifyAs: " . $e->getMessage());
+            Session::set("error", "Une erreur est survenue.");
+            header("Location: /stm/c/{$uuid}/rep/select-client");
+            exit();
+        }
+    }
+
+    /**
+     * Déconnexion du rep
+     *
+     * Route : GET /c/{uuid}/rep/logout
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 05/01/2026 - Sprint 14
+     */
+    public function repLogout(string $uuid): void
+    {
+        Session::remove('rep_session');
+        Session::remove('public_customer');
+        Session::remove('cart');
+
+        header("Location: /stm/c/{$uuid}");
+        exit();
+    }
+
+    /**
+     * Vérifier si un rep est authentifié
+     *
+     * @return bool
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function isRepAuthenticated(): bool
+    {
+        $repSession = Session::get('rep_session');
+        return !empty($repSession) && isset($repSession['rep_id']);
+    }
+
+    /**
+     * Vérifier si le rep est sur la bonne campagne
+     *
+     * @param string $uuid UUID de la campagne
+     * @return bool
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function isRepOnCampaign(string $uuid): bool
+    {
+        $repSession = Session::get('rep_session');
+        return !empty($repSession) && ($repSession['campaign_uuid'] ?? '') === $uuid;
+    }
+
+    /**
+     * Vérifier les droits d'accès client pour le mode rep
+     * Même logique que checkCustomerAccess mais sans le mode protected (password)
+     *
+     * @param array $campaign Données de la campagne
+     * @param string $customerNumber Numéro client
+     * @param string $country Pays
+     * @return bool
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function checkCustomerAccessForRep(array $campaign, string $customerNumber, string $country): bool
+    {
+        // Mode AUTOMATIC ou PROTECTED : tous les clients de la DB externe ont accès
+        if ($campaign["customer_assignment_mode"] === "automatic" || $campaign["customer_assignment_mode"] === "protected") {
+            return true;
+        }
+
+        // Mode MANUAL : vérifier si le client est dans la liste
+        if ($campaign["customer_assignment_mode"] === "manual") {
+            $query = "
+                SELECT COUNT(*) as count
+                FROM campaign_customers
+                WHERE campaign_id = :campaign_id
+                  AND customer_number = :customer_number
+                  AND country = :country
+            ";
+
+            $result = $this->db->query($query, [
+                ":campaign_id" => $campaign["id"],
+                ":customer_number" => $customerNumber,
+                ":country" => $country,
+            ]);
+
+            return ($result[0]["count"] ?? 0) > 0;
+        }
+
+        return false;
+    }
+
+    /**
+     * Construire l'URL d'authentification Microsoft
+     *
+     * @param string $redirectUri URI de callback encodé
+     * @return string URL d'authentification
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function buildMicrosoftAuthUrl(string $redirectUri): string
+    {
+        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
+        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
+
+        $params = [
+            'client_id' => $clientId,
+            'response_type' => 'code',
+            'redirect_uri' => urldecode($redirectUri),
+            'scope' => 'openid profile email User.Read',
+            'response_mode' => 'query',
+            'state' => bin2hex(random_bytes(16))
+        ];
+
+        return "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?" . http_build_query($params);
+    }
+
+    /**
+     * Échanger le code Microsoft contre un token
+     *
+     * @param string $code Code d'autorisation
+     * @param string $callbackType Type de callback ('callback' ou 'callback-rep')
+     * @return array|null Données du token ou null
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function exchangeMicrosoftCode(string $code, string $callbackType = 'callback'): ?array
+    {
+        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
+        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
+        $clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? '';
+        $redirectUri = $_ENV['APP_URL'] . '/auth/microsoft/' . $callbackType;
+
+        $url = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token";
+
+        $data = [
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'code' => $code,
+            'redirect_uri' => $redirectUri,
+            'grant_type' => 'authorization_code',
+            'scope' => 'openid profile email User.Read'
+        ];
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($data),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        return json_decode($response, true);
+    }
+
+    /**
+     * Récupérer les infos utilisateur depuis Microsoft Graph
+     *
+     * @param string $accessToken Token d'accès
+     * @return array|null Infos utilisateur ou null
+     * @created 05/01/2026 - Sprint 14
+     */
+    private function getMicrosoftUserInfo(string $accessToken): ?array
+    {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://graph.microsoft.com/v1.0/me',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/json'
+            ]
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        return json_decode($response, true);
     }
 }
