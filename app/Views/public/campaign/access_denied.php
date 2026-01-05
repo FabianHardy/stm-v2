@@ -1,14 +1,15 @@
 <?php
 /**
  * Vue : Page d'accès refusé
- * 
+ *
  * Affichée lorsqu'un client n'a pas accès à une campagne
  * Messages personnalisés selon la raison du refus
- * 
+ *
  * @package STM
  * @created 2025/11/18
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
+ * @modified 2025/01/05 - Ajout motif "no_products_authorized" pour API Trendy Foods
  */
 
 // ========================================
@@ -49,7 +50,7 @@ if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
 $lang = $_SESSION['temp_language'] ?? $_SESSION['public_customer']['language'] ?? 'fr';
 
 // Switch langue visible ?
-$showLang = !$customer 
+$showLang = !$customer
     ? (!$campaign || in_array($campaign['country'] ?? 'BE', ['BE', 'BOTH']))
     : ($customer['country'] === 'BE');
 
@@ -83,9 +84,30 @@ switch($reason) {
         if ($customer) {
             $infoBox = '<div class="bg-red-50 border border-red-200 rounded-lg p-4 mt-6"><p class="text-sm text-red-800"><i class="fas fa-info-circle mr-2"></i>' . trans('denied.account_not_authorized', $lang, ['account' => htmlspecialchars($customer['customer_number'])]) . '</p></div>';
         }
-        $actionButton = $customer 
+        $actionButton = $customer
             ? '<a href="/stm/c/' . htmlspecialchars($uuid) . '" class="inline-flex items-center bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition shadow-md"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>' . trans('common.back', $lang) . '</a>'
             : '<a href="/stm/c/' . htmlspecialchars($uuid) . '" class="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>' . trans('denied.try_another', $lang) . '</a>';
+        break;
+
+    // ========================================
+    // NOUVEAU MOTIF : Aucun produit autorisé (API Trendy Foods)
+    // ========================================
+    case 'no_products_authorized':
+        $pageTitle = $lang === 'fr' ? 'Aucun produit disponible' : 'Geen producten beschikbaar';
+        $iconSvg = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>';
+        $iconColor = 'text-orange-600 bg-orange-100';
+        $mainMessage = $lang === 'fr'
+            ? 'Vous n\'avez actuellement pas accès aux produits de cette campagne.'
+            : 'U heeft momenteel geen toegang tot de producten van deze campagne.';
+        $detailMessage = $lang === 'fr'
+            ? 'Les produits de cette promotion ne sont pas disponibles pour votre compte. Veuillez contacter votre représentant commercial pour plus d\'informations.'
+            : 'De producten van deze promotie zijn niet beschikbaar voor uw account. Neem contact op met uw vertegenwoordiger voor meer informatie.';
+        if ($customer) {
+            $infoBox = '<div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mt-6"><p class="text-sm text-orange-800"><i class="fas fa-info-circle mr-2"></i>' . ($lang === 'fr'
+                ? 'Compte client : ' . htmlspecialchars($customer['customer_number'])
+                : 'Klantnummer: ' . htmlspecialchars($customer['customer_number'])) . '</p></div>';
+        }
+        $actionButton = '<a href="/stm/c/' . htmlspecialchars($uuid) . '" class="inline-flex items-center bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition shadow-md"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>' . ($lang === 'fr' ? 'Retour' : 'Terug') . '</a>';
         break;
 
     case 'quotas_reached':
@@ -146,7 +168,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
 <!-- Contenu principal -->
 <div class="container mx-auto px-4 py-12">
     <div class="max-w-2xl mx-auto">
-        
+
         <!-- Carte principale -->
         <div class="bg-white rounded-lg shadow-lg overflow-hidden">
             <div class="p-8">
@@ -172,10 +194,10 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
 
         <!-- Section aide -->
         <div class="mt-8">
-            <?php 
+            <?php
             $country = $campaign['country'] ?? 'BE';
             $helpText = trans('denied.help_text', $lang);
-            include __DIR__ . '/../../components/public/help_box.php'; 
+            include __DIR__ . '/../../components/public/help_box.php';
             ?>
         </div>
     </div>
