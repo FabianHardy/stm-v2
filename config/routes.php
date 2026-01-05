@@ -584,6 +584,61 @@ $router->get("/admin/orders/{id}", function ($id) {
     $controller->show((int) $id);
 });
 
+
+/**
+ * ROUTES À AJOUTER À config/routes.php
+ * Sprint 14 : Mode Représentant
+ *
+ * @created 2026/01/05
+ *
+ * INSTRUCTIONS :
+ * Ajouter ces routes dans config/routes.php, dans la section "ROUTES PUBLIQUES"
+ * AVANT les routes génériques /c/{uuid}
+ */
+
+// =============================================================================
+// ROUTES MODE REPRÉSENTANT - À AJOUTER
+// =============================================================================
+
+// Accès rep à une campagne (redirige vers SSO Microsoft)
+$router->get('/c/{uuid}/rep', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repAccess($uuid);
+});
+
+// Callback Microsoft SSO pour les reps
+$router->get('/auth/microsoft/callback-rep', function() {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repMicrosoftCallback();
+});
+
+// Page sélection client (après authentification rep)
+$router->get('/c/{uuid}/rep/select-client', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repSelectClient($uuid);
+});
+
+// Identifier le rep en tant que client
+$router->post('/c/{uuid}/rep/identify', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repIdentifyAs($uuid);
+});
+
+// Déconnexion rep
+$router->get('/c/{uuid}/rep/logout', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repLogout($uuid);
+});
+
+// =============================================================================
+// NOTE IMPORTANTE
+// =============================================================================
+// Ces routes DOIVENT être placées AVANT la route générique :
+// $router->get('/c/{uuid}', function($uuid) { ... });
+//
+// Sinon le routeur va capturer /c/{uuid}/rep comme un UUID
+
+
 // ============================================
 // ROUTES PUBLIQUES - CAMPAGNES (SPRINT 7)
 // ============================================
