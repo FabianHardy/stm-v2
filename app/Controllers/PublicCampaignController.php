@@ -1624,107 +1624,90 @@ class PublicCampaignController
         // DEBUG : Chemin absolu pour le log
         $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
 
-        // Programmer l'envoi email APRÈS la réponse HTTP (shutdown function)
+        // Envoyer l'email de confirmation (si pending_email existe)
         if (isset($_SESSION["pending_email"])) {
             $data = $_SESSION["pending_email"];
+            unset($_SESSION["pending_email"]);
 
-            // DEBUG : Logger immédiatement les données pending_email
-            $debugLog = date('Y-m-d H:i:s') . " | PENDING_EMAIL EXISTE\n";
+            // DEBUG : Logger les données
+            $debugLog = date('Y-m-d H:i:s') . " | PENDING_EMAIL EXISTE - Envoi direct (sans shutdown)\n";
             $debugLog .= "  -> rep_email: " . ($data["rep_email"] ?? 'NULL') . "\n";
             $debugLog .= "  -> is_rep_order: " . (($data["is_rep_order"] ?? false) ? 'true' : 'false') . "\n";
             $debugLog .= "  -> customer_email: " . ($data["customer_email"] ?? 'NULL') . "\n";
             file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
 
-            unset($_SESSION["pending_email"]);
+            try {
+                $orderData = [
+                    "order_number" => $data["order_number"],
+                    "campaign_title_fr" => $data["campaign_title_fr"],
+                    "campaign_title_nl" => $data["campaign_title_nl"],
+                    "customer_number" => $data["customer_number"],
+                    "company_name" => $data["company_name"],
+                    "created_at" => date("Y-m-d H:i:s"),
+                    "country" => $data["country"],
+                    "deferred_delivery" => $data["deferred_delivery"],
+                    "delivery_date" => $data["delivery_date"],
+                    "lines" => [],
+                    // SPRINT 14 : Info si commande rep
+                    "is_rep_order" => $data["is_rep_order"] ?? false,
+                    "rep_name" => $data["rep_name"] ?? null,
+                ];
 
-            register_shutdown_function(function () use ($data, $debugLogPath) {
-                @ini_set("display_errors", "0");
-                error_reporting(0);
-
-                try {
-                    $orderData = [
-                        "order_number" => $data["order_number"],
-                        "campaign_title_fr" => $data["campaign_title_fr"],
-                        "campaign_title_nl" => $data["campaign_title_nl"],
-                        "customer_number" => $data["customer_number"],
-                        "company_name" => $data["company_name"],
-                        "created_at" => date("Y-m-d H:i:s"),
-                        "country" => $data["country"],
-                        "deferred_delivery" => $data["deferred_delivery"],
-                        "delivery_date" => $data["delivery_date"],
-                        "lines" => [],
-                        // SPRINT 14 : Info si commande rep
-                        "is_rep_order" => $data["is_rep_order"] ?? false,
-                        "rep_name" => $data["rep_name"] ?? null,
+                foreach ($data["lines"] as $item) {
+                    $orderData["lines"][] = [
+                        "name_fr" => $item["name_fr"],
+                        "name_nl" => $item["name_nl"],
+                        "quantity" => $item["quantity"],
+                        "product_code" => $item["code"],
                     ];
+                }
 
-                    foreach ($data["lines"] as $item) {
-                        $orderData["lines"][] = [
-                            "name_fr" => $item["name_fr"],
-                            "name_nl" => $item["name_nl"],
-                            "quantity" => $item["quantity"],
-                            "product_code" => $item["code"],
-                        ];
-                    }
+                $mailchimpService = new \App\Services\MailchimpEmailService();
 
-                    $mailchimpService = new \App\Services\MailchimpEmailService();
+                // Email au client
+                $emailSent = @$mailchimpService->sendOrderConfirmation(
+                    $data["customer_email"],
+                    $orderData,
+                    $data["language"],
+                );
 
-                    // Email au client
-                    $emailSent = @$mailchimpService->sendOrderConfirmation(
-                        $data["customer_email"],
+                if ($emailSent) {
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Email client envoyé à {$data["customer_email"]}\n", FILE_APPEND);
+                } else {
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC email client à {$data["customer_email"]}\n", FILE_APPEND);
+                }
+
+                // ========================================
+                // SPRINT 14 : Copie email au rep
+                // ========================================
+                if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition rep OK - Envoi copie au rep...\n", FILE_APPEND);
+
+                    // Marquer comme copie rep
+                    $orderData["is_rep_copy"] = true;
+
+                    $repEmailSent = @$mailchimpService->sendOrderConfirmation(
+                        $data["rep_email"],
                         $orderData,
                         $data["language"],
                     );
 
-                    if ($emailSent) {
-                        error_log(
-                            "Email confirmation envoyé avec succès via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
-                        );
+                    if ($repEmailSent) {
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | SUCCESS - Email rep envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                     } else {
-                        error_log(
-                            "Échec envoi email confirmation via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
-                        );
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC - Email rep NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                     }
-
-                    // ========================================
-                    // SPRINT 14 : Copie email au rep
-                    // ========================================
-                    // DEBUG : Logger dans un fichier accessible
-                    $debugLog = date('Y-m-d H:i:s') . " | SHUTDOWN - rep_email=" . ($data["rep_email"] ?? 'NULL') .
-                              " | customer_email=" . ($data["customer_email"] ?? 'NULL') .
-                              " | is_rep_order=" . (($data["is_rep_order"] ?? false) ? 'true' : 'false') . "\n";
-                    file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
-
-                    if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition OK - Envoi en cours...\n", FILE_APPEND);
-
-                        // Marquer comme copie rep
-                        $orderData["is_rep_copy"] = true;
-
-                        $repEmailSent = @$mailchimpService->sendOrderConfirmation(
-                            $data["rep_email"],
-                            $orderData,
-                            $data["language"],
-                        );
-
-                        if ($repEmailSent) {
-                            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | SUCCESS - Email envoyé à {$data["rep_email"]}\n", FILE_APPEND);
-                        } else {
-                            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC - Email NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
-                        }
-                    } else {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition NON remplie - Pas d'envoi\n", FILE_APPEND);
-                    }
-
-                } catch (\Exception $e) {
-                    error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
+                } else {
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition rep NON remplie - Pas d'envoi copie\n", FILE_APPEND);
                 }
-            });
+
+            } catch (\Exception $e) {
+                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
+            }
         } else {
             // DEBUG : pending_email n'existe pas
             $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
-            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | PENDING_EMAIL N'EXISTE PAS!\n", FILE_APPEND);
+            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | PENDING_EMAIL N'EXISTE PAS (refresh page)\n", FILE_APPEND);
         }
 
         // Vérifier la session
