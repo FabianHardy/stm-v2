@@ -1621,12 +1621,23 @@ class PublicCampaignController
      */
     public function orderConfirmation(string $uuid): void
     {
+        // DEBUG : Chemin absolu pour le log
+        $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
+
         // Programmer l'envoi email APRÈS la réponse HTTP (shutdown function)
         if (isset($_SESSION["pending_email"])) {
             $data = $_SESSION["pending_email"];
+
+            // DEBUG : Logger immédiatement les données pending_email
+            $debugLog = date('Y-m-d H:i:s') . " | PENDING_EMAIL EXISTE\n";
+            $debugLog .= "  -> rep_email: " . ($data["rep_email"] ?? 'NULL') . "\n";
+            $debugLog .= "  -> is_rep_order: " . (($data["is_rep_order"] ?? false) ? 'true' : 'false') . "\n";
+            $debugLog .= "  -> customer_email: " . ($data["customer_email"] ?? 'NULL') . "\n";
+            file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
+
             unset($_SESSION["pending_email"]);
 
-            register_shutdown_function(function () use ($data) {
+            register_shutdown_function(function () use ($data, $debugLogPath) {
                 @ini_set("display_errors", "0");
                 error_reporting(0);
 
@@ -1678,7 +1689,15 @@ class PublicCampaignController
                     // ========================================
                     // SPRINT 14 : Copie email au rep
                     // ========================================
+                    // DEBUG : Logger dans un fichier accessible
+                    $debugLog = date('Y-m-d H:i:s') . " | SHUTDOWN - rep_email=" . ($data["rep_email"] ?? 'NULL') .
+                              " | customer_email=" . ($data["customer_email"] ?? 'NULL') .
+                              " | is_rep_order=" . (($data["is_rep_order"] ?? false) ? 'true' : 'false') . "\n";
+                    file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
+
                     if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition OK - Envoi en cours...\n", FILE_APPEND);
+
                         // Marquer comme copie rep
                         $orderData["is_rep_copy"] = true;
 
@@ -1689,20 +1708,23 @@ class PublicCampaignController
                         );
 
                         if ($repEmailSent) {
-                            error_log(
-                                "Copie email confirmation envoyée au rep: {$data["rep_email"]} (Commande: {$data["order_number"]})",
-                            );
+                            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | SUCCESS - Email envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                         } else {
-                            error_log(
-                                "Échec envoi copie email rep à: {$data["rep_email"]} (Commande: {$data["order_number"]})",
-                            );
+                            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC - Email NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                         }
+                    } else {
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition NON remplie - Pas d'envoi\n", FILE_APPEND);
                     }
 
                 } catch (\Exception $e) {
                     error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
                 }
             });
+        } else {
+            // DEBUG : pending_email n'existe pas
+            $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
+            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | PENDING_EMAIL N'EXISTE PAS!\n", FILE_APPEND);
         }
 
         // Vérifier la session
