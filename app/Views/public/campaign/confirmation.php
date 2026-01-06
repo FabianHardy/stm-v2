@@ -1,24 +1,41 @@
 <?php
 /**
  * Vue : Page de confirmation après validation de commande
- * 
+ *
  * @package STM
  * @created 2025/11/17
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
+ * @modified 2026/01/06 - Sprint 14 : Badge mode représentant + redirection rep
  */
 
 // ========================================
 // PRÉPARATION DES DONNÉES
 // ========================================
 
+// UUID depuis l'URL (nécessaire pour la redirection)
+$urlParts = explode('/', $_SERVER['REQUEST_URI']);
+$uuidIndex = array_search('c', $urlParts);
+$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
+
 // Vérifier session client
 if (!isset($_SESSION['public_customer'])) {
-    header('Location: /stm/');
+    // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+    $repModeCookie = $_COOKIE['stm_rep_mode'] ?? null;
+    if ($repModeCookie && $repModeCookie === $uuid) {
+        header("Location: /stm/c/{$uuid}/rep");
+    } else {
+        header('Location: /stm/');
+    }
     exit;
 }
 
 $customer = $_SESSION['public_customer'];
+
+// Sprint 14 : Détection mode représentant
+$isRepOrder = $customer['is_rep_order'] ?? false;
+$repName = $customer['rep_name'] ?? '';
+$repEmail = $customer['rep_email'] ?? '';
 
 // Gestion switch langue
 $requestedLang = $_GET['lang'] ?? null;
@@ -29,11 +46,6 @@ if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
 }
 
 $lang = $customer['language'];
-
-// UUID depuis l'URL
-$urlParts = explode('/', $_SERVER['REQUEST_URI']);
-$uuidIndex = array_search('c', $urlParts);
-$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
 
 // Récupérer campagne
 try {
@@ -77,7 +89,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
 <!-- Contenu principal -->
 <div class="container mx-auto px-4 py-12">
     <div class="max-w-3xl mx-auto">
-        
+
         <!-- Carte de confirmation -->
         <div class="bg-white rounded-lg shadow-lg p-8 text-center">
             <div class="mb-6">
@@ -99,7 +111,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                 <p>
                     <?= trans('confirmation.email_sent', $lang) ?>
                 </p>
-                
+
                 <?php if ($campaign['deferred_delivery'] == 1 && !empty($campaign['delivery_date'])): ?>
                 <div class="mt-6 p-6 bg-blue-50 border border-blue-200 rounded-lg">
                     <div class="flex items-center justify-center mb-2">
@@ -113,7 +125,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
                     <p class="text-2xl font-bold text-blue-700">
                         <?php
                         $deliveryDate = new DateTime($campaign['delivery_date']);
-                        $months = $lang === 'fr' 
+                        $months = $lang === 'fr'
                             ? ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
                             : ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
                         echo $deliveryDate->format('d') . ' ' . $months[(int)$deliveryDate->format('m') - 1] . ' ' . $deliveryDate->format('Y');
@@ -124,7 +136,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
             </div>
 
             <div class="flex justify-center">
-                <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/catalog" 
+                <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/catalog"
                    class="inline-flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>

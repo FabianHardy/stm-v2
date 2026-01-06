@@ -6,6 +6,7 @@
  * @created 2025/11/14
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
+ * @modified 2026/01/05 - Sprint 14 : Affichage prix conditionnel pour reps
  */
 
 // ========================================
@@ -17,6 +18,89 @@ $uuid = $campaign["uuid"];
 $title = htmlspecialchars($campaign["name"]) . " - " . trans('catalog.title', $lang);
 $useAlpine = true;
 $bodyAttrs = 'x-data="cartManager()" x-init="init()"';
+
+// ========================================
+// SPRINT 14 : Détection mode rep et affichage prix
+// ========================================
+$isRepOrder = $customer["is_rep_order"] ?? false;
+$showPrices = ($campaign["show_prices"] ?? 1) == 1;
+$orderType = $campaign["order_type"] ?? "W"; // W = normal, V = prospection
+
+/**
+ * Formater un prix pour affichage
+ * @param float|null $price Prix à formater
+ * @return string Prix formaté ou chaîne vide
+ */
+function formatPrice(?float $price): string {
+    if ($price === null || $price <= 0) {
+        return '';
+    }
+    return number_format($price, 2, ',', ' ') . ' €';
+}
+
+/**
+ * Générer le bloc HTML d'affichage des prix selon les règles métier
+ *
+ * Règles :
+ * - Client direct : jamais de prix
+ * - Rep + show_prices OFF : pas de prix
+ * - Rep + show_prices ON + Type W : prix promo + prix normal barré (si promo)
+ * - Rep + show_prices ON + Type V : prix normal seul (jamais barré)
+ *
+ * @param array $product Données du produit (avec api_prix, api_prix_promo)
+ * @param bool $isRepOrder Est-ce une commande rep ?
+ * @param bool $showPrices Option show_prices de la campagne
+ * @param string $orderType Type de commande (W/V)
+ * @return string HTML du bloc prix
+ */
+function renderPriceBlock(array $product, bool $isRepOrder, bool $showPrices, string $orderType): string {
+    // Pas de prix pour les clients directs ou si show_prices désactivé
+    if (!$isRepOrder || !$showPrices) {
+        return '';
+    }
+
+    $prixNormal = $product["api_prix"] ?? null;
+    $prixPromo = $product["api_prix_promo"] ?? null;
+
+    // Pas de prix disponible
+    if (!$prixNormal && !$prixPromo) {
+        return '';
+    }
+
+    $html = '<div class="mt-3 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">';
+
+    if ($orderType === 'V') {
+        // Type V (prospection) : prix normal seul, jamais barré
+        $displayPrice = $prixNormal ?: $prixPromo;
+        if ($displayPrice) {
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($displayPrice) . '</span>';
+            $html .= '</div>';
+        }
+    } else {
+        // Type W (normal) : prix promo + prix normal barré si différent
+        if ($prixPromo && $prixNormal && $prixPromo < $prixNormal) {
+            // Promo active : afficher promo + normal barré
+            $html .= '<div class="flex items-center justify-center gap-2">';
+            $html .= '<span class="text-lg font-bold text-green-600">' . formatPrice($prixPromo) . '</span>';
+            $html .= '<span class="text-sm text-gray-400 line-through">' . formatPrice($prixNormal) . '</span>';
+            $html .= '</div>';
+        } elseif ($prixPromo) {
+            // Seulement prix promo
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($prixPromo) . '</span>';
+            $html .= '</div>';
+        } elseif ($prixNormal) {
+            // Seulement prix normal
+            $html .= '<div class="text-center">';
+            $html .= '<span class="text-lg font-bold text-blue-700">' . formatPrice($prixNormal) . '</span>';
+            $html .= '</div>';
+        }
+    }
+
+    $html .= '</div>';
+    return $html;
+}
 
 // Récupérer les pages statiques pour le footer (utilisé par le layout)
 $staticPageModel = new \App\Models\StaticPage();
@@ -48,16 +132,30 @@ ob_start();
                     <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
                     <div>
                         <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign["name"]) ?></h1>
-                        <p class="text-sm text-gray-600">
-                            <i class="fas fa-building mr-1"></i>
-                            <?= htmlspecialchars($customer["company_name"]) ?>
-                            <span class="mx-2">•</span>
-                            <?= htmlspecialchars($customer["customer_number"]) ?>
-                        </p>
+                        <div class="flex items-center gap-2 text-sm text-gray-600">
+                            <i class="fas fa-building"></i>
+                            <span><?= htmlspecialchars($customer["company_name"]) ?></span>
+                            <span>•</span>
+                            <span><?= htmlspecialchars($customer["customer_number"]) ?></span>
+                            <?php if ($isRepOrder): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 ml-2">
+                                <i class="fas fa-user-tie mr-1"></i>
+                                <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-4">
+                    <?php if ($isRepOrder && !empty($customer['rep_name'])): ?>
+                    <!-- Nom du rep connecté -->
+                    <div class="hidden lg:block text-right">
+                        <p class="text-sm font-medium text-gray-700"><?= htmlspecialchars($customer['rep_name']) ?></p>
+                        <p class="text-xs text-gray-500"><?= htmlspecialchars($customer['rep_email'] ?? '') ?></p>
+                    </div>
+                    <?php endif; ?>
+
                     <!-- Switch langue FR/NL (visible uniquement pour campagnes BE) -->
                     <?php if ($campaign["country"] === "BE"): ?>
                     <div class="hidden lg:flex bg-gray-100 rounded-lg p-1">
@@ -85,10 +183,16 @@ ob_start();
                         </span>
                     </button>
 
-                    <!-- Déconnexion desktop -->
+                    <!-- Déconnexion / Changer client (rep) -->
+                    <?php if ($isRepOrder): ?>
+                    <a href="/stm/c/<?= $uuid ?>/rep/select-client" class="hidden lg:flex items-center text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-exchange-alt mr-2"></i><?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
+                    </a>
+                    <?php else: ?>
                     <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">
                         <i class="fas fa-sign-out-alt mr-2"></i><?= trans('common.logout', $lang) ?>
                     </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -196,10 +300,38 @@ ob_start();
 
                             <!-- Infos produit -->
                             <div class="p-4">
-                                <!-- Titre 12px uppercase -->
-                                <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
-                                    <?= htmlspecialchars($productName) ?>
-                                </h3>
+                                <!-- Titre + Prix sur la même ligne -->
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <!-- Nom/Code 12px uppercase -->
+                                    <h3 class="font-bold text-gray-800 line-clamp-2 uppercase flex-1" style="font-size: 12px; line-height: 1.3;">
+                                        <?= htmlspecialchars($productName) ?>
+                                    </h3>
+
+                                    <!-- Prix (compact, à droite) - uniquement pour reps -->
+                                    <?php if ($isRepOrder && $showPrices): ?>
+                                        <?php
+                                        $prixNormal = $product["api_prix"] ?? null;
+                                        $prixPromo = $product["api_prix_promo"] ?? null;
+                                        ?>
+                                        <?php if ($orderType === 'V'): ?>
+                                            <?php $displayPrice = $prixNormal ?: $prixPromo; ?>
+                                            <?php if ($displayPrice): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($displayPrice) ?></span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <?php if ($prixPromo && $prixNormal && $prixPromo < $prixNormal): ?>
+                                                <div class="text-right whitespace-nowrap">
+                                                    <span class="text-sm font-bold text-green-600"><?= formatPrice($prixPromo) ?></span>
+                                                    <span class="text-xs text-gray-400 line-through ml-1"><?= formatPrice($prixNormal) ?></span>
+                                                </div>
+                                            <?php elseif ($prixPromo): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($prixPromo) ?></span>
+                                            <?php elseif ($prixNormal): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($prixNormal) ?></span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
 
                                 <!-- Quotas sur 1 SEULE LIGNE -->
                                 <?php if (!is_null($product["max_per_customer"]) && $product["is_orderable"]): ?>
@@ -305,12 +437,12 @@ ob_start();
                             <div class="p-3 bg-gray-50 rounded-lg">
                                 <!-- Vignette + Nom du produit -->
                                 <div class="flex items-start gap-2 mb-2">
-                                    <template x-if="item.image_<?= $lang ?>">
-                                        <img :src="item.image_<?= $lang ?>"
-                                             :alt="item.name_<?= $lang ?>"
+                                    <template x-if="item.image_<?= $lang ?> || item.image_fr">
+                                        <img :src="item.image_<?= $lang ?> || item.image_fr"
+                                             :alt="item.name_<?= $lang ?> || item.name_fr"
                                              class="w-12 h-12 object-contain rounded bg-white flex-shrink-0">
                                     </template>
-                                    <p class="text-sm font-medium text-gray-800 line-clamp-2" x-text="item.name_<?= $lang ?>"></p>
+                                    <p class="text-sm font-medium text-gray-800 line-clamp-2" x-text="item.name_<?= $lang ?> || item.name_fr"></p>
                                 </div>
 
                                 <!-- Contrôles quantité + poubelle -->
@@ -403,12 +535,12 @@ ob_start();
                     <div class="bg-white border rounded-lg p-4">
                         <!-- Vignette + Nom du produit -->
                         <div class="flex items-start gap-3 mb-3">
-                            <template x-if="item.image_<?= $lang ?>">
-                                <img :src="item.image_<?= $lang ?>"
-                                     :alt="item.name_<?= $lang ?>"
+                            <template x-if="item.image_<?= $lang ?> || item.image_fr">
+                                <img :src="item.image_<?= $lang ?> || item.image_fr"
+                                     :alt="item.name_<?= $lang ?> || item.name_fr"
                                      class="w-16 h-16 object-contain rounded bg-gray-50 flex-shrink-0">
                             </template>
-                            <p class="text-sm font-medium text-gray-800" x-text="item.name_<?= $lang ?>"></p>
+                            <p class="text-sm font-medium text-gray-800" x-text="item.name_<?= $lang ?> || item.name_fr"></p>
                         </div>
 
                         <!-- Contrôles quantité + poubelle -->

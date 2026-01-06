@@ -58,6 +58,12 @@ class PublicCampaignController
      */
     public function show(string $uuid): void
     {
+        // Sprint 14 : Si cookie mode rep présent et session expirée, rediriger vers SSO rep
+        if ($this->shouldRedirectToRepLogin($uuid)) {
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
         try {
             // Récupérer la campagne par UUID
             $query = "
@@ -281,7 +287,12 @@ class PublicCampaignController
             $customer = Session::get("public_customer");
 
             if (!$customer || $customer["campaign_uuid"] !== $uuid) {
-                header("Location: /stm/c/{$uuid}");
+                // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+                if ($this->shouldRedirectToRepLogin($uuid)) {
+                    header("Location: /stm/c/{$uuid}/rep");
+                } else {
+                    header("Location: /stm/c/{$uuid}");
+                }
                 exit();
             }
 
@@ -799,10 +810,11 @@ class PublicCampaignController
      */
     private function getExternalDatabase(): \PDO
     {
-        $host = $_ENV["DB_HOST"] ?? "localhost";
-        $dbname = "trendyblog_sig";
-        $username = $_ENV["DB_USER"] ?? "";
-        $password = $_ENV["DB_PASSWORD"] ?? "";
+        // Utiliser la méthode env() pour récupérer les variables de manière robuste
+        $host = $this->env("EXTERNAL_DB_HOST", $this->env("DB_HOST", "localhost"));
+        $dbname = $this->env("EXTERNAL_DB_NAME", "trendyblog_sig");
+        $username = $this->env("EXTERNAL_DB_USER", $this->env("DB_USER", ""));
+        $password = $this->env("EXTERNAL_DB_PASSWORD", $this->env("DB_PASS", ""));
 
         $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
 
@@ -1059,7 +1071,12 @@ class PublicCampaignController
 
         // Vérifier session client
         if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
-            header("Location: /stm/c/" . $uuid);
+            // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+            if ($this->shouldRedirectToRepLogin($uuid)) {
+                header("Location: /stm/c/{$uuid}/rep");
+            } else {
+                header("Location: /stm/c/" . $uuid);
+            }
             exit();
         }
 
@@ -1127,7 +1144,12 @@ class PublicCampaignController
     {
         // Vérifier session client
         if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
-            header("Location: /stm/c/" . $uuid);
+            // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+            if ($this->shouldRedirectToRepLogin($uuid)) {
+                header("Location: /stm/c/{$uuid}/rep");
+            } else {
+                header("Location: /stm/c/" . $uuid);
+            }
             exit();
         }
 
@@ -1828,7 +1850,8 @@ class PublicCampaignController
             Session::set('rep_campaign_uuid', $uuid);
 
             // Rediriger vers l'authentification Microsoft SSO
-            $redirectUri = urlencode($_ENV['APP_URL'] . '/auth/microsoft/callback-rep');
+            $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+            $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
             $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
 
             header("Location: {$authUrl}");
@@ -1921,6 +1944,16 @@ class PublicCampaignController
                 'rep_country' => $user['rep_country'],
                 'campaign_uuid' => $uuid,
                 'authenticated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // Cookie pour mémoriser le mode rep (survit à l'expiration de session)
+            // Durée : 8 heures (journée de travail)
+            setcookie('stm_rep_mode', $uuid, [
+                'expires' => time() + (8 * 3600),
+                'path' => '/stm/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Lax'
             ]);
 
             // Nettoyer
@@ -2107,12 +2140,22 @@ class PublicCampaignController
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 05/01/2026 - Sprint 14
+     * @modified 06/01/2026 - Suppression cookie stm_rep_mode
      */
     public function repLogout(string $uuid): void
     {
         Session::remove('rep_session');
         Session::remove('public_customer');
         Session::remove('cart');
+
+        // Supprimer le cookie mode rep
+        setcookie('stm_rep_mode', '', [
+            'expires' => time() - 3600,
+            'path' => '/stm/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
 
         header("Location: /stm/c/{$uuid}");
         exit();
@@ -2141,6 +2184,32 @@ class PublicCampaignController
     {
         $repSession = Session::get('rep_session');
         return !empty($repSession) && ($repSession['campaign_uuid'] ?? '') === $uuid;
+    }
+
+    /**
+     * Vérifier si on doit rediriger vers la connexion rep (session expirée mais cookie présent)
+     *
+     * @param string $uuid UUID de la campagne
+     * @return bool True si redirection nécessaire
+     * @created 06/01/2026 - Sprint 14
+     */
+    private function shouldRedirectToRepLogin(string $uuid): bool
+    {
+        // Si le cookie mode rep existe pour cette campagne
+        $repModeCookie = $_COOKIE['stm_rep_mode'] ?? null;
+
+        if ($repModeCookie === $uuid) {
+            // Et que la session rep n'existe plus (expirée)
+            $repSession = Session::get('rep_session');
+            $publicCustomer = Session::get('public_customer');
+
+            // Ni session rep, ni session client = session expirée
+            if (empty($repSession) && empty($publicCustomer)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2183,6 +2252,35 @@ class PublicCampaignController
     }
 
     /**
+     * Récupérer une variable d'environnement de manière robuste
+     *
+     * @param string $key Nom de la variable
+     * @param string $default Valeur par défaut
+     * @return string
+     * @created 05/01/2026 - Sprint 14 fix
+     */
+    private function env(string $key, string $default = ''): string
+    {
+        // Essayer getenv() d'abord (le plus fiable)
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+
+        // Fallback sur $_ENV
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        // Fallback sur $_SERVER (certains hébergeurs)
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+
+        return $default;
+    }
+
+    /**
      * Construire l'URL d'authentification Microsoft
      *
      * @param string $redirectUri URI de callback encodé
@@ -2191,8 +2289,13 @@ class PublicCampaignController
      */
     private function buildMicrosoftAuthUrl(string $redirectUri): string
     {
-        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
-        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
+        $tenantId = $this->env('MICROSOFT_TENANT_ID');
+        $clientId = $this->env('MICROSOFT_CLIENT_ID');
+
+        // Debug si vide
+        if (empty($tenantId) || empty($clientId)) {
+            error_log("[Rep SSO] ERREUR: Variables Microsoft manquantes - TENANT_ID: " . (empty($tenantId) ? 'VIDE' : 'OK') . ", CLIENT_ID: " . (empty($clientId) ? 'VIDE' : 'OK'));
+        }
 
         $params = [
             'client_id' => $clientId,
@@ -2216,10 +2319,11 @@ class PublicCampaignController
      */
     private function exchangeMicrosoftCode(string $code, string $callbackType = 'callback'): ?array
     {
-        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
-        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
-        $clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? '';
-        $redirectUri = $_ENV['APP_URL'] . '/auth/microsoft/' . $callbackType;
+        $tenantId = $this->env('MICROSOFT_TENANT_ID');
+        $clientId = $this->env('MICROSOFT_CLIENT_ID');
+        $clientSecret = $this->env('MICROSOFT_CLIENT_SECRET');
+        $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+        $redirectUri = $appUrl . '/auth/microsoft/' . $callbackType;
 
         $url = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token";
 

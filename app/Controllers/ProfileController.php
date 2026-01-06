@@ -266,7 +266,7 @@ class ProfileController
                 }
 
                 // Clients accessibles
-                $accessibleCustomerIds = StatsAccessHelper::getAccessibleCustomerIds();
+                $accessibleCustomerIds = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
                 if ($accessibleCustomerIds !== null) {
                     $stats['customers_accessible'] = count($accessibleCustomerIds);
                 }
