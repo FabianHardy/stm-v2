@@ -1828,7 +1828,8 @@ class PublicCampaignController
             Session::set('rep_campaign_uuid', $uuid);
 
             // Rediriger vers l'authentification Microsoft SSO
-            $redirectUri = urlencode($_ENV['APP_URL'] . '/auth/microsoft/callback-rep');
+            $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+            $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
             $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
 
             header("Location: {$authUrl}");
@@ -2183,6 +2184,35 @@ class PublicCampaignController
     }
 
     /**
+     * Récupérer une variable d'environnement de manière robuste
+     *
+     * @param string $key Nom de la variable
+     * @param string $default Valeur par défaut
+     * @return string
+     * @created 05/01/2026 - Sprint 14 fix
+     */
+    private function env(string $key, string $default = ''): string
+    {
+        // Essayer getenv() d'abord (le plus fiable)
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+
+        // Fallback sur $_ENV
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        // Fallback sur $_SERVER (certains hébergeurs)
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+
+        return $default;
+    }
+
+    /**
      * Construire l'URL d'authentification Microsoft
      *
      * @param string $redirectUri URI de callback encodé
@@ -2191,8 +2221,13 @@ class PublicCampaignController
      */
     private function buildMicrosoftAuthUrl(string $redirectUri): string
     {
-        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
-        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
+        $tenantId = $this->env('MICROSOFT_TENANT_ID');
+        $clientId = $this->env('MICROSOFT_CLIENT_ID');
+
+        // Debug si vide
+        if (empty($tenantId) || empty($clientId)) {
+            error_log("[Rep SSO] ERREUR: Variables Microsoft manquantes - TENANT_ID: " . (empty($tenantId) ? 'VIDE' : 'OK') . ", CLIENT_ID: " . (empty($clientId) ? 'VIDE' : 'OK'));
+        }
 
         $params = [
             'client_id' => $clientId,
@@ -2216,10 +2251,11 @@ class PublicCampaignController
      */
     private function exchangeMicrosoftCode(string $code, string $callbackType = 'callback'): ?array
     {
-        $tenantId = $_ENV['MICROSOFT_TENANT_ID'] ?? '';
-        $clientId = $_ENV['MICROSOFT_CLIENT_ID'] ?? '';
-        $clientSecret = $_ENV['MICROSOFT_CLIENT_SECRET'] ?? '';
-        $redirectUri = $_ENV['APP_URL'] . '/auth/microsoft/' . $callbackType;
+        $tenantId = $this->env('MICROSOFT_TENANT_ID');
+        $clientId = $this->env('MICROSOFT_CLIENT_ID');
+        $clientSecret = $this->env('MICROSOFT_CLIENT_SECRET');
+        $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+        $redirectUri = $appUrl . '/auth/microsoft/' . $callbackType;
 
         $url = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token";
 
