@@ -6,16 +6,27 @@
  * @created 2025/11/17
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
- * @modified 2026/01/06 - Sprint 14 : Badge mode représentant
+ * @modified 2026/01/06 - Sprint 14 : Badge mode représentant + redirection rep
  */
 
 // ========================================
 // PRÉPARATION DES DONNÉES
 // ========================================
 
+// UUID depuis l'URL (nécessaire pour la redirection)
+$urlParts = explode('/', $_SERVER['REQUEST_URI']);
+$uuidIndex = array_search('c', $urlParts);
+$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
+
 // Vérifier session client
 if (!isset($_SESSION['public_customer'])) {
-    header('Location: /stm/');
+    // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+    $repModeCookie = $_COOKIE['stm_rep_mode'] ?? null;
+    if ($repModeCookie && $repModeCookie === $uuid) {
+        header("Location: /stm/c/{$uuid}/rep");
+    } else {
+        header('Location: /stm/');
+    }
     exit;
 }
 
@@ -35,11 +46,6 @@ if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
 }
 
 $lang = $customer['language'];
-
-// UUID depuis l'URL
-$urlParts = explode('/', $_SERVER['REQUEST_URI']);
-$uuidIndex = array_search('c', $urlParts);
-$uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
 
 // Récupérer campagne
 try {

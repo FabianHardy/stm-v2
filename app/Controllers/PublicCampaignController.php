@@ -58,6 +58,12 @@ class PublicCampaignController
      */
     public function show(string $uuid): void
     {
+        // Sprint 14 : Si cookie mode rep présent et session expirée, rediriger vers SSO rep
+        if ($this->shouldRedirectToRepLogin($uuid)) {
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
         try {
             // Récupérer la campagne par UUID
             $query = "
@@ -281,7 +287,12 @@ class PublicCampaignController
             $customer = Session::get("public_customer");
 
             if (!$customer || $customer["campaign_uuid"] !== $uuid) {
-                header("Location: /stm/c/{$uuid}");
+                // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+                if ($this->shouldRedirectToRepLogin($uuid)) {
+                    header("Location: /stm/c/{$uuid}/rep");
+                } else {
+                    header("Location: /stm/c/{$uuid}");
+                }
                 exit();
             }
 
@@ -1060,7 +1071,12 @@ class PublicCampaignController
 
         // Vérifier session client
         if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
-            header("Location: /stm/c/" . $uuid);
+            // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+            if ($this->shouldRedirectToRepLogin($uuid)) {
+                header("Location: /stm/c/{$uuid}/rep");
+            } else {
+                header("Location: /stm/c/" . $uuid);
+            }
             exit();
         }
 
@@ -1128,7 +1144,12 @@ class PublicCampaignController
     {
         // Vérifier session client
         if (!isset($_SESSION["public_customer"]) || $_SESSION["public_customer"]["campaign_uuid"] !== $uuid) {
-            header("Location: /stm/c/" . $uuid);
+            // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
+            if ($this->shouldRedirectToRepLogin($uuid)) {
+                header("Location: /stm/c/{$uuid}/rep");
+            } else {
+                header("Location: /stm/c/" . $uuid);
+            }
             exit();
         }
 
@@ -1925,6 +1946,16 @@ class PublicCampaignController
                 'authenticated_at' => date('Y-m-d H:i:s')
             ]);
 
+            // Cookie pour mémoriser le mode rep (survit à l'expiration de session)
+            // Durée : 8 heures (journée de travail)
+            setcookie('stm_rep_mode', $uuid, [
+                'expires' => time() + (8 * 3600),
+                'path' => '/stm/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+
             // Nettoyer
             Session::remove('rep_campaign_uuid');
 
@@ -2109,12 +2140,22 @@ class PublicCampaignController
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 05/01/2026 - Sprint 14
+     * @modified 06/01/2026 - Suppression cookie stm_rep_mode
      */
     public function repLogout(string $uuid): void
     {
         Session::remove('rep_session');
         Session::remove('public_customer');
         Session::remove('cart');
+
+        // Supprimer le cookie mode rep
+        setcookie('stm_rep_mode', '', [
+            'expires' => time() - 3600,
+            'path' => '/stm/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
 
         header("Location: /stm/c/{$uuid}");
         exit();
@@ -2143,6 +2184,32 @@ class PublicCampaignController
     {
         $repSession = Session::get('rep_session');
         return !empty($repSession) && ($repSession['campaign_uuid'] ?? '') === $uuid;
+    }
+
+    /**
+     * Vérifier si on doit rediriger vers la connexion rep (session expirée mais cookie présent)
+     *
+     * @param string $uuid UUID de la campagne
+     * @return bool True si redirection nécessaire
+     * @created 06/01/2026 - Sprint 14
+     */
+    private function shouldRedirectToRepLogin(string $uuid): bool
+    {
+        // Si le cookie mode rep existe pour cette campagne
+        $repModeCookie = $_COOKIE['stm_rep_mode'] ?? null;
+
+        if ($repModeCookie === $uuid) {
+            // Et que la session rep n'existe plus (expirée)
+            $repSession = Session::get('rep_session');
+            $publicCustomer = Session::get('public_customer');
+
+            // Ni session rep, ni session client = session expirée
+            if (empty($repSession) && empty($publicCustomer)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
