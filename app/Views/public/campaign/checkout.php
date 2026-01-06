@@ -36,7 +36,7 @@ $footerPages = $staticPageModel->getFooterPages($campaign['id']);
 ob_start();
 ?>
 
-        <!-- Header blanc avec logo + infos (style cohérent avec catalog) -->
+        <!-- Header blanc avec logo + infos (cohérent avec catalog) -->
         <header class="bg-white shadow-md sticky top-0 z-40">
             <div class="container mx-auto px-4 py-4">
                 <div class="flex justify-between items-center">
@@ -48,25 +48,23 @@ ob_start();
                              onerror="this.style.display='none'">
                         <div>
                             <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
-                            <p class="text-sm text-gray-600">
-                                <i class="fas fa-building mr-1"></i>
-                                <?= htmlspecialchars($customer['company_name']) ?>
-                                <span class="mx-2">•</span>
-                                <?= htmlspecialchars($customer['customer_number']) ?>
-                            </p>
+                            <div class="flex items-center gap-2 text-sm text-gray-600">
+                                <i class="fas fa-building"></i>
+                                <span><?= htmlspecialchars($customer['company_name']) ?></span>
+                                <span>•</span>
+                                <span><?= htmlspecialchars($customer['customer_number']) ?></span>
+                                <?php if ($isRepOrder): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 ml-2">
+                                    <i class="fas fa-user-tie mr-1"></i>
+                                    <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
 
                     <div class="flex items-center gap-4">
-                        <?php if ($isRepOrder): ?>
-                        <!-- Badge Mode représentant -->
-                        <span class="hidden lg:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
-                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                            </svg>
-                            Mode représentant
-                        </span>
-
+                        <?php if ($isRepOrder && !empty($repName)): ?>
                         <!-- Nom du rep connecté -->
                         <div class="hidden lg:block text-right">
                             <p class="text-sm font-medium text-gray-700"><?= htmlspecialchars($repName) ?></p>
@@ -188,11 +186,16 @@ ob_start();
                             <!-- Liste des produits -->
                             <div class="space-y-4 mb-6">
                                 <?php foreach ($cart['items'] as $item): ?>
+                                    <?php
+                                    // Fallback image : langue actuelle -> FR -> placeholder
+                                    $itemImage = !empty($item['image_' . $lang]) ? $item['image_' . $lang] : ($item['image_fr'] ?? '');
+                                    $itemName = !empty($item['name_' . $lang]) ? $item['name_' . $lang] : ($item['name_fr'] ?? '');
+                                    ?>
                                     <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                         <!-- Image produit -->
-                                        <?php if (!empty($item['image_' . $lang])): ?>
-                                            <img src="<?= htmlspecialchars($item['image_' . $lang]) ?>"
-                                                 alt="<?= htmlspecialchars($item['name_' . $lang]) ?>"
+                                        <?php if (!empty($itemImage)): ?>
+                                            <img src="<?= htmlspecialchars($itemImage) ?>"
+                                                 alt="<?= htmlspecialchars($itemName) ?>"
                                                  class="w-24 h-24 object-contain rounded">
                                         <?php else: ?>
                                             <div class="w-24 h-24 bg-gray-200 rounded flex items-center justify-center">
@@ -205,7 +208,7 @@ ob_start();
                                         <!-- Infos produit -->
                                         <div class="flex-1">
                                             <h3 class="font-semibold text-gray-800">
-                                                <?= htmlspecialchars($item['name_' . $lang]) ?>
+                                                <?= htmlspecialchars($itemName) ?>
                                             </h3>
                                         </div>
 

@@ -6,7 +6,7 @@
  *
  * @package STM
  * @created 2025/11/21
- * @modified 2026/01/06 - Sprint 14 : Badge mode représentant (style catalog)
+ * @modified 2026/01/06 - Sprint 14 : Badge mode représentant (à gauche)
  *
  * Variables :
  * - $lang, $campaign, $customer, $uuid
@@ -47,12 +47,18 @@ $headerClass = 'bg-white shadow-md relative z-40' . ($sticky ? ' sticky top-0' :
                     <?php if (isset($campaign['name'])): ?>
                         <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
                         <?php if ($showClient && isset($customer)): ?>
-                        <p class="text-sm text-gray-600">
-                            <i class="fas fa-building mr-1"></i>
-                            <?= htmlspecialchars($customer['company_name'] ?? '') ?>
-                            <span class="mx-2">•</span>
-                            <?= htmlspecialchars($customer['customer_number'] ?? '') ?>
-                        </p>
+                        <div class="flex items-center gap-2 text-sm text-gray-600">
+                            <i class="fas fa-building"></i>
+                            <span><?= htmlspecialchars($customer['company_name'] ?? '') ?></span>
+                            <span>•</span>
+                            <span><?= htmlspecialchars($customer['customer_number'] ?? '') ?></span>
+                            <?php if ($isRepOrder): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 ml-2">
+                                <i class="fas fa-user-tie mr-1"></i>
+                                <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                         <?php endif; ?>
                     <?php else: ?>
                         <h1 class="text-2xl font-bold text-gray-900">Trendy Foods</h1>
@@ -64,16 +70,6 @@ $headerClass = 'bg-white shadow-md relative z-40' . ($sticky ? ' sticky top-0' :
             </div>
 
             <div class="flex items-center gap-4">
-                <?php if ($isRepOrder): ?>
-                <!-- Badge Mode représentant -->
-                <span class="hidden lg:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
-                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
-                    Mode représentant
-                </span>
-                <?php endif; ?>
-
                 <?php if ($isRepOrder && !empty($repName)): ?>
                 <!-- Nom du rep connecté -->
                 <div class="hidden lg:block text-right">

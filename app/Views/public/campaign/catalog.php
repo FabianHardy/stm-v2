@@ -132,21 +132,27 @@ ob_start();
                     <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-12" onerror="this.style.display='none'">
                     <div>
                         <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign["name"]) ?></h1>
-                        <p class="text-sm text-gray-600">
-                            <i class="fas fa-building mr-1"></i>
-                            <?= htmlspecialchars($customer["company_name"]) ?>
-                            <span class="mx-2">•</span>
-                            <?= htmlspecialchars($customer["customer_number"]) ?>
-                        </p>
+                        <div class="flex items-center gap-2 text-sm text-gray-600">
+                            <i class="fas fa-building"></i>
+                            <span><?= htmlspecialchars($customer["company_name"]) ?></span>
+                            <span>•</span>
+                            <span><?= htmlspecialchars($customer["customer_number"]) ?></span>
+                            <?php if ($isRepOrder): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200 ml-2">
+                                <i class="fas fa-user-tie mr-1"></i>
+                                <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-4">
-                    <?php // SPRINT 14 : Badge mode rep ?>
-                    <?php if ($isRepOrder): ?>
-                    <div class="hidden lg:flex items-center bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full text-sm font-medium">
-                        <i class="fas fa-user-tie mr-2"></i>
-                        <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger modus' ?>
+                    <?php if ($isRepOrder && !empty($customer['rep_name'])): ?>
+                    <!-- Nom du rep connecté -->
+                    <div class="hidden lg:block text-right">
+                        <p class="text-sm font-medium text-gray-700"><?= htmlspecialchars($customer['rep_name']) ?></p>
+                        <p class="text-xs text-gray-500"><?= htmlspecialchars($customer['rep_email'] ?? '') ?></p>
                     </div>
                     <?php endif; ?>
 
@@ -179,7 +185,7 @@ ob_start();
 
                     <!-- Déconnexion / Changer client (rep) -->
                     <?php if ($isRepOrder): ?>
-                    <a href="/stm/c/<?= $uuid ?>/rep/select-client" class="hidden lg:block text-purple-600 hover:text-purple-800">
+                    <a href="/stm/c/<?= $uuid ?>/rep/select-client" class="hidden lg:flex items-center text-gray-600 hover:text-gray-800">
                         <i class="fas fa-exchange-alt mr-2"></i><?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
                     </a>
                     <?php else: ?>
@@ -431,12 +437,12 @@ ob_start();
                             <div class="p-3 bg-gray-50 rounded-lg">
                                 <!-- Vignette + Nom du produit -->
                                 <div class="flex items-start gap-2 mb-2">
-                                    <template x-if="item.image_<?= $lang ?>">
-                                        <img :src="item.image_<?= $lang ?>"
-                                             :alt="item.name_<?= $lang ?>"
+                                    <template x-if="item.image_<?= $lang ?> || item.image_fr">
+                                        <img :src="item.image_<?= $lang ?> || item.image_fr"
+                                             :alt="item.name_<?= $lang ?> || item.name_fr"
                                              class="w-12 h-12 object-contain rounded bg-white flex-shrink-0">
                                     </template>
-                                    <p class="text-sm font-medium text-gray-800 line-clamp-2" x-text="item.name_<?= $lang ?>"></p>
+                                    <p class="text-sm font-medium text-gray-800 line-clamp-2" x-text="item.name_<?= $lang ?> || item.name_fr"></p>
                                 </div>
 
                                 <!-- Contrôles quantité + poubelle -->
@@ -529,12 +535,12 @@ ob_start();
                     <div class="bg-white border rounded-lg p-4">
                         <!-- Vignette + Nom du produit -->
                         <div class="flex items-start gap-3 mb-3">
-                            <template x-if="item.image_<?= $lang ?>">
-                                <img :src="item.image_<?= $lang ?>"
-                                     :alt="item.name_<?= $lang ?>"
+                            <template x-if="item.image_<?= $lang ?> || item.image_fr">
+                                <img :src="item.image_<?= $lang ?> || item.image_fr"
+                                     :alt="item.name_<?= $lang ?> || item.name_fr"
                                      class="w-16 h-16 object-contain rounded bg-gray-50 flex-shrink-0">
                             </template>
-                            <p class="text-sm font-medium text-gray-800" x-text="item.name_<?= $lang ?>"></p>
+                            <p class="text-sm font-medium text-gray-800" x-text="item.name_<?= $lang ?> || item.name_fr"></p>
                         </div>
 
                         <!-- Contrôles quantité + poubelle -->
