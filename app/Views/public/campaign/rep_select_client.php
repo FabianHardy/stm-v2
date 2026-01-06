@@ -195,34 +195,8 @@ $showLangSwitch = in_array($campaign['country'] ?? 'BE', ['BE', 'BOTH']);
                 <input type="hidden" name="country" value="<?= htmlspecialchars($campaign['country']) ?>">
                 <?php endif; ?>
 
-                <!-- Sélecteur de langue client (si BE ou BOTH) -->
-                <?php if ($campaign['country'] === 'BE' || $campaign['country'] === 'BOTH'): ?>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-language mr-2 text-gray-400"></i>
-                        <?= trans('rep.client_language', $lang) ?>
-                    </label>
-                    <div class="grid grid-cols-2 gap-4">
-                        <label class="radio-card relative flex items-center justify-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition">
-                            <input type="radio" name="language" value="fr" class="sr-only" <?= $lang === 'fr' ? 'checked' : '' ?>>
-                            <span class="font-medium">Français</span>
-                            <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
-                                <i class="fas fa-check-circle"></i>
-                            </span>
-                        </label>
-                        <label class="radio-card relative flex items-center justify-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition">
-                            <input type="radio" name="language" value="nl" class="sr-only" <?= $lang === 'nl' ? 'checked' : '' ?>>
-                            <span class="font-medium">Nederlands</span>
-                            <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
-                                <i class="fas fa-check-circle"></i>
-                            </span>
-                        </label>
-                    </div>
-                </div>
-                <?php else: ?>
-                <!-- Luxembourg = toujours français -->
-                <input type="hidden" name="language" value="fr">
-                <?php endif; ?>
+                <!-- Langue = celle du rep (stockée en session) -->
+                <input type="hidden" name="language" value="<?= $lang ?>">
 
                 <!-- Bouton submit -->
                 <button type="submit"
