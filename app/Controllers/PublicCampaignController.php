@@ -799,10 +799,11 @@ class PublicCampaignController
      */
     private function getExternalDatabase(): \PDO
     {
-        $host = $_ENV["DB_HOST"] ?? "localhost";
-        $dbname = "trendyblog_sig";
-        $username = $_ENV["DB_USER"] ?? "";
-        $password = $_ENV["DB_PASSWORD"] ?? "";
+        // Utiliser la méthode env() pour récupérer les variables de manière robuste
+        $host = $this->env("EXTERNAL_DB_HOST", $this->env("DB_HOST", "localhost"));
+        $dbname = $this->env("EXTERNAL_DB_NAME", "trendyblog_sig");
+        $username = $this->env("EXTERNAL_DB_USER", $this->env("DB_USER", ""));
+        $password = $this->env("EXTERNAL_DB_PASSWORD", $this->env("DB_PASS", ""));
 
         $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
 
