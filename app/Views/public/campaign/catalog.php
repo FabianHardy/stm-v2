@@ -294,13 +294,38 @@ ob_start();
 
                             <!-- Infos produit -->
                             <div class="p-4">
-                                <!-- Titre 12px uppercase -->
-                                <h3 class="font-bold text-gray-800 mb-2 line-clamp-2 uppercase" style="font-size: 12px; line-height: 1.3; min-height: 32px;">
-                                    <?= htmlspecialchars($productName) ?>
-                                </h3>
+                                <!-- Titre + Prix sur la même ligne -->
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <!-- Nom/Code 12px uppercase -->
+                                    <h3 class="font-bold text-gray-800 line-clamp-2 uppercase flex-1" style="font-size: 12px; line-height: 1.3;">
+                                        <?= htmlspecialchars($productName) ?>
+                                    </h3>
 
-                                <!-- SPRINT 14 : Bloc prix (uniquement pour reps) -->
-                                <?= renderPriceBlock($product, $isRepOrder, $showPrices, $orderType) ?>
+                                    <!-- Prix (compact, à droite) - uniquement pour reps -->
+                                    <?php if ($isRepOrder && $showPrices): ?>
+                                        <?php
+                                        $prixNormal = $product["api_prix"] ?? null;
+                                        $prixPromo = $product["api_prix_promo"] ?? null;
+                                        ?>
+                                        <?php if ($orderType === 'V'): ?>
+                                            <?php $displayPrice = $prixNormal ?: $prixPromo; ?>
+                                            <?php if ($displayPrice): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($displayPrice) ?></span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <?php if ($prixPromo && $prixNormal && $prixPromo < $prixNormal): ?>
+                                                <div class="text-right whitespace-nowrap">
+                                                    <span class="text-sm font-bold text-green-600"><?= formatPrice($prixPromo) ?></span>
+                                                    <span class="text-xs text-gray-400 line-through ml-1"><?= formatPrice($prixNormal) ?></span>
+                                                </div>
+                                            <?php elseif ($prixPromo): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($prixPromo) ?></span>
+                                            <?php elseif ($prixNormal): ?>
+                                                <span class="text-sm font-bold text-blue-600 whitespace-nowrap"><?= formatPrice($prixNormal) ?></span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
 
                                 <!-- Quotas sur 1 SEULE LIGNE -->
                                 <?php if (!is_null($product["max_per_customer"]) && $product["is_orderable"]): ?>
