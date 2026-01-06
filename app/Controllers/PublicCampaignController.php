@@ -1805,14 +1805,15 @@ class PublicCampaignController
     // ============================================================================
 
     /**
-     * Point d'entrée pour l'accès représentant
-     * Redirige vers SSO Microsoft si pas connecté
+     * Page de connexion pour les représentants
+     * Affiche le formulaire avec switch langue et bouton SSO Microsoft
      *
      * Route : GET /c/{uuid}/rep
      *
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 05/01/2026 - Sprint 14
+     * @modified 06/01/2026 - Ajout page connexion avec switch langue
      */
     public function repAccess(string $uuid): void
     {
@@ -1846,21 +1847,69 @@ class PublicCampaignController
                 exit();
             }
 
-            // Stocker l'UUID de la campagne pour le callback SSO
-            Session::set('rep_campaign_uuid', $uuid);
+            // Gestion du switch langue
+            $requestedLang = $_GET['lang'] ?? null;
+            if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+                Session::set('rep_language', $requestedLang);
+                // Rediriger pour nettoyer l'URL
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
 
-            // Rediriger vers l'authentification Microsoft SSO
-            $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
-            $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
-            $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
+            // Langue : session > défaut selon pays
+            $lang = Session::get('rep_language');
+            if (!$lang) {
+                $lang = ($campaign['country'] === 'LU') ? 'fr' : 'fr'; // Défaut FR
+                Session::set('rep_language', $lang);
+            }
 
-            header("Location: {$authUrl}");
-            exit();
+            // Récupérer erreur éventuelle
+            $error = Session::get('error');
+            Session::remove('error');
+
+            // Afficher la page de connexion
+            require __DIR__ . "/../Views/public/campaign/rep_access.php";
 
         } catch (\PDOException $e) {
             error_log("Erreur repAccess() : " . $e->getMessage());
             $this->renderAccessDenied("error", $uuid);
         }
+    }
+
+    /**
+     * Déclencher la connexion SSO Microsoft pour les représentants
+     *
+     * Route : POST /c/{uuid}/rep/login
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 06/01/2026 - Sprint 14
+     */
+    public function repLogin(string $uuid): void
+    {
+        // Vérifier token CSRF
+        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            Session::set('error', 'Token de sécurité invalide.');
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
+        // Stocker la langue choisie
+        $lang = $_POST['lang'] ?? 'fr';
+        if (in_array($lang, ['fr', 'nl'], true)) {
+            Session::set('rep_language', $lang);
+        }
+
+        // Stocker l'UUID de la campagne pour le callback SSO
+        Session::set('rep_campaign_uuid', $uuid);
+
+        // Rediriger vers l'authentification Microsoft SSO
+        $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+        $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
+        $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
+
+        header("Location: {$authUrl}");
+        exit();
     }
 
     /**
@@ -1936,12 +1985,14 @@ class PublicCampaignController
             }
 
             // Stocker les infos rep en session
+            $repLanguage = Session::get('rep_language') ?? 'fr';
             Session::set('rep_session', [
                 'rep_id' => $user['id'],
                 'rep_name' => $user['name'],
                 'rep_email' => $user['email'],
                 'rep_role' => $user['role'],
                 'rep_country' => $user['rep_country'],
+                'rep_language' => $repLanguage,
                 'campaign_uuid' => $uuid,
                 'authenticated_at' => date('Y-m-d H:i:s')
             ]);

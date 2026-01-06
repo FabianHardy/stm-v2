@@ -16,6 +16,7 @@
  * @modified   29/12/2025 - Ajout route API products/customer-orders
  * @modified   30/12/2025 - Ajout routes Email Templates (Sprint 8)
  * @modified   30/12/2025 - Ajout routes Pages Fixes (Sprint 9)
+ * @modified   06/01/2026 - Sprint 14 : Ajout route repLogin (page connexion rep avec switch langue)
  */
 
 // ============================================
@@ -590,6 +591,7 @@ $router->get("/admin/orders/{id}", function ($id) {
  * Sprint 14 : Mode Représentant
  *
  * @created 2026/01/05
+ * @modified 2026/01/06 - Ajout page connexion avec switch langue
  *
  * INSTRUCTIONS :
  * Ajouter ces routes dans config/routes.php, dans la section "ROUTES PUBLIQUES"
@@ -600,10 +602,16 @@ $router->get("/admin/orders/{id}", function ($id) {
 // ROUTES MODE REPRÉSENTANT - À AJOUTER
 // =============================================================================
 
-// Accès rep à une campagne (redirige vers SSO Microsoft)
+// Page de connexion rep (avec switch langue)
 $router->get('/c/{uuid}/rep', function($uuid) {
     $controller = new \App\Controllers\PublicCampaignController();
     $controller->repAccess($uuid);
+});
+
+// Déclencher la connexion SSO Microsoft (POST depuis formulaire)
+$router->post('/c/{uuid}/rep/login', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->repLogin($uuid);
 });
 
 // Callback Microsoft SSO pour les reps
