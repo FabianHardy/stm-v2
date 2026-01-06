@@ -36,7 +36,7 @@ $footerPages = $staticPageModel->getFooterPages($campaign['id']);
 ob_start();
 ?>
 
-        <!-- Header blanc avec logo + infos -->
+        <!-- Header blanc avec logo + infos (style cohérent avec catalog) -->
         <header class="bg-white shadow-md sticky top-0 z-40">
             <div class="container mx-auto px-4 py-4">
                 <div class="flex justify-between items-center">
@@ -47,17 +47,7 @@ ob_start();
                              class="h-12"
                              onerror="this.style.display='none'">
                         <div>
-                            <div class="flex items-center gap-3">
-                                <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
-                                <?php if ($isRepOrder): ?>
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
-                                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                        </svg>
-                                        Mode représentant
-                                    </span>
-                                <?php endif; ?>
-                            </div>
+                            <h1 class="text-2xl font-bold text-gray-800"><?= htmlspecialchars($campaign['name']) ?></h1>
                             <p class="text-sm text-gray-600">
                                 <i class="fas fa-building mr-1"></i>
                                 <?= htmlspecialchars($customer['company_name']) ?>
@@ -69,7 +59,15 @@ ob_start();
 
                     <div class="flex items-center gap-4">
                         <?php if ($isRepOrder): ?>
-                        <!-- Info rep (visible uniquement en mode rep) -->
+                        <!-- Badge Mode représentant -->
+                        <span class="hidden lg:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
+                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            Mode représentant
+                        </span>
+
+                        <!-- Nom du rep connecté -->
                         <div class="hidden lg:block text-right">
                             <p class="text-sm font-medium text-gray-700"><?= htmlspecialchars($repName) ?></p>
                             <p class="text-xs text-gray-500"><?= htmlspecialchars($repEmail) ?></p>
@@ -90,12 +88,21 @@ ob_start();
                         </div>
                         <?php endif; ?>
 
-                        <!-- Déconnexion -->
+                        <?php if ($isRepOrder): ?>
+                        <!-- Changer de client (mode rep) -->
+                        <a href="/stm/c/<?= $uuid ?>/rep/select-client"
+                           class="hidden lg:flex items-center text-gray-600 hover:text-gray-800 transition">
+                            <i class="fas fa-exchange-alt mr-2"></i>
+                            <?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
+                        </a>
+                        <?php else: ?>
+                        <!-- Déconnexion (client normal) -->
                         <a href="/stm/c/<?= $uuid ?>"
                            class="hidden lg:block text-gray-600 hover:text-gray-800 transition">
                             <i class="fas fa-sign-out-alt mr-2"></i>
                             <?= trans('common.logout', $lang) ?>
                         </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
