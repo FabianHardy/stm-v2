@@ -50,6 +50,78 @@ class PublicCampaignController
     }
 
     /**
+     * Récupérer l'adresse IP du client (gestion des proxys)
+     *
+     * @return string|null Adresse IP
+     */
+    private function getClientIp(): ?string
+    {
+        // Priorité : headers proxy puis REMOTE_ADDR
+        $headers = [
+            'HTTP_CF_CONNECTING_IP',     // Cloudflare
+            'HTTP_X_FORWARDED_FOR',      // Proxy standard
+            'HTTP_X_REAL_IP',            // Nginx
+            'HTTP_CLIENT_IP',            // Autres
+            'REMOTE_ADDR'                // Direct
+        ];
+
+        foreach ($headers as $header) {
+            if (!empty($_SERVER[$header])) {
+                // X-Forwarded-For peut contenir plusieurs IPs, prendre la première
+                $ip = $_SERVER[$header];
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                // Valider que c'est une IP valide
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Détecter le type d'appareil depuis le User Agent
+     *
+     * @return string 'mobile', 'tablet' ou 'desktop'
+     */
+    private function detectDeviceType(): string
+    {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        if (empty($userAgent)) {
+            return 'desktop';
+        }
+
+        $userAgent = strtolower($userAgent);
+
+        // Tablettes (vérifier avant mobile car certains tablets ont "mobile" dans leur UA)
+        $tablets = ['ipad', 'tablet', 'playbook', 'silk', 'kindle'];
+        foreach ($tablets as $tablet) {
+            if (strpos($userAgent, $tablet) !== false) {
+                return 'tablet';
+            }
+        }
+
+        // Android tablet (sans "mobile")
+        if (strpos($userAgent, 'android') !== false && strpos($userAgent, 'mobile') === false) {
+            return 'tablet';
+        }
+
+        // Mobiles
+        $mobiles = ['iphone', 'ipod', 'android', 'mobile', 'phone', 'blackberry', 'opera mini', 'opera mobi'];
+        foreach ($mobiles as $mobile) {
+            if (strpos($userAgent, $mobile) !== false) {
+                return 'mobile';
+            }
+        }
+
+        return 'desktop';
+    }
+
+    /**
      * Afficher la page d'accès à une campagne via UUID
      * Route : GET /c/{uuid}
      *
@@ -576,6 +648,26 @@ class PublicCampaignController
             unset($item);
 
             if (!$found) {
+                // Récupérer les prix via API Trendy Foods (pour mode rep)
+                $apiPrix = null;
+                $apiPrixPromo = null;
+
+                try {
+                    $trendyApi = $this->getTrendyApiService();
+                    $productsInfo = $trendyApi->getProductsInfo(
+                        $customer["customer_number"],
+                        $customer["country"],
+                        [$product["product_code"]]
+                    );
+
+                    if ($trendyApi->isApiResponseValid($productsInfo) && isset($productsInfo[$product["product_code"]])) {
+                        $apiPrix = $productsInfo[$product["product_code"]]["prix"];
+                        $apiPrixPromo = $productsInfo[$product["product_code"]]["prix_promo"];
+                    }
+                } catch (\Exception $e) {
+                    error_log("Erreur API prix dans addToCart: " . $e->getMessage());
+                }
+
                 $cart["items"][] = [
                     "product_id" => $productId,
                     "code" => $product["product_code"],
@@ -583,6 +675,10 @@ class PublicCampaignController
                     "name_nl" => $product["name_nl"] ?? $product["name_fr"],
                     "quantity" => $quantity,
                     "image_fr" => $product["image_fr"],
+                    "image_nl" => $product["image_nl"] ?? $product["image_fr"],
+                    // Prix récupérés via API
+                    "api_prix" => $apiPrix,
+                    "api_prix_promo" => $apiPrixPromo,
                 ];
             }
 
@@ -1107,6 +1203,44 @@ class PublicCampaignController
 
             $campaign = $campaign[0];
 
+            // ========================================
+            // SPRINT 14 : Rafraîchir les prix via API pour le checkout (mode rep)
+            // ========================================
+            $isRepOrder = $customer["is_rep_order"] ?? false;
+            $showPrices = ($campaign["show_prices"] ?? 1) == 1;
+            $orderType = $campaign["order_type"] ?? "W";
+
+            if ($isRepOrder && $showPrices && !empty($cart["items"])) {
+                try {
+                    // Récupérer tous les codes produits du panier
+                    $productCodes = array_column($cart["items"], "code");
+
+                    // Appeler l'API pour obtenir les prix à jour
+                    $trendyApi = $this->getTrendyApiService();
+                    $productsInfo = $trendyApi->getProductsInfo(
+                        $customer["customer_number"],
+                        $customer["country"],
+                        $productCodes
+                    );
+
+                    // Mettre à jour les prix dans le panier
+                    if ($trendyApi->isApiResponseValid($productsInfo)) {
+                        foreach ($cart["items"] as &$item) {
+                            if (isset($productsInfo[$item["code"]])) {
+                                $item["api_prix"] = $productsInfo[$item["code"]]["prix"];
+                                $item["api_prix_promo"] = $productsInfo[$item["code"]]["prix_promo"];
+                            }
+                        }
+                        unset($item);
+
+                        // Sauvegarder le panier avec les prix mis à jour
+                        $_SESSION["cart"] = $cart;
+                    }
+                } catch (\Exception $e) {
+                    error_log("Erreur API prix dans checkout: " . $e->getMessage());
+                }
+            }
+
             // Charger la vue checkout
             require __DIR__ . "/../Views/public/campaign/checkout.php";
         } catch (\PDOException $e) {
@@ -1263,7 +1397,7 @@ class PublicCampaignController
 
             // 4. Créer la commande dans table orders
             // ========================================
-            // SPRINT 14 : Traçabilité rep
+            // SPRINT 14 : Traçabilité rep + données tracking
             // ========================================
             $orderUuid = $this->generateUuid();
             $totalItems = array_sum(array_column($cart["items"], "quantity"));
@@ -1274,14 +1408,23 @@ class PublicCampaignController
             $orderSource = $isRepOrder ? 'rep' : 'client';
             $orderedByRepId = $isRepOrder ? ($customer["rep_id"] ?? null) : null;
 
+            // Données tracking
+            $ipAddress = $this->getClientIp();
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+            $deviceType = $this->detectDeviceType();
+
             $queryOrder = "INSERT INTO orders (
                 uuid, campaign_id, customer_id, customer_email,
                 ordered_by_rep_id, order_source,
-                total_items, total_products, status, created_at
+                total_items, total_products,
+                ip_address, user_agent, device_type,
+                status, created_at
             ) VALUES (
                 :uuid, :campaign_id, :customer_id, :customer_email,
                 :ordered_by_rep_id, :order_source,
-                :total_items, :total_products, 'pending', NOW()
+                :total_items, :total_products,
+                :ip_address, :user_agent, :device_type,
+                'pending', NOW()
             )";
 
             $this->db->execute($queryOrder, [
@@ -1293,6 +1436,9 @@ class PublicCampaignController
                 ":order_source" => $orderSource,
                 ":total_items" => $totalItems,
                 ":total_products" => $totalProducts,
+                ":ip_address" => $ipAddress,
+                ":user_agent" => $userAgent ? substr($userAgent, 0, 500) : null, // Limiter la taille
+                ":device_type" => $deviceType,
             ]);
 
             $orderId = $this->db->lastInsertId();
@@ -1663,6 +1809,12 @@ class PublicCampaignController
 
                 if ($emailSent) {
                     error_log("Email confirmation envoyé à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
+
+                    // Mettre à jour email_sent dans la DB
+                    $this->db->execute(
+                        "UPDATE orders SET email_sent = 1, email_sent_at = NOW() WHERE id = :id",
+                        [":id" => $data["order_id"]]
+                    );
                 } else {
                     error_log("Échec envoi email confirmation à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
                 }

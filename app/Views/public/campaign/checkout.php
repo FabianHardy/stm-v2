@@ -23,6 +23,41 @@ $isRepOrder = $customer['is_rep_order'] ?? false;
 $repName = $customer['rep_name'] ?? '';
 $repEmail = $customer['rep_email'] ?? '';
 
+// Sprint 14 : Variables pour l'affichage des prix (mode rep)
+$showPrices = ($campaign['show_prices'] ?? 1) == 1;
+$orderType = $campaign['order_type'] ?? 'W';
+
+/**
+ * Obtenir le prix d'un item selon les règles métier
+ * @param array $item Item du panier
+ * @param string $orderType Type de commande (W/V)
+ * @return float|null Prix à afficher
+ */
+function getItemPriceCheckout(array $item, string $orderType): ?float {
+    $prixNormal = $item['api_prix'] ?? null;
+    $prixPromo = $item['api_prix_promo'] ?? null;
+
+    if ($orderType === 'V') {
+        // Type V : prix normal uniquement
+        return $prixNormal ?: $prixPromo;
+    } else {
+        // Type W : prix promo prioritaire
+        return $prixPromo ?: $prixNormal;
+    }
+}
+
+/**
+ * Formater un prix pour affichage
+ * @param float|null $price Prix à formater
+ * @return string Prix formaté ou chaîne vide
+ */
+function formatPriceCheckout(?float $price): string {
+    if ($price === null || $price <= 0) {
+        return '';
+    }
+    return number_format($price, 2, ',', ' ') . ' €';
+}
+
 // Titre de la page
 $title = trans('checkout.title', $lang) . ' - ' . htmlspecialchars($campaign['name']);
 $useAlpine = true;
@@ -185,12 +220,18 @@ ob_start();
                         <?php else: ?>
                             <!-- Liste des produits -->
                             <div class="space-y-4 mb-6">
-                                <?php foreach ($cart['items'] as $item): ?>
-                                    <?php
+                                <?php
+                                $cartTotalPrice = 0;
+                                foreach ($cart['items'] as $item):
                                     // Fallback image : langue actuelle -> FR -> placeholder
                                     $itemImage = !empty($item['image_' . $lang]) ? $item['image_' . $lang] : ($item['image_fr'] ?? '');
                                     $itemName = !empty($item['name_' . $lang]) ? $item['name_' . $lang] : ($item['name_fr'] ?? '');
-                                    ?>
+
+                                    // Prix (mode rep)
+                                    $itemPrice = getItemPriceCheckout($item, $orderType);
+                                    $lineTotal = $itemPrice ? ($itemPrice * $item['quantity']) : 0;
+                                    $cartTotalPrice += $lineTotal;
+                                ?>
                                     <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                         <!-- Image produit -->
                                         <?php if (!empty($itemImage)): ?>
@@ -210,6 +251,13 @@ ob_start();
                                             <h3 class="font-semibold text-gray-800">
                                                 <?= htmlspecialchars($itemName) ?>
                                             </h3>
+                                            <?php if ($isRepOrder && $showPrices && $itemPrice): ?>
+                                            <!-- Prix unitaire (mode rep) -->
+                                            <p class="text-sm text-gray-500 mt-1">
+                                                <?= $lang === 'fr' ? 'Prix unit.' : 'Eenheidsprijs' ?> :
+                                                <span class="font-medium text-gray-700"><?= formatPriceCheckout($itemPrice) ?></span>
+                                            </p>
+                                            <?php endif; ?>
                                         </div>
 
                                         <!-- Quantité -->
@@ -220,6 +268,12 @@ ob_start();
                                             <p class="text-2xl font-bold text-orange-600">
                                                 <?= $item['quantity'] ?>
                                             </p>
+                                            <?php if ($isRepOrder && $showPrices && $lineTotal > 0): ?>
+                                            <!-- Sous-total ligne (mode rep) -->
+                                            <p class="text-sm font-semibold text-blue-600 mt-1">
+                                                <?= formatPriceCheckout($lineTotal) ?>
+                                            </p>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -235,6 +289,17 @@ ob_start();
                                         <?= array_sum(array_column($cart['items'], 'quantity')) ?>
                                     </span>
                                 </div>
+                                <?php if ($isRepOrder && $showPrices && $cartTotalPrice > 0): ?>
+                                <!-- Total € (mode rep) -->
+                                <div class="flex justify-between items-center text-lg mt-4 pt-4 border-t border-gray-200">
+                                    <span class="font-semibold text-gray-700">
+                                        Total :
+                                    </span>
+                                    <span class="text-2xl font-bold text-green-600">
+                                        <?= formatPriceCheckout($cartTotalPrice) ?>
+                                    </span>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         <?php endif; ?>
                     </div>
