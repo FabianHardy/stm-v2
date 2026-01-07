@@ -130,6 +130,11 @@ class MailchimpEmailService
                 'message' => $message
             ]);
 
+            // Convertir la réponse en array si c'est un objet (Mandrill peut retourner stdClass)
+            if (is_object($response)) {
+                $response = json_decode(json_encode($response), true);
+            }
+
             // Vérifier la réponse
             if (!empty($response) && is_array($response)) {
                 $status = $response[0]['status'] ?? 'unknown';
