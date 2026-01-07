@@ -8,6 +8,7 @@
  * @modified 16/12/2025 - Ajout filtrage permissions sur boutons
  * @modified 23/12/2025 - Ajout section statistiques de vente
  * @modified 29/12/2025 - Ajout modal détail client + liens stats reps
+ * @modified 07/01/2026 - Ajout stats par origine (client vs rep)
  */
 
 use Core\Session;
@@ -103,8 +104,8 @@ ob_start();
         </h3>
     </div>
     <div class="px-4 py-5 sm:p-6">
-        <!-- Cards résumé -->
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+        <!-- Cards résumé - Ligne 1 -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
             <!-- Total vendu -->
             <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center border border-orange-200">
                 <p class="text-3xl font-bold text-orange-600"><?php echo number_format($productStats['total_sold'], 0, ',', ' '); ?></p>
@@ -119,6 +120,38 @@ ob_start();
             <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center border border-blue-200">
                 <p class="text-3xl font-bold text-blue-600"><?php echo number_format($productStats['customers_count'], 0, ',', ' '); ?></p>
                 <p class="text-sm text-blue-700 mt-1">Clients</p>
+            </div>
+        </div>
+
+        <!-- Cards résumé - Ligne 2 : Origine (plus compactes) -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <!-- Via Clients -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg px-4 py-3 border border-blue-200 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-user text-blue-600 text-sm"></i>
+                    </span>
+                    <span class="text-sm font-medium text-blue-700">Via Clients</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-xl font-bold text-blue-600"><?php echo number_format($productStats['sold_by_clients'] ?? 0, 0, ',', ' '); ?></span>
+                    <span class="text-xs text-blue-500 ml-1">promos</span>
+                    <span class="text-xs text-blue-400 ml-2">(<?php echo $productStats['orders_by_clients'] ?? 0; ?> cmd)</span>
+                </div>
+            </div>
+            <!-- Via Reps -->
+            <div class="bg-gradient-to-br from-violet-50 to-violet-100 rounded-lg px-4 py-3 border border-violet-200 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="w-8 h-8 bg-violet-200 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-user-tie text-violet-600 text-sm"></i>
+                    </span>
+                    <span class="text-sm font-medium text-violet-700">Via Reps</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-xl font-bold text-violet-600"><?php echo number_format($productStats['sold_by_reps'] ?? 0, 0, ',', ' '); ?></span>
+                    <span class="text-xs text-violet-500 ml-1">promos</span>
+                    <span class="text-xs text-violet-400 ml-2">(<?php echo $productStats['orders_by_reps'] ?? 0; ?> cmd)</span>
+                </div>
             </div>
         </div>
 
