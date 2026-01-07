@@ -1621,24 +1621,12 @@ class PublicCampaignController
      */
     public function orderConfirmation(string $uuid): void
     {
-        // DEBUG : Chemin absolu pour le log
-        $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
-
         // Envoyer l'email de confirmation (si pending_email existe)
         if (isset($_SESSION["pending_email"])) {
             $data = $_SESSION["pending_email"];
             unset($_SESSION["pending_email"]);
 
-            // DEBUG : Logger les données
-            $debugLog = date('Y-m-d H:i:s') . " | PENDING_EMAIL EXISTE - Envoi direct (sans shutdown)\n";
-            $debugLog .= "  -> rep_email: " . ($data["rep_email"] ?? 'NULL') . "\n";
-            $debugLog .= "  -> is_rep_order: " . (($data["is_rep_order"] ?? false) ? 'true' : 'false') . "\n";
-            $debugLog .= "  -> customer_email: " . ($data["customer_email"] ?? 'NULL') . "\n";
-            file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
-
             try {
-                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 1 - Préparation orderData...\n", FILE_APPEND);
-
                 $orderData = [
                     "order_number" => $data["order_number"],
                     "campaign_title_fr" => $data["campaign_title_fr"],
@@ -1664,10 +1652,7 @@ class PublicCampaignController
                     ];
                 }
 
-                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 2 - Création MailchimpService...\n", FILE_APPEND);
                 $mailchimpService = new \App\Services\MailchimpEmailService();
-
-                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 3 - Envoi email client à {$data["customer_email"]}...\n", FILE_APPEND);
 
                 // Email au client
                 $emailSent = $mailchimpService->sendOrderConfirmation(
@@ -1677,17 +1662,15 @@ class PublicCampaignController
                 );
 
                 if ($emailSent) {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 4 - Email client ENVOYÉ à {$data["customer_email"]}\n", FILE_APPEND);
+                    error_log("Email confirmation envoyé à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
                 } else {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 4 - ECHEC email client à {$data["customer_email"]}\n", FILE_APPEND);
+                    error_log("Échec envoi email confirmation à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
                 }
 
                 // ========================================
                 // SPRINT 14 : Copie email au rep
                 // ========================================
                 if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 5 - Condition rep OK - Envoi copie au rep...\n", FILE_APPEND);
-
                     // Marquer comme copie rep
                     $orderData["is_rep_copy"] = true;
 
@@ -1698,22 +1681,15 @@ class PublicCampaignController
                     );
 
                     if ($repEmailSent) {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 6 - SUCCESS - Email rep envoyé à {$data["rep_email"]}\n", FILE_APPEND);
+                        error_log("Copie email confirmation envoyée au rep: {$data["rep_email"]} (Commande: {$data["order_number"]})");
                     } else {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 6 - ECHEC - Email rep NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
+                        error_log("Échec envoi copie email rep à: {$data["rep_email"]} (Commande: {$data["order_number"]})");
                     }
-                } else {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 5 - Condition rep NON remplie - Pas d'envoi copie\n", FILE_APPEND);
                 }
 
             } catch (\Exception $e) {
-                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
-                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
+                error_log("Erreur envoi email confirmation: " . $e->getMessage());
             }
-        } else {
-            // DEBUG : pending_email n'existe pas
-            $debugLogPath = $_SERVER['DOCUMENT_ROOT'] . '/stm/debug_rep_email.log';
-            file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | PENDING_EMAIL N'EXISTE PAS (refresh page)\n", FILE_APPEND);
         }
 
         // Vérifier la session
