@@ -173,6 +173,10 @@ class MailchimpEmailService
                 $order = json_decode(json_encode($order), true);
             }
 
+            // SPRINT 14 : Déterminer le type de template à utiliser
+            $isRepCopy = $order['is_rep_copy'] ?? false;
+            $templateType = $isRepCopy ? 'order_confirmation_rep' : 'order_confirmation';
+
             // Préparer les lignes de commande en HTML
             $orderLinesHtml = $this->renderOrderLinesHtml($order['lines'] ?? [], $language);
 
@@ -189,40 +193,57 @@ class MailchimpEmailService
                 'total_products' => $order['total_products'] ?? count($order['lines'] ?? []),
                 'delivery_info' => $this->renderDeliveryInfo($order, $language),
                 'order_lines' => $orderLinesHtml,
-                'year' => date('Y')
+                'year' => date('Y'),
+                // SPRINT 14 : Variables supplémentaires pour template rep
+                'rep_name' => $order['rep_name'] ?? '',
+                'order_number' => $order['order_number'] ?? '',
             ];
 
             // Essayer d'abord avec le template DB
             $emailTemplate = new \App\Models\EmailTemplate();
-            $rendered = $emailTemplate->render('order_confirmation', $language, $templateData);
+            $rendered = $emailTemplate->render($templateType, $language, $templateData);
 
             if ($rendered) {
                 // Template DB trouvé et rendu avec succès
                 $subject = $rendered['subject'];
                 $htmlContent = $rendered['body'];
-                error_log("MailchimpEmailService: Utilisation du template DB pour order_confirmation ({$language})");
+                error_log("MailchimpEmailService: Utilisation du template DB pour {$templateType} ({$language})");
             } else {
-                // Fallback sur le fichier template PHP
-                error_log("MailchimpEmailService: Fallback sur fichier PHP pour order_confirmation ({$language})");
+                // Fallback sur le fichier template PHP (ou template par défaut pour rep)
+                if ($isRepCopy) {
+                    // Pour la copie rep, fallback sur order_confirmation standard si pas de template rep
+                    $rendered = $emailTemplate->render('order_confirmation', $language, $templateData);
+                    if ($rendered) {
+                        // Modifier le sujet pour indiquer que c'est une copie
+                        $subject = ($language === 'nl' ? '[KOPIE] ' : '[COPIE] ') . $rendered['subject'];
+                        $htmlContent = $rendered['body'];
+                        error_log("MailchimpEmailService: Fallback sur order_confirmation pour copie rep ({$language})");
+                    } else {
+                        error_log("MailchimpEmailService: Aucun template trouvé pour copie rep ({$language})");
+                        return false;
+                    }
+                } else {
+                    error_log("MailchimpEmailService: Fallback sur fichier PHP pour order_confirmation ({$language})");
 
-                $templateFile = dirname(__DIR__) . "/Views/emails/order_confirmation_{$language}.php";
+                    $templateFile = dirname(__DIR__) . "/Views/emails/order_confirmation_{$language}.php";
 
-                if (!file_exists($templateFile)) {
-                    error_log("Template email introuvable: {$templateFile}");
-                    return false;
+                    if (!file_exists($templateFile)) {
+                        error_log("Template email introuvable: {$templateFile}");
+                        return false;
+                    }
+
+                    // Générer le contenu HTML depuis le fichier PHP
+                    $orderLines = is_array($order['lines'] ?? null) ? $order['lines'] : [];
+                    ob_start();
+                    include $templateFile;
+                    $htmlContent = ob_get_clean();
+
+                    // Sujet depuis les données
+                    $campaignName = $templateData['campaign_name'];
+                    $subject = $language === 'nl'
+                        ? "Bevestiging van uw bestelling - {$campaignName}"
+                        : "Confirmation de votre commande - {$campaignName}";
                 }
-
-                // Générer le contenu HTML depuis le fichier PHP
-                $orderLines = is_array($order['lines'] ?? null) ? $order['lines'] : [];
-                ob_start();
-                include $templateFile;
-                $htmlContent = ob_get_clean();
-
-                // Sujet depuis les données
-                $campaignName = $templateData['campaign_name'];
-                $subject = $language === 'nl'
-                    ? "Bevestiging van uw bestelling - {$campaignName}"
-                    : "Confirmation de votre commande - {$campaignName}";
             }
 
             // Envoyer l'email
