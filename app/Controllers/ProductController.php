@@ -9,6 +9,7 @@
  * @modified 23/12/2025 - Conservation des filtres après suppression
  * @modified 23/12/2025 - Ajout stats de vente dans show() avec getProductSalesStats()
  * @modified 29/12/2025 - Ajout API getProductCustomerOrdersApi() + user_id dans top reps
+ * @modified 07/01/2026 - Ajout stats par origine (client vs rep) dans getProductSalesStats()
  */
 
 namespace App\Controllers;
@@ -301,6 +302,10 @@ class ProductController
                     'total_sold' => 0,
                     'orders_count' => 0,
                     'customers_count' => 0,
+                    'sold_by_clients' => 0,
+                    'orders_by_clients' => 0,
+                    'sold_by_reps' => 0,
+                    'orders_by_reps' => 0,
                     'top_customers' => [],
                     'top_reps' => []
                 ];
@@ -330,6 +335,50 @@ class ProductController
 
         $statsResult = $db->query($statsQuery, $params);
         $stats = $statsResult[0] ?? ['total_sold' => 0, 'orders_count' => 0, 'customers_count' => 0];
+
+        // Stats par origine (client vs rep)
+        $originParams = [':product_id' => $productId];
+        $originFilter = "";
+        if ($accessibleCustomerNumbers !== null) {
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":orig_{$i}";
+                $placeholders[] = $key;
+                $originParams[$key] = $num;
+            }
+            $originFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        $originQuery = "
+            SELECT
+                COALESCE(o.order_source, 'client') as source,
+                COALESCE(SUM(ol.quantity), 0) as total_sold,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_lines ol
+            INNER JOIN orders o ON ol.order_id = o.id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE ol.product_id = :product_id
+            AND o.status = 'synced'
+            {$originFilter}
+            GROUP BY COALESCE(o.order_source, 'client')
+        ";
+
+        $originResult = $db->query($originQuery, $originParams);
+
+        $soldByClients = 0;
+        $ordersByClients = 0;
+        $soldByReps = 0;
+        $ordersByReps = 0;
+
+        foreach ($originResult as $row) {
+            if ($row['source'] === 'rep') {
+                $soldByReps = (int)$row['total_sold'];
+                $ordersByReps = (int)$row['orders_count'];
+            } else {
+                $soldByClients = (int)$row['total_sold'];
+                $ordersByClients = (int)$row['orders_count'];
+            }
+        }
 
         // Top 5 clients
         $topCustomersParams = [':product_id' => $productId];
@@ -371,6 +420,10 @@ class ProductController
             'total_sold' => (int)$stats['total_sold'],
             'orders_count' => (int)$stats['orders_count'],
             'customers_count' => (int)$stats['customers_count'],
+            'sold_by_clients' => $soldByClients,
+            'orders_by_clients' => $ordersByClients,
+            'sold_by_reps' => $soldByReps,
+            'orders_by_reps' => $ordersByReps,
             'top_customers' => $topCustomers,
             'top_reps' => $topReps
         ];

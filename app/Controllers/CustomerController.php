@@ -10,6 +10,7 @@
  * @version 3.0
  * @created 12/11/2025 19:00
  * @modified 29/12/2025 - Refonte complète en mode consultation uniquement
+ * @modified 07/01/2026 - Ajout stats par origine dans getCustomerStats + order_source dans getCustomerOrders
  */
 
 namespace App\Controllers;
@@ -613,13 +614,50 @@ class CustomerController
                 ':country' => $country
             ]);
 
-            return $result[0] ?? [
+            $stats = $result[0] ?? [
                 'orders_count' => 0,
                 'campaigns_count' => 0,
                 'total_quantity' => 0,
                 'first_order_date' => null,
                 'last_order_date' => null
             ];
+
+            // Stats par origine (client vs rep)
+            $originQuery = "
+                SELECT
+                    COALESCE(o.order_source, 'client') as source,
+                    COUNT(DISTINCT o.id) as orders_count,
+                    COALESCE(SUM(ol.quantity), 0) as total_quantity
+                FROM customers cu
+                INNER JOIN orders o ON cu.id = o.customer_id
+                LEFT JOIN order_lines ol ON o.id = ol.order_id
+                WHERE cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'synced'
+                GROUP BY COALESCE(o.order_source, 'client')
+            ";
+
+            $originResult = $db->query($originQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            $stats['orders_by_self'] = 0;
+            $stats['quantity_by_self'] = 0;
+            $stats['orders_by_rep'] = 0;
+            $stats['quantity_by_rep'] = 0;
+
+            foreach ($originResult as $row) {
+                if ($row['source'] === 'rep') {
+                    $stats['orders_by_rep'] = (int)$row['orders_count'];
+                    $stats['quantity_by_rep'] = (int)$row['total_quantity'];
+                } else {
+                    $stats['orders_by_self'] = (int)$row['orders_count'];
+                    $stats['quantity_by_self'] = (int)$row['total_quantity'];
+                }
+            }
+
+            return $stats;
 
         } catch (\Exception $e) {
             error_log("getCustomerStats error: " . $e->getMessage());
@@ -628,7 +666,11 @@ class CustomerController
                 'campaigns_count' => 0,
                 'total_quantity' => 0,
                 'first_order_date' => null,
-                'last_order_date' => null
+                'last_order_date' => null,
+                'orders_by_self' => 0,
+                'quantity_by_self' => 0,
+                'orders_by_rep' => 0,
+                'quantity_by_rep' => 0
             ];
         }
     }
@@ -651,6 +693,7 @@ class CustomerController
                     o.created_at,
                     o.total_items,
                     o.status,
+                    COALESCE(o.order_source, 'client') as order_source,
                     c.name as campaign_name,
                     c.id as campaign_id,
                     (SELECT SUM(ol2.quantity) FROM order_lines ol2 WHERE ol2.order_id = o.id) as total_quantity
