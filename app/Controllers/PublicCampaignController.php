@@ -1637,6 +1637,8 @@ class PublicCampaignController
             file_put_contents($debugLogPath, $debugLog, FILE_APPEND);
 
             try {
+                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 1 - Préparation orderData...\n", FILE_APPEND);
+
                 $orderData = [
                     "order_number" => $data["order_number"],
                     "campaign_title_fr" => $data["campaign_title_fr"],
@@ -1662,47 +1664,51 @@ class PublicCampaignController
                     ];
                 }
 
+                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 2 - Création MailchimpService...\n", FILE_APPEND);
                 $mailchimpService = new \App\Services\MailchimpEmailService();
 
+                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 3 - Envoi email client à {$data["customer_email"]}...\n", FILE_APPEND);
+
                 // Email au client
-                $emailSent = @$mailchimpService->sendOrderConfirmation(
+                $emailSent = $mailchimpService->sendOrderConfirmation(
                     $data["customer_email"],
                     $orderData,
                     $data["language"],
                 );
 
                 if ($emailSent) {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Email client envoyé à {$data["customer_email"]}\n", FILE_APPEND);
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 4 - Email client ENVOYÉ à {$data["customer_email"]}\n", FILE_APPEND);
                 } else {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC email client à {$data["customer_email"]}\n", FILE_APPEND);
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 4 - ECHEC email client à {$data["customer_email"]}\n", FILE_APPEND);
                 }
 
                 // ========================================
                 // SPRINT 14 : Copie email au rep
                 // ========================================
                 if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition rep OK - Envoi copie au rep...\n", FILE_APPEND);
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 5 - Condition rep OK - Envoi copie au rep...\n", FILE_APPEND);
 
                     // Marquer comme copie rep
                     $orderData["is_rep_copy"] = true;
 
-                    $repEmailSent = @$mailchimpService->sendOrderConfirmation(
+                    $repEmailSent = $mailchimpService->sendOrderConfirmation(
                         $data["rep_email"],
                         $orderData,
                         $data["language"],
                     );
 
                     if ($repEmailSent) {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | SUCCESS - Email rep envoyé à {$data["rep_email"]}\n", FILE_APPEND);
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 6 - SUCCESS - Email rep envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                     } else {
-                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | ECHEC - Email rep NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
+                        file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 6 - ECHEC - Email rep NON envoyé à {$data["rep_email"]}\n", FILE_APPEND);
                     }
                 } else {
-                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | Condition rep NON remplie - Pas d'envoi copie\n", FILE_APPEND);
+                    file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | STEP 5 - Condition rep NON remplie - Pas d'envoi copie\n", FILE_APPEND);
                 }
 
             } catch (\Exception $e) {
                 file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
+                file_put_contents($debugLogPath, date('Y-m-d H:i:s') . " | TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
             }
         } else {
             // DEBUG : pending_email n'existe pas
