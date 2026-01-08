@@ -62,6 +62,7 @@ ob_start();
 
         <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
             <input type="hidden" name="type" value="global">
+            <input type="hidden" name="format" value="excel">
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -81,27 +82,15 @@ ob_start();
                 <select name="campaign_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">Toutes les campagnes</option>
                     <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                    <option value="<?= $c['id'] ?>">
+                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" class="mr-2">
-                        <span class="text-sm">CSV (virgule)</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" checked class="mr-2">
-                        <span class="text-sm">Excel (point-virgule)</span>
-                    </label>
-                </div>
-            </div>
-
             <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition">
-                <i class="fas fa-download mr-2"></i>Télécharger
+                <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
 
@@ -124,6 +113,7 @@ ob_start();
 
         <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
             <input type="hidden" name="type" value="campaign">
+            <input type="hidden" name="format" value="excel">
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
@@ -131,28 +121,14 @@ ob_start();
                     <option value="">-- Sélectionner --</option>
                     <?php foreach ($campaigns as $c): ?>
                     <option value="<?= $c['id'] ?>">
-                        <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
+                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
                     </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" class="mr-2">
-                        <span class="text-sm">CSV</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" checked class="mr-2">
-                        <span class="text-sm">Excel</span>
-                    </label>
-                </div>
-            </div>
-
             <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">
-                <i class="fas fa-download mr-2"></i>Télécharger
+                <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
 
@@ -175,33 +151,22 @@ ob_start();
 
         <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
             <input type="hidden" name="type" value="reps">
+            <input type="hidden" name="format" value="excel">
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Campagne (optionnel)</label>
                 <select name="campaign_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">Toutes les campagnes</option>
                     <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                    <option value="<?= $c['id'] ?>">
+                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" class="mr-2">
-                        <span class="text-sm">CSV</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" checked class="mr-2">
-                        <span class="text-sm">Excel</span>
-                    </label>
-                </div>
-            </div>
-
             <button type="submit" class="w-full bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 transition">
-                <i class="fas fa-download mr-2"></i>Télécharger
+                <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
 
@@ -224,6 +189,7 @@ ob_start();
 
         <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
             <input type="hidden" name="type" value="not_ordered">
+            <input type="hidden" name="format" value="excel">
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
@@ -231,48 +197,19 @@ ob_start();
                     <option value="">-- Sélectionner --</option>
                     <?php foreach ($campaigns as $c): ?>
                     <option value="<?= $c['id'] ?>">
-                        <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
+                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
                     </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" class="mr-2">
-                        <span class="text-sm">CSV</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" checked class="mr-2">
-                        <span class="text-sm">Excel</span>
-                    </label>
-                </div>
-            </div>
-
             <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition">
-                <i class="fas fa-download mr-2"></i>Télécharger
+                <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
             <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Rep_Name</p>
-        </div>
-    </div>
-</div>
-
-<!-- Info format -->
-<div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-    <div class="flex items-start">
-        <i class="fas fa-info-circle text-blue-600 mt-0.5 mr-3"></i>
-        <div class="text-sm text-blue-800">
-            <p class="font-medium mb-1">Format des fichiers</p>
-            <ul class="list-disc list-inside space-y-1">
-                <li><strong>CSV (virgule)</strong> : Compatible avec la plupart des logiciels</li>
-                <li><strong>Excel (point-virgule)</strong> : Optimisé pour Microsoft Excel</li>
-                <li>Les fichiers sont encodés en UTF-8 avec BOM pour un affichage correct des accents</li>
-            </ul>
         </div>
     </div>
 </div>

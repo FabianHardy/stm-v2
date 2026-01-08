@@ -759,15 +759,15 @@ class StatsController
     }
 
     /**
-     * Export CSV/Excel
+     * Export Excel
      *
      * @return void
      * @modified 2025/12/16 - Ajout vérification accès campagne
+     * @modified 2026/01/08 - Toujours Excel, nom fichier avec campagne et pays
      */
     public function export(): void
     {
         $type = $_POST["type"] ?? "global";
-        $format = $_POST["format"] ?? "csv";
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
         $dateFrom = $_POST["date_from"] ?? date("Y-m-d", strtotime("-14 days"));
         $dateTo = $_POST["date_to"] ?? date("Y-m-d");
@@ -777,6 +777,17 @@ class StatsController
             Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
             header("Location: /stm/admin/stats/reports");
             exit();
+        }
+
+        // Récupérer les infos de la campagne si spécifiée
+        $campaignName = "";
+        $campaignCountry = "";
+        if ($campaignId) {
+            $campaign = $this->campaignModel->findById($campaignId);
+            if ($campaign) {
+                $campaignName = $this->sanitizeFilename($campaign["name"]);
+                $campaignCountry = $campaign["country"];
+            }
         }
 
         $data = [];
@@ -805,7 +816,7 @@ class StatsController
                     "Origine",
                     "Date_Commande",
                 ];
-                $filename = "export_campagne_" . $campaignId . "_" . date("Ymd");
+                $filename = "export_campagne_{$campaignCountry}_{$campaignName}_" . date("Ymd");
                 break;
 
             case "reps":
@@ -822,7 +833,11 @@ class StatsController
                     "Total_Quantité",
                     "%_Via_Reps",
                 ];
-                $filename = "export_reps_" . date("Ymd");
+                if ($campaignId && $campaignName) {
+                    $filename = "export_reps_{$campaignCountry}_{$campaignName}_" . date("Ymd");
+                } else {
+                    $filename = "export_reps_toutes_campagnes_" . date("Ymd");
+                }
                 break;
 
             case "not_ordered":
@@ -835,7 +850,7 @@ class StatsController
                 // Export clients n'ayant pas commandé
                 $data = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
                 $headers = ["Num_Client", "Nom", "Pays", "Rep_Name"];
-                $filename = "clients_sans_commande_" . $campaignId . "_" . date("Ymd");
+                $filename = "clients_sans_commande_{$campaignCountry}_{$campaignName}_" . date("Ymd");
                 break;
 
             default:
@@ -853,17 +868,31 @@ class StatsController
                     "Origine",
                     "Date_Commande",
                 ];
-                $filename = "export_global_" . date("Ymd");
+                if ($campaignId && $campaignName) {
+                    $filename = "export_global_{$campaignCountry}_{$campaignName}_" . date("Ymd");
+                } else {
+                    $filename = "export_global_toutes_campagnes_" . date("Ymd");
+                }
                 break;
         }
 
-        // Générer le fichier
-        if ($format === "csv") {
-            $this->exportCSV($data, $headers, $filename);
-        } else {
-            // Vrai fichier Excel avec PhpSpreadsheet
-            $this->exportToExcel($data, $headers, $filename);
-        }
+        // Toujours générer en Excel
+        $this->exportToExcel($data, $headers, $filename);
+    }
+
+    /**
+     * Nettoie un nom de fichier (supprime les caractères spéciaux)
+     */
+    private function sanitizeFilename(string $name): string
+    {
+        // Remplacer les accents
+        $name = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name);
+        // Remplacer les espaces par des underscores
+        $name = str_replace(' ', '_', $name);
+        // Supprimer tout sauf lettres, chiffres, underscores et tirets
+        $name = preg_replace('/[^a-zA-Z0-9_-]/', '', $name);
+        // Limiter la longueur
+        return substr($name, 0, 50);
     }
 
     /**
