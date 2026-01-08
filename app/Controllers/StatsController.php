@@ -953,6 +953,12 @@ class StatsController
         // Figer la première ligne
         $sheet->freezePane('A2');
 
+        // Cookie pour signaler la fin du téléchargement au JavaScript
+        $downloadToken = $_POST['download_token'] ?? '';
+        if ($downloadToken) {
+            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        }
+
         // Générer et envoyer le fichier
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');

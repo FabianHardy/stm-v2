@@ -60,7 +60,7 @@ ob_start();
             </div>
         </div>
 
-        <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
+        <form method="POST" action="/stm/admin/stats/export" class="space-y-4" onsubmit="return startExport(this)">
             <input type="hidden" name="type" value="global">
 
             <div class="grid grid-cols-2 gap-4">
@@ -120,7 +120,7 @@ ob_start();
             </div>
         </div>
 
-        <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
+        <form method="POST" action="/stm/admin/stats/export" class="space-y-4" onsubmit="return startExport(this)">
             <input type="hidden" name="type" value="campaign">
 
             <div class="grid grid-cols-2 gap-4">
@@ -167,7 +167,7 @@ ob_start();
             </div>
         </div>
 
-        <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
+        <form method="POST" action="/stm/admin/stats/export" class="space-y-4" onsubmit="return startExport(this)">
             <input type="hidden" name="type" value="reps">
 
             <div class="grid grid-cols-2 gap-4">
@@ -214,7 +214,7 @@ ob_start();
             </div>
         </div>
 
-        <form method="POST" action="/stm/admin/stats/export" class="space-y-4">
+        <form method="POST" action="/stm/admin/stats/export" class="space-y-4" onsubmit="return startExport(this)">
             <input type="hidden" name="type" value="not_ordered">
 
             <div class="grid grid-cols-2 gap-4">
@@ -250,12 +250,32 @@ ob_start();
     </div>
 </div>
 
+<!-- Export Loader Overlay -->
+<div id="export-loader" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
+        <div class="relative mb-4">
+            <div id="export-spinner" class="w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
+            <i class="fas fa-file-excel text-green-600 text-2xl absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
+        </div>
+        <h3 id="export-title" class="text-xl font-bold text-gray-900 mb-2">Génération de l'export Excel</h3>
+        <p id="export-message" class="text-gray-600 mb-4">Cette opération peut prendre plusieurs secondes...</p>
+        <div id="export-warning" class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <strong>Ne quittez pas cette page</strong> pendant la génération.
+        </div>
+        <p class="text-xs text-gray-400 mt-4">Temps écoulé : <span id="export-timer">0:00</span></p>
+    </div>
+</div>
+
 <?php endif; ?>
 
 <?php
 $content = ob_get_clean();
 $pageScripts = <<<'JS'
 <script>
+// ============================================
+// FILTRAGE CAMPAGNES PAR PAYS
+// ============================================
 function filterCampaigns(countrySelect, campaignSelectId, required = false) {
     const country = countrySelect.value;
     const campaignSelect = document.getElementById(campaignSelectId);
@@ -279,6 +299,97 @@ function filterCampaigns(countrySelect, campaignSelectId, required = false) {
             option.style.display = 'none';
         }
     });
+}
+
+// ============================================
+// EXPORT LOADER AVEC TIMER ET COOKIE TOKEN
+// ============================================
+let exportTimerInterval = null;
+let exportStartTime = null;
+let downloadCheckInterval = null;
+
+function startExport(form) {
+    // Générer un token unique pour ce téléchargement
+    const downloadToken = 'download_' + Date.now();
+
+    // Ajouter le token au formulaire
+    let tokenInput = form.querySelector('input[name="download_token"]');
+    if (!tokenInput) {
+        tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'download_token';
+        form.appendChild(tokenInput);
+    }
+    tokenInput.value = downloadToken;
+
+    // Adapter le message
+    const titleEl = document.getElementById('export-title');
+    const messageEl = document.getElementById('export-message');
+    const warningEl = document.getElementById('export-warning');
+    const spinnerEl = document.getElementById('export-spinner');
+
+    titleEl.textContent = 'Génération Excel en cours...';
+    messageEl.textContent = 'Cette opération peut prendre plusieurs secondes...';
+    warningEl.classList.remove('hidden');
+    spinnerEl.className = 'w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto';
+
+    // Afficher l'overlay
+    document.getElementById('export-loader').classList.remove('hidden');
+    document.getElementById('export-loader').classList.add('flex');
+
+    // Démarrer le timer
+    exportStartTime = Date.now();
+    updateExportTimer();
+    exportTimerInterval = setInterval(updateExportTimer, 1000);
+
+    // Vérifier périodiquement si le cookie de téléchargement existe
+    downloadCheckInterval = setInterval(function() {
+        if (getCookie('download_complete') === downloadToken) {
+            hideExportLoader();
+            document.cookie = 'download_complete=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+    }, 500);
+
+    // Timeout de sécurité : masquer le loader après 2 minutes max
+    setTimeout(function() {
+        hideExportLoader();
+    }, 120000);
+
+    return true;
+}
+
+function hideExportLoader() {
+    document.getElementById('export-loader').classList.add('hidden');
+    document.getElementById('export-loader').classList.remove('flex');
+
+    if (exportTimerInterval) {
+        clearInterval(exportTimerInterval);
+        exportTimerInterval = null;
+    }
+    if (downloadCheckInterval) {
+        clearInterval(downloadCheckInterval);
+        downloadCheckInterval = null;
+    }
+}
+
+function updateExportTimer() {
+    if (!exportStartTime) return;
+
+    const elapsed = Math.floor((Date.now() - exportStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+
+    const timerEl = document.getElementById('export-timer');
+    if (timerEl) {
+        timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    }
+}
+
+function getCookie(name) {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
 }
 </script>
 JS;
