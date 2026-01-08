@@ -14,6 +14,7 @@
  * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
  * @modified 2026/01/08 - Ajout stats par origine (client vs rep) dans index() et campaigns()
  * @modified 2026/01/08 - Export Excel : ajout colonne % Via Reps dans récap, colonne Origine par client
+ * @modified 2026/01/08 - Exports: colonne Campagne, Rep_Name depuis DB externe, filtre reps sans clients
  */
 
 namespace App\Controllers;
@@ -997,7 +998,7 @@ class StatsController
                    p.product_code as Promo_Art,
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
-                   COALESCE(u.name, cu.rep_name) as Rep_Name,
+                   cu.rep_id as rep_id,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
@@ -1005,14 +1006,95 @@ class StatsController
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
-            LEFT JOIN users u ON cu.rep_id = u.id
             WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
             ORDER BY o.created_at DESC, cu.customer_number
         ";
 
-        return $db->query($query, $params);
+        $results = $db->query($query, $params);
+
+        // Enrichir avec le rep_name depuis la base externe
+        return $this->enrichWithRepNames($results);
+    }
+
+    /**
+     * Enrichit les données avec les noms des représentants depuis la base externe
+     */
+    private function enrichWithRepNames(array $data): array
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        // Collecter les rep_id uniques par pays
+        $repIdsBE = [];
+        $repIdsLU = [];
+
+        foreach ($data as $row) {
+            if (!empty($row['rep_id'])) {
+                if (($row['Pays'] ?? '') === 'BE') {
+                    $repIdsBE[$row['rep_id']] = true;
+                } else {
+                    $repIdsLU[$row['rep_id']] = true;
+                }
+            }
+        }
+
+        // Récupérer les noms depuis la base externe
+        $repNames = [];
+
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+
+            if (!empty($repIdsBE)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM BE_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsBE)
+                );
+                foreach ($result as $r) {
+                    $repNames['BE'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+
+            if (!empty($repIdsLU)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsLU), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM LU_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsLU)
+                );
+                foreach ($result as $r) {
+                    $repNames['LU'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("Error fetching rep names: " . $e->getMessage());
+        }
+
+        // Enrichir les données
+        $enriched = [];
+        foreach ($data as $row) {
+            $country = $row['Pays'] ?? '';
+            $repId = $row['rep_id'] ?? '';
+            $repName = $repNames[$country][$repId] ?? '';
+
+            // Reconstruire la ligne avec Rep_Name à la bonne position (sans rep_id)
+            $enriched[] = [
+                'Campagne' => $row['Campagne'] ?? '',
+                'Num_Client' => $row['Num_Client'] ?? '',
+                'Nom' => $row['Nom'] ?? '',
+                'Pays' => $row['Pays'] ?? '',
+                'Promo_Art' => $row['Promo_Art'] ?? '',
+                'Nom_Produit' => $row['Nom_Produit'] ?? '',
+                'Quantite' => $row['Quantite'] ?? '',
+                'Rep_Name' => $repName,
+                'Origine' => $row['Origine'] ?? '',
+                'Date_Commande' => $row['Date_Commande'] ?? '',
+            ];
+        }
+
+        return $enriched;
     }
 
     /**
@@ -1031,7 +1113,7 @@ class StatsController
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
                    o.customer_email as Email,
-                   COALESCE(u.name, cu.rep_name) as Rep_Name,
+                   cu.rep_id as rep_id,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
@@ -1039,13 +1121,95 @@ class StatsController
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
-            LEFT JOIN users u ON cu.rep_id = u.id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'synced'
             ORDER BY cu.customer_number, p.product_code
         ";
 
-        return $db->query($query, [":campaign_id" => $campaignId]);
+        $results = $db->query($query, [":campaign_id" => $campaignId]);
+
+        // Enrichir avec le rep_name depuis la base externe
+        return $this->enrichWithRepNamesCampaign($results);
+    }
+
+    /**
+     * Enrichit les données campagne avec les noms des représentants depuis la base externe
+     */
+    private function enrichWithRepNamesCampaign(array $data): array
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        // Collecter les rep_id uniques par pays
+        $repIdsBE = [];
+        $repIdsLU = [];
+
+        foreach ($data as $row) {
+            if (!empty($row['rep_id'])) {
+                if (($row['Pays'] ?? '') === 'BE') {
+                    $repIdsBE[$row['rep_id']] = true;
+                } else {
+                    $repIdsLU[$row['rep_id']] = true;
+                }
+            }
+        }
+
+        // Récupérer les noms depuis la base externe
+        $repNames = [];
+
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+
+            if (!empty($repIdsBE)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM BE_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsBE)
+                );
+                foreach ($result as $r) {
+                    $repNames['BE'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+
+            if (!empty($repIdsLU)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsLU), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM LU_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsLU)
+                );
+                foreach ($result as $r) {
+                    $repNames['LU'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("Error fetching rep names: " . $e->getMessage());
+        }
+
+        // Enrichir les données
+        $enriched = [];
+        foreach ($data as $row) {
+            $country = $row['Pays'] ?? '';
+            $repId = $row['rep_id'] ?? '';
+            $repName = $repNames[$country][$repId] ?? '';
+
+            // Reconstruire la ligne avec Rep_Name à la bonne position (sans rep_id)
+            $enriched[] = [
+                'Campagne' => $row['Campagne'] ?? '',
+                'Num_Client' => $row['Num_Client'] ?? '',
+                'Nom' => $row['Nom'] ?? '',
+                'Pays' => $row['Pays'] ?? '',
+                'Promo_Art' => $row['Promo_Art'] ?? '',
+                'Nom_Produit' => $row['Nom_Produit'] ?? '',
+                'Quantite' => $row['Quantite'] ?? '',
+                'Email' => $row['Email'] ?? '',
+                'Rep_Name' => $repName,
+                'Origine' => $row['Origine'] ?? '',
+                'Date_Commande' => $row['Date_Commande'] ?? '',
+            ];
+        }
+
+        return $enriched;
     }
 
     /**
@@ -1066,6 +1230,11 @@ class StatsController
 
         $data = [];
         foreach ($reps as $rep) {
+            // Ne pas exporter les reps sans clients assignés
+            if (($rep["total_clients"] ?? 0) == 0) {
+                continue;
+            }
+
             $convRate =
                 $rep["total_clients"] > 0
                     ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) . "%"
