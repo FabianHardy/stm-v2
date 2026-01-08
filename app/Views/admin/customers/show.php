@@ -10,6 +10,7 @@
  * @created 12/11/2025 19:30
  * @modified 29/12/2025 - Refonte complète en mode consultation
  * @modified 07/01/2026 - Ajout stats origine (par lui-même vs via rep) + colonne Source
+ * @modified 08/01/2026 - Ajout bandeau filtre campagne
  */
 
 use Core\Session;
@@ -59,6 +60,31 @@ ob_start();
         </ol>
     </nav>
 </div>
+
+<?php if (!empty($selectedCampaign)): ?>
+<!-- Bandeau filtre campagne -->
+<div class="mb-4 rounded-lg bg-indigo-50 border border-indigo-200 p-4">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-filter text-indigo-600"></i>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-indigo-800">
+                    Filtré sur la campagne : <strong><?= htmlspecialchars($selectedCampaign['name']) ?></strong>
+                </p>
+                <p class="text-xs text-indigo-600">
+                    Les stats et commandes affichées concernent uniquement cette campagne
+                </p>
+            </div>
+        </div>
+        <a href="/stm/admin/customers/show?customer_number=<?= urlencode($customer['customer_number']) ?>&country=<?= $customer['country'] ?>"
+           class="inline-flex items-center px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md hover:bg-indigo-100 transition text-sm">
+            <i class="fas fa-times mr-1"></i>Voir tout
+        </a>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Messages flash -->
 <?php if ($flashSuccess = Session::getFlash('success')): ?>

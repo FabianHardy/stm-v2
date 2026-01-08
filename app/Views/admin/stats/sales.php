@@ -181,7 +181,7 @@ ob_start();
         $origin = $clientOrigins[$customerNumber] ?? null;
 
         // Construire l'URL vers la fiche client
-        $clientDetailUrl = "/stm/admin/stats/customer-detail?customer_number=" . urlencode($customerNumber)
+        $clientDetailUrl = "/stm/admin/customers/show?customer_number=" . urlencode($customerNumber)
                          . "&country=" . urlencode($repCountry);
         if (!empty($campaignId)) {
             $clientDetailUrl .= "&campaign_id=" . $campaignId;

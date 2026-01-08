@@ -11,6 +11,7 @@
  * @created 12/11/2025 19:00
  * @modified 29/12/2025 - Refonte complète en mode consultation uniquement
  * @modified 07/01/2026 - Ajout stats par origine dans getCustomerStats + order_source dans getCustomerOrders
+ * @modified 08/01/2026 - Ajout filtre par campagne dans show(), getCustomerStats(), getCustomerOrders()
  */
 
 namespace App\Controllers;
@@ -99,6 +100,7 @@ class CustomerController
     {
         $customerNumber = $_GET['customer_number'] ?? '';
         $country = $_GET['country'] ?? 'BE';
+        $campaignId = !empty($_GET['campaign_id']) ? (int)$_GET['campaign_id'] : null;
 
         if (empty($customerNumber)) {
             Session::setFlash('error', 'Numéro client requis');
@@ -123,11 +125,19 @@ class CustomerController
             exit;
         }
 
-        // Récupérer les stats du client
-        $customerStats = $this->getCustomerStats($customerNumber, $country);
+        // Récupérer les stats du client (filtrées par campagne si fourni)
+        $customerStats = $this->getCustomerStats($customerNumber, $country, $campaignId);
 
-        // Récupérer les commandes du client
-        $orders = $this->getCustomerOrders($customerNumber, $country);
+        // Récupérer les commandes du client (filtrées par campagne si fourni)
+        $orders = $this->getCustomerOrders($customerNumber, $country, $campaignId);
+
+        // Récupérer les infos de la campagne si filtre actif
+        $selectedCampaign = null;
+        if ($campaignId) {
+            $db = Database::getInstance();
+            $result = $db->query("SELECT id, name, country FROM campaigns WHERE id = :id", [':id' => $campaignId]);
+            $selectedCampaign = $result[0] ?? null;
+        }
 
         // Charger la vue
         require_once __DIR__ . '/../Views/admin/customers/show.php';
@@ -587,12 +597,24 @@ class CustomerController
      *
      * @param string $customerNumber
      * @param string $country
+     * @param int|null $campaignId Filtre par campagne (optionnel)
      * @return array
      */
-    private function getCustomerStats(string $customerNumber, string $country): array
+    private function getCustomerStats(string $customerNumber, string $country, ?int $campaignId = null): array
     {
         try {
             $db = Database::getInstance();
+
+            $campaignFilter = "";
+            $params = [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ];
+
+            if ($campaignId) {
+                $campaignFilter = " AND o.campaign_id = :campaign_id";
+                $params[':campaign_id'] = $campaignId;
+            }
 
             $query = "
                 SELECT
@@ -607,12 +629,10 @@ class CustomerController
                 WHERE cu.customer_number = :customer_number
                 AND cu.country = :country
                 AND o.status = 'synced'
+                {$campaignFilter}
             ";
 
-            $result = $db->query($query, [
-                ':customer_number' => $customerNumber,
-                ':country' => $country
-            ]);
+            $result = $db->query($query, $params);
 
             $stats = $result[0] ?? [
                 'orders_count' => 0,
@@ -634,13 +654,11 @@ class CustomerController
                 WHERE cu.customer_number = :customer_number
                 AND cu.country = :country
                 AND o.status = 'synced'
+                {$campaignFilter}
                 GROUP BY COALESCE(o.order_source, 'client')
             ";
 
-            $originResult = $db->query($originQuery, [
-                ':customer_number' => $customerNumber,
-                ':country' => $country
-            ]);
+            $originResult = $db->query($originQuery, $params);
 
             $stats['orders_by_self'] = 0;
             $stats['quantity_by_self'] = 0;
@@ -682,10 +700,29 @@ class CustomerController
      * @param string $country
      * @return array
      */
-    private function getCustomerOrders(string $customerNumber, string $country): array
+    /**
+     * Récupérer les commandes d'un client
+     *
+     * @param string $customerNumber
+     * @param string $country
+     * @param int|null $campaignId Filtre par campagne (optionnel)
+     * @return array
+     */
+    private function getCustomerOrders(string $customerNumber, string $country, ?int $campaignId = null): array
     {
         try {
             $db = Database::getInstance();
+
+            $campaignFilter = "";
+            $params = [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ];
+
+            if ($campaignId) {
+                $campaignFilter = " AND o.campaign_id = :campaign_id";
+                $params[':campaign_id'] = $campaignId;
+            }
 
             $query = "
                 SELECT
@@ -703,13 +740,11 @@ class CustomerController
                 WHERE cu.customer_number = :customer_number
                 AND cu.country = :country
                 AND o.status = 'synced'
+                {$campaignFilter}
                 ORDER BY o.created_at DESC
             ";
 
-            return $db->query($query, [
-                ':customer_number' => $customerNumber,
-                ':country' => $country
-            ]);
+            return $db->query($query, $params);
 
         } catch (\Exception $e) {
             error_log("getCustomerOrders error: " . $e->getMessage());
