@@ -1,1747 +1,2025 @@
 <?php
 /**
- * Vue : Statistiques - Par campagne
+ * Controller Stats - STM v2
  *
- * Stats détaillées pour une campagne spécifique
- * Avec graphiques, loader et système d'onglets
+ * Gestion des pages de statistiques admin
  *
  * @package STM
  * @created 2025/11/25
- * @modified 2025/12/04 - Ajout loader + graphiques Chart.js
- * @modified 2025/12/08 - Légende colonnes représentants
- * @modified 2025/12/09 - Système d'onglets (Produits/Reps/Fournisseurs)
- * @modified 2025/12/09 - Ajout fournisseur dans Produits, accordion dans Fournisseurs, tri par colonnes
- * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
- * @modified 2025/12/22 - Ajout overlay de chargement pour export Excel avec timer
+ * @modified 2025/12/09 - Ajout stats fournisseurs dans campaigns()
+ * @modified 2025/12/22 - Correction export Excel : quantités par produit (getClientProductQuantities)
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
- * @modified 2025/12/23 - Ajout onglet Clients (top clients par campagne)
- * @modified 2025/12/23 - Ajout modal détail commandes client avec API
- * @modified 2026/01/08 - Ajout stats par origine (client vs rep) sous les KPIs
+ * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
+ * @modified 2025/12/23 - Correction graphiques (getDailyEvolution, getCategoryStatsForCampaign) pour filtre clients
+ * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
+ * @modified 2026/01/08 - Ajout stats par origine (client vs rep) dans index() et campaigns()
+ * @modified 2026/01/08 - Export Excel : ajout colonne % Via Reps dans récap, colonne Origine par client
  */
 
+namespace App\Controllers;
+
+use App\Models\Stats;
+use App\Models\Campaign;
+use Core\Session;
 use App\Helpers\StatsAccessHelper;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
-// Variable pour le menu actif
-$activeMenu = "stats-campaigns";
+class StatsController
+{
+    private Stats $statsModel;
+    private Campaign $campaignModel;
 
-// Récupérer les pays accessibles selon le rôle
-$accessibleCountries = StatsAccessHelper::getAccessibleCountries();
-$defaultCountry = StatsAccessHelper::getDefaultCountry();
-
-ob_start();
-
-// Préparer les campagnes par pays pour Alpine.js
-$campaignsByCountry = ["BE" => [], "LU" => [], "all" => []];
-foreach ($campaigns as $c) {
-    $campaignsByCountry[$c["country"]][] = $c;
-    $campaignsByCountry["all"][] = $c;
-}
-$campaignsJson = json_encode($campaignsByCountry);
-
-// Récupérer le pays sélectionné
-$selectedCountry = $_GET["country"] ?? $defaultCountry ?? "";
-if (!$selectedCountry && $campaignStats) {
-    $selectedCountry = $campaignStats["campaign"]["country"] ?? "";
-}
-
-// Si un seul pays accessible, forcer ce pays
-if ($accessibleCountries !== null && count($accessibleCountries) === 1) {
-    $selectedCountry = $accessibleCountries[0];
-}
-
-// Encoder les stats fournisseurs en JSON pour le tri Alpine.js
-$supplierStatsJson = json_encode($supplierStats ?? []);
-?>
-
-<!-- Loader Overlay -->
-<div id="page-loader" class="fixed inset-0 bg-white bg-opacity-90 z-50 hidden items-center justify-center">
-    <div class="text-center">
-        <div class="relative">
-            <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-        </div>
-        <p class="mt-4 text-gray-600 font-medium">Chargement des statistiques...</p>
-        <p class="text-sm text-gray-400 mt-1">Cela peut prendre quelques secondes</p>
-    </div>
-</div>
-
-<!-- Export Loader Overlay -->
-<div id="export-loader" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden items-center justify-center">
-    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
-        <div class="relative mb-4">
-            <div id="export-spinner" class="w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
-            <i class="fas fa-file-excel text-green-600 text-2xl absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></i>
-        </div>
-        <h3 id="export-title" class="text-xl font-bold text-gray-900 mb-2">Génération de l'export Excel</h3>
-        <p id="export-message" class="text-gray-600 mb-4">Cette opération peut prendre plusieurs minutes selon le volume de données.</p>
-        <div id="export-warning" class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-            <i class="fas fa-exclamation-triangle mr-2"></i>
-            <strong>Ne quittez pas cette page</strong> pendant la génération.
-        </div>
-        <p class="text-xs text-gray-400 mt-4">Temps écoulé : <span id="export-timer">0:00</span></p>
-    </div>
-</div>
-
-<!-- En-tête -->
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-900">Statistiques - Par campagne</h1>
-    <p class="text-gray-600 mt-1">Performances détaillées d'une campagne</p>
-</div>
-
-<!-- Sélecteur de campagne avec filtre pays -->
-<div class="bg-white rounded-lg shadow-sm p-4 mb-6" x-data="campaignFilter()" x-init="init()">
-    <div class="flex flex-wrap gap-4 items-center">
-
-        <!-- Partie gauche : Sélecteur -->
-        <form method="GET" action="/stm/admin/stats/campaigns" class="flex flex-wrap gap-4 items-end <?= $campaignStats ? 'flex-shrink-0' : 'flex-1' ?>" id="campaign-form">
-
-            <!-- Pays - Masqué si un seul pays accessible -->
-            <?php if ($accessibleCountries === null || count($accessibleCountries) > 1): ?>
-            <div class="w-40">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                <select name="country" x-model="selectedCountry" @change="filterCampaigns()"
-                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <?php if ($accessibleCountries === null): ?>
-                    <option value="">Tous</option>
-                    <option value="BE">🇧🇪 Belgique</option>
-                    <option value="LU">🇱🇺 Luxembourg</option>
-                    <?php else: ?>
-                    <option value="">Tous</option>
-                    <?php if (in_array("BE", $accessibleCountries)): ?>
-                    <option value="BE">🇧🇪 Belgique</option>
-                    <?php endif; ?>
-                    <?php if (in_array("LU", $accessibleCountries)): ?>
-                    <option value="LU">🇱🇺 Luxembourg</option>
-                    <?php endif; ?>
-                    <?php endif; ?>
-                </select>
-            </div>
-            <?php else: ?>
-            <!-- Pays unique - Champ caché -->
-            <input type="hidden" name="country" value="<?= $selectedCountry ?>">
-            <div class="w-40">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
-                <div class="px-4 py-2 bg-gray-100 rounded-lg text-gray-700">
-                    <?= $selectedCountry === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?>
-                </div>
-            </div>
-            <?php endif; ?>
-
-            <!-- Campagne -->
-            <div class="<?= $campaignStats ? 'w-64' : 'flex-1 min-w-[300px]' ?>">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne</label>
-                <select name="campaign_id" x-ref="campaignSelect"
-                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- Choisir une campagne --</option>
-                    <template x-for="c in filteredCampaigns" :key="c.id">
-                        <option :value="c.id"
-                                :selected="c.id == selectedCampaign"
-                                x-text="c.name + ' (' + c.country + ' - ' + getStatusLabel(c.status) + ')'"></option>
-                    </template>
-                </select>
-            </div>
-
-            <button type="submit" onclick="showLoader()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition inline-flex items-center gap-2">
-                <i class="fas fa-chart-bar"></i>
-                <span>Voir les stats</span>
-            </button>
-        </form>
-
-        <?php if ($campaignStats): ?>
-        <!-- Partie droite : Infos campagne -->
-        <div class="flex-1 flex items-center justify-end gap-4 pl-4 border-l border-gray-200">
-            <div class="text-right">
-                <h2 class="text-lg font-bold text-gray-900"><?= htmlspecialchars($campaignStats["campaign"]["name"]) ?></h2>
-                <p class="text-xs text-gray-500"><?= htmlspecialchars($campaignStats["campaign"]["title_fr"] ?? "") ?></p>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                    <i class="fas fa-calendar mr-1"></i>
-                    <?= date("d/m/Y", strtotime($campaignStats["campaign"]["start_date"])) ?> - <?= date("d/m/Y", strtotime($campaignStats["campaign"]["end_date"])) ?>
-                </span>
-                <span class="inline-flex items-center px-2 py-1 <?= $campaignStats["campaign"]["country"] === "BE" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700" ?> rounded text-xs">
-                    <?= $campaignStats["campaign"]["country"] === "BE" ? "🇧🇪" : "🇱🇺" ?>
-                </span>
-                <?php
-                $statusLabels = [
-                    "draft" => "Brouillon",
-                    "scheduled" => "Programmée",
-                    "active" => "En cours",
-                    "ended" => "Terminée",
-                    "cancelled" => "Annulée",
-                ];
-                $statusColors = [
-                    "draft" => "bg-gray-100 text-gray-800",
-                    "scheduled" => "bg-blue-100 text-blue-800",
-                    "active" => "bg-green-100 text-green-800",
-                    "ended" => "bg-orange-100 text-orange-800",
-                    "cancelled" => "bg-red-100 text-red-800",
-                ];
-                $currentStatus = $campaignStats["campaign"]["status"] ?? "draft";
-                $statusLabel = $statusLabels[$currentStatus] ?? ucfirst($currentStatus);
-                $statusColor = $statusColors[$currentStatus] ?? "bg-gray-100 text-gray-800";
-                ?>
-                <span class="inline-flex items-center px-2 py-1 <?= $statusColor ?> rounded text-xs">
-                    <?= $statusLabel ?>
-                </span>
-            </div>
-        </div>
-        <?php endif; ?>
-
-    </div>
-</div>
-
-<?php if ($campaignStats): ?>
-
-<?php if ($repDetail): ?>
-<!-- ============================================ -->
-<!-- VUE DÉTAIL REPRÉSENTANT                      -->
-<!-- ============================================ -->
-
-<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-    <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-4">
-            <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-user text-indigo-600 text-xl"></i>
-            </div>
-            <div>
-                <h2 class="text-xl font-bold text-gray-900"><?= htmlspecialchars($repDetail["name"]) ?></h2>
-                <p class="text-sm text-gray-500">
-                    <span class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs mr-2">
-                        <?= htmlspecialchars($repDetail["cluster"]) ?>
-                    </span>
-                    <span class="inline-flex items-center px-2 py-0.5 <?= $repDetail["country"] === "BE" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700" ?> rounded text-xs mr-2">
-                        <?= $repDetail["country"] === "BE" ? "🇧🇪" : "🇱🇺" ?> <?= $repDetail["country"] ?>
-                    </span>
-                    <span class="text-gray-400">•</span>
-                    <span class="ml-2 text-indigo-600"><?= htmlspecialchars($campaignStats["campaign"]["name"]) ?></span>
-                </p>
-            </div>
-        </div>
-
-        <?php
-        $backUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId;
-        if (!empty($selectedCountry)) {
-            $backUrl .= "&country=" . $selectedCountry;
+    /**
+     * Constructeur
+     */
+    public function __construct()
+    {
+        // Vérifier l'authentification (utilise user_id comme les autres controllers)
+        if (!Session::get("user_id")) {
+            header("Location: /stm/admin/login");
+            exit();
         }
-        ?>
-        <a href="<?= $backUrl ?>" onclick="showLoader()" class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-            <i class="fas fa-arrow-left mr-2"></i> Retour à la campagne
-        </a>
-    </div>
 
-    <!-- Stats du rep -->
-    <div class="grid grid-cols-4 gap-4 mb-6">
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-gray-900"><?= $repDetail["total_clients"] ?></p>
-            <p class="text-xs text-gray-500">Total clients</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-green-600"><?= $repDetail["stats"]["customers_ordered"] ?></p>
-            <p class="text-xs text-gray-500">Ont commandé</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <?php $convRate = $repDetail["total_clients"] > 0 ? round(($repDetail["stats"]["customers_ordered"] / $repDetail["total_clients"]) * 100, 1) : 0; ?>
-            <p class="text-2xl font-bold text-indigo-600"><?= $convRate ?>%</p>
-            <p class="text-xs text-gray-500">Taux participation</p>
-        </div>
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-            <p class="text-2xl font-bold text-orange-600"><?= number_format($repDetail["stats"]["total_quantity"], 0, ",", " ") ?></p>
-            <p class="text-xs text-gray-500">Promos vendues</p>
-        </div>
-    </div>
-
-    <!-- Liste des clients du rep -->
-    <h3 class="font-semibold text-gray-900 mb-3">
-        Clients (<?= count($repClients) ?>)
-        <span class="text-sm font-normal text-gray-500">- Triés par quantité commandée</span>
-    </h3>
-
-    <?php if (empty($repClients)): ?>
-    <p class="text-gray-500 text-center py-8">Aucun client trouvé pour ce représentant</p>
-    <?php else: ?>
-    <div class="overflow-x-auto max-h-[500px]">
-        <table class="min-w-full">
-            <thead class="sticky top-0 bg-gray-50">
-                <tr class="text-left text-xs text-gray-500 uppercase border-b">
-                    <th class="py-3 px-4">Client</th>
-                    <th class="py-3 px-4">Ville</th>
-                    <th class="py-3 px-4 text-center">Statut</th>
-                    <th class="py-3 px-4 text-right">Commandes</th>
-                    <th class="py-3 px-4 text-right">Promos</th>
-                </tr>
-            </thead>
-            <tbody class="text-sm divide-y divide-gray-100">
-                <?php usort($repClients, function ($a, $b) {
-                    return ($b["total_quantity"] ?? 0) - ($a["total_quantity"] ?? 0);
-                }); ?>
-                <?php foreach ($repClients as $client): ?>
-                <tr class="hover:bg-gray-50">
-                    <td class="py-3 px-4">
-                        <p class="font-medium text-gray-900"><?= htmlspecialchars($client["company_name"] ?? "-") ?></p>
-                        <p class="text-xs text-gray-500"><?= htmlspecialchars($client["customer_number"] ?? "") ?></p>
-                    </td>
-                    <td class="py-3 px-4 text-gray-600"><?= htmlspecialchars($client["city"] ?? "-") ?></td>
-                    <td class="py-3 px-4 text-center">
-                        <?php if ($client["has_ordered"] ?? false): ?>
-                            <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                                <i class="fas fa-check mr-1"></i> Commandé
-                            </span>
-                        <?php else: ?>
-                            <span class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
-                                Pas encore
-                            </span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="py-3 px-4 text-right font-medium"><?= $client["orders_count"] ?? 0 ?></td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($client["total_quantity"] ?? 0, 0, ",", " ") ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-    <?php endif; ?>
-</div>
-
-<?php else: ?>
-<!-- ============================================ -->
-<!-- VUE CAMPAGNE (sans détail rep)               -->
-<!-- ============================================ -->
-
-<!-- KPIs -->
-<div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Clients éligibles</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">
-            <?= is_numeric($campaignStats["eligible_customers"])
-                ? number_format($campaignStats["eligible_customers"], 0, ",", " ")
-                : ($campaignStats["eligible_customers"] ?? 0) ?>
-        </p>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Clients ayant commandé</p>
-        <p class="text-2xl font-bold text-green-600 mt-1"><?= number_format($campaignStats["customers_ordered"] ?? 0, 0, ",", " ") ?></p>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Taux de participation</p>
-        <p class="text-2xl font-bold text-indigo-600 mt-1"><?= $campaignStats["participation_rate"] ?? 0 ?>%</p>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Total commandes</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1"><?= number_format($campaignStats["total_orders"] ?? 0, 0, ",", " ") ?></p>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Promos vendues</p>
-        <p class="text-2xl font-bold text-orange-600 mt-1"><?= number_format($campaignStats["total_quantity"] ?? 0, 0, ",", " ") ?></p>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Moy. / commande</p>
-        <?php
-        $totalOrders = $campaignStats["total_orders"] ?? 0;
-        $totalQuantity = $campaignStats["total_quantity"] ?? 0;
-        $avgPerOrder = $totalOrders > 0 ? round($totalQuantity / $totalOrders, 1) : 0;
-        ?>
-        <p class="text-2xl font-bold text-purple-600 mt-1"><?= number_format($avgPerOrder, 1, ",", " ") ?></p>
-    </div>
-</div>
-
-<!-- Stats par origine (Client vs Rep) -->
-<div class="grid grid-cols-2 gap-4 mb-6">
-    <!-- Via Clients -->
-    <div class="bg-white rounded-lg shadow-sm px-4 py-3">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <i class="fas fa-user text-blue-600"></i>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500 uppercase">Via Clients</p>
-                    <p class="text-xs text-gray-400">Commandes passées par les clients</p>
-                </div>
-            </div>
-            <div class="text-right">
-                <p class="text-xl font-bold text-blue-600"><?= number_format($originStats['client_orders'] ?? 0, 0, ",", " ") ?></p>
-                <p class="text-xs text-gray-500"><?= number_format($originStats['client_quantity'] ?? 0, 0, ",", " ") ?> promos</p>
-            </div>
-        </div>
-    </div>
-    <!-- Via Représentants -->
-    <div class="bg-white rounded-lg shadow-sm px-4 py-3">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-violet-100 rounded-full flex items-center justify-center">
-                    <i class="fas fa-user-tie text-violet-600"></i>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500 uppercase">Via Représentants</p>
-                    <p class="text-xs text-gray-400">Commandes passées par les reps</p>
-                </div>
-            </div>
-            <div class="text-right">
-                <p class="text-xl font-bold text-violet-600"><?= number_format($originStats['rep_orders'] ?? 0, 0, ",", " ") ?></p>
-                <p class="text-xs text-gray-500"><?= number_format($originStats['rep_quantity'] ?? 0, 0, ",", " ") ?> promos</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Graphiques -->
-<?php if (!empty($chartLabels)): ?>
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-
-    <!-- Évolution des ventes -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-chart-line text-indigo-500 mr-2"></i>
-            Évolution des ventes
-        </h3>
-        <div class="h-64">
-            <canvas id="evolutionChart"></canvas>
-        </div>
-    </div>
-
-    <!-- Répartition par catégorie -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-chart-pie text-purple-500 mr-2"></i>
-            Ventes par catégorie
-        </h3>
-        <?php if (!empty($categoryData)): ?>
-        <div class="h-64 flex items-center justify-center">
-            <canvas id="categoryChart"></canvas>
-        </div>
-        <?php else: ?>
-        <div class="h-64 flex items-center justify-center text-gray-400">
-            <p>Aucune donnée de catégorie disponible</p>
-        </div>
-        <?php endif; ?>
-    </div>
-
-    <!-- Commandes par origine -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-code-branch text-violet-500 mr-2"></i>
-            Commandes par origine
-        </h3>
-        <div class="h-64">
-            <canvas id="originChart"></canvas>
-        </div>
-    </div>
-
-</div>
-<?php endif; ?>
-
-<!-- ============================================ -->
-<!-- SYSTÈME D'ONGLETS                            -->
-<!-- ============================================ -->
-<?php
-// Compter les éléments pour les badges
-$productsCount = count($campaignProducts ?? []);
-$repsCount = 0;
-if (!empty($reps)) {
-    foreach ($reps as $rep) {
-        if (($rep["total_clients"] ?? 0) > 0) {
-            $repsCount++;
-        }
+        $this->statsModel = new Stats();
+        $this->campaignModel = new Campaign();
     }
-}
-$suppliersCount = count($supplierStats ?? []);
-$customersCount = count($topCustomers ?? []);
-?>
 
-<div class="bg-white rounded-lg shadow-sm mb-6" x-data="{ activeTab: 'products' }">
+    // =========================================================================
+    // MÉTHODES DE FILTRAGE HIÉRARCHIQUE
+    // =========================================================================
 
-    <!-- Navigation onglets -->
-    <div class="border-b border-gray-200">
-        <nav class="flex -mb-px">
-            <!-- Onglet Produits -->
-            <button @click="activeTab = 'products'"
-                    :class="activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
-                <i class="fas fa-box"></i>
-                <span>Produits</span>
-                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
-                      :class="activeTab === 'products' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
-                    <?= $productsCount ?>
-                </span>
-            </button>
+    /**
+     * Récupère les IDs des campagnes accessibles selon le rôle de l'utilisateur
+     * Délègue au helper centralisé
+     *
+     * @return array|null Liste des IDs ou null si accès à tout
+     * @created 2025/12/16
+     */
+    private function getAccessibleCampaignIds(): ?array
+    {
+        return StatsAccessHelper::getAccessibleCampaignIds();
+    }
 
-            <!-- Onglet Représentants -->
-            <button @click="activeTab = 'reps'"
-                    :class="activeTab === 'reps' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
-                <i class="fas fa-users"></i>
-                <span>Représentants</span>
-                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
-                      :class="activeTab === 'reps' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
-                    <?= $repsCount ?>
-                </span>
-            </button>
+    /**
+     * Récupère les IDs des représentants gérés par le manager connecté
+     * Délègue au helper centralisé
+     *
+     * @return array Liste des [rep_id, rep_country]
+     * @created 2025/12/16
+     */
+    private function getManagedRepIds(): array
+    {
+        return StatsAccessHelper::getManagedRepIds();
+    }
 
-            <!-- Onglet Fournisseurs -->
-            <button @click="activeTab = 'suppliers'"
-                    :class="activeTab === 'suppliers' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
-                <i class="fas fa-truck"></i>
-                <span>Fournisseurs</span>
-                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
-                      :class="activeTab === 'suppliers' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
-                    <?= $suppliersCount ?>
-                </span>
-            </button>
+    /**
+     * Filtre une liste de campagnes selon l'accès de l'utilisateur
+     * Délègue au helper centralisé
+     *
+     * @param array $campaigns Liste des campagnes
+     * @return array Liste filtrée
+     * @created 2025/12/16
+     */
+    private function filterCampaignsList(array $campaigns): array
+    {
+        return StatsAccessHelper::filterCampaignsList($campaigns);
+    }
 
-            <!-- Onglet Clients -->
-            <button @click="activeTab = 'customers'"
-                    :class="activeTab === 'customers' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="flex items-center gap-2 px-6 py-4 border-b-2 font-medium text-sm transition-colors">
-                <i class="fas fa-building"></i>
-                <span>Clients</span>
-                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full"
-                      :class="activeTab === 'customers' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'">
-                    <?= $customersCount ?>
-                </span>
-            </button>
-        </nav>
-    </div>
+    /**
+     * Vérifie si l'utilisateur a accès à une campagne spécifique
+     * Délègue au helper centralisé
+     *
+     * @param int $campaignId ID de la campagne
+     * @return bool True si accès autorisé
+     * @created 2025/12/16
+     */
+    private function canAccessCampaign(int $campaignId): bool
+    {
+        return StatsAccessHelper::canAccessCampaign($campaignId);
+    }
 
-    <!-- Contenu des onglets -->
-    <div class="p-6">
+    /**
+     * Filtre les représentants selon le rôle de l'utilisateur
+     * Délègue au helper centralisé
+     *
+     * @param array $reps Liste des représentants
+     * @return array Liste filtrée
+     * @created 2025/12/16
+     */
+    private function filterRepsList(array $reps): array
+    {
+        return StatsAccessHelper::filterRepsList($reps);
+    }
 
-        <!-- ============================================ -->
-        <!-- ONGLET PRODUITS (avec fournisseur)           -->
-        <!-- ============================================ -->
-        <div x-show="activeTab === 'products'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-            <?php if (empty($campaignProducts)): ?>
-            <div class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-box text-gray-400"></i>
-                </div>
-                <p class="text-gray-500">Aucun produit dans cette campagne</p>
-            </div>
-            <?php else: ?>
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr class="text-left text-xs text-gray-500 uppercase">
-                            <th class="py-3 px-4">#</th>
-                            <th class="py-3 px-4">Produit</th>
-                            <th class="py-3 px-4">Fournisseur</th>
-                            <th class="py-3 px-4 text-right">CMD</th>
-                            <th class="py-3 px-4 text-right">Promos</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-sm divide-y divide-gray-100">
-                        <?php
-                        $rank = 0;
+    /**
+     * Récupère les statistiques par origine (client vs rep)
+     *
+     * @param string $dateFrom Date de début
+     * @param string $dateTo Date de fin
+     * @param int|null $campaignId ID campagne (optionnel)
+     * @param string|null $country Pays (optionnel)
+     * @param array|null $accessibleCampaignIds Campagnes accessibles
+     * @return array Stats par origine
+     * @created 2026/01/08
+     */
+    private function getOriginStats(string $dateFrom, string $dateTo, ?int $campaignId, ?string $country, ?array $accessibleCampaignIds): array
+    {
+        $db = \Core\Database::getInstance();
 
-                        foreach ($campaignProducts as $product):
-                            $rank++;
-                            $productName = $product["product_name"] ?? "-";
-                            $productCode = $product["product_code"] ?? "-";
-                            $ordersCount = $product["orders_count"] ?? 0;
-                            $totalQty = $product["quantity_sold"] ?? 0;
+        $sql = "
+            SELECT
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+            FROM orders o
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.status = 'synced'
+            AND DATE(o.created_at) BETWEEN :date_from AND :date_to
+        ";
 
-                            // Récupérer le fournisseur
-                            $supplierName = $productSuppliers[$productCode]['supplier_name'] ?? 'Non référencé';
-                        ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="py-3 px-4">
-                                <span class="inline-flex items-center justify-center w-6 h-6 <?= $rank <= 3 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500' ?> rounded-full text-xs font-medium">
-                                    <?= $rank ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4">
-                                <p class="font-medium text-gray-900"><?= htmlspecialchars($productName) ?></p>
-                                <p class="text-xs text-gray-500"><?= htmlspecialchars($productCode) ?></p>
-                            </td>
-                            <td class="py-3 px-4">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">
-                                    <i class="fas fa-truck mr-1 text-[10px]"></i>
-                                    <?= htmlspecialchars($supplierName) ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-right font-medium"><?= $ordersCount ?></td>
-                            <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php endif; ?>
-        </div>
+        $params = [
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ];
 
-        <!-- ============================================ -->
-        <!-- ONGLET REPRÉSENTANTS                         -->
-        <!-- ============================================ -->
-        <div x-show="activeTab === 'reps'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+        if ($campaignId) {
+            $sql .= " AND o.campaign_id = :campaign_id";
+            $params[':campaign_id'] = $campaignId;
+        } elseif ($accessibleCampaignIds !== null) {
+            if (empty($accessibleCampaignIds)) {
+                return [
+                    'client_orders' => 0,
+                    'client_quantity' => 0,
+                    'rep_orders' => 0,
+                    'rep_quantity' => 0
+                ];
+            }
+            $placeholders = [];
+            foreach ($accessibleCampaignIds as $i => $id) {
+                $key = ":camp_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $id;
+            }
+            $sql .= " AND o.campaign_id IN (" . implode(",", $placeholders) . ")";
+        }
 
-            <?php if (empty($reps)): ?>
-            <div class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-users text-gray-400"></i>
-                </div>
-                <p class="text-gray-500">Aucune donnée représentant</p>
-                <p class="text-xs text-gray-400 mt-1">Vérifiez la connexion à la base externe</p>
-            </div>
-            <?php else: ?>
-            <?php
-            // Grouper par cluster
-            $clusters = [];
+        if ($country) {
+            $sql .= " AND cu.country = :country";
+            $params[':country'] = $country;
+        }
+
+        $sql .= " GROUP BY COALESCE(o.order_source, 'client')";
+
+        $results = $db->query($sql, $params);
+
+        $stats = [
+            'client_orders' => 0,
+            'client_quantity' => 0,
+            'rep_orders' => 0,
+            'rep_quantity' => 0
+        ];
+
+        foreach ($results as $row) {
+            if ($row['source'] === 'rep') {
+                $stats['rep_orders'] = (int)$row['orders_count'];
+                $stats['rep_quantity'] = (int)$row['total_quantity'];
+            } else {
+                $stats['client_orders'] = (int)$row['orders_count'];
+                $stats['client_quantity'] = (int)$row['total_quantity'];
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Récupère les statistiques par origine POUR CHAQUE REP d'une campagne
+     * Retourne un tableau indexé par rep_id (code externe IDE_REP) avec les stats client/rep
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array [rep_id_externe => ['client_orders' => X, 'rep_orders' => Y, ...]]
+     * @created 2026/01/08
+     */
+    private function getOriginStatsByRep(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Joindre avec users pour récupérer rep_id (code externe IDE_REP)
+        $sql = "
+            SELECT
+                u.rep_id as rep_id_externe,
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+            FROM orders o
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN users u ON o.ordered_by_rep_id = u.id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+            AND o.ordered_by_rep_id IS NOT NULL
+            AND u.rep_id IS NOT NULL
+            GROUP BY u.rep_id, COALESCE(o.order_source, 'client')
+        ";
+
+        $results = $db->query($sql, [':campaign_id' => $campaignId]);
+
+        $statsByRep = [];
+
+        foreach ($results as $row) {
+            $repId = $row['rep_id_externe'];
+
+            if (!isset($statsByRep[$repId])) {
+                $statsByRep[$repId] = [
+                    'client_orders' => 0,
+                    'client_quantity' => 0,
+                    'rep_orders' => 0,
+                    'rep_quantity' => 0
+                ];
+            }
+
+            if ($row['source'] === 'rep') {
+                $statsByRep[$repId]['rep_orders'] = (int)$row['orders_count'];
+                $statsByRep[$repId]['rep_quantity'] = (int)$row['total_quantity'];
+            } else {
+                $statsByRep[$repId]['client_orders'] = (int)$row['orders_count'];
+                $statsByRep[$repId]['client_quantity'] = (int)$row['total_quantity'];
+            }
+        }
+
+        return $statsByRep;
+    }
+
+    /**
+     * Récupère l'origine des commandes par client pour une campagne et un rep
+     * Retourne un tableau indexé par customer_number
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $repId ID du représentant
+     * @param string $repCountry Pays du rep
+     * @return array [customer_number => 'client' | 'rep' | 'both']
+     * @created 2026/01/08
+     */
+    private function getClientOrderOrigins(int $campaignId, string $repId, string $repCountry): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $sql = "
+            SELECT
+                cu.customer_number,
+                GROUP_CONCAT(DISTINCT COALESCE(o.order_source, 'client')) as sources
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+            AND cu.country = :country
+            GROUP BY cu.customer_number
+        ";
+
+        $results = $db->query($sql, [
+            ':campaign_id' => $campaignId,
+            ':country' => $repCountry
+        ]);
+
+        $origins = [];
+
+        foreach ($results as $row) {
+            $sources = $row['sources'];
+            if (strpos($sources, 'client') !== false && strpos($sources, 'rep') !== false) {
+                $origins[$row['customer_number']] = 'both';
+            } elseif (strpos($sources, 'rep') !== false) {
+                $origins[$row['customer_number']] = 'rep';
+            } else {
+                $origins[$row['customer_number']] = 'client';
+            }
+        }
+
+        return $origins;
+    }
+
+    // =========================================================================
+    // MÉTHODES PUBLIQUES
+    // =========================================================================
+
+    /**
+     * Vue globale des statistiques
+     *
+     * @return void
+     * @modified 2025/12/17 - Ajout filtrage automatique par pays
+     */
+    public function index(): void
+    {
+        // Récupérer les pays accessibles et le pays par défaut
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        $defaultCountry = StatsAccessHelper::getDefaultCountry();
+
+        // Récupérer les filtres
+        $period = $_GET["period"] ?? "7"; // 7 jours par défaut
+        $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+        $country = !empty($_GET["country"]) ? $_GET["country"] : $defaultCountry;
+
+        // Vérifier que le pays sélectionné est accessible
+        if ($country && !StatsAccessHelper::canAccessCountry($country)) {
+            $country = $defaultCountry;
+        }
+
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats");
+            exit();
+        }
+
+        // Calculer les dates selon la période
+        $dateTo = date("Y-m-d");
+
+        switch ($period) {
+            case "7":
+            default:
+                $dateFrom = date("Y-m-d", strtotime("-7 days"));
+                $periodLabel = "7 derniers jours";
+                break;
+            case "14":
+                $dateFrom = date("Y-m-d", strtotime("-14 days"));
+                $periodLabel = "14 derniers jours";
+                break;
+            case "30":
+                $dateFrom = date("Y-m-d", strtotime("-30 days"));
+                $periodLabel = "30 derniers jours";
+                break;
+            case "month":
+                $dateFrom = date("Y-m-01"); // Premier jour du mois
+                $periodLabel = "Ce mois (" . date("F Y") . ")";
+                break;
+        }
+
+        // Récupérer les données (filtrées par campagnes accessibles si pas de campagne spécifique)
+        $accessibleCampaignIds = $this->getAccessibleCampaignIds();
+
+        // Passer le filtre d'accès aux méthodes du modèle
+        $kpis = $this->statsModel->getGlobalKPIs($dateFrom, $dateTo, $campaignId, $country, $accessibleCampaignIds);
+        $dailyEvolution = $this->statsModel->getDailyEvolution($dateFrom, $dateTo, $campaignId, $accessibleCampaignIds);
+        $topProducts = $this->statsModel->getTopProducts($dateFrom, $dateTo, $campaignId, $country, 10, $accessibleCampaignIds);
+        $clusterStats = $this->statsModel->getStatsByCluster($dateFrom, $dateTo, $campaignId, $country, $accessibleCampaignIds);
+
+        // Stats par origine (client vs rep)
+        $originStats = $this->getOriginStats($dateFrom, $dateTo, $campaignId, $country, $accessibleCampaignIds);
+
+        // Liste des campagnes pour le filtre (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
+
+        // Préparer les données pour les graphiques
+        $chartLabels = [];
+        $chartOrders = [];
+        $chartQuantity = [];
+
+        // Générer toutes les dates de la période
+        $currentDate = new \DateTime($dateFrom);
+        $endDate = new \DateTime($dateTo);
+        $dailyMap = [];
+
+        foreach ($dailyEvolution as $row) {
+            $dailyMap[$row["day"]] = $row;
+        }
+
+        while ($currentDate <= $endDate) {
+            $day = $currentDate->format("Y-m-d");
+            $chartLabels[] = $currentDate->format("d/m");
+            $chartOrders[] = (int) ($dailyMap[$day]["orders_count"] ?? 0);
+            $chartQuantity[] = (int) ($dailyMap[$day]["quantity"] ?? 0);
+            $currentDate->modify("+1 day");
+        }
+
+        // Données pour le graphique cluster
+        // Le format est déjà ['cluster_name' => ['quantity' => X, 'customers' => Y], ...]
+        $clusterGroups = $clusterStats;
+
+        // Variables pour la vue
+        $title = "Statistiques - Vue globale";
+
+        require __DIR__ . "/../Views/admin/stats/index.php";
+    }
+
+
+    /**
+     * Statistiques par campagne
+     *
+     * @return void
+     * @modified 2025/12/04 - Ajout graphiques évolution + catégories
+     * @modified 2025/12/09 - Ajout stats par fournisseur
+     * @modified 2025/12/09 - Ajout mapping produit → fournisseur pour onglet Produits
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
+     * @modified 2025/12/17 - Ajout filtrage par clients accessibles
+ * @modified 2025/12/23 - Ajout top clients (getTopCustomersForCampaign)
+     */
+    public function campaigns(): void
+    {
+        // Récupérer les filtres
+        $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+        $country = !empty($_GET["country"]) ? $_GET["country"] : null;
+        $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
+        $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
+
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Récupérer les clients accessibles selon le rôle
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+
+        // Liste des campagnes (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
+
+        // Stats de la campagne sélectionnée
+        $campaignStats = null;
+        $campaignProducts = [];
+        $reps = [];
+        $repDetail = null;
+        $repClients = [];
+
+        // Données pour graphiques
+        $dailyEvolution = [];
+        $categoryStats = [];
+        $chartLabels = [];
+        $chartOrders = [];
+        $chartQuantity = [];
+        $categoryLabels = [];
+        $categoryData = [];
+        $categoryColors = [];
+
+        // Stats par fournisseur
+        $supplierStats = [];
+
+        // Mapping produit → fournisseur pour l'onglet Produits
+        $productSuppliers = [];
+
+        // Top clients
+        $topCustomers = [];
+        $topCustomersLimit = isset($_GET["customers_limit"]) ? (int) $_GET["customers_limit"] : 50;
+        // Valider la limite (10, 25, 50, 100)
+        if (!in_array($topCustomersLimit, [10, 25, 50, 100])) {
+            $topCustomersLimit = 50;
+        }
+
+        if ($campaignId) {
+            // Passer le filtre clients aux méthodes de stats
+            $campaignStats = $this->statsModel->getCampaignStats($campaignId, $accessibleCustomerNumbers);
+            $campaignProducts = $this->statsModel->getCampaignProducts($campaignId, $accessibleCustomerNumbers);
+
+            // Récupérer les représentants filtrés sur cette campagne
+            $campaignCountry = $campaignStats["campaign"]["country"] ?? null;
+            $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+            // Filtrer les reps selon le rôle (manager_reps ne voit que ses reps)
+            $reps = $this->filterRepsList($allReps);
+
+            // Détail d'un représentant si sélectionné
+            if ($repId && $repCountry) {
+                $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
+
+                foreach ($reps as $rep) {
+                    if ($rep["id"] === $repId && $rep["country"] === $repCountry) {
+                        $repDetail = $rep;
+                        break;
+                    }
+                }
+            }
+
+            // ============================================
+            // Mapping produit → fournisseur pour onglet Produits
+            // ============================================
+            if (!empty($campaignProducts)) {
+                try {
+                    $productCodes = array_column($campaignProducts, 'product_code');
+                    $externalDb = \Core\ExternalDatabase::getInstance();
+                    $productSuppliers = $externalDb->getSuppliersForProducts($productCodes);
+                } catch (\Exception $e) {
+                    error_log("Erreur getSuppliersForProducts: " . $e->getMessage());
+                    $productSuppliers = [];
+                }
+            }
+
+            // ============================================
+            // Évolution journalière sur la période de la campagne
+            // ============================================
+            $campaign = $campaignStats["campaign"];
+            $startDate = $campaign["start_date"];
+            $endDate = $campaign["end_date"];
+
+            // Si la campagne est toujours en cours, limiter à aujourd'hui
+            $today = date("Y-m-d");
+            if ($endDate > $today) {
+                $endDate = $today;
+            }
+
+            $dailyEvolution = $this->statsModel->getDailyEvolution($startDate, $endDate, $campaignId, null, $accessibleCustomerNumbers);
+
+            // Préparer les données pour le graphique d'évolution
+            $currentDate = new \DateTime($startDate);
+            $endDateObj = new \DateTime($endDate);
+            $dailyMap = [];
+
+            foreach ($dailyEvolution as $row) {
+                $dailyMap[$row["day"]] = $row;
+            }
+
+            while ($currentDate <= $endDateObj) {
+                $day = $currentDate->format("Y-m-d");
+                $chartLabels[] = $currentDate->format("D d/m");
+                $chartOrders[] = (int) ($dailyMap[$day]["orders_count"] ?? 0);
+                $chartQuantity[] = (int) ($dailyMap[$day]["quantity"] ?? 0);
+                $currentDate->modify("+1 day");
+            }
+
+            // ============================================
+            // Stats par catégorie pour le donut
+            // ============================================
+            $categoryStats = $this->getCategoryStatsForCampaign($campaignId, $accessibleCustomerNumbers);
+
+            foreach ($categoryStats as $cat) {
+                $categoryLabels[] = $cat["category_name"];
+                $categoryData[] = (int) $cat["quantity"];
+                $categoryColors[] = $cat["color"] ?? $this->getRandomColor();
+            }
+
+            // ============================================
+            // Stats par fournisseur (09/12/2025)
+            // ============================================
+            try {
+                $supplierStats = $this->campaignModel->getSupplierStats($campaignId);
+            } catch (\Exception $e) {
+                error_log("Erreur getSupplierStats: " . $e->getMessage());
+                $supplierStats = [];
+            }
+
+            // ============================================
+            // Top clients (23/12/2025)
+            // ============================================
+            $topCustomers = $this->statsModel->getTopCustomersForCampaign($campaignId, $accessibleCustomerNumbers, $topCustomersLimit);
+
+            // ============================================
+            // Stats par origine (client vs rep) - 08/01/2026
+            // ============================================
+            $originStats = $this->getOriginStats($startDate, $endDate, $campaignId, null, null);
+
+            // Stats origine PAR REP (pour l'onglet Représentants)
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+        } else {
+            // Pas de campagne sélectionnée : originStats vide
+            $originStats = [
+                'client_orders' => 0,
+                'client_quantity' => 0,
+                'rep_orders' => 0,
+                'rep_quantity' => 0
+            ];
+            $originStatsByRep = [];
+        }
+
+        $title = "Statistiques - Par campagne";
+
+        // Encoder les données JSON pour les graphiques
+        $chartLabelsJson = json_encode($chartLabels);
+        $chartOrdersJson = json_encode($chartOrders);
+        $chartQuantityJson = json_encode($chartQuantity);
+        $categoryLabelsJson = json_encode($categoryLabels);
+        $categoryDataJson = json_encode($categoryData);
+        $categoryColorsJson = json_encode($categoryColors);
+
+        require __DIR__ . "/../Views/admin/stats/campaigns.php";
+    }
+
+    /**
+     * Récupérer les stats par catégorie pour une campagne
+     *
+     * @param int $campaignId ID de la campagne
+     * @param array|null $accessibleCustomerNumbers Liste des numéros clients accessibles (null = tout)
+     * @return array Stats par catégorie
+     * @modified 2025/12/23 - Ajout filtre par clients accessibles
+     */
+    private function getCategoryStatsForCampaign(int $campaignId, ?array $accessibleCustomerNumbers = null): array
+    {
+        $db = \Core\Database::getInstance();
+        $params = [":campaign_id" => $campaignId];
+
+        // Construire le filtre clients
+        $customerFilter = "";
+        $customerJoin = "";
+
+        if ($accessibleCustomerNumbers !== null) {
+            if (empty($accessibleCustomerNumbers)) {
+                // Aucun client accessible = retourner tableau vide
+                return [];
+            }
+            $placeholders = [];
+            foreach ($accessibleCustomerNumbers as $i => $num) {
+                $key = ":cat_cust_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $num;
+            }
+            $customerJoin = "INNER JOIN customers cu ON o.customer_id = cu.id";
+            $customerFilter = "AND cu.customer_number IN (" . implode(",", $placeholders) . ")";
+        }
+
+        $query = "
+            SELECT
+                c.name_fr as category_name,
+                c.color,
+                COALESCE(SUM(ol.quantity), 0) as quantity
+            FROM categories c
+            INNER JOIN products p ON c.id = p.category_id AND p.campaign_id = :campaign_id
+            LEFT JOIN order_lines ol ON p.id = ol.product_id
+            LEFT JOIN orders o ON ol.order_id = o.id AND o.status = 'synced'
+            {$customerJoin}
+            WHERE 1=1
+            {$customerFilter}
+            GROUP BY c.id, c.name_fr, c.color
+            HAVING quantity > 0
+            ORDER BY quantity DESC
+        ";
+
+        return $db->query($query, $params);
+    }
+
+    /**
+     * Générer une couleur aléatoire pour les graphiques
+     *
+     * @return string Couleur hex
+     */
+    private function getRandomColor(): string
+    {
+        $colors = [
+            '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+            '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#eab308',
+            '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
+            '#0ea5e9', '#3b82f6', '#6366f1'
+        ];
+        return $colors[array_rand($colors)];
+    }
+
+    /**
+     * Statistiques par commercial
+     *
+     * @return void
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
+     * @modified 2025/12/17 - Ajout filtrage automatique par pays
+     */
+    public function sales(): void
+    {
+        // Récupérer les pays accessibles et le pays par défaut
+        $accessibleCountries = StatsAccessHelper::getAccessibleCountries();
+        $defaultCountry = StatsAccessHelper::getDefaultCountry();
+
+        // Récupérer les filtres
+        $country = !empty($_GET["country"]) ? $_GET["country"] : $defaultCountry;
+        $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+        $repId = !empty($_GET["rep_id"]) ? $_GET["rep_id"] : null;
+        $repCountry = !empty($_GET["rep_country"]) ? $_GET["rep_country"] : null;
+
+        // Vérifier que le pays sélectionné est accessible
+        if ($country && !StatsAccessHelper::canAccessCountry($country)) {
+            $country = $defaultCountry;
+        }
+
+        // Vérifier l'accès à la campagne sélectionnée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/sales");
+            exit();
+        }
+
+        // Liste des campagnes pour le filtre (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
+
+        // Liste des clusters
+        $clusters = $this->statsModel->getClustersList();
+
+        // Liste des représentants avec leurs stats (filtrée selon rôle)
+        $allReps = $this->statsModel->getRepStats($country, $campaignId);
+        $reps = $this->filterRepsList($allReps);
+
+        // Détail d'un représentant si sélectionné
+        $repDetail = null;
+        $repClients = [];
+
+        if ($repId && $repCountry) {
+            $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
+
+            // Trouver les infos du rep
             foreach ($reps as $rep) {
-                if (($rep["total_clients"] ?? 0) == 0) {
-                    continue;
+                if ($rep["id"] === $repId && $rep["country"] === $repCountry) {
+                    $repDetail = $rep;
+                    break;
                 }
-                $clusterName = $rep["cluster"] ?? "Sans cluster";
-                if (!isset($clusters[$clusterName])) {
-                    $clusters[$clusterName] = [
-                        "reps" => [],
-                        "totals" => ["clients" => 0, "ordered" => 0, "quantity" => 0]
-                    ];
-                }
-                $clusters[$clusterName]["reps"][] = $rep;
-                $clusters[$clusterName]["totals"]["clients"] += $rep["total_clients"] ?? 0;
-                $clusters[$clusterName]["totals"]["ordered"] += $rep["stats"]["customers_ordered"] ?? 0;
-                $clusters[$clusterName]["totals"]["quantity"] += $rep["stats"]["total_quantity"] ?? 0;
-            }
-
-            $clusters = array_filter($clusters, function($c) {
-                return !empty($c["reps"]);
-            });
-
-            uasort($clusters, function($a, $b) {
-                return $b["totals"]["quantity"] - $a["totals"]["quantity"];
-            });
-            ?>
-
-            <?php if (empty($clusters)): ?>
-            <div class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-users text-gray-400"></i>
-                </div>
-                <p class="text-gray-500">Aucune donnée représentant</p>
-            </div>
-            <?php else: ?>
-
-            <!-- Bouton Export Excel Représentants avec statut cache -->
-            <div class="flex justify-end items-center gap-3 mb-4" x-data="exportCache()" x-init="checkCache()">
-                <!-- Indicateur de statut du cache -->
-                <div class="text-xs text-right">
-                    <template x-if="cacheStatus === 'checking'">
-                        <span class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification...</span>
-                    </template>
-                    <template x-if="cacheStatus === 'valid'">
-                        <span class="text-green-600" :title="'Généré le ' + cachedAt">
-                            <i class="fas fa-check-circle mr-1"></i>En cache
-                            <span class="text-gray-400">(<span x-text="formatFileSize(fileSize)"></span>)</span>
-                        </span>
-                    </template>
-                    <template x-if="cacheStatus === 'outdated'">
-                        <span class="text-amber-600" :title="'Fichier du ' + cachedAt + ' - nouvelles données disponibles'">
-                            <i class="fas fa-exclamation-circle mr-1"></i>Mise à jour requise
-                        </span>
-                    </template>
-                    <template x-if="cacheStatus === 'no_cache'">
-                        <span class="text-gray-400">
-                            <i class="fas fa-file-excel mr-1"></i>Non généré
-                        </span>
-                    </template>
-                </div>
-
-                <form method="POST" action="/stm/admin/stats/export-reps-excel" class="inline" id="export-form" @submit="startExport($event, cacheStatus)">
-                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?? '' ?>">
-                    <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                    <input type="hidden" name="download_token" id="download_token" value="">
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition shadow-sm"
-                            :class="cacheStatus === 'valid' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'">
-                        <i class="fas fa-file-excel"></i>
-                        <span x-text="cacheStatus === 'valid' ? 'Télécharger' : 'Générer'"></span>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Légende des colonnes -->
-            <p class="text-xs text-gray-500 mb-4 text-right">
-                <span class="inline-flex items-center gap-1">
-                    <span class="font-medium">Format :</span>
-                    <span class="text-gray-700">Total clients</span>
-                    <span class="text-gray-400">/</span>
-                    <span class="text-green-600">Ont commandé</span>
-                    <span class="text-gray-400">|</span>
-                    <span class="text-orange-600">Promos</span>
-                    <span class="text-gray-400">|</span>
-                    <span class="text-violet-600">% via Rep</span>
-                </span>
-            </p>
-
-            <div x-data="{ openClusters: {} }">
-                <?php foreach ($clusters as $clusterName => $clusterData):
-                    $clusterId = md5($clusterName);
-                ?>
-                <div class="border border-gray-200 rounded-lg mb-2 overflow-hidden">
-                    <div class="bg-gray-50 px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition"
-                         @click="openClusters['<?= $clusterId ?>'] = !openClusters['<?= $clusterId ?>']">
-                        <div class="flex items-center gap-3">
-                            <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
-                               :class="{ 'rotate-90': openClusters['<?= $clusterId ?>'] }"></i>
-                            <div>
-                                <span class="font-medium text-gray-900"><?= htmlspecialchars($clusterName) ?></span>
-                                <span class="text-xs text-gray-500 ml-2"><?= count($clusterData["reps"]) ?> rep.</span>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center gap-4 text-sm">
-                            <div class="text-center">
-                                <span class="font-bold text-gray-900"><?= $clusterData["totals"]["clients"] ?></span>
-                                <span class="text-gray-400">/</span>
-                                <span class="font-bold text-green-600"><?= $clusterData["totals"]["ordered"] ?></span>
-                            </div>
-                            <div class="w-16 text-right">
-                                <span class="font-bold text-orange-600"><?= number_format($clusterData["totals"]["quantity"], 0, ",", " ") ?></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div x-show="openClusters['<?= $clusterId ?>']"
-                         x-transition:enter="transition ease-out duration-200"
-                         x-transition:enter-start="opacity-0"
-                         x-transition:enter-end="opacity-100">
-                        <div class="divide-y divide-gray-100">
-                            <?php usort($clusterData["reps"], function ($a, $b) {
-                                return ($b["stats"]["total_quantity"] ?? 0) - ($a["stats"]["total_quantity"] ?? 0);
-                            }); ?>
-                            <?php foreach ($clusterData["reps"] as $rep): ?>
-                            <?php
-                            $repDetailUrl = "/stm/admin/stats/campaigns?campaign_id=" . $campaignId . "&rep_id=" . urlencode($rep["id"]) . "&rep_country=" . $rep["country"];
-                            if (!empty($selectedCountry)) {
-                                $repDetailUrl .= "&country=" . $selectedCountry;
-                            }
-                            ?>
-                            <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-50">
-                                <div class="flex items-center gap-2 pl-6">
-                                    <div class="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
-                                        <span class="text-xs font-medium text-indigo-600"><?= strtoupper(substr($rep["name"] ?? "", 0, 2)) ?></span>
-                                    </div>
-                                    <span class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep["name"] ?? "") ?></span>
-                                </div>
-
-                                <div class="flex items-center gap-4 text-sm">
-                                    <div class="text-center">
-                                        <span class="text-gray-700"><?= $rep["total_clients"] ?? 0 ?></span>
-                                        <span class="text-gray-400">/</span>
-                                        <span class="text-green-600"><?= $rep["stats"]["customers_ordered"] ?? 0 ?></span>
-                                    </div>
-                                    <div class="w-16 text-right">
-                                        <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"] ?? 0, 0, ",", " ") ?></span>
-                                    </div>
-                                    <!-- % Via Reps -->
-                                    <?php
-                                    $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
-                                    $repClientOrders = $repOrigin['client_orders'] ?? 0;
-                                    $repRepOrders = $repOrigin['rep_orders'] ?? 0;
-                                    $repTotalOrigin = $repClientOrders + $repRepOrders;
-                                    $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100) : null;
-                                    ?>
-                                    <div class="w-16 text-center">
-                                        <?php if ($pctViaReps !== null): ?>
-                                            <?php if ($pctViaReps >= 75): ?>
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
-                                                    <i class="fas fa-user-tie mr-1"></i><?= $pctViaReps ?>%
-                                                </span>
-                                            <?php elseif ($pctViaReps >= 25): ?>
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
-                                                    <i class="fas fa-exchange-alt mr-1"></i><?= $pctViaReps ?>%
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700" title="<?= $repClientOrders ?> cmd via clients / <?= $repTotalOrigin ?> total">
-                                                    <i class="fas fa-user mr-1"></i><?= 100 - $pctViaReps ?>%
-                                                </span>
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <span class="text-gray-400">-</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <a href="<?= $repDetailUrl ?>" onclick="showLoader()"
-                                       class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
-                                        <i class="fas fa-eye mr-1"></i> Voir
-                                    </a>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-
-            <p class="text-xs text-gray-400 mt-3 text-center">
-                <span class="inline-flex items-center gap-2">
-                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-xs"><i class="fas fa-user-tie mr-1"></i>≥75%</span> Via rep
-                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs"><i class="fas fa-exchange-alt mr-1"></i>25-75%</span> Mix
-                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs"><i class="fas fa-user mr-1"></i>≥75%</span> Via client
-                </span>
-            </p>
-
-            <?php endif; ?>
-            <?php endif; ?>
-        </div>
-
-        <!-- ============================================ -->
-        <!-- ONGLET FOURNISSEURS (accordion + tri)        -->
-        <!-- ============================================ -->
-        <div x-show="activeTab === 'suppliers'"
-             x-data="supplierTable()"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100">
-
-            <template x-if="suppliers.length === 0">
-                <div class="text-center py-8">
-                    <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <i class="fas fa-truck text-gray-400"></i>
-                    </div>
-                    <p class="text-gray-500">Aucune donnée fournisseur</p>
-                    <p class="text-xs text-gray-400 mt-1">Vérifiez que les codes produits correspondent à BE_COLIS</p>
-                </div>
-            </template>
-
-            <template x-if="suppliers.length > 0">
-                <div>
-                    <!-- En-tête avec tri -->
-                    <div class="bg-gray-50 rounded-t-lg border border-gray-200 px-4 py-3">
-                        <div class="flex items-center justify-between text-xs text-gray-500 uppercase font-medium">
-                            <div class="w-8">#</div>
-                            <button @click="sortBy('supplier_name')" class="flex-1 min-w-[200px] text-left hover:text-indigo-600 transition flex items-center gap-1">
-                                Fournisseur
-                                <i class="fas" :class="sortField === 'supplier_name' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
-                            </button>
-                            <button @click="sortBy('customers_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
-                                Clients
-                                <i class="fas" :class="sortField === 'customers_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
-                            </button>
-                            <button @click="sortBy('orders_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
-                                CMD
-                                <i class="fas" :class="sortField === 'orders_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
-                            </button>
-                            <button @click="sortBy('promos_count')" class="w-20 text-center hover:text-indigo-600 transition flex items-center justify-center gap-1">
-                                Promos
-                                <i class="fas" :class="sortField === 'promos_count' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
-                            </button>
-                            <button @click="sortBy('total_quantity')" class="w-24 text-right hover:text-indigo-600 transition flex items-center justify-end gap-1">
-                                Qté
-                                <i class="fas" :class="sortField === 'total_quantity' ? (sortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort text-gray-300'"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Liste des fournisseurs -->
-                    <div class="border-x border-b border-gray-200 rounded-b-lg divide-y divide-gray-100">
-                        <template x-for="(supplier, index) in sortedSuppliers" :key="supplier.supplier_id">
-                            <div>
-                                <!-- Ligne fournisseur -->
-                                <div class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
-                                     :class="{ 'bg-yellow-50': index < 3 }"
-                                     @click="toggleSupplier(supplier.supplier_id)">
-                                    <div class="flex items-center gap-3 w-8">
-                                        <template x-if="index < 3">
-                                            <span class="text-lg" x-text="['🥇', '🥈', '🥉'][index]"></span>
-                                        </template>
-                                        <template x-if="index >= 3">
-                                            <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium" x-text="index + 1"></span>
-                                        </template>
-                                    </div>
-                                    <div class="flex-1 min-w-[200px] flex items-center gap-3">
-                                        <i class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200"
-                                           :class="{ 'rotate-90': openSuppliers[supplier.supplier_id] }"></i>
-                                        <div>
-                                            <p class="font-medium text-gray-900" x-text="supplier.supplier_name"></p>
-                                            <p class="text-xs text-gray-500 font-mono" x-text="supplier.supplier_number"></p>
-                                        </div>
-                                    </div>
-                                    <div class="w-20 text-center">
-                                        <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium" x-text="supplier.customers_count"></span>
-                                    </div>
-                                    <div class="w-20 text-center">
-                                        <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium" x-text="supplier.orders_count"></span>
-                                    </div>
-                                    <div class="w-20 text-center">
-                                        <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium" x-text="supplier.promos_count"></span>
-                                    </div>
-                                    <div class="w-24 text-right font-bold text-orange-600" x-text="formatNumber(supplier.total_quantity)"></div>
-                                </div>
-
-                                <!-- Détail produits du fournisseur -->
-                                <div x-show="openSuppliers[supplier.supplier_id]"
-                                     x-transition:enter="transition ease-out duration-200"
-                                     x-transition:enter-start="opacity-0"
-                                     x-transition:enter-end="opacity-100"
-                                     class="bg-gray-50 px-4 py-3 border-t border-gray-100">
-                                    <p class="text-xs font-medium text-gray-500 mb-2">
-                                        <i class="fas fa-box mr-1"></i>
-                                        Produits de ce fournisseur (<span x-text="supplier.products ? supplier.products.length : 0"></span>)
-                                    </p>
-                                    <div class="space-y-1 pl-4">
-                                        <template x-for="prod in supplier.products" :key="prod.product_id">
-                                            <div class="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
-                                                <div class="flex-1">
-                                                    <span class="text-gray-900" x-text="prod.product_name"></span>
-                                                    <span class="text-xs text-gray-400 ml-2" x-text="prod.product_code"></span>
-                                                </div>
-                                                <div class="flex items-center gap-4">
-                                                    <span class="text-xs text-gray-500">
-                                                        <span x-text="prod.orders_count"></span> cmd
-                                                    </span>
-                                                    <span class="font-medium text-orange-600" x-text="formatNumber(prod.quantity_sold)"></span>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- Légende -->
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <p class="text-xs text-gray-500">
-                            <strong>Clients</strong> : Clients distincts ayant commandé •
-                            <strong>CMD</strong> : Nombre de commandes •
-                            <strong>Promos</strong> : Nombre de produits du fournisseur •
-                            <i class="fas fa-sort mx-1"></i> Cliquez sur les en-têtes pour trier
-                        </p>
-                    </div>
-                </div>
-            </template>
-        </div>
-
-        <!-- ============================================ -->
-        <!-- ONGLET CLIENTS (top clients)                 -->
-        <!-- ============================================ -->
-        <div x-show="activeTab === 'customers'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-            <?php if (empty($topCustomers)): ?>
-            <div class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-building text-gray-400"></i>
-                </div>
-                <p class="text-gray-500">Aucun client n'a commandé sur cette campagne</p>
-            </div>
-            <?php else: ?>
-
-            <!-- Sélecteur de limite -->
-            <div class="flex items-center justify-between mb-4">
-                <p class="text-sm text-gray-600">
-                    <i class="fas fa-building mr-1"></i>
-                    Top <strong><?= $topCustomersLimit ?></strong> clients ayant commandé
-                </p>
-                <form method="GET" class="flex items-center gap-2">
-                    <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
-                    <input type="hidden" name="country" value="<?= htmlspecialchars($selectedCountry ?? '') ?>">
-                    <label class="text-sm text-gray-500">Afficher</label>
-                    <select name="customers_limit" onchange="showLoader(); this.form.submit();"
-                            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <?php foreach ([10, 25, 50, 100] as $opt): ?>
-                        <option value="<?= $opt ?>" <?= ($topCustomersLimit == $opt) ? 'selected' : '' ?>><?= $opt ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <span class="text-sm text-gray-500">clients</span>
-                </form>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr class="text-left text-xs text-gray-500 uppercase">
-                            <th class="py-3 px-4">#</th>
-                            <th class="py-3 px-4">Client</th>
-                            <th class="py-3 px-4">N° Client</th>
-                            <th class="py-3 px-4">Représentant</th>
-                            <th class="py-3 px-4 text-right">CMD</th>
-                            <th class="py-3 px-4 text-right">Promos</th>
-                            <th class="py-3 px-4 text-right">Réf.</th>
-                            <th class="py-3 px-4 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-sm divide-y divide-gray-100">
-                        <?php
-                        $rank = 0;
-                        foreach ($topCustomers as $customer):
-                            $rank++;
-                            $companyName = $customer["company_name"] ?? "-";
-                            $customerNumber = $customer["customer_number"] ?? "-";
-                            $country = $customer["country"] ?? "-";
-                            $repName = $customer["rep_name"] ?? "-";
-                            $ordersCount = (int)($customer["orders_count"] ?? 0);
-                            $totalQty = (int)($customer["total_quantity"] ?? 0);
-                            $distinctProducts = (int)($customer["distinct_products"] ?? 0);
-                        ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="py-3 px-4">
-                                <?php if ($rank <= 3): ?>
-                                <span class="text-lg"><?= ['🥇', '🥈', '🥉'][$rank - 1] ?></span>
-                                <?php else: ?>
-                                <span class="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
-                                    <?= $rank ?>
-                                </span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="py-3 px-4">
-                                <p class="font-medium text-gray-900"><?= htmlspecialchars($companyName) ?></p>
-                                <span class="inline-flex items-center px-1.5 py-0.5 <?= $country === 'BE' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700' ?> rounded text-[10px]">
-                                    <?= $country === 'BE' ? '🇧🇪' : '🇱🇺' ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4">
-                                <span class="text-gray-600 font-mono text-xs"><?= htmlspecialchars($customerNumber) ?></span>
-                            </td>
-                            <td class="py-3 px-4">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">
-                                    <i class="fas fa-user mr-1 text-[10px]"></i>
-                                    <?= htmlspecialchars($repName) ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-right">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                    <?= $ordersCount ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-right font-bold text-orange-600"><?= number_format($totalQty, 0, ",", " ") ?></td>
-                            <td class="py-3 px-4 text-right">
-                                <span class="inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                                    <?= $distinctProducts ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <button type="button"
-                                        onclick="openCustomerOrdersModal('<?= htmlspecialchars($customerNumber) ?>', '<?= $country ?>', '<?= htmlspecialchars(addslashes($companyName)) ?>')"
-                                        class="inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition">
-                                    <i class="fas fa-eye mr-1"></i>
-                                    Détail
-                                </button>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Modal détail commandes client -->
-            <div id="customerOrdersModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true">
-                <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-                    <!-- Overlay -->
-                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeCustomerOrdersModal()"></div>
-
-                    <!-- Modal content -->
-                    <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:max-w-4xl sm:w-full mx-auto">
-                        <!-- Header -->
-                        <div class="bg-indigo-600 px-6 py-4 rounded-t-lg">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white" id="modalCustomerName">Détail client</h3>
-                                    <p class="text-indigo-200 text-sm" id="modalCustomerNumber"></p>
-                                </div>
-                                <button type="button" onclick="closeCustomerOrdersModal()" class="text-white hover:text-indigo-200 transition">
-                                    <i class="fas fa-times text-xl"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Body -->
-                        <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
-                            <!-- Loading -->
-                            <div id="modalLoading" class="text-center py-8">
-                                <i class="fas fa-spinner fa-spin text-indigo-600 text-2xl"></i>
-                                <p class="text-gray-500 mt-2">Chargement des commandes...</p>
-                            </div>
-
-                            <!-- Error -->
-                            <div id="modalError" class="hidden text-center py-8">
-                                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <i class="fas fa-exclamation-triangle text-red-500"></i>
-                                </div>
-                                <p class="text-red-600" id="modalErrorText">Erreur lors du chargement</p>
-                            </div>
-
-                            <!-- Content -->
-                            <div id="modalContent" class="hidden">
-                                <!-- Stats résumé -->
-                                <div class="grid grid-cols-2 gap-4 mb-6">
-                                    <div class="bg-green-50 rounded-lg p-4 text-center">
-                                        <p class="text-2xl font-bold text-green-600" id="modalTotalOrders">0</p>
-                                        <p class="text-sm text-green-700">Commandes</p>
-                                    </div>
-                                    <div class="bg-orange-50 rounded-lg p-4 text-center">
-                                        <p class="text-2xl font-bold text-orange-600" id="modalTotalQuantity">0</p>
-                                        <p class="text-sm text-orange-700">Promos vendues</p>
-                                    </div>
-                                </div>
-
-                                <!-- Liste des commandes -->
-                                <div id="modalOrdersList" class="space-y-4">
-                                    <!-- Rempli par JavaScript -->
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Footer -->
-                        <div class="bg-gray-50 px-6 py-3 rounded-b-lg flex justify-end">
-                            <button type="button" onclick="closeCustomerOrdersModal()"
-                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
-                                Fermer
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Légende -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <p class="text-xs text-gray-500">
-                    <strong>CMD</strong> : Nombre de commandes •
-                    <strong>Promos</strong> : Total promos commandées •
-                    <strong>Réf.</strong> : Nombre de produits différents commandés
-                </p>
-            </div>
-            <?php endif; ?>
-        </div>
-
-    </div>
-</div>
-
-<?php endif; ?>
-<!-- Fin condition repDetail -->
-
-<?php else: ?>
-
-<!-- Message si pas de campagne sélectionnée -->
-<div class="bg-white rounded-lg shadow-sm p-12 text-center">
-    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <i class="fas fa-chart-pie text-gray-400 text-2xl"></i>
-    </div>
-    <h3 class="text-lg font-semibold text-gray-900 mb-2">Sélectionnez une campagne</h3>
-    <p class="text-gray-500">Choisissez d'abord un pays, puis une campagne pour voir ses statistiques détaillées.</p>
-</div>
-
-<?php endif; ?>
-
-<?php
-$content = ob_get_clean();
-
-// Script Alpine.js pour le filtrage pays → campagne
-$campaignIdJs = $campaignId ?? "";
-$campaignIdInt = isset($campaignId) ? (int)$campaignId : 0;
-$selectedCountryJs = $selectedCountry ?? "";
-
-// Données des graphiques (passées depuis le controller)
-$chartLabelsJson = $chartLabelsJson ?? "[]";
-$chartOrdersJson = $chartOrdersJson ?? "[]";
-$chartQuantityJson = $chartQuantityJson ?? "[]";
-$categoryLabelsJson = $categoryLabelsJson ?? "[]";
-$categoryDataJson = $categoryDataJson ?? "[]";
-$categoryColorsJson = $categoryColorsJson ?? "[]";
-
-// Données origine pour le graphique (client vs rep)
-$originClientOrders = $originStats['client_orders'] ?? 0;
-$originRepOrders = $originStats['rep_orders'] ?? 0;
-$originClientQty = $originStats['client_quantity'] ?? 0;
-$originRepQty = $originStats['rep_quantity'] ?? 0;
-
-$pageScripts = <<<SCRIPTS
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-// ============================================
-// LOADER
-// ============================================
-function showLoader() {
-    document.getElementById('page-loader').classList.remove('hidden');
-    document.getElementById('page-loader').classList.add('flex');
-}
-
-// ============================================
-// EXPORT CACHE - Vérifie l'état du cache
-// ============================================
-function exportCache() {
-    return {
-        cacheStatus: 'checking',
-        cachedAt: null,
-        fileSize: 0,
-
-        checkCache() {
-            const campaignId = {$campaignIdInt};
-            if (!campaignId) {
-                this.cacheStatus = 'no_cache';
-                return;
-            }
-
-            fetch('/stm/admin/stats/check-export-cache?campaign_id=' + campaignId)
-                .then(response => response.json())
-                .then(data => {
-                    // Debug : afficher le scope dans la console
-                    console.log('Export cache check:', data);
-
-                    this.cacheStatus = data.status || 'no_cache';
-                    this.cachedAt = data.cached_at ? this.formatDate(data.cached_at) : null;
-                    this.fileSize = data.file_size || 0;
-                })
-                .catch(error => {
-                    console.error('Erreur vérification cache:', error);
-                    this.cacheStatus = 'no_cache';
-                });
-        },
-
-        formatDate(dateStr) {
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        },
-
-        formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        }
-    }
-}
-
-// ============================================
-// EXPORT LOADER AVEC TIMER ET COOKIE TOKEN
-// ============================================
-let exportTimerInterval = null;
-let exportStartTime = null;
-let downloadCheckInterval = null;
-
-function startExport(event, cacheStatus) {
-    // Générer un token unique pour ce téléchargement
-    const downloadToken = 'download_' + Date.now();
-
-    // Ajouter le token au formulaire
-    document.getElementById('download_token').value = downloadToken;
-
-    // Adapter le message selon le statut du cache
-    const titleEl = document.getElementById('export-title');
-    const messageEl = document.getElementById('export-message');
-    const warningEl = document.getElementById('export-warning');
-    const spinnerEl = document.getElementById('export-spinner');
-
-    if (cacheStatus === 'valid') {
-        titleEl.textContent = 'Téléchargement en cours...';
-        messageEl.textContent = 'Le fichier est en cache, téléchargement immédiat.';
-        warningEl.classList.add('hidden');
-        spinnerEl.className = 'w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto';
-    } else if (cacheStatus === 'outdated') {
-        titleEl.textContent = 'Mise à jour en cours...';
-        messageEl.textContent = 'De nouvelles données ont été détectées. Régénération du fichier en cours.';
-        warningEl.classList.remove('hidden');
-        spinnerEl.className = 'w-20 h-20 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mx-auto';
-    } else {
-        titleEl.textContent = 'Génération Excel en cours...';
-        messageEl.textContent = 'Cette opération peut prendre plusieurs minutes selon le volume de données.';
-        warningEl.classList.remove('hidden');
-        spinnerEl.className = 'w-20 h-20 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto';
-    }
-
-    // Afficher l'overlay
-    document.getElementById('export-loader').classList.remove('hidden');
-    document.getElementById('export-loader').classList.add('flex');
-
-    // Démarrer le timer
-    exportStartTime = Date.now();
-    updateExportTimer();
-    exportTimerInterval = setInterval(updateExportTimer, 1000);
-
-    // Vérifier périodiquement si le cookie de téléchargement existe
-    downloadCheckInterval = setInterval(function() {
-        if (getCookie('download_complete') === downloadToken) {
-            hideExportLoader();
-            document.cookie = 'download_complete=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        }
-    }, 500);
-
-    // Timeout de sécurité : masquer le loader après 10 minutes max
-    setTimeout(function() {
-        hideExportLoader();
-    }, 600000);
-
-    return true;
-}
-
-function hideExportLoader() {
-    document.getElementById('export-loader').classList.add('hidden');
-    document.getElementById('export-loader').classList.remove('flex');
-
-    if (exportTimerInterval) {
-        clearInterval(exportTimerInterval);
-        exportTimerInterval = null;
-    }
-    if (downloadCheckInterval) {
-        clearInterval(downloadCheckInterval);
-        downloadCheckInterval = null;
-    }
-}
-
-function updateExportTimer() {
-    if (!exportStartTime) return;
-
-    const elapsed = Math.floor((Date.now() - exportStartTime) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-
-    const timerEl = document.getElementById('export-timer');
-    if (timerEl) {
-        timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-    }
-}
-
-function getCookie(name) {
-    const value = '; ' + document.cookie;
-    const parts = value.split('; ' + name + '=');
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-}
-
-// ============================================
-// FILTRAGE CAMPAGNES
-// ============================================
-function campaignFilter() {
-    const allCampaigns = {$campaignsJson};
-    const currentCampaignId = '{$campaignIdJs}';
-    const currentCountry = '{$selectedCountryJs}';
-
-    const statusLabels = {
-        'draft': 'Brouillon',
-        'scheduled': 'Programmée',
-        'active': 'En cours',
-        'ended': 'Terminée',
-        'cancelled': 'Annulée'
-    };
-
-    return {
-        selectedCountry: currentCountry,
-        selectedCampaign: currentCampaignId,
-        filteredCampaigns: [],
-
-        init() {
-            this.filterCampaigns();
-            this.\$nextTick(() => {
-                if (currentCampaignId && this.\$refs.campaignSelect) {
-                    this.\$refs.campaignSelect.value = currentCampaignId;
-                }
-            });
-        },
-
-        getStatusLabel(status) {
-            return statusLabels[status] || status;
-        },
-
-        filterCampaigns() {
-            if (this.selectedCountry && this.selectedCountry !== '') {
-                this.filteredCampaigns = allCampaigns[this.selectedCountry] || [];
-            } else {
-                this.filteredCampaigns = allCampaigns['all'] || [];
-            }
-
-            const campaignIds = this.filteredCampaigns.map(c => c.id.toString());
-            if (this.selectedCampaign && !campaignIds.includes(this.selectedCampaign.toString())) {
-                this.selectedCampaign = '';
             }
         }
+
+        $title = "Statistiques - Par représentant";
+
+        require __DIR__ . "/../Views/admin/stats/sales.php";
     }
-}
 
-// ============================================
-// TABLEAU FOURNISSEURS AVEC TRI
-// ============================================
-function supplierTable() {
-    return {
-        suppliers: {$supplierStatsJson},
-        sortField: 'total_quantity',
-        sortDir: 'desc',
-        openSuppliers: {},
+    /**
+     * Page des rapports et exports
+     *
+     * @return void
+     * @modified 2025/12/16 - Ajout filtrage hiérarchique par rôle
+     */
+    public function reports(): void
+    {
+        // Liste des campagnes pour les exports (filtrée selon accès)
+        $allCampaigns = $this->statsModel->getCampaignsList();
+        $campaigns = $this->filterCampaignsList($allCampaigns);
 
-        get sortedSuppliers() {
-            return [...this.suppliers].sort((a, b) => {
-                let valA = a[this.sortField];
-                let valB = b[this.sortField];
+        $title = "Statistiques - Rapports";
 
-                // Tri alphabétique pour supplier_name
-                if (this.sortField === 'supplier_name') {
-                    valA = (valA || '').toLowerCase();
-                    valB = (valB || '').toLowerCase();
+        require __DIR__ . "/../Views/admin/stats/reports.php";
+    }
 
-                    if (this.sortDir === 'asc') {
-                        return valA.localeCompare(valB, 'fr');
-                    }
-                    return valB.localeCompare(valA, 'fr');
-                }
+    /**
+     * Export CSV/Excel
+     *
+     * @return void
+     * @modified 2025/12/16 - Ajout vérification accès campagne
+     */
+    public function export(): void
+    {
+        $type = $_POST["type"] ?? "global";
+        $format = $_POST["format"] ?? "csv";
+        $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
+        $dateFrom = $_POST["date_from"] ?? date("Y-m-d", strtotime("-14 days"));
+        $dateTo = $_POST["date_to"] ?? date("Y-m-d");
 
-                // Tri numérique pour les autres colonnes
-                valA = valA || 0;
-                valB = valB || 0;
-
-                if (this.sortDir === 'asc') {
-                    return valA - valB;
-                }
-                return valB - valA;
-            });
-        },
-
-        sortBy(field) {
-            if (this.sortField === field) {
-                this.sortDir = this.sortDir === 'desc' ? 'asc' : 'desc';
-            } else {
-                this.sortField = field;
-                // Tri par nom : A-Z par défaut, autres : desc par défaut
-                this.sortDir = field === 'supplier_name' ? 'asc' : 'desc';
-            }
-        },
-
-        toggleSupplier(supplierId) {
-            this.openSuppliers[supplierId] = !this.openSuppliers[supplierId];
-        },
-
-        formatNumber(num) {
-            return new Intl.NumberFormat('fr-FR').format(num || 0);
+        // Vérifier l'accès à la campagne si spécifiée
+        if ($campaignId && !$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/reports");
+            exit();
         }
-    }
-}
 
-// ============================================
-// GRAPHIQUES CHART.JS
-// ============================================
-document.addEventListener('DOMContentLoaded', function() {
+        $data = [];
+        $filename = "";
+        $headers = [];
 
-    // Graphique évolution
-    const evolutionCtx = document.getElementById('evolutionChart');
-    if (evolutionCtx) {
-        const chartLabels = {$chartLabelsJson};
-        const chartOrders = {$chartOrdersJson};
-        const chartQuantity = {$chartQuantityJson};
-
-        if (chartLabels.length > 0) {
-            new Chart(evolutionCtx, {
-                type: 'line',
-                data: {
-                    labels: chartLabels,
-                    datasets: [
-                        {
-                            label: 'Commandes',
-                            data: chartOrders,
-                            borderColor: '#6366f1',
-                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Promos vendues',
-                            data: chartQuantity,
-                            borderColor: '#f97316',
-                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 15
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false }
-                        },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Commandes'
-                            },
-                            beginAtZero: true
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Promos'
-                            },
-                            beginAtZero: true,
-                            grid: { drawOnChartArea: false }
-                        }
-                    }
+        switch ($type) {
+            case "campaign":
+                if (!$campaignId) {
+                    Session::setFlash("error", "Veuillez sélectionner une campagne");
+                    header("Location: /stm/admin/stats/reports");
+                    exit();
                 }
-            });
+
+                // Export des commandes d'une campagne
+                $data = $this->getExportCampaignData($campaignId);
+                $headers = [
+                    "Num_Client",
+                    "Nom",
+                    "Pays",
+                    "Promo_Art",
+                    "Nom_Produit",
+                    "Quantité",
+                    "Email",
+                    "Rep_Name",
+                    "Date_Commande",
+                ];
+                $filename = "export_campagne_" . $campaignId . "_" . date("Ymd");
+                break;
+
+            case "reps":
+                // Export stats par représentant
+                $data = $this->getExportRepsData($campaignId);
+                $headers = [
+                    "Rep_ID",
+                    "Rep_Nom",
+                    "Cluster",
+                    "Pays",
+                    "Nb_Clients",
+                    "Clients_Commandé",
+                    "Taux_Conv",
+                    "Total_Quantité",
+                ];
+                $filename = "export_reps_" . date("Ymd");
+                break;
+
+            case "not_ordered":
+                if (!$campaignId) {
+                    Session::setFlash("error", "Veuillez sélectionner une campagne");
+                    header("Location: /stm/admin/stats/reports");
+                    exit();
+                }
+
+                // Export clients n'ayant pas commandé
+                $data = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
+                $headers = ["Num_Client", "Nom", "Pays", "Rep_Name"];
+                $filename = "clients_sans_commande_" . $campaignId . "_" . date("Ymd");
+                break;
+
+            default:
+                // Export global
+                $data = $this->getExportGlobalData($dateFrom, $dateTo, $campaignId);
+                $headers = [
+                    "Num_Client",
+                    "Nom",
+                    "Pays",
+                    "Promo_Art",
+                    "Nom_Produit",
+                    "Quantité",
+                    "Rep_Name",
+                    "Cluster",
+                    "Date_Commande",
+                ];
+                $filename = "export_global_" . date("Ymd");
+                break;
+        }
+
+        // Générer le fichier
+        if ($format === "csv") {
+            $this->exportCSV($data, $headers, $filename);
+        } else {
+            // Pour Excel, on utilise CSV avec séparateur point-virgule
+            $this->exportCSV($data, $headers, $filename, ";");
         }
     }
 
-    // Graphique catégories (Donut)
-    const categoryCtx = document.getElementById('categoryChart');
-    if (categoryCtx) {
-        const categoryLabels = {$categoryLabelsJson};
-        const categoryData = {$categoryDataJson};
-        const categoryColors = {$categoryColorsJson};
+    /**
+     * Récupère les données pour export global
+     */
+    private function getExportGlobalData(string $dateFrom, string $dateTo, ?int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
 
-        if (categoryLabels.length > 0) {
-            new Chart(categoryCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: categoryLabels,
-                    datasets: [{
-                        data: categoryData,
-                        backgroundColor: categoryColors,
-                        borderWidth: 2,
-                        borderColor: '#ffffff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '60%',
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 10,
-                                font: { size: 11 }
-                            }
-                        }
-                    }
-                }
-            });
+        $params = [
+            ":date_from" => $dateFrom . " 00:00:00",
+            ":date_to" => $dateTo . " 23:59:59",
+        ];
+
+        $campaignFilter = "";
+        if ($campaignId) {
+            $campaignFilter = " AND o.campaign_id = :campaign_id";
+            $params[":campaign_id"] = $campaignId;
         }
+
+        $query = "
+            SELECT cu.customer_number as Num_Client,
+                   cu.company_name as Nom,
+                   cu.country as Pays,
+                   p.product_code as Promo_Art,
+                   p.name as Nom_Produit,
+                   ol.quantity as Quantite,
+                   cu.rep_name as Rep_Name,
+                   '' as Cluster,
+                   DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN products p ON ol.product_id = p.id
+            WHERE o.status = 'synced'
+            AND o.created_at BETWEEN :date_from AND :date_to
+            {$campaignFilter}
+            ORDER BY o.created_at DESC, cu.customer_number
+        ";
+
+        return $db->query($query, $params);
     }
 
-    // Graphique origine (Bar Chart)
-    const originCtx = document.getElementById('originChart');
-    if (originCtx) {
-        const originClientOrders = {$originClientOrders};
-        const originRepOrders = {$originRepOrders};
-        const originClientQty = {$originClientQty};
-        const originRepQty = {$originRepQty};
+    /**
+     * Récupère les données pour export campagne
+     */
+    private function getExportCampaignData(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
 
-        new Chart(originCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Commandes', 'Promos vendues'],
-                datasets: [{
-                    label: 'Clients',
-                    data: [originClientOrders, originClientQty],
-                    backgroundColor: '#3B82F6',
-                    borderRadius: 4
-                }, {
-                    label: 'Représentants',
-                    data: [originRepOrders, originRepQty],
-                    backgroundColor: '#8B5CF6',
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { precision: 0 }
-                    }
-                },
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
+        $query = "
+            SELECT cu.customer_number as Num_Client,
+                   cu.company_name as Nom,
+                   cu.country as Pays,
+                   p.product_code as Promo_Art,
+                   p.name as Nom_Produit,
+                   ol.quantity as Quantite,
+                   o.customer_email as Email,
+                   cu.rep_name as Rep_Name,
+                   DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN products p ON ol.product_id = p.id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+            ORDER BY cu.customer_number, p.product_code
+        ";
+
+        return $db->query($query, [":campaign_id" => $campaignId]);
+    }
+
+    /**
+     * Récupère les données pour export représentants
+     */
+    private function getExportRepsData(?int $campaignId): array
+    {
+        $reps = $this->statsModel->getRepStats(null, $campaignId);
+
+        $data = [];
+        foreach ($reps as $rep) {
+            $convRate =
+                $rep["total_clients"] > 0
+                    ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) . "%"
+                    : "0%";
+
+            $data[] = [
+                "Rep_ID" => $rep["id"],
+                "Rep_Nom" => $rep["name"],
+                "Cluster" => $rep["cluster"],
+                "Pays" => $rep["country"],
+                "Nb_Clients" => $rep["total_clients"],
+                "Clients_Commande" => $rep["stats"]["customers_ordered"],
+                "Taux_Conv" => $convRate,
+                "Total_Quantite" => $rep["stats"]["total_quantity"],
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Génère et télécharge un fichier CSV
+     */
+    private function exportCSV(array $data, array $headers, string $filename, string $delimiter = ","): void
+    {
+        header("Content-Type: text/csv; charset=utf-8");
+        header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
+        header("Pragma: no-cache");
+        header("Expires: 0");
+
+        // BOM UTF-8 pour Excel
+        echo "\xEF\xBB\xBF";
+
+        $output = fopen("php://output", "w");
+
+        // En-têtes
+        fputcsv($output, $headers, $delimiter);
+
+        // Données
+        foreach ($data as $row) {
+            if (is_array($row)) {
+                fputcsv($output, array_values($row), $delimiter);
             }
+        }
+
+        fclose($output);
+        exit();
+    }
+    /**
+     * Export Excel détaillé des représentants pour une campagne
+     *
+     * Génère un fichier Excel multi-feuilles :
+     * - Feuille 1 : Récap de tous les représentants
+     * - Feuilles 2+ : Détail par représentant (clients + quantités par produit)
+     *
+     * @return void
+     * @created 2025/12/10
+     * @modified 2025/12/10 - Filtrage selon mode campagne + reps avec clients uniquement
+     * @modified 2025/12/16 - Ajout vérification accès campagne + filtrage reps par rôle
+     */
+    public function exportRepsExcel(): void
+    {
+        // Augmenter les limites pour la génération Excel (gros volumes)
+        set_time_limit(600); // 10 minutes
+        ini_set('memory_limit', '2048M'); // 2 Go
+
+        $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
+        $downloadToken = $_POST['download_token'] ?? '';
+        $forceRegenerate = !empty($_POST["force_regenerate"]);
+
+        if (!$campaignId) {
+            Session::setFlash("error", "Veuillez sélectionner une campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Récupérer les infos de la campagne
+        $campaign = $this->campaignModel->findById($campaignId);
+        if (!$campaign) {
+            Session::setFlash("error", "Campagne introuvable");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        $campaignCountry = $campaign["country"];
+        $campaignName = $campaign["name"];
+        $assignmentMode = $campaign["customer_assignment_mode"] ?? "automatic";
+
+        // ============================================
+        // SYSTÈME DE CACHE
+        // ============================================
+
+        // 1. Calculer le scope d'accès selon le rôle
+        $accessScope = $this->getExportAccessScope();
+
+        // 2. Calculer le hash des données actuelles
+        $currentHash = $this->getExportDataHash($campaignId, $accessScope);
+
+        // 3. Vérifier si un cache existe
+        $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
+
+        // 4. Si cache valide (même hash) et pas de régénération forcée → servir le fichier
+        if ($cache && $cache['data_hash'] === $currentHash && !$forceRegenerate) {
+            $this->serveExportFile($cache, $downloadToken);
+            exit();
+        }
+
+        // 5. Sinon → générer le fichier
+        // (cache inexistant, hash différent, ou régénération forcée)
+
+        // Récupérer les représentants avec leurs stats (filtrés par campagne)
+        $allReps = $this->statsModel->getRepStats($campaignCountry, $campaignId);
+
+        // Filtrer selon le rôle (manager_reps ne voit que ses reps)
+        $filteredReps = $this->filterRepsList($allReps);
+
+        // FILTRER : Ne garder que les reps qui ont des clients assignés (total_clients > 0)
+        $reps = array_filter($filteredReps, function($rep) {
+            return ($rep["total_clients"] ?? 0) > 0;
         });
-    }
-});
+        $reps = array_values($reps); // Réindexer
 
-// ============================================
-// MODAL DÉTAIL COMMANDES CLIENT
-// ============================================
-function openCustomerOrdersModal(customerNumber, country, companyName) {
-    const modal = document.getElementById('customerOrdersModal');
-    const modalLoading = document.getElementById('modalLoading');
-    const modalError = document.getElementById('modalError');
-    const modalContent = document.getElementById('modalContent');
-    const modalCustomerName = document.getElementById('modalCustomerName');
-    const modalCustomerNumber = document.getElementById('modalCustomerNumber');
+        if (empty($reps)) {
+            Session::setFlash("error", "Aucun représentant avec des clients trouvé pour cette campagne");
+            header("Location: /stm/admin/stats/campaigns?campaign_id=" . $campaignId);
+            exit();
+        }
 
-    // Afficher le modal
-    modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+        // Récupérer tous les produits de la campagne (pour les colonnes)
+        $campaignProducts = $this->statsModel->getCampaignProducts($campaignId);
 
-    // Reset état
-    modalLoading.classList.remove('hidden');
-    modalError.classList.add('hidden');
-    modalContent.classList.add('hidden');
-
-    // Mettre à jour le header
-    modalCustomerName.textContent = companyName;
-    modalCustomerNumber.textContent = customerNumber + ' - ' + (country === 'BE' ? '🇧🇪 Belgique' : '🇱🇺 Luxembourg');
-
-    // Charger les données via API
-    const campaignId = {$campaignIdInt};
-    fetch('/stm/admin/stats/customer-orders?campaign_id=' + campaignId + '&customer_number=' + encodeURIComponent(customerNumber) + '&country=' + country)
-        .then(response => response.json())
-        .then(data => {
-            modalLoading.classList.add('hidden');
-
-            if (!data.success) {
-                modalError.classList.remove('hidden');
-                document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
-                return;
-            }
-
-            // Afficher le contenu
-            modalContent.classList.remove('hidden');
-
-            // Stats
-            document.getElementById('modalTotalOrders').textContent = data.total_orders;
-            document.getElementById('modalTotalQuantity').textContent = formatNumberFr(data.total_quantity);
-
-            // Liste des commandes
-            const ordersList = document.getElementById('modalOrdersList');
-            ordersList.innerHTML = '';
-
-            if (data.orders.length === 0) {
-                ordersList.innerHTML = '<div class="text-center py-4 text-gray-500">Aucune commande trouvée</div>';
-                return;
-            }
-
-            data.orders.forEach((order, index) => {
-                const orderDate = new Date(order.created_at);
-                const formattedDate = orderDate.toLocaleDateString('fr-FR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-
-                let linesHtml = '<table class="min-w-full table-fixed">' +
-                    '<thead class="bg-gray-100">' +
-                        '<tr class="text-left text-xs text-gray-500 uppercase">' +
-                            '<th class="py-2 px-3 w-16">Image</th>' +
-                            '<th class="py-2 px-3 text-left">Promotion</th>' +
-                            '<th class="py-2 px-3 w-28">Code</th>' +
-                            '<th class="py-2 px-3 w-24 text-right">Quantité</th>' +
-                        '</tr>' +
-                    '</thead>' +
-                    '<tbody class="text-sm divide-y divide-gray-100">';
-
-                order.lines.forEach(line => {
-                    const imageUrl = line.product_image || '/stm/assets/images/no-image.png';
-                    linesHtml += '<tr class="hover:bg-gray-50">' +
-                        '<td class="py-2 px-3 w-16">' +
-                            '<img src="' + imageUrl + '" alt="" class="w-12 h-12 object-contain rounded border border-gray-200 bg-white">' +
-                        '</td>' +
-                        '<td class="py-2 px-3 text-left">' +
-                            '<p class="font-medium text-gray-900 text-left">' + escapeHtml(line.product_name) + '</p>' +
-                        '</td>' +
-                        '<td class="py-2 px-3 w-28">' +
-                            '<span class="text-gray-500 font-mono text-xs">' + escapeHtml(line.product_code) + '</span>' +
-                        '</td>' +
-                        '<td class="py-2 px-3 w-24 text-right">' +
-                            '<span class="inline-flex items-center px-2.5 py-1 bg-orange-100 text-orange-700 rounded font-bold">' + formatNumberFr(line.quantity) + '</span>' +
-                        '</td>' +
-                    '</tr>';
-                });
-
-                linesHtml += '</tbody></table>';
-
-                const orderHtml = '<div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">' +
-                    '<div class="bg-gradient-to-r from-indigo-50 to-white px-4 py-3 flex items-center justify-between cursor-pointer border-b border-gray-200" onclick="toggleOrderDetail(' + index + ')">' +
-                        '<div class="flex items-center gap-3">' +
-                            '<i class="fas fa-chevron-down text-indigo-400 transition-transform duration-200" id="orderChevron' + index + '"></i>' +
-                            '<div>' +
-                                '<span class="font-semibold text-gray-900">Commande #' + order.order_id + '</span>' +
-                                '<span class="text-sm text-gray-500 ml-3"><i class="far fa-calendar-alt mr-1"></i>' + formattedDate + '</span>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="flex items-center gap-4">' +
-                            '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">' +
-                                '<i class="fas fa-box mr-1"></i>' + order.lines.length + ' produit(s)' +
-                            '</span>' +
-                            '<span class="inline-flex items-center px-3 py-1 bg-orange-500 text-white rounded font-bold">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="p-0" id="orderDetail' + index + '">' +
-                        linesHtml +
-                    '</div>' +
-                '</div>';
-
-                ordersList.innerHTML += orderHtml;
-            });
-        })
-        .catch(error => {
-            console.error('Erreur chargement commandes:', error);
-            modalLoading.classList.add('hidden');
-            modalError.classList.remove('hidden');
-            document.getElementById('modalErrorText').textContent = 'Erreur de connexion';
+        // Trier les produits par code article
+        usort($campaignProducts, function($a, $b) {
+            return strcasecmp($a["product_code"] ?? "", $b["product_code"] ?? "");
         });
-}
 
-function closeCustomerOrdersModal() {
-    document.getElementById('customerOrdersModal').classList.add('hidden');
-    document.body.style.overflow = '';
-}
+        // En mode MANUAL, récupérer la liste des clients autorisés
+        $authorizedCustomers = [];
+        if ($assignmentMode === "manual") {
+            $authorizedCustomers = $this->getAuthorizedCustomersForCampaign($campaignId);
+        }
 
-function toggleOrderDetail(index) {
-    const detail = document.getElementById('orderDetail' + index);
-    const chevron = document.getElementById('orderChevron' + index);
+        // Récupérer les stats origine par rep (pour colonne % Via Reps)
+        $originStatsByRep = $this->getOriginStatsByRep($campaignId);
 
-    if (detail.classList.contains('hidden')) {
-        detail.classList.remove('hidden');
-        chevron.classList.remove('fa-chevron-right');
-        chevron.classList.add('fa-chevron-down');
-    } else {
-        detail.classList.add('hidden');
-        chevron.classList.remove('fa-chevron-down');
-        chevron.classList.add('fa-chevron-right');
+        // Créer le spreadsheet
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+
+        // Style en-têtes
+        $headerStyle = [
+            "font" => ["bold" => true, "color" => ["rgb" => "FFFFFF"]],
+            "fill" => [
+                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                "startColor" => ["rgb" => "4F46E5"]
+            ],
+            "alignment" => ["horizontal" => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER]
+        ];
+
+        // ============================================
+        // FEUILLE 1 : RÉCAP REPRÉSENTANTS
+        // ============================================
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle("Récap Représentants");
+
+        // En-têtes
+        $headers = ["N° Rep", "Nom", "Email", "Cluster", "Clients assignés", "Ont commandé", "Pas commandé", "Qté totale", "% Conversion", "% Via Reps"];
+        $col = "A";
+        foreach ($headers as $header) {
+            $sheet->setCellValue($col . "1", $header);
+            $col++;
+        }
+
+        // Style en-têtes
+        $sheet->getStyle("A1:J1")->applyFromArray($headerStyle);
+
+        // Préparer les noms de feuilles pour les liens (même logique que la création)
+        $sheetNames = [];
+        $usedNames = ["Récap Représentants" => true];
+        foreach ($reps as $repIndex => $rep) {
+            $cleanName = preg_replace("/[^a-zA-Z0-9\s\-]/", "", $rep["name"] ?? "Inconnu");
+            $sheetName = substr("Rep - " . $cleanName, 0, 31);
+
+            $originalSheetName = $sheetName;
+            $counter = 1;
+            while (isset($usedNames[$sheetName])) {
+                $sheetName = substr($originalSheetName, 0, 28) . " " . $counter;
+                $counter++;
+            }
+            $usedNames[$sheetName] = true;
+            $sheetNames[$repIndex] = $sheetName;
+        }
+
+        // Données
+        $row = 2;
+        foreach ($reps as $repIndex => $rep) {
+            $totalClients = $rep["total_clients"] ?? 0;
+            $customersOrdered = $rep["stats"]["customers_ordered"] ?? 0;
+            $notOrdered = $totalClients - $customersOrdered;
+            $totalQty = $rep["stats"]["total_quantity"] ?? 0;
+            $convRate = $totalClients > 0 ? round(($customersOrdered / $totalClients) * 100, 1) : 0;
+
+            // Calculer % Via Reps
+            $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
+            $repClientOrders = $repOrigin['client_orders'] ?? 0;
+            $repRepOrders = $repOrigin['rep_orders'] ?? 0;
+            $repTotalOrigin = $repClientOrders + $repRepOrders;
+            $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100, 1) : 0;
+
+            $sheet->setCellValue("A" . $row, $rep["id"] ?? "");
+            $sheet->setCellValue("B" . $row, $rep["name"] ?? "");
+            $sheet->setCellValue("C" . $row, $rep["email"] ?? "");
+            $sheet->setCellValue("D" . $row, $rep["cluster"] ?? "");
+            $sheet->setCellValue("E" . $row, $totalClients);
+            $sheet->setCellValue("F" . $row, $customersOrdered);
+            $sheet->setCellValue("G" . $row, $notOrdered);
+            $sheet->setCellValue("H" . $row, $totalQty);
+            $sheet->setCellValue("I" . $row, $convRate . "%");
+            $sheet->setCellValue("J" . $row, $pctViaReps . "%");
+
+            // Ajouter hyperlien vers la feuille du représentant (double-clic ou clic)
+            $targetSheet = $sheetNames[$repIndex];
+            $sheet->getCell("B" . $row)->getHyperlink()->setUrl("sheet://'" . $targetSheet . "'!A1");
+            $sheet->getStyle("B" . $row)->applyFromArray([
+                "font" => ["color" => ["rgb" => "0066CC"], "underline" => true]
+            ]);
+
+            $row++;
+        }
+
+        // Largeurs fixes
+        $sheet->getColumnDimension("A")->setWidth(12);
+        $sheet->getColumnDimension("B")->setWidth(25);
+        $sheet->getColumnDimension("C")->setWidth(30);
+        $sheet->getColumnDimension("D")->setWidth(20);
+        $sheet->getColumnDimension("E")->setWidth(15);
+        $sheet->getColumnDimension("F")->setWidth(15);
+        $sheet->getColumnDimension("G")->setWidth(15);
+        $sheet->getColumnDimension("H")->setWidth(12);
+        $sheet->getColumnDimension("I")->setWidth(12);
+        $sheet->getColumnDimension("J")->setWidth(12);
+
+        // ============================================
+        // FEUILLES PAR REPRÉSENTANT
+        // ============================================
+        foreach ($reps as $repIndex => $rep) {
+            // Créer une nouvelle feuille
+            $repSheet = $spreadsheet->createSheet();
+
+            // Utiliser le nom pré-calculé (cohérent avec les liens)
+            $sheetName = $sheetNames[$repIndex];
+            $repSheet->setTitle($sheetName);
+
+            // Récupérer les clients du représentant (TOUS depuis la DB externe)
+            $allRepClients = $this->statsModel->getRepClients($rep["id"], $rep["country"], $campaignId);
+
+            // FILTRER selon le mode d'attribution
+            if ($assignmentMode === "manual" && !empty($authorizedCustomers)) {
+                // Mode MANUAL : ne garder que les clients autorisés pour cette campagne
+                $repClients = array_filter($allRepClients, function($client) use ($authorizedCustomers) {
+                    return in_array($client["customer_number"], $authorizedCustomers);
+                });
+                $repClients = array_values($repClients);
+            } else {
+                // Mode AUTOMATIC ou PROTECTED : tous les clients du rep
+                $repClients = $allRepClients;
+            }
+
+            // Si aucun client pour ce rep (après filtrage), on met une feuille vide avec message
+            if (empty($repClients)) {
+                $repSheet->setCellValue("A1", "Aucun client assigné pour ce représentant");
+                continue;
+            }
+
+            // Récupérer les origines des commandes par client pour ce rep
+            $clientOrigins = $this->getClientOrderOrigins($campaignId, $rep["id"], $rep["country"]);
+
+            // En-têtes fixes (ajout "Origine" après "Qté totale")
+            $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale", "Origine"];
+            $col = "A";
+            foreach ($fixedHeaders as $header) {
+                $repSheet->setCellValue($col . "1", $header);
+                $col++;
+            }
+
+            // En-têtes produits (colonnes dynamiques) - Utiliser le code article
+            // Commence maintenant à la colonne G (index 7)
+            $productColumns = [];
+            $colIndex = 7;
+            foreach ($campaignProducts as $product) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+                $productColumns[$product["id"]] = $colLetter;
+                $repSheet->setCellValue($colLetter . "1", $product["product_code"]);
+                $colIndex++;
+            }
+
+            $lastColIndex = $colIndex - 1;
+            $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIndex);
+
+            // Style en-têtes
+            $repSheet->getStyle("A1:" . $lastColLetter . "1")->applyFromArray($headerStyle);
+
+            // Récupérer les quantités par produit pour chaque client
+            $clientProductQuantities = $this->getClientProductQuantities($campaignId, $rep["id"], $rep["country"]);
+
+            // Trier les clients : ceux qui ont commandé en premier, puis par quantité décroissante
+            usort($repClients, function($a, $b) {
+                $aOrdered = $a["has_ordered"] ?? false;
+                $bOrdered = $b["has_ordered"] ?? false;
+
+                if ($aOrdered && !$bOrdered) return -1;
+                if (!$aOrdered && $bOrdered) return 1;
+
+                return ($b["total_quantity"] ?? 0) - ($a["total_quantity"] ?? 0);
+            });
+
+            // Données clients
+            $row = 2;
+            foreach ($repClients as $client) {
+                $customerNumber = $client["customer_number"] ?? "";
+                $hasOrdered = $client["has_ordered"] ?? false;
+
+                $repSheet->setCellValue("A" . $row, $customerNumber);
+                $repSheet->setCellValue("B" . $row, $client["company_name"] ?? "-");
+                $repSheet->setCellValue("C" . $row, $client["city"] ?? "-");
+                $repSheet->setCellValue("D" . $row, $hasOrdered ? "Oui" : "Non");
+                $repSheet->setCellValue("E" . $row, $client["total_quantity"] ?? 0);
+
+                // Origine de la commande
+                $origin = $clientOrigins[$customerNumber] ?? "-";
+                $originLabel = "-";
+                if ($origin === "client") {
+                    $originLabel = "Client";
+                } elseif ($origin === "rep") {
+                    $originLabel = "Rep";
+                } elseif ($origin === "both") {
+                    $originLabel = "Les deux";
+                }
+                $repSheet->setCellValue("F" . $row, $hasOrdered ? $originLabel : "-");
+
+                // Style conditionnel pour "A commandé"
+                if ($hasOrdered) {
+                    $repSheet->getStyle("D" . $row)->applyFromArray([
+                        "font" => ["color" => ["rgb" => "059669"]],
+                        "fill" => [
+                            "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            "startColor" => ["rgb" => "D1FAE5"]
+                        ]
+                    ]);
+                } else {
+                    $repSheet->getStyle("D" . $row)->applyFromArray([
+                        "font" => ["color" => ["rgb" => "DC2626"]],
+                        "fill" => [
+                            "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            "startColor" => ["rgb" => "FEE2E2"]
+                        ]
+                    ]);
+                }
+
+                // Style conditionnel pour "Origine"
+                if ($hasOrdered && $originLabel !== "-") {
+                    if ($originLabel === "Client") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "1D4ED8"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "DBEAFE"]
+                            ]
+                        ]);
+                    } elseif ($originLabel === "Rep") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "7C3AED"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "EDE9FE"]
+                            ]
+                        ]);
+                    } elseif ($originLabel === "Les deux") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "D97706"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "FEF3C7"]
+                            ]
+                        ]);
+                    }
+                }
+
+                // Quantités par produit (avec coloration si > 0)
+                foreach ($campaignProducts as $product) {
+                    $productId = $product["id"];
+                    $colLetter = $productColumns[$productId];
+                    $qty = $clientProductQuantities[$customerNumber][$productId] ?? 0;
+                    $repSheet->setCellValue($colLetter . $row, $qty);
+
+                    // Colorer en vert clair si quantité > 0
+                    if ($qty > 0) {
+                        $repSheet->getStyle($colLetter . $row)->applyFromArray([
+                            "font" => ["bold" => true, "color" => ["rgb" => "065F46"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "D1FAE5"]
+                            ]
+                        ]);
+                    }
+                }
+
+                $row++;
+            }
+
+            // Largeurs fixes
+            $repSheet->getColumnDimension("A")->setWidth(12);
+            $repSheet->getColumnDimension("B")->setWidth(30);
+            $repSheet->getColumnDimension("C")->setWidth(20);
+            $repSheet->getColumnDimension("D")->setWidth(12);
+            $repSheet->getColumnDimension("E")->setWidth(10);
+            $repSheet->getColumnDimension("F")->setWidth(12);
+
+            foreach ($productColumns as $colLetter) {
+                $repSheet->getColumnDimension($colLetter)->setWidth(8);
+            }
+
+            // Figer la première ligne et les 6 premières colonnes
+            $repSheet->freezePane("G2");
+
+            // Ajouter lien retour vers récap (en haut à droite, après les données)
+            $lastDataRow = $row;
+            $repSheet->setCellValue("A" . ($lastDataRow + 2), "← Retour Récap");
+            $repSheet->getCell("A" . ($lastDataRow + 2))->getHyperlink()->setUrl("sheet://'Récap Représentants'!A1");
+            $repSheet->getStyle("A" . ($lastDataRow + 2))->applyFromArray([
+                "font" => ["color" => ["rgb" => "0066CC"], "underline" => true, "bold" => true]
+            ]);
+        }
+
+        // Activer la première feuille
+        $spreadsheet->setActiveSheetIndex(0);
+
+        // ============================================
+        // SAUVEGARDE EN CACHE
+        // ============================================
+
+        // Créer le dossier de stockage si nécessaire
+        $storageDir = __DIR__ . '/../../storage/exports';
+        if (!is_dir($storageDir)) {
+            mkdir($storageDir, 0755, true);
+        }
+
+        // Générer un nom de fichier unique pour le cache
+        $filename = "export_reps_" . preg_replace("/[^a-zA-Z0-9]/", "_", $campaignName) . "_" . $campaignId . "_" . md5($accessScope) . ".xlsx";
+        $filePath = $storageDir . '/' . $filename;
+
+        // Sauvegarder le fichier sur le serveur
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($filePath);
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        // Enregistrer dans la table de cache
+        $fileSize = filesize($filePath);
+        $this->saveExportCache($campaignId, 'reps_excel', $accessScope, $filePath, $filename, $currentHash, $fileSize);
+
+        // Servir le fichier
+        $cacheData = [
+            'file_path' => $filePath,
+            'file_name' => $filename
+        ];
+        $this->serveExportFile($cacheData, $downloadToken);
+
+        exit();
+    }
+
+    /**
+     * Récupère la liste des numéros clients autorisés pour une campagne (mode manual)
+     *
+     * @param int $campaignId
+     * @return array Liste des customer_number autorisés
+     * @created 2025/12/10
+     */
+    private function getAuthorizedCustomersForCampaign(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $query = "
+            SELECT customer_number
+            FROM campaign_customers
+            WHERE campaign_id = :campaign_id
+            AND is_authorized = 1
+        ";
+
+        $results = $db->query($query, [":campaign_id" => $campaignId]);
+
+        return array_column($results, "customer_number");
+    }
+
+    /**
+     * Récupère les quantités par produit pour chaque client d'un représentant
+     *
+     * @param int $campaignId
+     * @param string $repId
+     * @param string $repCountry
+     * @return array [customer_number => [product_id => quantity]]
+     * @created 2025/12/10
+     * @modified 2025/12/22 - Correction : utiliser customer_number IN au lieu de rep_id
+     */
+    private function getClientProductQuantities(int $campaignId, string $repId, string $repCountry): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Étape 1 : Récupérer les customer_numbers du représentant depuis la DB externe
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+        } catch (\Exception $e) {
+            error_log("getClientProductQuantities: Impossible de se connecter à la DB externe - " . $e->getMessage());
+            return [];
+        }
+
+        try {
+            $tableClient = $repCountry === "BE" ? "BE_CLL" : "LU_CLL";
+            $clientsResult = $extDb->query(
+                "SELECT CLL_NCLIXX as customer_number FROM {$tableClient} WHERE IDE_REP = :rep_id",
+                [":rep_id" => $repId]
+            );
+
+            if (empty($clientsResult)) {
+                return [];
+            }
+
+            // Construire la liste des numéros clients (filtrer les nulls)
+            $customerNumbers = array_filter(
+                array_column($clientsResult, "customer_number"),
+                fn($n) => $n !== null && $n !== ""
+            );
+
+            if (empty($customerNumbers)) {
+                return [];
+            }
+
+            // Échapper les numéros pour la requête IN
+            $escapedNumbers = array_map(function ($num) {
+                return "'" . addslashes((string) $num) . "'";
+            }, $customerNumbers);
+            $inClause = implode(",", $escapedNumbers);
+
+            // Étape 2 : Requête pour les quantités par produit
+            $query = "
+                SELECT
+                    cu.customer_number,
+                    ol.product_id,
+                    SUM(ol.quantity) as quantity
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                INNER JOIN order_lines ol ON o.id = ol.order_id
+                WHERE o.campaign_id = :campaign_id
+                AND o.status = 'synced'
+                AND cu.customer_number IN ({$inClause})
+                AND cu.country = :country
+                GROUP BY cu.customer_number, ol.product_id
+            ";
+
+            $results = $db->query($query, [
+                ":campaign_id" => $campaignId,
+                ":country" => $repCountry
+            ]);
+
+            $quantities = [];
+            foreach ($results as $row) {
+                $customerNumber = $row["customer_number"];
+                $productId = $row["product_id"];
+
+                if (!isset($quantities[$customerNumber])) {
+                    $quantities[$customerNumber] = [];
+                }
+                $quantities[$customerNumber][$productId] = (int) $row["quantity"];
+            }
+
+            return $quantities;
+
+        } catch (\Exception $e) {
+            error_log("getClientProductQuantities error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // =========================================================================
+    // MÉTHODES DE CACHE POUR LES EXPORTS
+    // =========================================================================
+
+    /**
+     * Calcule le scope d'accès selon le rôle de l'utilisateur
+     * Gère aussi le mode impersonation (se connecter en tant que)
+     *
+     * @return string Le scope d'accès (global, createur_X, manager_X, rep_X)
+     * @created 2025/12/22
+     * @modified 2025/12/23 - Correction support impersonation
+     */
+    private function getExportAccessScope(): string
+    {
+        // Vérifier si on est en mode impersonation
+        $isImpersonating = Session::get('impersonate_original_user') !== null;
+
+        if ($isImpersonating) {
+            // En mode impersonation : lire le rôle depuis Session::get('user')
+            $user = Session::get('user');
+            $userRole = strtolower($user['role'] ?? '');
+            $userId = $user['id'] ?? Session::get('user_id');
+        } else {
+            // Mode normal : utiliser user_id et user_role
+            $userId = Session::get('user_id');
+            $userRole = strtolower(Session::get('user_role') ?? '');
+        }
+
+        // Admin et superadmin : accès global (même fichier pour tous)
+        if (in_array($userRole, ['superadmin', 'admin', 'super_admin'])) {
+            return 'global';
+        }
+
+        // Créateur : scope basé sur user_id
+        if ($userRole === 'createur') {
+            return 'createur_' . $userId;
+        }
+
+        // Manager reps : scope basé sur user_id
+        if ($userRole === 'manager_reps') {
+            return 'manager_' . $userId;
+        }
+
+        // Rep : scope basé sur user_id
+        if ($userRole === 'rep') {
+            return 'rep_' . $userId;
+        }
+
+        // Par défaut : scope unique par utilisateur
+        return 'user_' . $userId;
+    }
+
+    /**
+     * Calcule le hash des données pour détecter les changements
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $accessScope Scope d'accès
+     * @return string Hash SHA256 des données
+     * @created 2025/12/22
+     */
+    private function getExportDataHash(int $campaignId, string $accessScope): string
+    {
+        $db = \Core\Database::getInstance();
+
+        // Récupérer les stats de base selon le scope
+        $accessibleCampaignIds = $this->getAccessibleCampaignIds();
+
+        // Filtre campagne si on a des restrictions
+        $campaignFilter = "";
+        $params = [":campaign_id" => $campaignId];
+
+        if ($accessibleCampaignIds !== null && !in_array($campaignId, $accessibleCampaignIds)) {
+            // Pas d'accès à cette campagne - hash vide
+            return hash('sha256', 'no_access');
+        }
+
+        // Compter les commandes validées
+        $query = "
+            SELECT
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity,
+                MAX(o.created_at) as last_order_date
+            FROM orders o
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+        ";
+
+        $result = $db->query($query, $params);
+        $stats = $result[0] ?? ['orders_count' => 0, 'total_quantity' => 0, 'last_order_date' => null];
+
+        // Compter les représentants avec clients (selon le scope)
+        $repsCount = 0;
+        if (strpos($accessScope, 'rep_') === 0) {
+            // Rep : un seul rep
+            $repsCount = 1;
+        } elseif (strpos($accessScope, 'manager_') === 0) {
+            // Manager : compter ses reps
+            $managedReps = $this->getManagedRepIds();
+            $repsCount = count($managedReps);
+        } else {
+            // Admin/Global : compter tous les reps de la campagne
+            $campaign = $this->campaignModel->findById($campaignId);
+            $allReps = $this->statsModel->getRepStats($campaign['country'] ?? 'BE', $campaignId);
+            $repsCount = count($allReps);
+        }
+
+        // Construire une chaîne unique pour le hash
+        $hashString = implode('|', [
+            $campaignId,
+            $accessScope,
+            $stats['orders_count'],
+            $stats['total_quantity'],
+            $stats['last_order_date'] ?? 'none',
+            $repsCount
+        ]);
+
+        return hash('sha256', $hashString);
+    }
+
+    /**
+     * Récupère le cache d'un export s'il existe
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $exportType Type d'export
+     * @param string $accessScope Scope d'accès
+     * @return array|null Données du cache ou null
+     * @created 2025/12/22
+     */
+    private function getExportCache(int $campaignId, string $exportType, string $accessScope): ?array
+    {
+        $db = \Core\Database::getInstance();
+
+        try {
+            $query = "
+                SELECT * FROM export_cache
+                WHERE campaign_id = :campaign_id
+                AND export_type = :export_type
+                AND access_scope = :access_scope
+            ";
+
+            $result = $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':export_type' => $exportType,
+                ':access_scope' => $accessScope
+            ]);
+
+            if (empty($result)) {
+                return null;
+            }
+
+            $cache = $result[0];
+
+            // Vérifier que le fichier existe toujours
+            if (!file_exists($cache['file_path'])) {
+                // Fichier supprimé, nettoyer le cache
+                $db->query("DELETE FROM export_cache WHERE id = :id", [':id' => $cache['id']]);
+                return null;
+            }
+
+            return $cache;
+
+        } catch (\Exception $e) {
+            error_log("getExportCache error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Sauvegarde les infos d'un export en cache
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $exportType Type d'export
+     * @param string $accessScope Scope d'accès
+     * @param string $filePath Chemin du fichier
+     * @param string $fileName Nom du fichier
+     * @param string $dataHash Hash des données
+     * @param int $fileSize Taille du fichier
+     * @created 2025/12/22
+     */
+    private function saveExportCache(
+        int $campaignId,
+        string $exportType,
+        string $accessScope,
+        string $filePath,
+        string $fileName,
+        string $dataHash,
+        int $fileSize
+    ): void {
+        $db = \Core\Database::getInstance();
+
+        try {
+            // Supprimer l'ancien cache s'il existe (et son fichier)
+            $oldCache = $this->getExportCache($campaignId, $exportType, $accessScope);
+            if ($oldCache && $oldCache['file_path'] !== $filePath && file_exists($oldCache['file_path'])) {
+                unlink($oldCache['file_path']);
+            }
+
+            // Insérer ou mettre à jour le cache
+            $query = "
+                INSERT INTO export_cache
+                (campaign_id, export_type, access_scope, file_path, file_name, data_hash, file_size, created_at)
+                VALUES
+                (:campaign_id, :export_type, :access_scope, :file_path, :file_name, :data_hash, :file_size, NOW())
+                ON DUPLICATE KEY UPDATE
+                file_path = VALUES(file_path),
+                file_name = VALUES(file_name),
+                data_hash = VALUES(data_hash),
+                file_size = VALUES(file_size),
+                updated_at = NOW()
+            ";
+
+            $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':export_type' => $exportType,
+                ':access_scope' => $accessScope,
+                ':file_path' => $filePath,
+                ':file_name' => $fileName,
+                ':data_hash' => $dataHash,
+                ':file_size' => $fileSize
+            ]);
+
+            // Nettoyer les vieux fichiers (> 6 mois) - occasionnellement
+            if (rand(1, 100) === 1) {
+                $this->cleanOldExportCache();
+            }
+
+        } catch (\Exception $e) {
+            error_log("saveExportCache error: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Sert un fichier d'export au navigateur
+     *
+     * @param array $cache Données du cache
+     * @param string $downloadToken Token pour signaler la fin du téléchargement
+     * @created 2025/12/22
+     */
+    private function serveExportFile(array $cache, string $downloadToken): void
+    {
+        $filePath = $cache['file_path'];
+        $fileName = $cache['file_name'];
+
+        // Vérifier que le fichier existe
+        if (!file_exists($filePath)) {
+            Session::setFlash("error", "Fichier d'export introuvable");
+            header("Location: /stm/admin/stats/campaigns");
+            exit();
+        }
+
+        // Cookie pour signaler au JS que le téléchargement est terminé
+        if ($downloadToken) {
+            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        }
+
+        // Headers pour le téléchargement
+        header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        header("Content-Disposition: attachment;filename=\"" . $fileName . "\"");
+        header("Content-Length: " . filesize($filePath));
+        header("Cache-Control: max-age=0");
+        header("Pragma: public");
+
+        // Envoyer le fichier
+        readfile($filePath);
+    }
+
+    /**
+     * Nettoie les exports en cache de plus de 6 mois
+     *
+     * @created 2025/12/22
+     */
+    private function cleanOldExportCache(): void
+    {
+        $db = \Core\Database::getInstance();
+
+        try {
+            // Récupérer les vieux caches
+            $query = "
+                SELECT id, file_path FROM export_cache
+                WHERE created_at < DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            ";
+
+            $oldCaches = $db->query($query);
+
+            foreach ($oldCaches as $cache) {
+                // Supprimer le fichier
+                if (file_exists($cache['file_path'])) {
+                    unlink($cache['file_path']);
+                }
+
+                // Supprimer l'entrée en base
+                $db->query("DELETE FROM export_cache WHERE id = :id", [':id' => $cache['id']]);
+            }
+
+            error_log("cleanOldExportCache: " . count($oldCaches) . " fichiers nettoyés");
+
+        } catch (\Exception $e) {
+            error_log("cleanOldExportCache error: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * API pour vérifier l'état du cache d'un export (appelé en AJAX)
+     *
+     * @created 2025/12/22
+     */
+    public function checkExportCache(): void
+    {
+        header('Content-Type: application/json');
+
+        $campaignId = !empty($_GET["campaign_id"]) ? (int) $_GET["campaign_id"] : null;
+
+        if (!$campaignId) {
+            echo json_encode(['error' => 'campaign_id requis']);
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            echo json_encode(['error' => 'Accès non autorisé']);
+            exit();
+        }
+
+        // Debug : récupérer le rôle (prend en compte l'impersonation)
+        $isImpersonating = Session::get('impersonate_original_user') !== null;
+        if ($isImpersonating) {
+            $user = Session::get('user');
+            $rawRole = $user['role'] ?? 'unknown';
+            $userId = $user['id'] ?? Session::get('user_id');
+        } else {
+            $rawRole = Session::get('user_role');
+            $userId = Session::get('user_id');
+        }
+
+        $accessScope = $this->getExportAccessScope();
+        $currentHash = $this->getExportDataHash($campaignId, $accessScope);
+        $cache = $this->getExportCache($campaignId, 'reps_excel', $accessScope);
+
+        // Debug : log le scope calculé
+        error_log("checkExportCache - user_id: " . $userId . ", role: " . $rawRole . ", scope: " . $accessScope . ", impersonating: " . ($isImpersonating ? 'yes' : 'no'));
+
+        if (!$cache) {
+            // Pas de cache
+            echo json_encode([
+                'status' => 'no_cache',
+                'message' => 'Première génération requise',
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole,
+                'debug_user_id' => $userId,
+                'debug_impersonating' => $isImpersonating
+            ]);
+        } elseif ($cache['data_hash'] !== $currentHash) {
+            // Cache obsolète
+            echo json_encode([
+                'status' => 'outdated',
+                'message' => 'Nouvelles données détectées',
+                'cached_at' => $cache['created_at'],
+                'file_size' => $cache['file_size'],
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole,
+                'debug_impersonating' => $isImpersonating
+            ]);
+        } else {
+            // Cache valide
+            echo json_encode([
+                'status' => 'valid',
+                'message' => 'Fichier en cache',
+                'cached_at' => $cache['created_at'],
+                'file_size' => $cache['file_size'],
+                'debug_scope' => $accessScope,
+                'debug_role' => $rawRole,
+                'debug_impersonating' => $isImpersonating
+            ]);
+        }
+
+        exit();
+    }
+
+    /**
+     * API : Récupère les commandes d'un client pour une campagne (AJAX)
+     *
+     * @return void
+     * @created 2025/12/23
+     */
+    public function getCustomerOrdersApi(): void
+    {
+        header('Content-Type: application/json');
+
+        $campaignId = isset($_GET['campaign_id']) ? (int)$_GET['campaign_id'] : 0;
+        $customerNumber = $_GET['customer_number'] ?? '';
+        $country = $_GET['country'] ?? '';
+
+        if (!$campaignId || !$customerNumber || !$country) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Paramètres manquants'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès à la campagne
+        if (!$this->canAccessCampaign($campaignId)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à cette campagne'
+            ]);
+            exit();
+        }
+
+        // Vérifier l'accès au client (selon le rôle)
+        $accessibleCustomerNumbers = StatsAccessHelper::getAccessibleCustomerNumbersOnly();
+        if ($accessibleCustomerNumbers !== null && !in_array($customerNumber, $accessibleCustomerNumbers)) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Accès non autorisé à ce client'
+            ]);
+            exit();
+        }
+
+        try {
+            $db = \Core\Database::getInstance();
+
+            // Récupérer les commandes du client pour cette campagne
+            // Inclut l'origine (order_source) et le nom du rep si applicable
+            $query = "
+                SELECT
+                    o.id as order_id,
+                    o.created_at,
+                    o.total_items,
+                    o.status,
+                    COALESCE(o.order_source, 'client') as order_source,
+                    u.name as rep_name
+                FROM orders o
+                INNER JOIN customers cu ON o.customer_id = cu.id
+                LEFT JOIN users u ON o.ordered_by_rep_id = u.id
+                WHERE o.campaign_id = :campaign_id
+                AND cu.customer_number = :customer_number
+                AND cu.country = :country
+                AND o.status = 'synced'
+                ORDER BY o.created_at DESC
+            ";
+
+            $orders = $db->query($query, [
+                ':campaign_id' => $campaignId,
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            // Pour chaque commande, récupérer les lignes de commande
+            foreach ($orders as &$order) {
+                $linesQuery = "
+                    SELECT
+                        ol.quantity,
+                        p.product_code,
+                        p.name_fr as product_name,
+                        p.image_fr as product_image
+                    FROM order_lines ol
+                    INNER JOIN products p ON ol.product_id = p.id
+                    WHERE ol.order_id = :order_id
+                    ORDER BY ol.quantity DESC, p.name_fr ASC
+                ";
+
+                $order['lines'] = $db->query($linesQuery, [':order_id' => $order['order_id']]);
+                $order['total_quantity'] = array_sum(array_column($order['lines'], 'quantity'));
+            }
+
+            // Récupérer les infos du client
+            $customerQuery = "
+                SELECT company_name
+                FROM customers
+                WHERE customer_number = :customer_number
+                AND country = :country
+                LIMIT 1
+            ";
+
+            $customerInfo = $db->query($customerQuery, [
+                ':customer_number' => $customerNumber,
+                ':country' => $country
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'customer' => [
+                    'customer_number' => $customerNumber,
+                    'country' => $country,
+                    'company_name' => $customerInfo[0]['company_name'] ?? $customerNumber
+                ],
+                'orders' => $orders,
+                'total_orders' => count($orders),
+                'total_quantity' => array_sum(array_column($orders, 'total_quantity'))
+            ]);
+
+        } catch (\Exception $e) {
+            error_log("getCustomerOrdersApi error: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Erreur lors de la récupération des commandes'
+            ]);
+        }
+
+        exit();
     }
 }
-
-function formatNumberFr(num) {
-    return new Intl.NumberFormat('fr-FR').format(num);
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Fermer modal avec Escape
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeCustomerOrdersModal();
-    }
-});
-</script>
-SCRIPTS;
-
-require __DIR__ . "/../../layouts/admin.php";
-?>

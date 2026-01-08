@@ -1672,6 +1672,19 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
 
                 linesHtml += '</tbody></table>';
 
+                // Badge origine
+                let originBadge = '';
+                if (order.order_source === 'rep') {
+                    const repName = order.rep_name ? ' (' + escapeHtml(order.rep_name) + ')' : '';
+                    originBadge = '<span class="inline-flex items-center px-2 py-1 bg-violet-100 text-violet-700 rounded text-xs font-medium" title="Commandé par le représentant' + repName + '">' +
+                        '<i class="fas fa-user-tie mr-1"></i>Via Rep' + repName +
+                    '</span>';
+                } else {
+                    originBadge = '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium" title="Commandé par le client">' +
+                        '<i class="fas fa-user mr-1"></i>Via Client' +
+                    '</span>';
+                }
+
                 const orderHtml = '<div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">' +
                     '<div class="bg-gradient-to-r from-indigo-50 to-white px-4 py-3 flex items-center justify-between cursor-pointer border-b border-gray-200" onclick="toggleOrderDetail(' + index + ')">' +
                         '<div class="flex items-center gap-3">' +
@@ -1681,8 +1694,9 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
                                 '<span class="text-sm text-gray-500 ml-3"><i class="far fa-calendar-alt mr-1"></i>' + formattedDate + '</span>' +
                             '</div>' +
                         '</div>' +
-                        '<div class="flex items-center gap-4">' +
-                            '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">' +
+                        '<div class="flex items-center gap-2">' +
+                            originBadge +
+                            '<span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">' +
                                 '<i class="fas fa-box mr-1"></i>' + order.lines.length + ' produit(s)' +
                             '</span>' +
                             '<span class="inline-flex items-center px-3 py-1 bg-orange-500 text-white rounded font-bold">' + formatNumberFr(order.total_quantity) + ' promos</span>' +
