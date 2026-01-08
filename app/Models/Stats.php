@@ -10,6 +10,7 @@
  * @modified 2025/12/16 - Ajout filtrage hiérarchique par accessibleCampaignIds
  * @modified 2025/12/23 - Correction getCampaignProducts() : affiche tous les produits même sans commandes
  * @modified 2025/12/23 - Ajout getTopCustomersForCampaign() pour top clients par campagne
+ * @modified 2026/01/08 - Correction jointure campaign_customers, ajout getRepNameByCustomer()
  */
 
 namespace App\Models;
@@ -829,22 +830,25 @@ class Stats
 
         if ($mode === "manual") {
             // Mode manuel : liste depuis campaign_customers
+            // Jointure via customer_number + country (pas de customer_id dans campaign_customers)
             $eligibleCustomers = $this->db->query(
-                "SELECT cc.customer_number, cc.country, cu.company_name, cu.rep_name
+                "SELECT cc.customer_number, cc.country, cu.company_name
                  FROM campaign_customers cc
-                 LEFT JOIN customers cu ON cc.customer_id = cu.id
+                 LEFT JOIN customers cu ON cc.customer_number = cu.customer_number AND cc.country = cu.country
                  WHERE cc.campaign_id = :id AND cc.is_authorized = 1
                  LIMIT :limit",
                 [":id" => $campaignId, ":limit" => $limit * 2], // Récupérer plus pour filtrer
             );
 
-            // Filtrer ceux qui n'ont pas commandé
+            // Filtrer ceux qui n'ont pas commandé et enrichir avec rep_name depuis DB externe
             $notOrdered = [];
             foreach ($eligibleCustomers as $cust) {
                 $inOrdered =
                     isset($orderedNumbers[$cust["country"]]) &&
                     in_array($cust["customer_number"], $orderedNumbers[$cust["country"]]);
                 if (!$inOrdered) {
+                    // Récupérer le rep_name depuis la DB externe via customer_number
+                    $cust["rep_name"] = $this->getRepNameByCustomer($cust["customer_number"], $cust["country"]);
                     $notOrdered[] = $cust;
                     if (count($notOrdered) >= $limit) {
                         break;
@@ -1283,6 +1287,42 @@ class Stats
             }
 
             return null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Récupère le nom d'un représentant à partir du numéro client
+     * Passe par BE_CLL/LU_CLL pour obtenir IDE_REP, puis BE_REP/LU_REP pour le nom
+     *
+     * @param string $customerNumber
+     * @param string $country
+     * @return string|null
+     */
+    private function getRepNameByCustomer(string $customerNumber, string $country): ?string
+    {
+        if (!$this->extDb || empty($customerNumber)) {
+            return null;
+        }
+
+        try {
+            $clientTable = $country === "BE" ? "BE_CLL" : "LU_CLL";
+
+            // Récupérer IDE_REP du client
+            $result = $this->extDb->query(
+                "SELECT IDE_REP FROM {$clientTable} WHERE CLL_NCLIXX = :customer_number",
+                [":customer_number" => $customerNumber]
+            );
+
+            if (empty($result) || empty($result[0]["IDE_REP"])) {
+                return null;
+            }
+
+            $repId = $result[0]["IDE_REP"];
+
+            // Récupérer le nom du rep
+            return $this->getRepName($repId, $country);
         } catch (\Exception $e) {
             return null;
         }

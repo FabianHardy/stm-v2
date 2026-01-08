@@ -903,6 +903,17 @@ class StatsController
      */
     private function exportToExcel(array $data, array $headers, string $filename): void
     {
+        // Augmenter le temps d'exécution pour les gros exports
+        set_time_limit(300);
+
+        // Nettoyer tous les buffers output pour éviter la corruption du fichier
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Désactiver l'affichage des erreurs dans le fichier
+        ini_set('display_errors', '0');
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Export');
@@ -998,7 +1009,6 @@ class StatsController
                    p.product_code as Promo_Art,
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
-                   cu.rep_id as rep_id,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
@@ -1020,6 +1030,7 @@ class StatsController
 
     /**
      * Enrichit les données avec les noms des représentants depuis la base externe
+     * Utilise customer_number pour trouver IDE_REP dans BE_CLL/LU_CLL
      */
     private function enrichWithRepNames(array $data): array
     {
@@ -1027,26 +1038,69 @@ class StatsController
             return [];
         }
 
-        // Collecter les rep_id uniques par pays
-        $repIdsBE = [];
-        $repIdsLU = [];
+        // Collecter les customer_numbers uniques par pays
+        $customersBE = [];
+        $customersLU = [];
 
         foreach ($data as $row) {
-            if (!empty($row['rep_id'])) {
-                if (($row['Pays'] ?? '') === 'BE') {
-                    $repIdsBE[$row['rep_id']] = true;
+            $customerNumber = $row['Num_Client'] ?? '';
+            $country = $row['Pays'] ?? '';
+            if (!empty($customerNumber)) {
+                if ($country === 'BE') {
+                    $customersBE[$customerNumber] = true;
                 } else {
-                    $repIdsLU[$row['rep_id']] = true;
+                    $customersLU[$customerNumber] = true;
                 }
             }
         }
 
-        // Récupérer les noms depuis la base externe
+        // Récupérer les IDE_REP depuis la base externe
+        $customerRepIds = [];
         $repNames = [];
 
         try {
             $extDb = \Core\ExternalDatabase::getInstance();
 
+            // Récupérer IDE_REP pour les clients BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(',', array_fill(0, count($customersBE), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['BE'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Récupérer IDE_REP pour les clients LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(',', array_fill(0, count($customersLU), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['LU'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Collecter les rep_ids uniques
+            $repIdsBE = [];
+            $repIdsLU = [];
+            foreach ($customerRepIds as $country => $customers) {
+                foreach ($customers as $repId) {
+                    if (!empty($repId)) {
+                        if ($country === 'BE') {
+                            $repIdsBE[$repId] = true;
+                        } else {
+                            $repIdsLU[$repId] = true;
+                        }
+                    }
+                }
+            }
+
+            // Récupérer les noms des reps
             if (!empty($repIdsBE)) {
                 $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
                 $result = $extDb->query(
@@ -1076,10 +1130,11 @@ class StatsController
         $enriched = [];
         foreach ($data as $row) {
             $country = $row['Pays'] ?? '';
-            $repId = $row['rep_id'] ?? '';
+            $customerNumber = $row['Num_Client'] ?? '';
+            $repId = $customerRepIds[$country][$customerNumber] ?? '';
             $repName = $repNames[$country][$repId] ?? '';
 
-            // Reconstruire la ligne avec Rep_Name à la bonne position (sans rep_id)
+            // Reconstruire la ligne avec Rep_Name
             $enriched[] = [
                 'Campagne' => $row['Campagne'] ?? '',
                 'Num_Client' => $row['Num_Client'] ?? '',
@@ -1113,7 +1168,6 @@ class StatsController
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
                    o.customer_email as Email,
-                   cu.rep_id as rep_id,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
@@ -1134,6 +1188,7 @@ class StatsController
 
     /**
      * Enrichit les données campagne avec les noms des représentants depuis la base externe
+     * Utilise customer_number pour trouver IDE_REP dans BE_CLL/LU_CLL
      */
     private function enrichWithRepNamesCampaign(array $data): array
     {
@@ -1141,26 +1196,69 @@ class StatsController
             return [];
         }
 
-        // Collecter les rep_id uniques par pays
-        $repIdsBE = [];
-        $repIdsLU = [];
+        // Collecter les customer_numbers uniques par pays
+        $customersBE = [];
+        $customersLU = [];
 
         foreach ($data as $row) {
-            if (!empty($row['rep_id'])) {
-                if (($row['Pays'] ?? '') === 'BE') {
-                    $repIdsBE[$row['rep_id']] = true;
+            $customerNumber = $row['Num_Client'] ?? '';
+            $country = $row['Pays'] ?? '';
+            if (!empty($customerNumber)) {
+                if ($country === 'BE') {
+                    $customersBE[$customerNumber] = true;
                 } else {
-                    $repIdsLU[$row['rep_id']] = true;
+                    $customersLU[$customerNumber] = true;
                 }
             }
         }
 
-        // Récupérer les noms depuis la base externe
+        // Récupérer les IDE_REP depuis la base externe
+        $customerRepIds = [];
         $repNames = [];
 
         try {
             $extDb = \Core\ExternalDatabase::getInstance();
 
+            // Récupérer IDE_REP pour les clients BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(',', array_fill(0, count($customersBE), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['BE'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Récupérer IDE_REP pour les clients LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(',', array_fill(0, count($customersLU), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['LU'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Collecter les rep_ids uniques
+            $repIdsBE = [];
+            $repIdsLU = [];
+            foreach ($customerRepIds as $country => $customers) {
+                foreach ($customers as $repId) {
+                    if (!empty($repId)) {
+                        if ($country === 'BE') {
+                            $repIdsBE[$repId] = true;
+                        } else {
+                            $repIdsLU[$repId] = true;
+                        }
+                    }
+                }
+            }
+
+            // Récupérer les noms des reps
             if (!empty($repIdsBE)) {
                 $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
                 $result = $extDb->query(
@@ -1190,10 +1288,11 @@ class StatsController
         $enriched = [];
         foreach ($data as $row) {
             $country = $row['Pays'] ?? '';
-            $repId = $row['rep_id'] ?? '';
+            $customerNumber = $row['Num_Client'] ?? '';
+            $repId = $customerRepIds[$country][$customerNumber] ?? '';
             $repName = $repNames[$country][$repId] ?? '';
 
-            // Reconstruire la ligne avec Rep_Name à la bonne position (sans rep_id)
+            // Reconstruire la ligne avec Rep_Name
             $enriched[] = [
                 'Campagne' => $row['Campagne'] ?? '',
                 'Num_Client' => $row['Num_Client'] ?? '',
