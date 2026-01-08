@@ -11,10 +11,11 @@
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.3.0
+ * @version    1.4.0
  * @created    2025/11/27
  * @modified   2025/12/30 - Suppression N° commande et section statut synchro
  * @modified   2026/01/08 - Enrichissement section technique avec Source, Rep, Email
+ * @modified   2026/01/08 - Sprint 15 : Bouton "Générer TXT" pour commandes mode pending, statut "En attente export"
  */
 
 // Permissions pour les boutons (à remplacer par PermissionHelper quand disponible)
@@ -25,11 +26,12 @@ ob_start();
 // Statuts de synchronisation avec labels et couleurs
 $statusLabels = [
     "pending_sync" => ["label" => "En attente de synchro", "class" => "bg-yellow-100 text-yellow-800", "icon" => "fa-clock"],
-    "synced" => ["label" => "Synchronisée", "class" => "bg-green-100 text-green-800", "icon" => "fa-check-circle"],
+    "synced" => ["label" => "Traité (TXT)", "class" => "bg-green-100 text-green-800", "icon" => "fa-check-circle"],
     "error" => ["label" => "Erreur", "class" => "bg-red-100 text-red-800", "icon" => "fa-exclamation-triangle"],
     // Anciens statuts (rétrocompatibilité)
     "pending" => ["label" => "En attente", "class" => "bg-yellow-100 text-yellow-800", "icon" => "fa-clock"],
-    "validated" => ["label" => "Validée", "class" => "bg-green-100 text-green-800", "icon" => "fa-check-circle"],
+    // Sprint 15 : Statut pour commandes en mode pending (pas de TXT généré)
+    "validated" => ["label" => "En attente export", "class" => "bg-orange-100 text-orange-800", "icon" => "fa-file-export"],
     "cancelled" => ["label" => "Annulée", "class" => "bg-red-100 text-red-800", "icon" => "fa-times-circle"],
 ];
 $currentStatus = $statusLabels[$order["status"] ?? "pending_sync"] ?? $statusLabels["pending_sync"];
@@ -87,7 +89,25 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
                 Télécharger TXT
             </a>
             <?php endif; ?>
+
             <?php if ($canExport): ?>
+            <?php
+            // Sprint 15 : Si statut validated et pas de fichier TXT, afficher bouton Générer TXT
+            $isValidatedWithoutFile = ($order['status'] === 'validated' && !$fileExists);
+            ?>
+
+            <?php if ($isValidatedWithoutFile): ?>
+            <!-- Sprint 15 : Bouton Générer TXT à la demande (pour commandes mode pending) -->
+            <form method="POST" action="/stm/admin/orders/<?= $order['id'] ?>/generate-txt" class="inline">
+                <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <button type="submit"
+                        onclick="return confirm('Générer le fichier TXT pour cette commande ?')"
+                        class="inline-flex items-center px-4 py-2 bg-orange-600 hover:bg-orange-700 border border-transparent rounded-md text-sm font-medium text-white transition-colors">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    Générer TXT
+                </button>
+            </form>
+            <?php else: ?>
             <!-- Bouton Régénérer TXT -->
             <form method="POST" action="/stm/admin/orders/regenerate" class="inline">
                 <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -100,6 +120,8 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
                 </button>
             </form>
             <?php endif; ?>
+            <?php endif; ?>
+
             <!-- Statut -->
             <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium <?php echo $currentStatus["class"]; ?>">
                 <i class="fas <?php echo $currentStatus["icon"]; ?> mr-2"></i>
