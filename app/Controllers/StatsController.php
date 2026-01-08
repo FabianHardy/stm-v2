@@ -801,6 +801,7 @@ class StatsController
                     "Quantité",
                     "Email",
                     "Rep_Name",
+                    "Origine",
                     "Date_Commande",
                 ];
                 $filename = "export_campagne_" . $campaignId . "_" . date("Ymd");
@@ -818,6 +819,7 @@ class StatsController
                     "Clients_Commandé",
                     "Taux_Conv",
                     "Total_Quantité",
+                    "%_Via_Reps",
                 ];
                 $filename = "export_reps_" . date("Ymd");
                 break;
@@ -847,6 +849,7 @@ class StatsController
                     "Quantité",
                     "Rep_Name",
                     "Cluster",
+                    "Origine",
                     "Date_Commande",
                 ];
                 $filename = "export_global_" . date("Ymd");
@@ -889,6 +892,7 @@ class StatsController
                    ol.quantity as Quantite,
                    cu.rep_name as Rep_Name,
                    '' as Cluster,
+                   CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -919,6 +923,7 @@ class StatsController
                    ol.quantity as Quantite,
                    o.customer_email as Email,
                    cu.rep_name as Rep_Name,
+                   CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -939,12 +944,28 @@ class StatsController
     {
         $reps = $this->statsModel->getRepStats(null, $campaignId);
 
+        // Récupérer les stats origine si campagne sélectionnée
+        $originStatsByRep = [];
+        if ($campaignId) {
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+        }
+
         $data = [];
         foreach ($reps as $rep) {
             $convRate =
                 $rep["total_clients"] > 0
                     ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) . "%"
                     : "0%";
+
+            // Calculer le % Via Reps
+            $pctViaReps = "-";
+            if ($campaignId && isset($originStatsByRep[$rep["id"]])) {
+                $repOrigin = $originStatsByRep[$rep["id"]];
+                $totalOrigin = ($repOrigin['client_orders'] ?? 0) + ($repOrigin['rep_orders'] ?? 0);
+                if ($totalOrigin > 0) {
+                    $pctViaReps = round(($repOrigin['rep_orders'] / $totalOrigin) * 100) . "%";
+                }
+            }
 
             $data[] = [
                 "Rep_ID" => $rep["id"],
@@ -955,6 +976,7 @@ class StatsController
                 "Clients_Commande" => $rep["stats"]["customers_ordered"],
                 "Taux_Conv" => $convRate,
                 "Total_Quantite" => $rep["stats"]["total_quantity"],
+                "Pct_Via_Reps" => $pctViaReps,
             ];
         }
 
