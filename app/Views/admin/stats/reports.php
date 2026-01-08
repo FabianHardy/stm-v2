@@ -2,12 +2,12 @@
 /**
  * Vue : Statistiques - Rapports et exports
  *
- * Page d'export CSV/Excel des données
+ * Page d'export Excel des données
  *
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/16 - Ajout filtrage permissions sur exports
- * @modified 2026/01/08 - Excel par défaut, ajout colonnes Origine et %_Via_Reps
+ * @modified 2026/01/08 - Excel uniquement, ajout filtre pays, colonnes Origine et %_Via_Reps
  */
 
 use Core\Session;
@@ -24,7 +24,7 @@ ob_start();
 <!-- En-tête -->
 <div class="mb-6">
     <h1 class="text-2xl font-bold text-gray-900">Statistiques - Rapports</h1>
-    <p class="text-gray-600 mt-1">Exportez vos données au format CSV ou Excel</p>
+    <p class="text-gray-600 mt-1">Exportez vos données au format Excel</p>
 </div>
 
 <?php if ($flash): ?>
@@ -49,7 +49,10 @@ ob_start();
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
     <!-- Export global -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
+    <div class="bg-white rounded-lg shadow-sm p-6" x-data="{
+        selectedCountry: '',
+        campaigns: <?= json_encode(array_map(fn($c) => ['id' => $c['id'], 'name' => $c['name'], 'country' => $c['country']], $campaigns)) ?>
+    }">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
                 <i class="fas fa-globe text-indigo-600"></i>
@@ -78,14 +81,21 @@ ob_start();
             </div>
 
             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                <select x-model="selectedCountry" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">Tous les pays</option>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
+                </select>
+            </div>
+
+            <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Campagne (optionnel)</label>
                 <select name="campaign_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">Toutes les campagnes</option>
-                    <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>">
-                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
-                    </option>
-                    <?php endforeach; ?>
+                    <template x-for="c in campaigns.filter(c => !selectedCountry || c.country === selectedCountry)" :key="c.id">
+                        <option :value="c.id" x-text="(c.country === 'BE' ? '🇧🇪' : '🇱🇺') + ' ' + c.name + ' (' + c.country + ')'"></option>
+                    </template>
                 </select>
             </div>
 
@@ -100,7 +110,10 @@ ob_start();
     </div>
 
     <!-- Export par campagne -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
+    <div class="bg-white rounded-lg shadow-sm p-6" x-data="{
+        selectedCountry: '',
+        campaigns: <?= json_encode(array_map(fn($c) => ['id' => $c['id'], 'name' => $c['name'], 'country' => $c['country']], $campaigns)) ?>
+    }">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                 <i class="fas fa-bullhorn text-green-600"></i>
@@ -116,18 +129,25 @@ ob_start();
             <input type="hidden" name="format" value="excel">
 
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
-                <select name="campaign_id" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays <span class="text-red-500">*</span></label>
+                <select x-model="selectedCountry" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">-- Sélectionner --</option>
-                    <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>">
-                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
-                    </option>
-                    <?php endforeach; ?>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
                 </select>
             </div>
 
-            <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
+                <select name="campaign_id" required class="w-full border border-gray-300 rounded-lg px-3 py-2" :disabled="!selectedCountry">
+                    <option value="">-- Sélectionner un pays d'abord --</option>
+                    <template x-for="c in campaigns.filter(c => c.country === selectedCountry)" :key="c.id">
+                        <option :value="c.id" x-text="c.name"></option>
+                    </template>
+                </select>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition" :disabled="!selectedCountry">
                 <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
@@ -138,7 +158,10 @@ ob_start();
     </div>
 
     <!-- Export représentants -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
+    <div class="bg-white rounded-lg shadow-sm p-6" x-data="{
+        selectedCountry: '',
+        campaigns: <?= json_encode(array_map(fn($c) => ['id' => $c['id'], 'name' => $c['name'], 'country' => $c['country']], $campaigns)) ?>
+    }">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
                 <i class="fas fa-users text-orange-600"></i>
@@ -154,14 +177,21 @@ ob_start();
             <input type="hidden" name="format" value="excel">
 
             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+                <select x-model="selectedCountry" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">Tous les pays</option>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
+                </select>
+            </div>
+
+            <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Campagne (optionnel)</label>
                 <select name="campaign_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">Toutes les campagnes</option>
-                    <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>">
-                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
-                    </option>
-                    <?php endforeach; ?>
+                    <template x-for="c in campaigns.filter(c => !selectedCountry || c.country === selectedCountry)" :key="c.id">
+                        <option :value="c.id" x-text="(c.country === 'BE' ? '🇧🇪' : '🇱🇺') + ' ' + c.name + ' (' + c.country + ')'"></option>
+                    </template>
                 </select>
             </div>
 
@@ -176,7 +206,10 @@ ob_start();
     </div>
 
     <!-- Export clients sans commande -->
-    <div class="bg-white rounded-lg shadow-sm p-6">
+    <div class="bg-white rounded-lg shadow-sm p-6" x-data="{
+        selectedCountry: '',
+        campaigns: <?= json_encode(array_map(fn($c) => ['id' => $c['id'], 'name' => $c['name'], 'country' => $c['country']], $campaigns)) ?>
+    }">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <i class="fas fa-user-times text-red-600"></i>
@@ -192,18 +225,25 @@ ob_start();
             <input type="hidden" name="format" value="excel">
 
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
-                <select name="campaign_id" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pays <span class="text-red-500">*</span></label>
+                <select x-model="selectedCountry" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">-- Sélectionner --</option>
-                    <?php foreach ($campaigns as $c): ?>
-                    <option value="<?= $c['id'] ?>">
-                        <?= $c['country'] === 'BE' ? '🇧🇪' : '🇱🇺' ?> <?= htmlspecialchars($c['name']) ?> (<?= $c['country'] ?>)
-                    </option>
-                    <?php endforeach; ?>
+                    <option value="BE">🇧🇪 Belgique</option>
+                    <option value="LU">🇱🇺 Luxembourg</option>
                 </select>
             </div>
 
-            <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Campagne <span class="text-red-500">*</span></label>
+                <select name="campaign_id" required class="w-full border border-gray-300 rounded-lg px-3 py-2" :disabled="!selectedCountry">
+                    <option value="">-- Sélectionner un pays d'abord --</option>
+                    <template x-for="c in campaigns.filter(c => c.country === selectedCountry)" :key="c.id">
+                        <option :value="c.id" x-text="c.name"></option>
+                    </template>
+                </select>
+            </div>
+
+            <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition" :disabled="!selectedCountry">
                 <i class="fas fa-download mr-2"></i>Télécharger Excel
             </button>
         </form>
