@@ -10,6 +10,7 @@
  * @modified 2025/12/12 - Intégration PermissionMiddleware (Phase 5)
  * @modified 2025/12/18 - Utilisation StatsAccessHelper pour filtrage reps/manager_reps
  * @modified 2025/12/19 - Correction comptage actives (is_active=1 + dates)
+ * @modified 2026/01/08 - Sprint 14/15 : Ajout show_prices et order_processing_mode dans store/update
  */
 
 namespace App\Controllers;
@@ -186,6 +187,8 @@ class CampaignController
             "customer_assignment_mode" => $_POST["customer_assignment_mode"] ?? "automatic",
             "order_password" => $_POST["order_password"] ?? null,
             "order_type" => $_POST["order_type"] ?? "W",
+            "show_prices" => isset($_POST["show_prices"]) ? 1 : 0, // Sprint 14
+            "order_processing_mode" => $_POST["order_processing_mode"] ?? "direct", // Sprint 15
             "deferred_delivery" => isset($_POST["deferred_delivery"]) ? 1 : 0,
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];
@@ -369,6 +372,8 @@ class CampaignController
             "customer_assignment_mode" => $_POST["customer_assignment_mode"] ?? "automatic",
             "order_password" => $_POST["order_password"] ?? null,
             "order_type" => $_POST["order_type"] ?? "W",
+            "show_prices" => isset($_POST["show_prices"]) ? 1 : 0, // Sprint 14
+            "order_processing_mode" => $_POST["order_processing_mode"] ?? "direct", // Sprint 15
             "deferred_delivery" => isset($_POST["deferred_delivery"]) ? 1 : 0,
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];

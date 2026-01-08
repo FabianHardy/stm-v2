@@ -3,11 +3,12 @@
  * Vue : Liste des campagnes
  *
  * @package STM/Views/Admin/Campaigns
- * @version 2.4.0
+ * @version 2.5.0
  * @created 07/11/2025
  * @modified 14/11/2025 - Ajout colonne statistiques (clients + promotions)
  * @modified 15/12/2025 - Masquage conditionnel boutons selon permissions (Phase 5)
  * @modified 19/12/2025 - Correction affichage statut (is_active + dates)
+ * @modified 08/01/2026 - Sprint 15 : Ajout colonne Mode (TXT/Excel + type W/V + prix reps)
  */
 
 use App\Helpers\PermissionHelper;
@@ -187,6 +188,9 @@ ob_start();
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Statistiques
                     </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Mode
+                    </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         URLs
                     </th>
@@ -201,7 +205,7 @@ ob_start();
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($campaigns)): ?>
                     <tr>
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td colspan="8" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                             </svg>
@@ -282,6 +286,38 @@ ob_start();
                                         </svg>
                                         <?= $promotionCount ?> promo<?= $promotionCount > 1 ? "s" : "" ?>
                                     </span>
+                                </div>
+                            </td>
+
+                            <!-- Sprint 15 : Mode de traitement -->
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <?php
+                                $processingMode = $campaign["order_processing_mode"] ?? "direct";
+                                $orderType = $campaign["order_type"] ?? "W";
+                                $showPrices = $campaign["show_prices"] ?? 1;
+                                ?>
+                                <div class="flex flex-col items-center gap-1">
+                                    <?php if ($processingMode === "pending"): ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Export Excel">
+                                            📋 Excel
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title="Fichier TXT immédiat">
+                                            ⚡ TXT
+                                        </span>
+                                    <?php endif; ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?= $orderType === 'W' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' ?>">
+                                        <?= $orderType ?>
+                                    </span>
+                                    <?php if ($showPrices): ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800" title="Prix visibles pour les reps">
+                                            💰
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500" title="Prix masqués pour les reps">
+                                            💰
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                             </td>
 

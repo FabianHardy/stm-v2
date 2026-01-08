@@ -9,6 +9,7 @@
  * @created  2025/11/14 02:00
  * @modified 2025/12/10 - Ajout onglet Équipe pour gestion des collaborateurs
  * @modified 2025/12/15 - Masquage conditionnel boutons selon permissions (Phase 5)
+ * @modified 2026/01/08 - Sprint 15 : Affichage mode de traitement (direct/pending) + prix reps
  */
 
 use App\Helpers\PermissionHelper;
@@ -419,7 +420,7 @@ $canViewOrders = PermissionHelper::can('orders.view');
             <h2 class="text-lg font-semibold text-gray-900">🚚 Paramètres de commande</h2>
         </div>
         <div class="px-6 py-6">
-            <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <dl class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
                     <dt class="text-sm font-medium text-gray-500 mb-2">Type de commande</dt>
                     <dd>
@@ -430,16 +431,38 @@ $canViewOrders = PermissionHelper::can('orders.view');
                         <?php endif; ?>
                     </dd>
                 </div>
+                <!-- Sprint 15 : Mode de traitement -->
                 <div>
-                    <dt class="text-sm font-medium text-gray-500 mb-2">Modalité de livraison</dt>
+                    <dt class="text-sm font-medium text-gray-500 mb-2">Mode de traitement</dt>
+                    <dd>
+                        <?php if (($campaign["order_processing_mode"] ?? "direct") === "pending"): ?>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-100 text-orange-800">📋 En attente (Export Excel)</span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">⚡ Traitement direct (TXT)</span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 mb-2">Livraison</dt>
                     <dd>
                         <?php if ($campaign["deferred_delivery"]): ?>
-                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-100 text-orange-800">📅 Livraison différée</span>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-100 text-blue-800">📅 Différée</span>
                             <?php if (!empty($campaign["delivery_date"])): ?>
                                 <p class="mt-2 text-sm text-gray-600">Date prévue : <strong><?= date("d/m/Y", strtotime($campaign["delivery_date"])) ?></strong></p>
                             <?php endif; ?>
                         <?php else: ?>
-                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">⚡ Livraison immédiate</span>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-800">🚚 Immédiate</span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+                <!-- Sprint 14 : Prix pour les représentants -->
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 mb-2">Prix pour les reps</dt>
+                    <dd>
+                        <?php if ($campaign["show_prices"] ?? 1): ?>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-800">💰 Prix visibles</span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-500">💰 Prix masqués</span>
                         <?php endif; ?>
                     </dd>
                 </div>
