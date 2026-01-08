@@ -13,6 +13,7 @@
  * @modified 2025/12/30 - Ajout méthode showStaticPage() pour pages fixes (Sprint 9)
  * @modified 2025/01/05 - Intégration API Trendy Foods pour éligibilité produits
  * @modified 2026/01/05 - Sprint 14 : Mode Représentant (commande pour client)
+ * @modified 2026/01/08 - Amélioration messages compte désactivé + redirection rep
  */
 
 namespace App\Controllers;
@@ -2097,29 +2098,37 @@ class PublicCampaignController
                 exit();
             }
 
-            // Vérifier que l'utilisateur existe dans notre base ET est un rep
-            $query = "SELECT * FROM users WHERE microsoft_id = :microsoft_id AND is_active = 1";
+            // Vérifier que l'utilisateur existe dans notre base (SANS filtre is_active pour pouvoir détecter les comptes désactivés)
+            $query = "SELECT * FROM users WHERE microsoft_id = :microsoft_id";
             $user = $this->db->query($query, [":microsoft_id" => $userInfo['id']]);
 
             if (empty($user)) {
-                // Utilisateur non trouvé, essayer par email
-                $query = "SELECT * FROM users WHERE email = :email AND is_active = 1";
+                // Utilisateur non trouvé par microsoft_id, essayer par email
+                $query = "SELECT * FROM users WHERE email = :email";
                 $user = $this->db->query($query, [":email" => $userInfo['mail'] ?? $userInfo['userPrincipalName']]);
             }
 
             if (empty($user)) {
-                Session::set('error', 'Vous n\'êtes pas autorisé à accéder à cette fonctionnalité.');
-                header("Location: /stm/c/{$uuid}");
+                // Aucun compte trouvé
+                Session::set('error', 'Aucun compte n\'est associé à cet identifiant Microsoft. Veuillez contacter votre administrateur.');
+                header("Location: /stm/c/{$uuid}/rep");
                 exit();
             }
 
             $user = $user[0];
 
+            // Vérifier si le compte est actif
+            if (empty($user['is_active'])) {
+                Session::set('error', 'Votre compte a été désactivé. Veuillez contacter votre administrateur.');
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
+
             // Vérifier que c'est bien un rôle autorisé (rep, manager_reps, admin, superadmin)
             $allowedRoles = ['rep', 'manager_reps', 'admin', 'superadmin'];
             if (!in_array($user['role'], $allowedRoles)) {
                 Session::set('error', 'Votre rôle ne permet pas d\'utiliser cette fonctionnalité.');
-                header("Location: /stm/c/{$uuid}");
+                header("Location: /stm/c/{$uuid}/rep");
                 exit();
             }
 
@@ -2493,7 +2502,8 @@ class PublicCampaignController
             'redirect_uri' => urldecode($redirectUri),
             'scope' => 'openid profile email User.Read',
             'response_mode' => 'query',
-            'state' => bin2hex(random_bytes(16))
+            'state' => bin2hex(random_bytes(16)),
+            'prompt' => 'select_account'  // Force la sélection de compte même si déjà connecté
         ];
 
         return "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?" . http_build_query($params);

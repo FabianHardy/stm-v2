@@ -9,6 +9,7 @@
  *
  * @package STM
  * @created 2025/12/15
+ * @modified 2026/01/08 - Ajout prompt=select_account pour forcer sélection de compte
  */
 
 namespace App\Services;
@@ -76,6 +77,7 @@ class MicrosoftAuthService
             'scope' => 'openid profile email User.Read User.Read.All',
             'state' => $state,
             'response_mode' => 'query',
+            'prompt' => 'select_account',  // Force la sélection de compte même si déjà connecté
         ];
 
         return $this->authorizeUrl . '?' . http_build_query($params);
