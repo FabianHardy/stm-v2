@@ -26,6 +26,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class StatsController
@@ -860,9 +861,77 @@ class StatsController
         if ($format === "csv") {
             $this->exportCSV($data, $headers, $filename);
         } else {
-            // Pour Excel, on utilise CSV avec séparateur point-virgule
-            $this->exportCSV($data, $headers, $filename, ";");
+            // Vrai fichier Excel avec PhpSpreadsheet
+            $this->exportToExcel($data, $headers, $filename);
         }
+    }
+
+    /**
+     * Génère et télécharge un vrai fichier Excel (.xlsx)
+     */
+    private function exportToExcel(array $data, array $headers, string $filename): void
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Export');
+
+        // Styles pour l'en-tête
+        $headerStyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F46E5']
+            ],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+        ];
+
+        // Écrire les en-têtes
+        $col = 'A';
+        foreach ($headers as $header) {
+            $sheet->setCellValue($col . '1', $header);
+            $col++;
+        }
+
+        // Calculer la dernière colonne
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle('A1:' . $lastCol . '1')->applyFromArray($headerStyle);
+
+        // Écrire les données
+        $row = 2;
+        foreach ($data as $dataRow) {
+            $col = 'A';
+            foreach (array_values($dataRow) as $value) {
+                $sheet->setCellValue($col . $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+
+        // Auto-dimensionner les colonnes
+        $col = 'A';
+        for ($i = 1; $i <= count($headers); $i++) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+            $col++;
+        }
+
+        // Bordures pour toutes les données
+        $lastRow = $row - 1;
+        if ($lastRow >= 1) {
+            $sheet->getStyle('A1:' . $lastCol . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(Border::BORDER_THIN);
+        }
+
+        // Figer la première ligne
+        $sheet->freezePane('A2');
+
+        // Générer et envoyer le fichier
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
+        header('Cache-Control: max-age=0');
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit();
     }
 
     /**
