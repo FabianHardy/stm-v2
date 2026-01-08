@@ -38,6 +38,12 @@ ob_start();
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <form method="GET" action="/stm/admin/stats/sales" class="flex flex-wrap gap-4 items-end">
 
+        <?php if ($repDetail): ?>
+        <!-- Conserver le rep sélectionné lors du filtrage -->
+        <input type="hidden" name="rep_id" value="<?= htmlspecialchars($repId) ?>">
+        <input type="hidden" name="rep_country" value="<?= htmlspecialchars($repCountry) ?>">
+        <?php endif; ?>
+
         <!-- Pays - Masqué si un seul pays accessible -->
         <?php if ($accessibleCountries === null || count($accessibleCountries) > 1): ?>
         <div>
@@ -173,6 +179,14 @@ ob_start();
     foreach ($repClients as $client) {
         $customerNumber = $client["customer_number"] ?? "";
         $origin = $clientOrigins[$customerNumber] ?? null;
+
+        // Construire l'URL vers la fiche client
+        $clientDetailUrl = "/stm/admin/stats/customer-detail?customer_number=" . urlencode($customerNumber)
+                         . "&country=" . urlencode($repCountry);
+        if (!empty($campaignId)) {
+            $clientDetailUrl .= "&campaign_id=" . $campaignId;
+        }
+
         $clientsData[] = [
             'company_name' => $client["company_name"] ?? "-",
             'customer_number' => $customerNumber,
@@ -180,7 +194,8 @@ ob_start();
             'has_ordered' => $client["has_ordered"] ? 1 : 0,
             'orders_count' => (int)($client["orders_count"] ?? 0),
             'total_quantity' => (int)($client["total_quantity"] ?? 0),
-            'origin' => $origin
+            'origin' => $origin,
+            'detail_url' => $clientDetailUrl
         ];
     }
     ?>
@@ -240,6 +255,7 @@ ob_start();
                         </span>
                     </th>
                     <?php endif; ?>
+                    <th class="py-3 px-4 text-center">Actions</th>
                 </tr>
             </thead>
             <tbody class="text-sm divide-y divide-gray-100">
@@ -286,6 +302,12 @@ ob_start();
                             </template>
                         </td>
                         <?php endif; ?>
+                        <td class="py-3 px-4 text-center">
+                            <a :href="client.detail_url"
+                               class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
+                                <i class="fas fa-eye mr-1"></i>Voir
+                            </a>
+                        </td>
                     </tr>
                 </template>
             </tbody>
