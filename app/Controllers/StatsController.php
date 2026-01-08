@@ -723,6 +723,12 @@ class StatsController
             }
         }
 
+        // Stats origine par rep (si campagne sélectionnée)
+        $originStatsByRep = [];
+        if ($campaignId) {
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+        }
+
         $title = "Statistiques - Par représentant";
 
         require __DIR__ . "/../Views/admin/stats/sales.php";

@@ -8,6 +8,7 @@
  * @created 2025/11/25
  * @modified 2025/11/26 - Refonte vue hiérarchique par cluster
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
+ * @modified 2026/01/08 - Ajout colonne % Via Rep (origine commandes)
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -397,6 +398,9 @@ uasort($repsByCluster, function ($a, $b) {
                         <th class="px-6 py-2 text-right">Ont commandé</th>
                         <th class="px-6 py-2 text-right">Taux</th>
                         <th class="px-6 py-2 text-right">Promos vendues</th>
+                        <?php if (!empty($campaignId)): ?>
+                        <th class="px-6 py-2 text-center">Via Rep</th>
+                        <?php endif; ?>
                         <th class="px-6 py-2 text-center">Détail</th>
                     </tr>
                 </thead>
@@ -454,6 +458,34 @@ uasort($repsByCluster, function ($a, $b) {
                             ",",
                             " ",
                         ); ?></td>
+                        <?php if (!empty($campaignId)): ?>
+                        <td class="px-6 py-3 text-center">
+                            <?php
+                            $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
+                            $repClientOrders = $repOrigin['client_orders'] ?? 0;
+                            $repRepOrders = $repOrigin['rep_orders'] ?? 0;
+                            $repTotalOrigin = $repClientOrders + $repRepOrders;
+                            $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100) : null;
+                            ?>
+                            <?php if ($pctViaReps !== null): ?>
+                                <?php if ($pctViaReps >= 75): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-user-tie mr-1"></i><?= $pctViaReps ?>%
+                                </span>
+                                <?php elseif ($pctViaReps >= 25): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-exchange-alt mr-1"></i><?= $pctViaReps ?>%
+                                </span>
+                                <?php else: ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700" title="<?= $repClientOrders ?> cmd via clients / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-user mr-1"></i><?= 100 - $pctViaReps ?>%
+                                </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="text-gray-400">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php endif; ?>
                         <td class="px-6 py-3 text-center">
                             <?php
                             $detailUrl =
