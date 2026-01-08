@@ -463,6 +463,20 @@ ob_start();
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
+
+                                <?php if ($isRepOrder && $showPrices): ?>
+                                <!-- Prix et sous-total (mode rep uniquement) -->
+                                <div class="mt-2 pt-2 border-t border-gray-200 text-sm" x-show="getItemPrice(item) > 0">
+                                    <div class="flex justify-between items-center text-gray-600">
+                                        <span><?= $lang === 'fr' ? 'Prix unit.' : 'Eenheidsprijs' ?></span>
+                                        <span x-text="formatPrice(getItemPrice(item))"></span>
+                                    </div>
+                                    <div class="flex justify-between items-center font-semibold text-blue-600">
+                                        <span><?= $lang === 'fr' ? 'Sous-total' : 'Subtotaal' ?></span>
+                                        <span x-text="formatPrice(getItemPrice(item) * item.quantity)"></span>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </template>
                     </div>
@@ -473,6 +487,13 @@ ob_start();
                             <span><?= trans('catalog.total_items', $lang) ?> :</span>
                             <span class="text-blue-600" x-text="cartItemCount"></span>
                         </div>
+                        <?php if ($isRepOrder && $showPrices): ?>
+                        <!-- Total € (mode rep uniquement) -->
+                        <div class="flex justify-between text-lg font-bold mt-2 pt-2 border-t border-gray-200" x-show="cartTotal > 0">
+                            <span>Total :</span>
+                            <span class="text-green-600" x-text="formatPrice(cartTotal)"></span>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Actions -->
@@ -561,6 +582,20 @@ ob_start();
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
+
+                        <?php if ($isRepOrder && $showPrices): ?>
+                        <!-- Prix et sous-total (mode rep uniquement) -->
+                        <div class="mt-3 pt-3 border-t border-gray-200 text-sm" x-show="getItemPrice(item) > 0">
+                            <div class="flex justify-between items-center text-gray-600">
+                                <span><?= $lang === 'fr' ? 'Prix unitaire' : 'Eenheidsprijs' ?></span>
+                                <span x-text="formatPrice(getItemPrice(item))"></span>
+                            </div>
+                            <div class="flex justify-between items-center font-semibold text-blue-600 mt-1">
+                                <span><?= $lang === 'fr' ? 'Sous-total' : 'Subtotaal' ?></span>
+                                <span x-text="formatPrice(getItemPrice(item) * item.quantity)"></span>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </template>
             </div>
@@ -572,6 +607,13 @@ ob_start();
                         <span class="font-semibold"><?= trans('catalog.total_items', $lang) ?> :</span>
                         <span class="text-2xl font-bold text-blue-600" x-text="cartItemCount"></span>
                     </div>
+                    <?php if ($isRepOrder && $showPrices): ?>
+                    <!-- Total € (mode rep uniquement) -->
+                    <div class="bg-green-50 rounded-lg p-4 flex justify-between items-center" x-show="cartTotal > 0">
+                        <span class="font-semibold text-green-700">Total :</span>
+                        <span class="text-2xl font-bold text-green-600" x-text="formatPrice(cartTotal)"></span>
+                    </div>
+                    <?php endif; ?>
                     <button @click="validateOrder()"
                             class="w-full bg-green-600 text-white font-bold py-4 rounded-lg text-lg">
                         <i class="fas fa-check mr-2"></i>
@@ -637,6 +679,38 @@ ob_start();
                 get cartItemCount() {
                     return this.cart.items ? this.cart.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
                 },
+
+                <?php if ($isRepOrder && $showPrices): ?>
+                // Calculer le total € du panier (mode rep uniquement)
+                get cartTotal() {
+                    if (!this.cart.items) return 0;
+                    return this.cart.items.reduce((sum, item) => {
+                        const price = this.getItemPrice(item);
+                        return sum + (price * item.quantity);
+                    }, 0);
+                },
+
+                // Obtenir le prix d'un item selon les règles métier (Type W/V)
+                getItemPrice(item) {
+                    const orderType = '<?= $orderType ?>';
+                    const prixNormal = parseFloat(item.api_prix) || 0;
+                    const prixPromo = parseFloat(item.api_prix_promo) || 0;
+
+                    if (orderType === 'V') {
+                        // Type V (prospection) : prix normal uniquement
+                        return prixNormal || prixPromo;
+                    } else {
+                        // Type W (normal) : prix promo prioritaire
+                        return prixPromo || prixNormal;
+                    }
+                },
+
+                // Formater un prix en euros
+                formatPrice(price) {
+                    if (!price || price <= 0) return '';
+                    return price.toFixed(2).replace('.', ',') + ' €';
+                },
+                <?php endif; ?>
 
                 init() {
                     const sections = document.querySelectorAll('section[id^="category-"]');

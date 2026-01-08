@@ -4,13 +4,15 @@
  *
  * Affiche toutes les commandes avec :
  * - Statistiques (total, aujourd'hui, en attente, erreurs)
- * - Filtres (campagne, statut, pays, dates, recherche)
+ * - Filtres (campagne, statut, pays, source, dates, recherche)
+ * - Colonne Source (Client/Rep) dans le tableau
  * - Pagination
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.0.0
+ * @version    1.1.0
  * @created    2025/12/30
+ * @modified   2026/01/08 - Ajout filtre Source + colonne Source
  */
 
 ob_start();
@@ -76,7 +78,7 @@ function buildFilterUrl($newParams = []) {
 <!-- Filtres -->
 <?php if (!$isToday && !$isPending): ?>
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-    <form method="GET" action="/stm/admin/orders" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+    <form method="GET" action="/stm/admin/orders" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <!-- Campagne -->
         <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">Campagne</label>
@@ -113,6 +115,16 @@ function buildFilterUrl($newParams = []) {
             </select>
         </div>
 
+        <!-- Source -->
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Source</label>
+            <select name="source" class="w-full rounded-md border-gray-300 text-sm">
+                <option value="">Toutes</option>
+                <option value="client" <?= ($filters['source'] ?? '') === 'client' ? 'selected' : '' ?>>👤 Clients</option>
+                <option value="rep" <?= ($filters['source'] ?? '') === 'rep' ? 'selected' : '' ?>>👔 Reps</option>
+            </select>
+        </div>
+
         <!-- Date début -->
         <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">Du</label>
@@ -136,7 +148,7 @@ function buildFilterUrl($newParams = []) {
         </div>
 
         <!-- Boutons -->
-        <div class="md:col-span-6 flex gap-2">
+        <div class="col-span-2 md:col-span-4 lg:col-span-7 flex gap-2">
             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
                 <i class="fas fa-search mr-1"></i> Filtrer
             </button>
@@ -175,6 +187,7 @@ function buildFilterUrl($newParams = []) {
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pays</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campagne</th>
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Source</th>
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Articles</th>
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Statut</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -184,7 +197,7 @@ function buildFilterUrl($newParams = []) {
         <tbody class="bg-white divide-y divide-gray-200">
             <?php if (empty($orders)): ?>
             <tr>
-                <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                <td colspan="8" class="px-6 py-12 text-center text-gray-500">
                     <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
                     <p>Aucune commande trouvée</p>
                 </td>
@@ -225,6 +238,17 @@ function buildFilterUrl($newParams = []) {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     <?= htmlspecialchars($order['campaign_name'] ?? 'N/A') ?>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <?php if (($order['order_source'] ?? 'client') === 'rep'): ?>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800">
+                            <i class="fas fa-user-tie mr-1"></i> Rep
+                        </span>
+                    <?php else: ?>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <i class="fas fa-user mr-1"></i> Client
+                        </span>
+                    <?php endif; ?>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">

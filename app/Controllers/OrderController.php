@@ -19,6 +19,7 @@
  * @modified   2025/11/27 - Correction exportTxt() : format ERP identique à generateOrderFile()
  * @modified   2025/12/29 - Ajout index(), today(), pending(), export(), updateStatus(), regenerateFile()
  * @modified   2025/12/30 - Ajout vérifications de permissions et filtrage par scope
+ * @modified   2026/01/08 - Ajout filtre source (client/rep) + jointure rep dans show()
  */
 
 namespace App\Controllers;
@@ -109,6 +110,7 @@ class OrderController
             'campaign_id' => $_GET['campaign_id'] ?? '',
             'status' => $_GET['status'] ?? '',
             'country' => $_GET['country'] ?? '',
+            'source' => $_GET['source'] ?? '',
             'date_from' => $_GET['date_from'] ?? '',
             'date_to' => $_GET['date_to'] ?? '',
             'search' => $_GET['search'] ?? ''
@@ -168,6 +170,7 @@ class OrderController
             'campaign_id' => $_GET['campaign_id'] ?? '',
             'status' => $_GET['status'] ?? '',
             'country' => $_GET['country'] ?? '',
+            'source' => $_GET['source'] ?? '',
             'search' => $_GET['search'] ?? '',
             'today' => true
         ];
@@ -222,6 +225,7 @@ class OrderController
             'campaign_id' => $_GET['campaign_id'] ?? '',
             'status' => self::STATUS_PENDING_SYNC,
             'country' => $_GET['country'] ?? '',
+            'source' => $_GET['source'] ?? '',
             'date_from' => $_GET['date_from'] ?? '',
             'date_to' => $_GET['date_to'] ?? '',
             'search' => $_GET['search'] ?? ''
@@ -271,6 +275,7 @@ class OrderController
             'campaign_id' => $_GET['campaign_id'] ?? '',
             'status' => $_GET['status'] ?? '',
             'country' => $_GET['country'] ?? '',
+            'source' => $_GET['source'] ?? '',
             'date_from' => $_GET['date_from'] ?? '',
             'date_to' => $_GET['date_to'] ?? '',
             'search' => $_GET['search'] ?? ''
@@ -325,10 +330,13 @@ class OrderController
                 cu.customer_number,
                 cu.company_name,
                 cu.email as customer_email,
-                cu.country as customer_country
+                cu.country as customer_country,
+                rep.name as rep_user_name,
+                rep.rep_id as rep_user_code
             FROM orders o
             LEFT JOIN campaigns c ON o.campaign_id = c.id
             LEFT JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN users rep ON o.ordered_by_rep_id = rep.id
             WHERE o.id = :id
             ",
             [":id" => $id]
@@ -541,6 +549,11 @@ class OrderController
             $sql .= " AND DATE(o.created_at) = CURDATE()";
         }
 
+        if (!empty($filters['source'])) {
+            $sql .= " AND COALESCE(o.order_source, 'client') = ?";
+            $params[] = $filters['source'];
+        }
+
         $sql .= " ORDER BY o.created_at DESC";
 
         $offset = ($page - 1) * $perPage;
@@ -604,6 +617,11 @@ class OrderController
 
         if (!empty($filters['today'])) {
             $sql .= " AND DATE(o.created_at) = CURDATE()";
+        }
+
+        if (!empty($filters['source'])) {
+            $sql .= " AND COALESCE(o.order_source, 'client') = ?";
+            $params[] = $filters['source'];
         }
 
         $result = $this->db->queryOne($sql, $params);

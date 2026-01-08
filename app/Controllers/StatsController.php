@@ -12,6 +12,8 @@
  * @modified 2025/12/23 - Correction getExportAccessScope() pour support impersonation
  * @modified 2025/12/23 - Correction graphiques (getDailyEvolution, getCategoryStatsForCampaign) pour filtre clients
  * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
+ * @modified 2026/01/08 - Ajout stats par origine (client vs rep) dans index() et campaigns()
+ * @modified 2026/01/08 - Export Excel : ajout colonne % Via Reps dans récap, colonne Origine par client
  */
 
 namespace App\Controllers;
@@ -113,6 +115,192 @@ class StatsController
         return StatsAccessHelper::filterRepsList($reps);
     }
 
+    /**
+     * Récupère les statistiques par origine (client vs rep)
+     *
+     * @param string $dateFrom Date de début
+     * @param string $dateTo Date de fin
+     * @param int|null $campaignId ID campagne (optionnel)
+     * @param string|null $country Pays (optionnel)
+     * @param array|null $accessibleCampaignIds Campagnes accessibles
+     * @return array Stats par origine
+     * @created 2026/01/08
+     */
+    private function getOriginStats(string $dateFrom, string $dateTo, ?int $campaignId, ?string $country, ?array $accessibleCampaignIds): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $sql = "
+            SELECT
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+            FROM orders o
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.status = 'synced'
+            AND DATE(o.created_at) BETWEEN :date_from AND :date_to
+        ";
+
+        $params = [
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ];
+
+        if ($campaignId) {
+            $sql .= " AND o.campaign_id = :campaign_id";
+            $params[':campaign_id'] = $campaignId;
+        } elseif ($accessibleCampaignIds !== null) {
+            if (empty($accessibleCampaignIds)) {
+                return [
+                    'client_orders' => 0,
+                    'client_quantity' => 0,
+                    'rep_orders' => 0,
+                    'rep_quantity' => 0
+                ];
+            }
+            $placeholders = [];
+            foreach ($accessibleCampaignIds as $i => $id) {
+                $key = ":camp_{$i}";
+                $placeholders[] = $key;
+                $params[$key] = $id;
+            }
+            $sql .= " AND o.campaign_id IN (" . implode(",", $placeholders) . ")";
+        }
+
+        if ($country) {
+            $sql .= " AND cu.country = :country";
+            $params[':country'] = $country;
+        }
+
+        $sql .= " GROUP BY COALESCE(o.order_source, 'client')";
+
+        $results = $db->query($sql, $params);
+
+        $stats = [
+            'client_orders' => 0,
+            'client_quantity' => 0,
+            'rep_orders' => 0,
+            'rep_quantity' => 0
+        ];
+
+        foreach ($results as $row) {
+            if ($row['source'] === 'rep') {
+                $stats['rep_orders'] = (int)$row['orders_count'];
+                $stats['rep_quantity'] = (int)$row['total_quantity'];
+            } else {
+                $stats['client_orders'] = (int)$row['orders_count'];
+                $stats['client_quantity'] = (int)$row['total_quantity'];
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Récupère les statistiques par origine POUR CHAQUE REP d'une campagne
+     * Retourne un tableau indexé par rep_id (code externe IDE_REP) avec les stats client/rep
+     *
+     * @param int $campaignId ID de la campagne
+     * @return array [rep_id_externe => ['client_orders' => X, 'rep_orders' => Y, ...]]
+     * @created 2026/01/08
+     */
+    private function getOriginStatsByRep(int $campaignId): array
+    {
+        $db = \Core\Database::getInstance();
+
+        // Joindre avec users pour récupérer rep_id (code externe IDE_REP)
+        $sql = "
+            SELECT
+                u.rep_id as rep_id_externe,
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+            FROM orders o
+            INNER JOIN order_lines ol ON o.id = ol.order_id
+            INNER JOIN users u ON o.ordered_by_rep_id = u.id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+            AND o.ordered_by_rep_id IS NOT NULL
+            AND u.rep_id IS NOT NULL
+            GROUP BY u.rep_id, COALESCE(o.order_source, 'client')
+        ";
+
+        $results = $db->query($sql, [':campaign_id' => $campaignId]);
+
+        $statsByRep = [];
+
+        foreach ($results as $row) {
+            $repId = $row['rep_id_externe'];
+
+            if (!isset($statsByRep[$repId])) {
+                $statsByRep[$repId] = [
+                    'client_orders' => 0,
+                    'client_quantity' => 0,
+                    'rep_orders' => 0,
+                    'rep_quantity' => 0
+                ];
+            }
+
+            if ($row['source'] === 'rep') {
+                $statsByRep[$repId]['rep_orders'] = (int)$row['orders_count'];
+                $statsByRep[$repId]['rep_quantity'] = (int)$row['total_quantity'];
+            } else {
+                $statsByRep[$repId]['client_orders'] = (int)$row['orders_count'];
+                $statsByRep[$repId]['client_quantity'] = (int)$row['total_quantity'];
+            }
+        }
+
+        return $statsByRep;
+    }
+
+    /**
+     * Récupère l'origine des commandes par client pour une campagne et un rep
+     * Retourne un tableau indexé par customer_number
+     *
+     * @param int $campaignId ID de la campagne
+     * @param string $repId ID du représentant
+     * @param string $repCountry Pays du rep
+     * @return array [customer_number => 'client' | 'rep' | 'both']
+     * @created 2026/01/08
+     */
+    private function getClientOrderOrigins(int $campaignId, string $repId, string $repCountry): array
+    {
+        $db = \Core\Database::getInstance();
+
+        $sql = "
+            SELECT
+                cu.customer_number,
+                GROUP_CONCAT(DISTINCT COALESCE(o.order_source, 'client')) as sources
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            WHERE o.campaign_id = :campaign_id
+            AND o.status = 'synced'
+            AND cu.country = :country
+            GROUP BY cu.customer_number
+        ";
+
+        $results = $db->query($sql, [
+            ':campaign_id' => $campaignId,
+            ':country' => $repCountry
+        ]);
+
+        $origins = [];
+
+        foreach ($results as $row) {
+            $sources = $row['sources'];
+            if (strpos($sources, 'client') !== false && strpos($sources, 'rep') !== false) {
+                $origins[$row['customer_number']] = 'both';
+            } elseif (strpos($sources, 'rep') !== false) {
+                $origins[$row['customer_number']] = 'rep';
+            } else {
+                $origins[$row['customer_number']] = 'client';
+            }
+        }
+
+        return $origins;
+    }
+
     // =========================================================================
     // MÉTHODES PUBLIQUES
     // =========================================================================
@@ -177,6 +365,9 @@ class StatsController
         $dailyEvolution = $this->statsModel->getDailyEvolution($dateFrom, $dateTo, $campaignId, $accessibleCampaignIds);
         $topProducts = $this->statsModel->getTopProducts($dateFrom, $dateTo, $campaignId, $country, 10, $accessibleCampaignIds);
         $clusterStats = $this->statsModel->getStatsByCluster($dateFrom, $dateTo, $campaignId, $country, $accessibleCampaignIds);
+
+        // Stats par origine (client vs rep)
+        $originStats = $this->getOriginStats($dateFrom, $dateTo, $campaignId, $country, $accessibleCampaignIds);
 
         // Liste des campagnes pour le filtre (filtrée selon accès)
         $allCampaigns = $this->statsModel->getCampaignsList();
@@ -374,6 +565,23 @@ class StatsController
             // Top clients (23/12/2025)
             // ============================================
             $topCustomers = $this->statsModel->getTopCustomersForCampaign($campaignId, $accessibleCustomerNumbers, $topCustomersLimit);
+
+            // ============================================
+            // Stats par origine (client vs rep) - 08/01/2026
+            // ============================================
+            $originStats = $this->getOriginStats($startDate, $endDate, $campaignId, null, null);
+
+            // Stats origine PAR REP (pour l'onglet Représentants)
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+        } else {
+            // Pas de campagne sélectionnée : originStats vide
+            $originStats = [
+                'client_orders' => 0,
+                'client_quantity' => 0,
+                'rep_orders' => 0,
+                'rep_quantity' => 0
+            ];
+            $originStatsByRep = [];
         }
 
         $title = "Statistiques - Par campagne";
@@ -502,6 +710,7 @@ class StatsController
         // Détail d'un représentant si sélectionné
         $repDetail = null;
         $repClients = [];
+        $clientOrigins = [];
 
         if ($repId && $repCountry) {
             $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
@@ -513,6 +722,17 @@ class StatsController
                     break;
                 }
             }
+
+            // Récupérer les origines des commandes par client (si campagne sélectionnée)
+            if ($campaignId) {
+                $clientOrigins = $this->getClientOrderOrigins($campaignId, $repId, $repCountry);
+            }
+        }
+
+        // Stats origine par rep (si campagne sélectionnée)
+        $originStatsByRep = [];
+        if ($campaignId) {
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
         }
 
         $title = "Statistiques - Par représentant";
@@ -581,6 +801,7 @@ class StatsController
                     "Quantité",
                     "Email",
                     "Rep_Name",
+                    "Origine",
                     "Date_Commande",
                 ];
                 $filename = "export_campagne_" . $campaignId . "_" . date("Ymd");
@@ -598,6 +819,7 @@ class StatsController
                     "Clients_Commandé",
                     "Taux_Conv",
                     "Total_Quantité",
+                    "%_Via_Reps",
                 ];
                 $filename = "export_reps_" . date("Ymd");
                 break;
@@ -627,6 +849,7 @@ class StatsController
                     "Quantité",
                     "Rep_Name",
                     "Cluster",
+                    "Origine",
                     "Date_Commande",
                 ];
                 $filename = "export_global_" . date("Ymd");
@@ -669,6 +892,7 @@ class StatsController
                    ol.quantity as Quantite,
                    cu.rep_name as Rep_Name,
                    '' as Cluster,
+                   CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -699,6 +923,7 @@ class StatsController
                    ol.quantity as Quantite,
                    o.customer_email as Email,
                    cu.rep_name as Rep_Name,
+                   CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
             INNER JOIN customers cu ON o.customer_id = cu.id
@@ -719,12 +944,28 @@ class StatsController
     {
         $reps = $this->statsModel->getRepStats(null, $campaignId);
 
+        // Récupérer les stats origine si campagne sélectionnée
+        $originStatsByRep = [];
+        if ($campaignId) {
+            $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+        }
+
         $data = [];
         foreach ($reps as $rep) {
             $convRate =
                 $rep["total_clients"] > 0
                     ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) . "%"
                     : "0%";
+
+            // Calculer le % Via Reps
+            $pctViaReps = "-";
+            if ($campaignId && isset($originStatsByRep[$rep["id"]])) {
+                $repOrigin = $originStatsByRep[$rep["id"]];
+                $totalOrigin = ($repOrigin['client_orders'] ?? 0) + ($repOrigin['rep_orders'] ?? 0);
+                if ($totalOrigin > 0) {
+                    $pctViaReps = round(($repOrigin['rep_orders'] / $totalOrigin) * 100) . "%";
+                }
+            }
 
             $data[] = [
                 "Rep_ID" => $rep["id"],
@@ -735,6 +976,7 @@ class StatsController
                 "Clients_Commande" => $rep["stats"]["customers_ordered"],
                 "Taux_Conv" => $convRate,
                 "Total_Quantite" => $rep["stats"]["total_quantity"],
+                "Pct_Via_Reps" => $pctViaReps,
             ];
         }
 
@@ -870,6 +1112,9 @@ class StatsController
             $authorizedCustomers = $this->getAuthorizedCustomersForCampaign($campaignId);
         }
 
+        // Récupérer les stats origine par rep (pour colonne % Via Reps)
+        $originStatsByRep = $this->getOriginStatsByRep($campaignId);
+
         // Créer le spreadsheet
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 
@@ -890,7 +1135,7 @@ class StatsController
         $sheet->setTitle("Récap Représentants");
 
         // En-têtes
-        $headers = ["N° Rep", "Nom", "Email", "Cluster", "Clients assignés", "Ont commandé", "Pas commandé", "Qté totale", "% Conversion"];
+        $headers = ["N° Rep", "Nom", "Email", "Cluster", "Clients assignés", "Ont commandé", "Pas commandé", "Qté totale", "% Conversion", "% Via Reps"];
         $col = "A";
         foreach ($headers as $header) {
             $sheet->setCellValue($col . "1", $header);
@@ -898,7 +1143,7 @@ class StatsController
         }
 
         // Style en-têtes
-        $sheet->getStyle("A1:I1")->applyFromArray($headerStyle);
+        $sheet->getStyle("A1:J1")->applyFromArray($headerStyle);
 
         // Préparer les noms de feuilles pour les liens (même logique que la création)
         $sheetNames = [];
@@ -926,6 +1171,13 @@ class StatsController
             $totalQty = $rep["stats"]["total_quantity"] ?? 0;
             $convRate = $totalClients > 0 ? round(($customersOrdered / $totalClients) * 100, 1) : 0;
 
+            // Calculer % Via Reps
+            $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
+            $repClientOrders = $repOrigin['client_orders'] ?? 0;
+            $repRepOrders = $repOrigin['rep_orders'] ?? 0;
+            $repTotalOrigin = $repClientOrders + $repRepOrders;
+            $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100, 1) : 0;
+
             $sheet->setCellValue("A" . $row, $rep["id"] ?? "");
             $sheet->setCellValue("B" . $row, $rep["name"] ?? "");
             $sheet->setCellValue("C" . $row, $rep["email"] ?? "");
@@ -935,6 +1187,7 @@ class StatsController
             $sheet->setCellValue("G" . $row, $notOrdered);
             $sheet->setCellValue("H" . $row, $totalQty);
             $sheet->setCellValue("I" . $row, $convRate . "%");
+            $sheet->setCellValue("J" . $row, $pctViaReps . "%");
 
             // Ajouter hyperlien vers la feuille du représentant (double-clic ou clic)
             $targetSheet = $sheetNames[$repIndex];
@@ -956,6 +1209,7 @@ class StatsController
         $sheet->getColumnDimension("G")->setWidth(15);
         $sheet->getColumnDimension("H")->setWidth(12);
         $sheet->getColumnDimension("I")->setWidth(12);
+        $sheet->getColumnDimension("J")->setWidth(12);
 
         // ============================================
         // FEUILLES PAR REPRÉSENTANT
@@ -989,8 +1243,11 @@ class StatsController
                 continue;
             }
 
-            // En-têtes fixes
-            $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale"];
+            // Récupérer les origines des commandes par client pour ce rep
+            $clientOrigins = $this->getClientOrderOrigins($campaignId, $rep["id"], $rep["country"]);
+
+            // En-têtes fixes (ajout "Origine" après "Qté totale")
+            $fixedHeaders = ["N° Client", "Nom", "Ville", "A commandé", "Qté totale", "Origine"];
             $col = "A";
             foreach ($fixedHeaders as $header) {
                 $repSheet->setCellValue($col . "1", $header);
@@ -998,8 +1255,9 @@ class StatsController
             }
 
             // En-têtes produits (colonnes dynamiques) - Utiliser le code article
+            // Commence maintenant à la colonne G (index 7)
             $productColumns = [];
-            $colIndex = 6;
+            $colIndex = 7;
             foreach ($campaignProducts as $product) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                 $productColumns[$product["id"]] = $colLetter;
@@ -1039,6 +1297,18 @@ class StatsController
                 $repSheet->setCellValue("D" . $row, $hasOrdered ? "Oui" : "Non");
                 $repSheet->setCellValue("E" . $row, $client["total_quantity"] ?? 0);
 
+                // Origine de la commande
+                $origin = $clientOrigins[$customerNumber] ?? "-";
+                $originLabel = "-";
+                if ($origin === "client") {
+                    $originLabel = "Client";
+                } elseif ($origin === "rep") {
+                    $originLabel = "Rep";
+                } elseif ($origin === "both") {
+                    $originLabel = "Les deux";
+                }
+                $repSheet->setCellValue("F" . $row, $hasOrdered ? $originLabel : "-");
+
                 // Style conditionnel pour "A commandé"
                 if ($hasOrdered) {
                     $repSheet->getStyle("D" . $row)->applyFromArray([
@@ -1056,6 +1326,35 @@ class StatsController
                             "startColor" => ["rgb" => "FEE2E2"]
                         ]
                     ]);
+                }
+
+                // Style conditionnel pour "Origine"
+                if ($hasOrdered && $originLabel !== "-") {
+                    if ($originLabel === "Client") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "1D4ED8"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "DBEAFE"]
+                            ]
+                        ]);
+                    } elseif ($originLabel === "Rep") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "7C3AED"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "EDE9FE"]
+                            ]
+                        ]);
+                    } elseif ($originLabel === "Les deux") {
+                        $repSheet->getStyle("F" . $row)->applyFromArray([
+                            "font" => ["color" => ["rgb" => "D97706"]],
+                            "fill" => [
+                                "fillType" => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                "startColor" => ["rgb" => "FEF3C7"]
+                            ]
+                        ]);
+                    }
                 }
 
                 // Quantités par produit (avec coloration si > 0)
@@ -1086,13 +1385,14 @@ class StatsController
             $repSheet->getColumnDimension("C")->setWidth(20);
             $repSheet->getColumnDimension("D")->setWidth(12);
             $repSheet->getColumnDimension("E")->setWidth(10);
+            $repSheet->getColumnDimension("F")->setWidth(12);
 
             foreach ($productColumns as $colLetter) {
                 $repSheet->getColumnDimension($colLetter)->setWidth(8);
             }
 
-            // Figer la première ligne et les 5 premières colonnes
-            $repSheet->freezePane("F2");
+            // Figer la première ligne et les 6 premières colonnes
+            $repSheet->freezePane("G2");
 
             // Ajouter lien retour vers récap (en haut à droite, après les données)
             $lastDataRow = $row;
@@ -1677,14 +1977,18 @@ class StatsController
             $db = \Core\Database::getInstance();
 
             // Récupérer les commandes du client pour cette campagne
+            // Inclut l'origine (order_source) et le nom du rep si applicable
             $query = "
                 SELECT
                     o.id as order_id,
                     o.created_at,
                     o.total_items,
-                    o.status
+                    o.status,
+                    COALESCE(o.order_source, 'client') as order_source,
+                    u.name as rep_name
                 FROM orders o
                 INNER JOIN customers cu ON o.customer_id = cu.id
+                LEFT JOIN users u ON o.ordered_by_rep_id = u.id
                 WHERE o.campaign_id = :campaign_id
                 AND cu.customer_number = :customer_number
                 AND cu.country = :country

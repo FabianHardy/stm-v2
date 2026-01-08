@@ -9,6 +9,7 @@
  * @created 2025/11/25
  * @modified 2025/11/26 - Correction scripts + filtres dynamiques
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
+ * @modified 2026/01/08 - Ajout KPI et graphiques origine (client vs rep)
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -113,7 +114,7 @@ $campaignsJson = json_encode($campaignsByCountry);
 </div>
 
 <!-- KPIs -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
     <!-- Total commandes -->
     <div class="bg-white rounded-lg shadow-sm p-6">
@@ -197,6 +198,30 @@ $campaignsJson = json_encode($campaignsByCountry);
         <?php else: ?>
         <p class="text-xs text-gray-400"><?= $country === "BE" ? "🇧🇪 Belgique" : "🇱🇺 Luxembourg" ?></p>
         <?php endif; ?>
+    </div>
+
+    <!-- Origine des commandes -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-sm text-gray-500">Origine</p>
+            <div class="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-code-branch text-violet-600 text-lg"></i>
+            </div>
+        </div>
+        <p class="text-3xl font-bold text-gray-900 mb-2"><?= number_format(
+            ($originStats["client_orders"] ?? 0) + ($originStats["rep_orders"] ?? 0),
+            0,
+            ",",
+            " ",
+        ) ?></p>
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                <i class="fas fa-user mr-1"></i> <?= number_format($originStats["client_orders"] ?? 0, 0, ",", " ") ?>
+            </span>
+            <span class="inline-flex items-center px-2 py-0.5 bg-violet-100 text-violet-800 rounded text-xs font-medium">
+                <i class="fas fa-user-tie mr-1"></i> <?= number_format($originStats["rep_orders"] ?? 0, 0, ",", " ") ?>
+            </span>
+        </div>
     </div>
 </div>
 
@@ -302,6 +327,126 @@ $campaignsJson = json_encode($campaignsByCountry);
         </div>
     </div>
     <?php endif; ?>
+</div>
+
+<!-- Répartition par origine -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Bar chart Commandes par origine -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Commandes par origine</h3>
+
+        <!-- Stats textuelles -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <!-- Clients -->
+            <div class="bg-blue-50 rounded-lg p-4 text-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <i class="fas fa-user text-blue-600 text-xl"></i>
+                </div>
+                <p class="font-semibold text-blue-900">Clients</p>
+                <div class="mt-2 space-y-1">
+                    <p class="text-xl font-bold text-blue-700"><?= number_format($originStats["client_orders"] ?? 0, 0, ",", " ") ?></p>
+                    <p class="text-xs text-blue-600">commandes</p>
+                    <p class="text-lg font-bold text-blue-700"><?= number_format($originStats["client_quantity"] ?? 0, 0, ",", " ") ?></p>
+                    <p class="text-xs text-blue-600">promos vendues</p>
+                </div>
+            </div>
+            <!-- Représentants -->
+            <div class="bg-violet-50 rounded-lg p-4 text-center">
+                <div class="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <i class="fas fa-user-tie text-violet-600 text-xl"></i>
+                </div>
+                <p class="font-semibold text-violet-900">Représentants</p>
+                <div class="mt-2 space-y-1">
+                    <p class="text-xl font-bold text-violet-700"><?= number_format($originStats["rep_orders"] ?? 0, 0, ",", " ") ?></p>
+                    <p class="text-xs text-violet-600">commandes</p>
+                    <p class="text-lg font-bold text-violet-700"><?= number_format($originStats["rep_quantity"] ?? 0, 0, ",", " ") ?></p>
+                    <p class="text-xs text-violet-600">promos vendues</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphique bar -->
+        <div class="h-40">
+            <canvas id="originChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Pourcentages origine -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Analyse origine</h3>
+
+        <?php
+        $totalOrders = ($originStats["client_orders"] ?? 0) + ($originStats["rep_orders"] ?? 0);
+        $totalQty = ($originStats["client_quantity"] ?? 0) + ($originStats["rep_quantity"] ?? 0);
+        $clientOrdersPct = $totalOrders > 0 ? round(($originStats["client_orders"] ?? 0) / $totalOrders * 100) : 0;
+        $repOrdersPct = $totalOrders > 0 ? round(($originStats["rep_orders"] ?? 0) / $totalOrders * 100) : 0;
+        $clientQtyPct = $totalQty > 0 ? round(($originStats["client_quantity"] ?? 0) / $totalQty * 100) : 0;
+        $repQtyPct = $totalQty > 0 ? round(($originStats["rep_quantity"] ?? 0) / $totalQty * 100) : 0;
+        ?>
+
+        <!-- Barres de progression -->
+        <div class="space-y-6">
+            <!-- Commandes -->
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Commandes</span>
+                    <span class="text-sm text-gray-500"><?= $totalOrders ?> total</span>
+                </div>
+                <div class="flex h-6 rounded-full overflow-hidden bg-gray-100">
+                    <?php if ($clientOrdersPct > 0): ?>
+                    <div class="bg-blue-500 flex items-center justify-center text-white text-xs font-medium" style="width: <?= $clientOrdersPct ?>%">
+                        <?= $clientOrdersPct ?>%
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($repOrdersPct > 0): ?>
+                    <div class="bg-violet-500 flex items-center justify-center text-white text-xs font-medium" style="width: <?= $repOrdersPct ?>%">
+                        <?= $repOrdersPct ?>%
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="flex justify-between mt-1 text-xs text-gray-500">
+                    <span><i class="fas fa-user text-blue-500 mr-1"></i> Clients: <?= $originStats["client_orders"] ?? 0 ?></span>
+                    <span><i class="fas fa-user-tie text-violet-500 mr-1"></i> Reps: <?= $originStats["rep_orders"] ?? 0 ?></span>
+                </div>
+            </div>
+
+            <!-- Quantités -->
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Promos vendues</span>
+                    <span class="text-sm text-gray-500"><?= $totalQty ?> total</span>
+                </div>
+                <div class="flex h-6 rounded-full overflow-hidden bg-gray-100">
+                    <?php if ($clientQtyPct > 0): ?>
+                    <div class="bg-blue-500 flex items-center justify-center text-white text-xs font-medium" style="width: <?= $clientQtyPct ?>%">
+                        <?= $clientQtyPct ?>%
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($repQtyPct > 0): ?>
+                    <div class="bg-violet-500 flex items-center justify-center text-white text-xs font-medium" style="width: <?= $repQtyPct ?>%">
+                        <?= $repQtyPct ?>%
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="flex justify-between mt-1 text-xs text-gray-500">
+                    <span><i class="fas fa-user text-blue-500 mr-1"></i> Clients: <?= $originStats["client_quantity"] ?? 0 ?></span>
+                    <span><i class="fas fa-user-tie text-violet-500 mr-1"></i> Reps: <?= $originStats["rep_quantity"] ?? 0 ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Légende -->
+        <div class="flex justify-center gap-6 mt-6 pt-4 border-t border-gray-200">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                <span class="text-sm text-gray-600">Clients</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-violet-500"></span>
+                <span class="text-sm text-gray-600">Représentants</span>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Top produits et Stats par cluster -->
@@ -452,6 +597,12 @@ $countryBEQty = $kpis["quantity_by_country"]["BE"] ?? 0;
 $countryLUQty = $kpis["quantity_by_country"]["LU"] ?? 0;
 $showCountryChart = empty($country) ? "true" : "false";
 
+// Données origine pour le graphique
+$originClientOrders = $originStats["client_orders"] ?? 0;
+$originRepOrders = $originStats["rep_orders"] ?? 0;
+$originClientQty = $originStats["client_quantity"] ?? 0;
+$originRepQty = $originStats["rep_quantity"] ?? 0;
+
 // Valeurs actuelles pour les filtres
 $currentCountry = $country ?? "";
 $currentCampaignId = $campaignId ?? "";
@@ -574,6 +725,42 @@ document.addEventListener('DOMContentLoaded', function() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // Graphique répartition par origine (Client vs Rep)
+    const originCanvas = document.getElementById('originChart');
+    if (originCanvas) {
+        const ctxOrigin = originCanvas.getContext('2d');
+        new Chart(ctxOrigin, {
+            type: 'bar',
+            data: {
+                labels: ['Commandes', 'Promos vendues'],
+                datasets: [{
+                    label: 'Clients',
+                    data: [{$originClientOrders}, {$originClientQty}],
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 4
+                }, {
+                    label: 'Représentants',
+                    data: [{$originRepOrders}, {$originRepQty}],
+                    backgroundColor: '#8B5CF6',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                },
                 plugins: {
                     legend: { position: 'bottom' }
                 }

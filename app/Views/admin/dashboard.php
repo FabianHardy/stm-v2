@@ -7,6 +7,7 @@
  * @modified 2025/11/27 - Fix htmlspecialchars null + Graphique 7 jours + Lien détail commande
  * @modified 2025/12/15 - Intégration permissions : masquage éléments selon droits (structure originale conservée)
  * @modified 2025/12/16 - Ajout filtrage hiérarchique stats selon rôle (createur, manager_reps)
+ * @modified 2026/01/07 - Sprint 14 : Ajout KPI origine (client/rep), graphique origine, colonne Source dans tableau
  */
 
 use Core\Database;
@@ -230,6 +231,71 @@ if ($canViewProducts) {
     skip_promos_kpi:
 }
 
+// KPI 5: Stats par origine (client vs rep) - 14 derniers jours
+$stats["orders_client"] = 0;
+$stats["orders_rep"] = 0;
+$stats["quantity_client"] = 0;
+$stats["quantity_rep"] = 0;
+
+if ($canViewOrders) {
+    try {
+        // Construire les filtres
+        $originParams = [$dateFrom, $dateTo];
+        $originCampaignFilter = "";
+        $originCustomerFilter = "";
+
+        // Filtre par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $originCampaignFilter = " AND o.campaign_id IN ({$placeholders})";
+                $originParams = array_merge($originParams, $accessibleCampaignIds);
+            } else {
+                goto skip_origin_kpi;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $originCustomerFilter = " AND cu.customer_number IN ({$placeholders2})";
+                $originParams = array_merge($originParams, $accessibleCustomerNumbers);
+            } else {
+                goto skip_origin_kpi;
+            }
+        }
+
+        $originResults = $db->query("
+            SELECT
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as total_orders,
+                COALESCE(SUM(ol.quantity), 0) as total_quantity
+            FROM orders o
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE o.status = 'synced'
+            AND DATE(o.created_at) BETWEEN ? AND ?
+            {$originCampaignFilter}
+            {$originCustomerFilter}
+            GROUP BY COALESCE(o.order_source, 'client')
+        ", $originParams);
+
+        foreach ($originResults as $row) {
+            if ($row["source"] === "rep") {
+                $stats["orders_rep"] = (int) $row["total_orders"];
+                $stats["quantity_rep"] = (int) $row["total_quantity"];
+            } else {
+                $stats["orders_client"] = (int) $row["total_orders"];
+                $stats["quantity_client"] = (int) $row["total_quantity"];
+            }
+        }
+    } catch (\PDOException $e) {
+        error_log("Erreur récupération stats origine: " . $e->getMessage());
+    }
+    skip_origin_kpi:
+}
+
 // Dernières commandes (14 derniers jours)
 if ($canViewOrders) {
     try {
@@ -271,6 +337,8 @@ if ($canViewOrders) {
                 cu.country,
                 o.status,
                 o.created_at,
+                COALESCE(o.order_source, 'client') as order_source,
+                o.ordered_by_rep_id,
                 COALESCE(SUM(ol.quantity), 0) as items_count
             FROM orders o
             LEFT JOIN campaigns c ON o.campaign_id = c.id
@@ -279,7 +347,7 @@ if ($canViewOrders) {
             WHERE DATE(o.created_at) BETWEEN ? AND ?
             {$campaignFilterRecent}
             {$customerFilterRecent}
-            GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at
+            GROUP BY o.id, o.order_number, c.name, cu.company_name, cu.country, o.status, o.created_at, o.order_source, o.ordered_by_rep_id
             ORDER BY o.created_at DESC
             LIMIT 10
         ", $recentOrderParams);
@@ -346,6 +414,82 @@ if ($canViewStats && $canViewCampaigns) {
         $campaign_stats = [];
     }
     skip_campaign_stats:
+}
+
+// Stats par campagne PAR ORIGINE (client vs rep) - 14 derniers jours
+$campaign_origin_stats = [];
+if ($canViewStats && $canViewCampaigns) {
+    try {
+        // Construire les filtres
+        $campaignOriginParams = [$dateFrom, $dateTo];
+        $campaignOriginFilter = "";
+        $customerOriginFilter = "";
+
+        // Filtre par campagnes accessibles
+        if ($accessibleCampaignIds !== null) {
+            if (!empty($accessibleCampaignIds)) {
+                $placeholders = implode(",", array_fill(0, count($accessibleCampaignIds), "?"));
+                $campaignOriginFilter = " AND c.id IN ({$placeholders})";
+                $campaignOriginParams = array_merge($campaignOriginParams, $accessibleCampaignIds);
+            } else {
+                goto skip_campaign_origin_stats;
+            }
+        }
+
+        // Filtre par clients accessibles
+        if ($accessibleCustomerNumbers !== null) {
+            if (!empty($accessibleCustomerNumbers)) {
+                $placeholders2 = implode(",", array_fill(0, count($accessibleCustomerNumbers), "?"));
+                $customerOriginFilter = " AND cu.customer_number IN ({$placeholders2})";
+                $campaignOriginParams = array_merge($campaignOriginParams, $accessibleCustomerNumbers);
+            } else {
+                goto skip_campaign_origin_stats;
+            }
+        }
+
+        // Ventes par campagne et par origine
+        $campaign_origin_raw = $db->query("
+            SELECT
+                c.name as campaign_name,
+                c.country,
+                COALESCE(o.order_source, 'client') as source,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(ol.quantity), 0) as quantity_count
+            FROM campaigns c
+            INNER JOIN orders o ON c.id = o.campaign_id AND o.status = 'synced' AND DATE(o.created_at) BETWEEN ? AND ?
+            INNER JOIN customers cu ON o.customer_id = cu.id
+            LEFT JOIN order_lines ol ON o.id = ol.order_id
+            WHERE 1=1
+            {$campaignOriginFilter}
+            {$customerOriginFilter}
+            GROUP BY c.id, c.name, c.country, COALESCE(o.order_source, 'client')
+            HAVING quantity_count > 0
+            ORDER BY c.name, source
+        ", $campaignOriginParams);
+
+        // Restructurer les données par campagne
+        foreach ($campaign_origin_raw as $row) {
+            $campName = $row["campaign_name"] . " (" . $row["country"] . ")";
+            if (!isset($campaign_origin_stats[$campName])) {
+                $campaign_origin_stats[$campName] = [
+                    "client_orders" => 0,
+                    "client_quantity" => 0,
+                    "rep_orders" => 0,
+                    "rep_quantity" => 0,
+                ];
+            }
+            if ($row["source"] === "rep") {
+                $campaign_origin_stats[$campName]["rep_orders"] = (int) $row["orders_count"];
+                $campaign_origin_stats[$campName]["rep_quantity"] = (int) $row["quantity_count"];
+            } else {
+                $campaign_origin_stats[$campName]["client_orders"] = (int) $row["orders_count"];
+                $campaign_origin_stats[$campName]["client_quantity"] = (int) $row["quantity_count"];
+            }
+        }
+    } catch (\PDOException $e) {
+        error_log("Erreur récupération stats campagnes par origine: " . $e->getMessage());
+    }
+    skip_campaign_origin_stats:
 }
 
 // Répartition par catégorie (14 derniers jours)
@@ -485,17 +629,11 @@ $chart_day_quantity = json_encode(array_column($daily_orders, "quantity_count"))
 $kpiCount = 0;
 if ($canViewCampaigns) $kpiCount++;
 if ($canViewCustomers) $kpiCount++;
-if ($canViewOrders) $kpiCount += 2; // Commandes + Quantité
+if ($canViewOrders) $kpiCount += 3; // Commandes + Quantité + Origine
 if ($canViewProducts) $kpiCount++;
 
-// Déterminer les classes de grille selon le nombre de KPI
-$kpiGridClass = match(true) {
-    $kpiCount >= 5 => 'lg:grid-cols-5',
-    $kpiCount === 4 => 'lg:grid-cols-4',
-    $kpiCount === 3 => 'lg:grid-cols-3',
-    $kpiCount === 2 => 'lg:grid-cols-2',
-    default => 'lg:grid-cols-1',
-};
+// Grille fixe : 3 colonnes (2 lignes de 3 KPIs)
+$kpiGridClass = 'lg:grid-cols-3';
 
 // Compter les actions rapides disponibles
 $quickActionsCount = 0;
@@ -627,6 +765,34 @@ $quickActionsGridClass = match(true) {
             </div>
         </div>
     </div>
+
+    <!-- Origine des commandes -->
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-code-branch text-violet-600"></i>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Origine commandes</dt>
+                        <dd class="mt-1 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600"><i class="fas fa-user text-blue-500 mr-1"></i> Clients</span>
+                                <span class="font-bold text-blue-600"><?= $stats["orders_client"] ?> <span class="text-xs font-normal text-gray-500">(<?= number_format($stats["quantity_client"], 0, ",", " ") ?> promos)</span></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600"><i class="fas fa-user-tie text-violet-500 mr-1"></i> Reps</span>
+                                <span class="font-bold text-violet-600"><?= $stats["orders_rep"] ?> <span class="text-xs font-normal text-gray-500">(<?= number_format($stats["quantity_rep"], 0, ",", " ") ?> promos)</span></span>
+                            </div>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 
     <?php if ($canViewProducts): ?>
@@ -669,16 +835,16 @@ $quickActionsGridClass = match(true) {
         <?php endif; ?>
     </div>
 
-    <!-- Graphique par catégorie -->
+    <!-- Graphique par campagne par origine -->
     <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par catégorie <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
-        <?php if (empty($product_categories) || array_sum(array_column($product_categories, "quantity_sold")) == 0): ?>
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Ventes par origine <span class="text-sm font-normal text-gray-500">(<?= $periodLabel ?>)</span></h3>
+        <?php if (empty($campaign_origin_stats)): ?>
         <div class="text-center py-8 text-gray-500">
-            <i class="fas fa-chart-pie text-4xl text-gray-300 mb-3"></i>
-            <p>Aucune donnée de vente</p>
+            <i class="fas fa-code-branch text-4xl text-gray-300 mb-3"></i>
+            <p>Aucune commande sur cette période</p>
         </div>
         <?php else: ?>
-        <canvas id="categoryChart" height="200"></canvas>
+        <canvas id="originChart" height="200"></canvas>
         <?php endif; ?>
     </div>
 </div>
@@ -713,6 +879,7 @@ $quickActionsGridClass = match(true) {
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campagne</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pays</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantité</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
@@ -722,7 +889,7 @@ $quickActionsGridClass = match(true) {
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($recent_orders)): ?>
                     <tr>
-                        <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
+                        <td colspan="8" class="px-6 py-8 text-center text-sm text-gray-500">
                             <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
                             <p>Aucune commande pour le moment</p>
                         </td>
@@ -738,6 +905,7 @@ $quickActionsGridClass = match(true) {
                         $status = $order["status"] ?? "pending";
                         $itemsCount = (int) ($order["items_count"] ?? 0);
                         $createdAt = $order["created_at"] ?? date("Y-m-d H:i:s");
+                        $orderSource = $order["order_source"] ?? "client";
 
                         $statusColors = [
                             "pending" => "bg-yellow-100 text-yellow-800",
@@ -766,6 +934,17 @@ $quickActionsGridClass = match(true) {
                                 </span>
                                 <?php else: ?>
                                 <span class="text-gray-400">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <?php if ($orderSource === "rep"): ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800">
+                                    <i class="fas fa-user-tie mr-1"></i> Rep
+                                </span>
+                                <?php else: ?>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    <i class="fas fa-user mr-1"></i> Client
+                                </span>
                                 <?php endif; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
@@ -897,29 +1076,58 @@ if (ctxCampaign) {
 ";
     }
 
-    // Graphique catégories (seulement si données)
-    if (!empty($product_categories) && array_sum(array_column($product_categories, "quantity_sold")) > 0) {
+    // Graphique origine par campagne (bar chart groupé)
+    if (!empty($campaign_origin_stats)) {
+        $originLabels = json_encode(array_keys($campaign_origin_stats));
+        $originClientData = json_encode(array_column($campaign_origin_stats, "client_quantity"));
+        $originRepData = json_encode(array_column($campaign_origin_stats, "rep_quantity"));
+
         $pageScripts .= "
-// Graphique des catégories (Donut)
-const ctxCategory = document.getElementById('categoryChart');
-if (ctxCategory) {
-    new Chart(ctxCategory.getContext('2d'), {
-        type: 'doughnut',
+// Graphique ventes par campagne par origine (Bar groupé)
+const ctxOrigin = document.getElementById('originChart');
+if (ctxOrigin) {
+    new Chart(ctxOrigin.getContext('2d'), {
+        type: 'bar',
         data: {
-            labels: {$chart_category_labels},
-            datasets: [{
-                data: {$chart_category_counts},
-                backgroundColor: {$chart_category_colors},
-                borderWidth: 2,
-                borderColor: '#ffffff'
-            }]
+            labels: {$originLabels},
+            datasets: [
+                {
+                    label: 'Clients',
+                    data: {$originClientData},
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Représentants',
+                    data: {$originRepData},
+                    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    borderWidth: 1
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString('fr-FR') + ' promos';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    title: { display: true, text: 'Promos vendues' }
                 }
             }
         }

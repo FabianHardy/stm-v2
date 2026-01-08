@@ -8,6 +8,7 @@
  * @created 2025/11/25
  * @modified 2025/11/26 - Refonte vue hiérarchique par cluster
  * @modified 2025/12/17 - Ajout filtrage automatique pays selon rôle
+ * @modified 2026/01/08 - Ajout colonne % Via Rep (origine commandes)
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -36,6 +37,12 @@ ob_start();
 <!-- Filtres -->
 <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <form method="GET" action="/stm/admin/stats/sales" class="flex flex-wrap gap-4 items-end">
+
+        <?php if ($repDetail): ?>
+        <!-- Conserver le rep sélectionné lors du filtrage -->
+        <input type="hidden" name="rep_id" value="<?= htmlspecialchars($repId) ?>">
+        <input type="hidden" name="rep_country" value="<?= htmlspecialchars($repCountry) ?>">
+        <?php endif; ?>
 
         <!-- Pays - Masqué si un seul pays accessible -->
         <?php if ($accessibleCountries === null || count($accessibleCountries) > 1): ?>
@@ -163,50 +170,146 @@ ob_start();
     <!-- Liste des clients du rep -->
     <h3 class="font-semibold text-gray-900 mb-3">
         Clients (<?php echo count($repClients); ?>)
-        <span class="text-sm font-normal text-gray-500">- Triés par quantité commandée</span>
+        <span class="text-sm font-normal text-gray-500">- Cliquez sur les en-têtes pour trier</span>
     </h3>
 
-    <div class="overflow-x-auto max-h-[500px]">
+    <?php
+    // Préparer les données JSON pour Alpine.js
+    $clientsData = [];
+    foreach ($repClients as $client) {
+        $customerNumber = $client["customer_number"] ?? "";
+        $origin = $clientOrigins[$customerNumber] ?? null;
+
+        // Construire l'URL vers la fiche client
+        $clientDetailUrl = "/stm/admin/customers/show?customer_number=" . urlencode($customerNumber)
+                         . "&country=" . urlencode($repCountry);
+        if (!empty($campaignId)) {
+            $clientDetailUrl .= "&campaign_id=" . $campaignId;
+        }
+
+        $clientsData[] = [
+            'company_name' => $client["company_name"] ?? "-",
+            'customer_number' => $customerNumber,
+            'city' => $client["city"] ?? "-",
+            'has_ordered' => $client["has_ordered"] ? 1 : 0,
+            'orders_count' => (int)($client["orders_count"] ?? 0),
+            'total_quantity' => (int)($client["total_quantity"] ?? 0),
+            'origin' => $origin,
+            'detail_url' => $clientDetailUrl
+        ];
+    }
+    ?>
+
+    <div class="overflow-x-auto max-h-[500px]"
+         x-data="clientsTable(<?= htmlspecialchars(json_encode($clientsData), ENT_QUOTES) ?>)">
         <table class="min-w-full">
-            <thead class="sticky top-0 bg-gray-50">
+            <thead class="sticky top-0 bg-gray-50 z-10">
                 <tr class="text-left text-xs text-gray-500 uppercase border-b">
-                    <th class="py-3 px-4">Client</th>
-                    <th class="py-3 px-4">Ville</th>
-                    <th class="py-3 px-4 text-center">Statut</th>
-                    <th class="py-3 px-4 text-right">Commandes</th>
-                    <th class="py-3 px-4 text-right">Promos</th>
+                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('company_name')">
+                        <span class="flex items-center gap-1">
+                            Client
+                            <template x-if="sortColumn === 'company_name'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('city')">
+                        <span class="flex items-center gap-1">
+                            Ville
+                            <template x-if="sortColumn === 'city'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <th class="py-3 px-4 text-center cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('has_ordered')">
+                        <span class="flex items-center justify-center gap-1">
+                            Statut
+                            <template x-if="sortColumn === 'has_ordered'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <th class="py-3 px-4 text-right cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('orders_count')">
+                        <span class="flex items-center justify-end gap-1">
+                            Commandes
+                            <template x-if="sortColumn === 'orders_count'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <th class="py-3 px-4 text-right cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('total_quantity')">
+                        <span class="flex items-center justify-end gap-1">
+                            Promos
+                            <template x-if="sortColumn === 'total_quantity'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <?php if (!empty($campaignId)): ?>
+                    <th class="py-3 px-4 text-center cursor-pointer hover:bg-gray-100 select-none" @click="sortBy('origin')">
+                        <span class="flex items-center justify-center gap-1">
+                            Origine
+                            <template x-if="sortColumn === 'origin'">
+                                <i :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-indigo-600"></i>
+                            </template>
+                        </span>
+                    </th>
+                    <?php endif; ?>
+                    <th class="py-3 px-4 text-center">Actions</th>
                 </tr>
             </thead>
             <tbody class="text-sm divide-y divide-gray-100">
-                <?php foreach ($repClients as $client): ?>
-                <tr class="hover:bg-gray-50">
-                    <td class="py-3 px-4">
-                        <p class="font-medium text-gray-900"><?php echo htmlspecialchars(
-                            $client["company_name"] ?? "-",
-                        ); ?></p>
-                        <p class="text-xs text-gray-500"><?php echo htmlspecialchars($client["customer_number"]); ?></p>
-                    </td>
-                    <td class="py-3 px-4 text-gray-600"><?php echo htmlspecialchars($client["city"] ?? "-"); ?></td>
-                    <td class="py-3 px-4 text-center">
-                        <?php if ($client["has_ordered"]): ?>
-                        <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                            <i class="fas fa-check mr-1"></i>Commandé
-                        </span>
-                        <?php else: ?>
-                        <span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                            <i class="fas fa-minus mr-1"></i>Non
-                        </span>
+                <template x-for="client in sortedClients" :key="client.customer_number">
+                    <tr class="hover:bg-gray-50">
+                        <td class="py-3 px-4">
+                            <p class="font-medium text-gray-900" x-text="client.company_name"></p>
+                            <p class="text-xs text-gray-500" x-text="client.customer_number"></p>
+                        </td>
+                        <td class="py-3 px-4 text-gray-600" x-text="client.city"></td>
+                        <td class="py-3 px-4 text-center">
+                            <template x-if="client.has_ordered">
+                                <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                                    <i class="fas fa-check mr-1"></i>Commandé
+                                </span>
+                            </template>
+                            <template x-if="!client.has_ordered">
+                                <span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                    <i class="fas fa-minus mr-1"></i>Non
+                                </span>
+                            </template>
+                        </td>
+                        <td class="py-3 px-4 text-right font-medium" x-text="client.orders_count"></td>
+                        <td class="py-3 px-4 text-right font-bold text-orange-600" x-text="formatNumber(client.total_quantity)"></td>
+                        <?php if (!empty($campaignId)): ?>
+                        <td class="py-3 px-4 text-center">
+                            <template x-if="client.origin === 'client'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                    <i class="fas fa-user mr-1"></i>Client
+                                </span>
+                            </template>
+                            <template x-if="client.origin === 'rep'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700">
+                                    <i class="fas fa-user-tie mr-1"></i>Rep
+                                </span>
+                            </template>
+                            <template x-if="client.origin === 'both'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                                    <i class="fas fa-exchange-alt mr-1"></i>Les deux
+                                </span>
+                            </template>
+                            <template x-if="!client.origin">
+                                <span class="text-gray-400">-</span>
+                            </template>
+                        </td>
                         <?php endif; ?>
-                    </td>
-                    <td class="py-3 px-4 text-right font-medium"><?php echo $client["orders_count"]; ?></td>
-                    <td class="py-3 px-4 text-right font-bold text-orange-600"><?php echo number_format(
-                        $client["total_quantity"],
-                        0,
-                        ",",
-                        " ",
-                    ); ?></td>
-                </tr>
-                <?php endforeach; ?>
+                        <td class="py-3 px-4 text-center">
+                            <a :href="client.detail_url"
+                               class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
+                                <i class="fas fa-eye mr-1"></i>Voir
+                            </a>
+                        </td>
+                    </tr>
+                </template>
             </tbody>
         </table>
     </div>
@@ -397,6 +500,9 @@ uasort($repsByCluster, function ($a, $b) {
                         <th class="px-6 py-2 text-right">Ont commandé</th>
                         <th class="px-6 py-2 text-right">Taux</th>
                         <th class="px-6 py-2 text-right">Promos vendues</th>
+                        <?php if (!empty($campaignId)): ?>
+                        <th class="px-6 py-2 text-center">Via Rep</th>
+                        <?php endif; ?>
                         <th class="px-6 py-2 text-center">Détail</th>
                     </tr>
                 </thead>
@@ -454,6 +560,34 @@ uasort($repsByCluster, function ($a, $b) {
                             ",",
                             " ",
                         ); ?></td>
+                        <?php if (!empty($campaignId)): ?>
+                        <td class="px-6 py-3 text-center">
+                            <?php
+                            $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
+                            $repClientOrders = $repOrigin['client_orders'] ?? 0;
+                            $repRepOrders = $repOrigin['rep_orders'] ?? 0;
+                            $repTotalOrigin = $repClientOrders + $repRepOrders;
+                            $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100) : null;
+                            ?>
+                            <?php if ($pctViaReps !== null): ?>
+                                <?php if ($pctViaReps >= 75): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-user-tie mr-1"></i><?= $pctViaReps ?>%
+                                </span>
+                                <?php elseif ($pctViaReps >= 25): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-exchange-alt mr-1"></i><?= $pctViaReps ?>%
+                                </span>
+                                <?php else: ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700" title="<?= $repClientOrders ?> cmd via clients / <?= $repTotalOrigin ?> total">
+                                    <i class="fas fa-user mr-1"></i><?= 100 - $pctViaReps ?>%
+                                </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="text-gray-400">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php endif; ?>
                         <td class="px-6 py-3 text-center">
                             <?php
                             $detailUrl =
@@ -487,6 +621,51 @@ uasort($repsByCluster, function ($a, $b) {
 
 <?php
 $content = ob_get_clean();
-$pageScripts = "";
+$pageScripts = <<<'SCRIPT'
+<script>
+function clientsTable(clients) {
+    return {
+        clients: clients,
+        sortColumn: 'orders_count',
+        sortDirection: 'desc',
+
+        get sortedClients() {
+            return [...this.clients].sort((a, b) => {
+                let aVal = a[this.sortColumn];
+                let bVal = b[this.sortColumn];
+
+                // Gérer les valeurs null/undefined
+                if (aVal === null || aVal === undefined) aVal = '';
+                if (bVal === null || bVal === undefined) bVal = '';
+
+                // Comparaison
+                let comparison = 0;
+                if (typeof aVal === 'string') {
+                    comparison = aVal.localeCompare(bVal, 'fr', { sensitivity: 'base' });
+                } else {
+                    comparison = aVal - bVal;
+                }
+
+                return this.sortDirection === 'asc' ? comparison : -comparison;
+            });
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                // Par défaut desc pour les nombres, asc pour le texte
+                this.sortDirection = ['orders_count', 'total_quantity', 'has_ordered'].includes(column) ? 'desc' : 'asc';
+            }
+        },
+
+        formatNumber(num) {
+            return new Intl.NumberFormat('fr-FR').format(num);
+        }
+    }
+}
+</script>
+SCRIPT;
 require __DIR__ . "/../../layouts/admin.php";
  ?>

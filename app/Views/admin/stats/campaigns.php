@@ -16,6 +16,7 @@
  * @modified 2025/12/22 - Système de cache intelligent pour exports Excel
  * @modified 2025/12/23 - Ajout onglet Clients (top clients par campagne)
  * @modified 2025/12/23 - Ajout modal détail commandes client avec API
+ * @modified 2026/01/08 - Ajout stats par origine (client vs rep) sous les KPIs
  */
 
 use App\Helpers\StatsAccessHelper;
@@ -343,9 +344,49 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
     </div>
 </div>
 
+<!-- Stats par origine (Client vs Rep) -->
+<div class="grid grid-cols-2 gap-4 mb-6">
+    <!-- Via Clients -->
+    <div class="bg-white rounded-lg shadow-sm px-4 py-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user text-blue-600"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 uppercase">Via Clients</p>
+                    <p class="text-xs text-gray-400">Commandes passées par les clients</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-xl font-bold text-blue-600"><?= number_format($originStats['client_orders'] ?? 0, 0, ",", " ") ?></p>
+                <p class="text-xs text-gray-500"><?= number_format($originStats['client_quantity'] ?? 0, 0, ",", " ") ?> promos</p>
+            </div>
+        </div>
+    </div>
+    <!-- Via Représentants -->
+    <div class="bg-white rounded-lg shadow-sm px-4 py-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-violet-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user-tie text-violet-600"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 uppercase">Via Représentants</p>
+                    <p class="text-xs text-gray-400">Commandes passées par les reps</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-xl font-bold text-violet-600"><?= number_format($originStats['rep_orders'] ?? 0, 0, ",", " ") ?></p>
+                <p class="text-xs text-gray-500"><?= number_format($originStats['rep_quantity'] ?? 0, 0, ",", " ") ?> promos</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Graphiques -->
 <?php if (!empty($chartLabels)): ?>
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
     <!-- Évolution des ventes -->
     <div class="bg-white rounded-lg shadow-sm p-6">
@@ -373,6 +414,17 @@ $supplierStatsJson = json_encode($supplierStats ?? []);
             <p>Aucune donnée de catégorie disponible</p>
         </div>
         <?php endif; ?>
+    </div>
+
+    <!-- Commandes par origine -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-code-branch text-violet-500 mr-2"></i>
+            Commandes par origine
+        </h3>
+        <div class="h-64">
+            <canvas id="originChart"></canvas>
+        </div>
     </div>
 
 </div>
@@ -613,9 +665,11 @@ $customersCount = count($topCustomers ?? []);
                     <span class="font-medium">Format :</span>
                     <span class="text-gray-700">Total clients</span>
                     <span class="text-gray-400">/</span>
-                    <span class="text-green-600">Clients ayant commandé</span>
+                    <span class="text-green-600">Ont commandé</span>
                     <span class="text-gray-400">|</span>
-                    <span class="text-orange-600">Promos vendues</span>
+                    <span class="text-orange-600">Promos</span>
+                    <span class="text-gray-400">|</span>
+                    <span class="text-violet-600">% via Rep</span>
                 </span>
             </p>
 
@@ -679,6 +733,33 @@ $customersCount = count($topCustomers ?? []);
                                     <div class="w-16 text-right">
                                         <span class="font-bold text-orange-600"><?= number_format($rep["stats"]["total_quantity"] ?? 0, 0, ",", " ") ?></span>
                                     </div>
+                                    <!-- % Via Reps -->
+                                    <?php
+                                    $repOrigin = $originStatsByRep[$rep["id"]] ?? null;
+                                    $repClientOrders = $repOrigin['client_orders'] ?? 0;
+                                    $repRepOrders = $repOrigin['rep_orders'] ?? 0;
+                                    $repTotalOrigin = $repClientOrders + $repRepOrders;
+                                    $pctViaReps = $repTotalOrigin > 0 ? round(($repRepOrders / $repTotalOrigin) * 100) : null;
+                                    ?>
+                                    <div class="w-16 text-center">
+                                        <?php if ($pctViaReps !== null): ?>
+                                            <?php if ($pctViaReps >= 75): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                                    <i class="fas fa-user-tie mr-1"></i><?= $pctViaReps ?>%
+                                                </span>
+                                            <?php elseif ($pctViaReps >= 25): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700" title="<?= $repRepOrders ?> cmd via rep / <?= $repTotalOrigin ?> total">
+                                                    <i class="fas fa-exchange-alt mr-1"></i><?= $pctViaReps ?>%
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700" title="<?= $repClientOrders ?> cmd via clients / <?= $repTotalOrigin ?> total">
+                                                    <i class="fas fa-user mr-1"></i><?= 100 - $pctViaReps ?>%
+                                                </span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="text-gray-400">-</span>
+                                        <?php endif; ?>
+                                    </div>
                                     <a href="<?= $repDetailUrl ?>" onclick="showLoader()"
                                        class="inline-flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-xs">
                                         <i class="fas fa-eye mr-1"></i> Voir
@@ -693,7 +774,11 @@ $customersCount = count($topCustomers ?? []);
             </div>
 
             <p class="text-xs text-gray-400 mt-3 text-center">
-                Format: Total clients / Clients ayant commandé | Promos vendues
+                <span class="inline-flex items-center gap-2">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-xs"><i class="fas fa-user-tie mr-1"></i>≥75%</span> Via rep
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs"><i class="fas fa-exchange-alt mr-1"></i>25-75%</span> Mix
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs"><i class="fas fa-user mr-1"></i>≥75%</span> Via client
+                </span>
             </p>
 
             <?php endif; ?>
@@ -1052,6 +1137,12 @@ $chartQuantityJson = $chartQuantityJson ?? "[]";
 $categoryLabelsJson = $categoryLabelsJson ?? "[]";
 $categoryDataJson = $categoryDataJson ?? "[]";
 $categoryColorsJson = $categoryColorsJson ?? "[]";
+
+// Données origine pour le graphique (client vs rep)
+$originClientOrders = $originStats['client_orders'] ?? 0;
+$originRepOrders = $originStats['rep_orders'] ?? 0;
+$originClientQty = $originStats['client_quantity'] ?? 0;
+$originRepQty = $originStats['rep_quantity'] ?? 0;
 
 $pageScripts = <<<SCRIPTS
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1445,6 +1536,46 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+
+    // Graphique origine (Bar Chart)
+    const originCtx = document.getElementById('originChart');
+    if (originCtx) {
+        const originClientOrders = {$originClientOrders};
+        const originRepOrders = {$originRepOrders};
+        const originClientQty = {$originClientQty};
+        const originRepQty = {$originRepQty};
+
+        new Chart(originCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Commandes', 'Promos vendues'],
+                datasets: [{
+                    label: 'Clients',
+                    data: [originClientOrders, originClientQty],
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 4
+                }, {
+                    label: 'Représentants',
+                    data: [originRepOrders, originRepQty],
+                    backgroundColor: '#8B5CF6',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
 });
 
 // ============================================
@@ -1541,6 +1672,19 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
 
                 linesHtml += '</tbody></table>';
 
+                // Badge origine
+                let originBadge = '';
+                if (order.order_source === 'rep') {
+                    const repName = order.rep_name ? ' (' + escapeHtml(order.rep_name) + ')' : '';
+                    originBadge = '<span class="inline-flex items-center px-2 py-1 bg-violet-100 text-violet-700 rounded text-xs font-medium" title="Commandé par le représentant' + repName + '">' +
+                        '<i class="fas fa-user-tie mr-1"></i>Via Rep' + repName +
+                    '</span>';
+                } else {
+                    originBadge = '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium" title="Commandé par le client">' +
+                        '<i class="fas fa-user mr-1"></i>Via Client' +
+                    '</span>';
+                }
+
                 const orderHtml = '<div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">' +
                     '<div class="bg-gradient-to-r from-indigo-50 to-white px-4 py-3 flex items-center justify-between cursor-pointer border-b border-gray-200" onclick="toggleOrderDetail(' + index + ')">' +
                         '<div class="flex items-center gap-3">' +
@@ -1550,8 +1694,9 @@ function openCustomerOrdersModal(customerNumber, country, companyName) {
                                 '<span class="text-sm text-gray-500 ml-3"><i class="far fa-calendar-alt mr-1"></i>' + formattedDate + '</span>' +
                             '</div>' +
                         '</div>' +
-                        '<div class="flex items-center gap-4">' +
-                            '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">' +
+                        '<div class="flex items-center gap-2">' +
+                            originBadge +
+                            '<span class="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">' +
                                 '<i class="fas fa-box mr-1"></i>' + order.lines.length + ' produit(s)' +
                             '</span>' +
                             '<span class="inline-flex items-center px-3 py-1 bg-orange-500 text-white rounded font-bold">' + formatNumberFr(order.total_quantity) + ' promos</span>' +

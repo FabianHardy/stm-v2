@@ -20,6 +20,7 @@
  * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
  * @modified 30/12/2025 - Ajout menu Traductions (gestion FR/NL front client)
  * @modified 30/12/2025 - Ajout menus Pages statiques et Email templates
+ * @modified 08/01/2026 - Correction isActive() : Vue globale ne highlight plus si sur autres pages stats
  */
 
 use App\Helpers\PermissionHelper;
@@ -40,7 +41,37 @@ if (!function_exists('isActive')) {
         if ($route === '/stm/admin/settings' && str_starts_with($currentRoute, '/stm/admin/settings/')) {
             return false;
         }
+
+        // Cas spécial : /stats (Vue globale) ne doit pas matcher /stats/campaigns, /stats/sales, etc.
+        if ($route === '/stm/admin/stats' && preg_match('#^/stm/admin/stats/(campaigns|sales|reports)#', $currentRoute)) {
+            return false;
+        }
+
         return str_starts_with($currentRoute, $route);
+    }
+}
+
+/**
+ * Vérifie si un menu parent doit être ouvert (si lui ou un de ses sous-menus est actif)
+ */
+if (!function_exists('isMenuOpen')) {
+    function isMenuOpen(array $item, string $currentRoute): bool
+    {
+        // Vérifier si le menu parent lui-même est actif
+        if (isActive($item['route'], $currentRoute)) {
+            return true;
+        }
+
+        // Vérifier si un des sous-menus est actif
+        if (isset($item['submenu']) && is_array($item['submenu'])) {
+            foreach ($item['submenu'] as $subItem) {
+                if (isset($subItem['route']) && isActive($subItem['route'], $currentRoute)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
 
@@ -297,7 +328,7 @@ $filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
 
                 <?php if (isset($item["submenu"]) && !empty($item["submenu"])): ?>
                     <!-- Menu avec sous-menu -->
-                    <div x-data="{ open: <?= isActive($item["route"], $currentRoute) ? "true" : "false" ?> }">
+                    <div x-data="{ open: <?= isMenuOpen($item, $currentRoute) ? "true" : "false" ?> }">
 
                         <!-- Menu parent -->
                         <button @click="open = !open"
@@ -449,7 +480,7 @@ $filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
             <?php foreach ($filteredMenuItems as $item): ?>
 
                 <?php if (isset($item["submenu"]) && !empty($item["submenu"])): ?>
-                    <div x-data="{ open: <?= isActive($item["route"], $currentRoute) ? "true" : "false" ?> }">
+                    <div x-data="{ open: <?= isMenuOpen($item, $currentRoute) ? "true" : "false" ?> }">
                         <button @click="open = !open"
                                 class="<?= getNavLinkClass($item["route"], $currentRoute) ?> w-full justify-between">
                             <div class="flex items-center gap-3">

@@ -7,6 +7,7 @@
  * @package STM
  * @created 2025/11/25
  * @modified 2025/12/16 - Ajout filtrage permissions sur exports
+ * @modified 2026/01/08 - Excel par défaut, ajout colonnes Origine et %_Via_Reps
  */
 
 use Core\Session;
@@ -89,11 +90,11 @@ ob_start();
                 <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
                 <div class="flex gap-4">
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" checked class="mr-2">
+                        <input type="radio" name="format" value="csv" class="mr-2">
                         <span class="text-sm">CSV (virgule)</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" class="mr-2">
+                        <input type="radio" name="format" value="excel" checked class="mr-2">
                         <span class="text-sm">Excel (point-virgule)</span>
                     </label>
                 </div>
@@ -105,7 +106,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Rep_Name, Cluster, Date_Commande</p>
+            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Rep_Name, Cluster, Origine, Date_Commande</p>
         </div>
     </div>
 
@@ -140,11 +141,11 @@ ob_start();
                 <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
                 <div class="flex gap-4">
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" checked class="mr-2">
+                        <input type="radio" name="format" value="csv" class="mr-2">
                         <span class="text-sm">CSV</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" class="mr-2">
+                        <input type="radio" name="format" value="excel" checked class="mr-2">
                         <span class="text-sm">Excel</span>
                     </label>
                 </div>
@@ -156,7 +157,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Email, Rep_Name, Date_Commande</p>
+            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Email, Rep_Name, Origine, Date_Commande</p>
         </div>
     </div>
 
@@ -189,11 +190,11 @@ ob_start();
                 <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
                 <div class="flex gap-4">
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" checked class="mr-2">
+                        <input type="radio" name="format" value="csv" class="mr-2">
                         <span class="text-sm">CSV</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" class="mr-2">
+                        <input type="radio" name="format" value="excel" checked class="mr-2">
                         <span class="text-sm">Excel</span>
                     </label>
                 </div>
@@ -205,7 +206,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Rep_ID, Rep_Nom, Cluster, Pays, Nb_Clients, Clients_Commandé, Taux_Conv, Total_Quantité</p>
+            <p><strong>Colonnes:</strong> Rep_ID, Rep_Nom, Cluster, Pays, Nb_Clients, Clients_Commandé, Taux_Conv, Total_Quantité, %_Via_Reps</p>
         </div>
     </div>
 
@@ -240,11 +241,11 @@ ob_start();
                 <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
                 <div class="flex gap-4">
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="csv" checked class="mr-2">
+                        <input type="radio" name="format" value="csv" class="mr-2">
                         <span class="text-sm">CSV</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="radio" name="format" value="excel" class="mr-2">
+                        <input type="radio" name="format" value="excel" checked class="mr-2">
                         <span class="text-sm">Excel</span>
                     </label>
                 </div>

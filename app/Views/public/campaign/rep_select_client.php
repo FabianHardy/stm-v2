@@ -8,6 +8,7 @@
  * Chemin : /app/Views/public/campaign/rep_select_client.php
  *
  * @created 2026/01/05 - Sprint 14
+ * @modified 2026/01/06 - Utilisation système trans() pour traductions
  */
 
 // Variables disponibles :
@@ -15,15 +16,26 @@
 // $rep : Données du représentant connecté (depuis session rep_session)
 // $error : Message d'erreur éventuel
 
+// Gestion du switch langue
+$requestedLang = $_GET['lang'] ?? null;
+if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+    $_SESSION['rep_session']['rep_language'] = $requestedLang;
+    // Rediriger pour nettoyer l'URL
+    $cleanUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: {$cleanUrl}");
+    exit;
+}
+
 $lang = $_SESSION['rep_session']['rep_language'] ?? 'fr';
 $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manual';
+$showLangSwitch = in_array($campaign['country'] ?? 'BE', ['BE', 'BOTH']);
 ?>
 <!DOCTYPE html>
 <html lang="<?= $lang ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $lang === 'fr' ? 'Sélection client' : 'Klantselectie' ?> - <?= htmlspecialchars($campaign['title_' . $lang] ?? $campaign['title_fr']) ?></title>
+    <title><?= trans('rep.select_title', $lang) ?> - <?= htmlspecialchars($campaign['title_' . $lang] ?? $campaign['title_fr']) ?></title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -53,27 +65,42 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
             <div class="flex items-center justify-between">
                 <!-- Logo et titre campagne -->
                 <div class="flex items-center space-x-4">
-                    <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-10">
+                    <img src="/stm/assets/images/logo.png" alt="Trendy Foods" class="h-10" onerror="this.style.display='none'">
                     <div>
                         <h1 class="text-lg font-bold text-gray-900">
                             <?= htmlspecialchars($campaign['title_' . $lang] ?? $campaign['title_fr']) ?>
                         </h1>
                         <p class="text-sm text-purple-600 font-medium">
                             <i class="fas fa-user-tie mr-1"></i>
-                            <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger modus' ?>
+                            <?= trans('rep.mode_label', $lang) ?>
                         </p>
                     </div>
                 </div>
 
-                <!-- Info Rep connecté -->
+                <!-- Info Rep connecté + switch langue -->
                 <div class="flex items-center space-x-4">
                     <div class="text-right hidden sm:block">
-                        <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep['rep_name'] ?? 'Représentant') ?></p>
+                        <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($rep['rep_name'] ?? '') ?></p>
                         <p class="text-xs text-gray-500"><?= htmlspecialchars($rep['rep_email'] ?? '') ?></p>
                     </div>
+
+                    <!-- Switch langue FR/NL -->
+                    <?php if ($showLangSwitch): ?>
+                    <div class="hidden sm:flex bg-gray-100 rounded-lg p-1">
+                        <a href="?lang=fr"
+                           class="px-3 py-1.5 rounded-md text-sm <?= $lang === 'fr' ? 'bg-white text-purple-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                            FR
+                        </a>
+                        <a href="?lang=nl"
+                           class="px-3 py-1.5 rounded-md text-sm <?= $lang === 'nl' ? 'bg-white text-purple-600 font-semibold shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm' ?> transition">
+                            NL
+                        </a>
+                    </div>
+                    <?php endif; ?>
+
                     <a href="/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/rep/logout"
                        class="text-gray-400 hover:text-red-500 transition"
-                       title="<?= $lang === 'fr' ? 'Déconnexion' : 'Afmelden' ?>">
+                       title="<?= trans('rep.logout', $lang) ?>">
                         <i class="fas fa-sign-out-alt text-xl"></i>
                     </a>
                 </div>
@@ -90,12 +117,10 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                 <i class="fas fa-user-tie text-purple-600 text-2xl"></i>
             </div>
             <h2 class="text-2xl font-bold text-gray-900">
-                <?= $lang === 'fr' ? 'Sélectionner un client' : 'Selecteer een klant' ?>
+                <?= trans('rep.select_title', $lang) ?>
             </h2>
             <p class="text-gray-600 mt-2">
-                <?= $lang === 'fr'
-                    ? 'Entrez le numéro du client pour lequel vous souhaitez passer commande'
-                    : 'Voer het klantnummer in waarvoor u een bestelling wilt plaatsen' ?>
+                <?= trans('rep.select_subtitle', $lang) ?>
             </p>
         </div>
 
@@ -120,21 +145,19 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                 <div class="mb-6">
                     <label for="customer_number" class="block text-sm font-medium text-gray-700 mb-2">
                         <i class="fas fa-id-card mr-2 text-gray-400"></i>
-                        <?= $lang === 'fr' ? 'Numéro client' : 'Klantnummer' ?> <span class="text-red-500">*</span>
+                        <?= trans('rep.customer_number', $lang) ?> <span class="text-red-500">*</span>
                     </label>
                     <input type="text"
                            id="customer_number"
                            name="customer_number"
                            x-model="customerNumber"
-                           placeholder="<?= $lang === 'fr' ? 'Ex: 123456 ou 123456-12' : 'Bv: 123456 of 123456-12' ?>"
+                           placeholder="<?= trans('rep.customer_number_placeholder', $lang) ?>"
                            required
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-lg"
                            autofocus>
                     <p class="text-xs text-gray-500 mt-2">
                         <i class="fas fa-info-circle mr-1"></i>
-                        <?= $lang === 'fr'
-                            ? 'Formats acceptés : 123456, 123456-12, E12345-CB, *12345'
-                            : 'Aanvaarde formaten: 123456, 123456-12, E12345-CB, *12345' ?>
+                        <?= trans('rep.customer_number_formats', $lang) ?>
                     </p>
                 </div>
 
@@ -143,14 +166,14 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">
                         <i class="fas fa-globe mr-2 text-gray-400"></i>
-                        <?= $lang === 'fr' ? 'Pays' : 'Land' ?> <span class="text-red-500">*</span>
+                        <?= trans('rep.country', $lang) ?> <span class="text-red-500">*</span>
                     </label>
                     <div class="grid grid-cols-2 gap-4">
                         <label class="radio-card relative flex items-center justify-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition">
                             <input type="radio" name="country" value="BE" class="sr-only" checked>
                             <span class="flex items-center">
                                 <span class="text-2xl mr-2">🇧🇪</span>
-                                <span class="font-medium"><?= $lang === 'fr' ? 'Belgique' : 'België' ?></span>
+                                <span class="font-medium"><?= trans('rep.country_be', $lang) ?></span>
                             </span>
                             <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
                                 <i class="fas fa-check-circle"></i>
@@ -160,7 +183,7 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                             <input type="radio" name="country" value="LU" class="sr-only">
                             <span class="flex items-center">
                                 <span class="text-2xl mr-2">🇱🇺</span>
-                                <span class="font-medium">Luxembourg</span>
+                                <span class="font-medium"><?= trans('rep.country_lu', $lang) ?></span>
                             </span>
                             <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
                                 <i class="fas fa-check-circle"></i>
@@ -172,34 +195,8 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                 <input type="hidden" name="country" value="<?= htmlspecialchars($campaign['country']) ?>">
                 <?php endif; ?>
 
-                <!-- Sélecteur de langue (si BE ou BOTH) -->
-                <?php if ($campaign['country'] === 'BE' || $campaign['country'] === 'BOTH'): ?>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-language mr-2 text-gray-400"></i>
-                        <?= $lang === 'fr' ? 'Langue du client' : 'Taal van de klant' ?>
-                    </label>
-                    <div class="grid grid-cols-2 gap-4">
-                        <label class="radio-card relative flex items-center justify-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition">
-                            <input type="radio" name="language" value="fr" class="sr-only" <?= $lang === 'fr' ? 'checked' : '' ?>>
-                            <span class="font-medium">Français</span>
-                            <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
-                                <i class="fas fa-check-circle"></i>
-                            </span>
-                        </label>
-                        <label class="radio-card relative flex items-center justify-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition">
-                            <input type="radio" name="language" value="nl" class="sr-only" <?= $lang === 'nl' ? 'checked' : '' ?>>
-                            <span class="font-medium">Nederlands</span>
-                            <span class="check-icon absolute top-2 right-2 text-purple-500 opacity-0">
-                                <i class="fas fa-check-circle"></i>
-                            </span>
-                        </label>
-                    </div>
-                </div>
-                <?php else: ?>
-                <!-- Luxembourg = toujours français -->
-                <input type="hidden" name="language" value="fr">
-                <?php endif; ?>
+                <!-- Langue = celle du rep (stockée en session) -->
+                <input type="hidden" name="language" value="<?= $lang ?>">
 
                 <!-- Bouton submit -->
                 <button type="submit"
@@ -209,13 +206,13 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                     <template x-if="!loading">
                         <span>
                             <i class="fas fa-arrow-right mr-2"></i>
-                            <?= $lang === 'fr' ? 'Accéder au catalogue' : 'Naar catalogus' ?>
+                            <?= trans('rep.go_to_catalog', $lang) ?>
                         </span>
                     </template>
                     <template x-if="loading">
                         <span>
                             <i class="fas fa-spinner fa-spin mr-2"></i>
-                            <?= $lang === 'fr' ? 'Chargement...' : 'Laden...' ?>
+                            <?= trans('rep.loading', $lang) ?>
                         </span>
                     </template>
                 </button>
@@ -229,21 +226,17 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
                 <div class="text-sm text-purple-800">
                     <?php if ($isManualMode): ?>
                         <p class="font-medium mb-1">
-                            <?= $lang === 'fr' ? 'Mode liste restreinte' : 'Beperkte lijstmodus' ?>
+                            <?= trans('rep.mode_restricted', $lang) ?>
                         </p>
                         <p>
-                            <?= $lang === 'fr'
-                                ? 'Cette campagne est limitée à une liste de clients spécifiques.'
-                                : 'Deze campagne is beperkt tot een specifieke lijst van klanten.' ?>
+                            <?= trans('rep.mode_restricted_info', $lang) ?>
                         </p>
                     <?php else: ?>
                         <p class="font-medium mb-1">
-                            <?= $lang === 'fr' ? 'Mode accès libre' : 'Vrije toegang modus' ?>
+                            <?= trans('rep.mode_open', $lang) ?>
                         </p>
                         <p>
-                            <?= $lang === 'fr'
-                                ? 'Tous les clients peuvent accéder à cette campagne.'
-                                : 'Alle klanten hebben toegang tot deze campagne.' ?>
+                            <?= trans('rep.mode_open_info', $lang) ?>
                         </p>
                     <?php endif; ?>
                 </div>
@@ -254,7 +247,7 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
         <div class="text-center mt-6">
             <a href="/stm/admin/dashboard" class="text-gray-500 hover:text-gray-700 text-sm">
                 <i class="fas fa-arrow-left mr-1"></i>
-                <?= $lang === 'fr' ? 'Retour au tableau de bord' : 'Terug naar dashboard' ?>
+                <?= trans('rep.back_to_dashboard', $lang) ?>
             </a>
         </div>
 
@@ -262,7 +255,7 @@ $isManualMode = ($campaign['customer_assignment_mode'] ?? 'automatic') === 'manu
 
     <!-- Footer -->
     <footer class="py-6 text-center text-gray-400 text-sm">
-        <p>&copy; <?= date('Y') ?> Trendy Foods - <?= $lang === 'fr' ? 'Tous droits réservés' : 'Alle rechten voorbehouden' ?></p>
+        <p>&copy; <?= date('Y') ?> Trendy Foods - <?= trans('common.all_rights_reserved', $lang) ?></p>
     </footer>
 
     <!-- Script pour les radio buttons -->

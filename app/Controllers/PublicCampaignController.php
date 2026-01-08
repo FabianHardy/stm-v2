@@ -50,6 +50,78 @@ class PublicCampaignController
     }
 
     /**
+     * Récupérer l'adresse IP du client (gestion des proxys)
+     *
+     * @return string|null Adresse IP
+     */
+    private function getClientIp(): ?string
+    {
+        // Priorité : headers proxy puis REMOTE_ADDR
+        $headers = [
+            'HTTP_CF_CONNECTING_IP',     // Cloudflare
+            'HTTP_X_FORWARDED_FOR',      // Proxy standard
+            'HTTP_X_REAL_IP',            // Nginx
+            'HTTP_CLIENT_IP',            // Autres
+            'REMOTE_ADDR'                // Direct
+        ];
+
+        foreach ($headers as $header) {
+            if (!empty($_SERVER[$header])) {
+                // X-Forwarded-For peut contenir plusieurs IPs, prendre la première
+                $ip = $_SERVER[$header];
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                // Valider que c'est une IP valide
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Détecter le type d'appareil depuis le User Agent
+     *
+     * @return string 'mobile', 'tablet' ou 'desktop'
+     */
+    private function detectDeviceType(): string
+    {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        if (empty($userAgent)) {
+            return 'desktop';
+        }
+
+        $userAgent = strtolower($userAgent);
+
+        // Tablettes (vérifier avant mobile car certains tablets ont "mobile" dans leur UA)
+        $tablets = ['ipad', 'tablet', 'playbook', 'silk', 'kindle'];
+        foreach ($tablets as $tablet) {
+            if (strpos($userAgent, $tablet) !== false) {
+                return 'tablet';
+            }
+        }
+
+        // Android tablet (sans "mobile")
+        if (strpos($userAgent, 'android') !== false && strpos($userAgent, 'mobile') === false) {
+            return 'tablet';
+        }
+
+        // Mobiles
+        $mobiles = ['iphone', 'ipod', 'android', 'mobile', 'phone', 'blackberry', 'opera mini', 'opera mobi'];
+        foreach ($mobiles as $mobile) {
+            if (strpos($userAgent, $mobile) !== false) {
+                return 'mobile';
+            }
+        }
+
+        return 'desktop';
+    }
+
+    /**
      * Afficher la page d'accès à une campagne via UUID
      * Route : GET /c/{uuid}
      *
@@ -576,6 +648,26 @@ class PublicCampaignController
             unset($item);
 
             if (!$found) {
+                // Récupérer les prix via API Trendy Foods (pour mode rep)
+                $apiPrix = null;
+                $apiPrixPromo = null;
+
+                try {
+                    $trendyApi = $this->getTrendyApiService();
+                    $productsInfo = $trendyApi->getProductsInfo(
+                        $customer["customer_number"],
+                        $customer["country"],
+                        [$product["product_code"]]
+                    );
+
+                    if ($trendyApi->isApiResponseValid($productsInfo) && isset($productsInfo[$product["product_code"]])) {
+                        $apiPrix = $productsInfo[$product["product_code"]]["prix"];
+                        $apiPrixPromo = $productsInfo[$product["product_code"]]["prix_promo"];
+                    }
+                } catch (\Exception $e) {
+                    error_log("Erreur API prix dans addToCart: " . $e->getMessage());
+                }
+
                 $cart["items"][] = [
                     "product_id" => $productId,
                     "code" => $product["product_code"],
@@ -583,6 +675,10 @@ class PublicCampaignController
                     "name_nl" => $product["name_nl"] ?? $product["name_fr"],
                     "quantity" => $quantity,
                     "image_fr" => $product["image_fr"],
+                    "image_nl" => $product["image_nl"] ?? $product["image_fr"],
+                    // Prix récupérés via API
+                    "api_prix" => $apiPrix,
+                    "api_prix_promo" => $apiPrixPromo,
                 ];
             }
 
@@ -1107,6 +1203,44 @@ class PublicCampaignController
 
             $campaign = $campaign[0];
 
+            // ========================================
+            // SPRINT 14 : Rafraîchir les prix via API pour le checkout (mode rep)
+            // ========================================
+            $isRepOrder = $customer["is_rep_order"] ?? false;
+            $showPrices = ($campaign["show_prices"] ?? 1) == 1;
+            $orderType = $campaign["order_type"] ?? "W";
+
+            if ($isRepOrder && $showPrices && !empty($cart["items"])) {
+                try {
+                    // Récupérer tous les codes produits du panier
+                    $productCodes = array_column($cart["items"], "code");
+
+                    // Appeler l'API pour obtenir les prix à jour
+                    $trendyApi = $this->getTrendyApiService();
+                    $productsInfo = $trendyApi->getProductsInfo(
+                        $customer["customer_number"],
+                        $customer["country"],
+                        $productCodes
+                    );
+
+                    // Mettre à jour les prix dans le panier
+                    if ($trendyApi->isApiResponseValid($productsInfo)) {
+                        foreach ($cart["items"] as &$item) {
+                            if (isset($productsInfo[$item["code"]])) {
+                                $item["api_prix"] = $productsInfo[$item["code"]]["prix"];
+                                $item["api_prix_promo"] = $productsInfo[$item["code"]]["prix_promo"];
+                            }
+                        }
+                        unset($item);
+
+                        // Sauvegarder le panier avec les prix mis à jour
+                        $_SESSION["cart"] = $cart;
+                    }
+                } catch (\Exception $e) {
+                    error_log("Erreur API prix dans checkout: " . $e->getMessage());
+                }
+            }
+
             // Charger la vue checkout
             require __DIR__ . "/../Views/public/campaign/checkout.php";
         } catch (\PDOException $e) {
@@ -1263,7 +1397,7 @@ class PublicCampaignController
 
             // 4. Créer la commande dans table orders
             // ========================================
-            // SPRINT 14 : Traçabilité rep
+            // SPRINT 14 : Traçabilité rep + données tracking
             // ========================================
             $orderUuid = $this->generateUuid();
             $totalItems = array_sum(array_column($cart["items"], "quantity"));
@@ -1274,14 +1408,23 @@ class PublicCampaignController
             $orderSource = $isRepOrder ? 'rep' : 'client';
             $orderedByRepId = $isRepOrder ? ($customer["rep_id"] ?? null) : null;
 
+            // Données tracking
+            $ipAddress = $this->getClientIp();
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+            $deviceType = $this->detectDeviceType();
+
             $queryOrder = "INSERT INTO orders (
                 uuid, campaign_id, customer_id, customer_email,
                 ordered_by_rep_id, order_source,
-                total_items, total_products, status, created_at
+                total_items, total_products,
+                ip_address, user_agent, device_type,
+                status, created_at
             ) VALUES (
                 :uuid, :campaign_id, :customer_id, :customer_email,
                 :ordered_by_rep_id, :order_source,
-                :total_items, :total_products, 'pending', NOW()
+                :total_items, :total_products,
+                :ip_address, :user_agent, :device_type,
+                'pending', NOW()
             )";
 
             $this->db->execute($queryOrder, [
@@ -1293,6 +1436,9 @@ class PublicCampaignController
                 ":order_source" => $orderSource,
                 ":total_items" => $totalItems,
                 ":total_products" => $totalProducts,
+                ":ip_address" => $ipAddress,
+                ":user_agent" => $userAgent ? substr($userAgent, 0, 500) : null, // Limiter la taille
+                ":device_type" => $deviceType,
             ]);
 
             $orderId = $this->db->lastInsertId();
@@ -1621,88 +1767,81 @@ class PublicCampaignController
      */
     public function orderConfirmation(string $uuid): void
     {
-        // Programmer l'envoi email APRÈS la réponse HTTP (shutdown function)
+        // Envoyer l'email de confirmation (si pending_email existe)
         if (isset($_SESSION["pending_email"])) {
             $data = $_SESSION["pending_email"];
             unset($_SESSION["pending_email"]);
 
-            register_shutdown_function(function () use ($data) {
-                @ini_set("display_errors", "0");
-                error_reporting(0);
+            try {
+                $orderData = [
+                    "order_number" => $data["order_number"],
+                    "campaign_title_fr" => $data["campaign_title_fr"],
+                    "campaign_title_nl" => $data["campaign_title_nl"],
+                    "customer_number" => $data["customer_number"],
+                    "company_name" => $data["company_name"],
+                    "created_at" => date("Y-m-d H:i:s"),
+                    "country" => $data["country"],
+                    "deferred_delivery" => $data["deferred_delivery"],
+                    "delivery_date" => $data["delivery_date"],
+                    "lines" => [],
+                    // SPRINT 14 : Info si commande rep
+                    "is_rep_order" => $data["is_rep_order"] ?? false,
+                    "rep_name" => $data["rep_name"] ?? null,
+                ];
 
-                try {
-                    $orderData = [
-                        "order_number" => $data["order_number"],
-                        "campaign_title_fr" => $data["campaign_title_fr"],
-                        "campaign_title_nl" => $data["campaign_title_nl"],
-                        "customer_number" => $data["customer_number"],
-                        "company_name" => $data["company_name"],
-                        "created_at" => date("Y-m-d H:i:s"),
-                        "country" => $data["country"],
-                        "deferred_delivery" => $data["deferred_delivery"],
-                        "delivery_date" => $data["delivery_date"],
-                        "lines" => [],
-                        // SPRINT 14 : Info si commande rep
-                        "is_rep_order" => $data["is_rep_order"] ?? false,
-                        "rep_name" => $data["rep_name"] ?? null,
+                foreach ($data["lines"] as $item) {
+                    $orderData["lines"][] = [
+                        "name_fr" => $item["name_fr"],
+                        "name_nl" => $item["name_nl"],
+                        "quantity" => $item["quantity"],
+                        "product_code" => $item["code"],
                     ];
+                }
 
-                    foreach ($data["lines"] as $item) {
-                        $orderData["lines"][] = [
-                            "name_fr" => $item["name_fr"],
-                            "name_nl" => $item["name_nl"],
-                            "quantity" => $item["quantity"],
-                            "product_code" => $item["code"],
-                        ];
-                    }
+                $mailchimpService = new \App\Services\MailchimpEmailService();
 
-                    $mailchimpService = new \App\Services\MailchimpEmailService();
+                // Email au client
+                $emailSent = $mailchimpService->sendOrderConfirmation(
+                    $data["customer_email"],
+                    $orderData,
+                    $data["language"],
+                );
 
-                    // Email au client
-                    $emailSent = @$mailchimpService->sendOrderConfirmation(
-                        $data["customer_email"],
+                if ($emailSent) {
+                    error_log("Email confirmation envoyé à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
+
+                    // Mettre à jour email_sent dans la DB
+                    $this->db->execute(
+                        "UPDATE orders SET email_sent = 1, email_sent_at = NOW() WHERE id = :id",
+                        [":id" => $data["order_id"]]
+                    );
+                } else {
+                    error_log("Échec envoi email confirmation à: {$data["customer_email"]} (Commande: {$data["order_number"]})");
+                }
+
+                // ========================================
+                // SPRINT 14 : Copie email au rep
+                // ========================================
+                if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
+                    // Marquer comme copie rep
+                    $orderData["is_rep_copy"] = true;
+
+                    $repEmailSent = $mailchimpService->sendOrderConfirmation(
+                        $data["rep_email"],
                         $orderData,
                         $data["language"],
                     );
 
-                    if ($emailSent) {
-                        error_log(
-                            "Email confirmation envoyé avec succès via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
-                        );
+                    if ($repEmailSent) {
+                        error_log("Copie email confirmation envoyée au rep: {$data["rep_email"]} (Commande: {$data["order_number"]})");
                     } else {
-                        error_log(
-                            "Échec envoi email confirmation via Mailchimp à: {$data["customer_email"]} (Commande: {$data["order_number"]})",
-                        );
+                        error_log("Échec envoi copie email rep à: {$data["rep_email"]} (Commande: {$data["order_number"]})");
                     }
-
-                    // ========================================
-                    // SPRINT 14 : Copie email au rep
-                    // ========================================
-                    if (!empty($data["rep_email"]) && $data["rep_email"] !== $data["customer_email"]) {
-                        // Marquer comme copie rep
-                        $orderData["is_rep_copy"] = true;
-
-                        $repEmailSent = @$mailchimpService->sendOrderConfirmation(
-                            $data["rep_email"],
-                            $orderData,
-                            $data["language"],
-                        );
-
-                        if ($repEmailSent) {
-                            error_log(
-                                "Copie email confirmation envoyée au rep: {$data["rep_email"]} (Commande: {$data["order_number"]})",
-                            );
-                        } else {
-                            error_log(
-                                "Échec envoi copie email rep à: {$data["rep_email"]} (Commande: {$data["order_number"]})",
-                            );
-                        }
-                    }
-
-                } catch (\Exception $e) {
-                    error_log("Erreur envoi email Mailchimp asynchrone: " . $e->getMessage());
                 }
-            });
+
+            } catch (\Exception $e) {
+                error_log("Erreur envoi email confirmation: " . $e->getMessage());
+            }
         }
 
         // Vérifier la session
@@ -1805,14 +1944,15 @@ class PublicCampaignController
     // ============================================================================
 
     /**
-     * Point d'entrée pour l'accès représentant
-     * Redirige vers SSO Microsoft si pas connecté
+     * Page de connexion pour les représentants
+     * Affiche le formulaire avec switch langue et bouton SSO Microsoft
      *
      * Route : GET /c/{uuid}/rep
      *
      * @param string $uuid UUID de la campagne
      * @return void
      * @created 05/01/2026 - Sprint 14
+     * @modified 06/01/2026 - Ajout page connexion avec switch langue
      */
     public function repAccess(string $uuid): void
     {
@@ -1846,21 +1986,69 @@ class PublicCampaignController
                 exit();
             }
 
-            // Stocker l'UUID de la campagne pour le callback SSO
-            Session::set('rep_campaign_uuid', $uuid);
+            // Gestion du switch langue
+            $requestedLang = $_GET['lang'] ?? null;
+            if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+                Session::set('rep_language', $requestedLang);
+                // Rediriger pour nettoyer l'URL
+                header("Location: /stm/c/{$uuid}/rep");
+                exit();
+            }
 
-            // Rediriger vers l'authentification Microsoft SSO
-            $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
-            $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
-            $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
+            // Langue : session > défaut selon pays
+            $lang = Session::get('rep_language');
+            if (!$lang) {
+                $lang = ($campaign['country'] === 'LU') ? 'fr' : 'fr'; // Défaut FR
+                Session::set('rep_language', $lang);
+            }
 
-            header("Location: {$authUrl}");
-            exit();
+            // Récupérer erreur éventuelle
+            $error = Session::get('error');
+            Session::remove('error');
+
+            // Afficher la page de connexion
+            require __DIR__ . "/../Views/public/campaign/rep_access.php";
 
         } catch (\PDOException $e) {
             error_log("Erreur repAccess() : " . $e->getMessage());
             $this->renderAccessDenied("error", $uuid);
         }
+    }
+
+    /**
+     * Déclencher la connexion SSO Microsoft pour les représentants
+     *
+     * Route : POST /c/{uuid}/rep/login
+     *
+     * @param string $uuid UUID de la campagne
+     * @return void
+     * @created 06/01/2026 - Sprint 14
+     */
+    public function repLogin(string $uuid): void
+    {
+        // Vérifier token CSRF
+        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            Session::set('error', 'Token de sécurité invalide.');
+            header("Location: /stm/c/{$uuid}/rep");
+            exit();
+        }
+
+        // Stocker la langue choisie
+        $lang = $_POST['lang'] ?? 'fr';
+        if (in_array($lang, ['fr', 'nl'], true)) {
+            Session::set('rep_language', $lang);
+        }
+
+        // Stocker l'UUID de la campagne pour le callback SSO
+        Session::set('rep_campaign_uuid', $uuid);
+
+        // Rediriger vers l'authentification Microsoft SSO
+        $appUrl = $this->env('APP_URL', 'https://dev.trendyfoodsblog.com/stm');
+        $redirectUri = urlencode($appUrl . '/auth/microsoft/callback-rep');
+        $authUrl = $this->buildMicrosoftAuthUrl($redirectUri);
+
+        header("Location: {$authUrl}");
+        exit();
     }
 
     /**
@@ -1936,12 +2124,14 @@ class PublicCampaignController
             }
 
             // Stocker les infos rep en session
+            $repLanguage = Session::get('rep_language') ?? 'fr';
             Session::set('rep_session', [
                 'rep_id' => $user['id'],
                 'rep_name' => $user['name'],
                 'rep_email' => $user['email'],
                 'rep_role' => $user['role'],
                 'rep_country' => $user['rep_country'],
+                'rep_language' => $repLanguage,
                 'campaign_uuid' => $uuid,
                 'authenticated_at' => date('Y-m-d H:i:s')
             ]);

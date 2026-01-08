@@ -9,6 +9,8 @@
  * @version 3.0
  * @created 12/11/2025 19:30
  * @modified 29/12/2025 - Refonte complète en mode consultation
+ * @modified 07/01/2026 - Ajout stats origine (par lui-même vs via rep) + colonne Source
+ * @modified 08/01/2026 - Ajout bandeau filtre campagne
  */
 
 use Core\Session;
@@ -58,6 +60,31 @@ ob_start();
         </ol>
     </nav>
 </div>
+
+<?php if (!empty($selectedCampaign)): ?>
+<!-- Bandeau filtre campagne -->
+<div class="mb-4 rounded-lg bg-indigo-50 border border-indigo-200 p-4">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-filter text-indigo-600"></i>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-indigo-800">
+                    Filtré sur la campagne : <strong><?= htmlspecialchars($selectedCampaign['name']) ?></strong>
+                </p>
+                <p class="text-xs text-indigo-600">
+                    Les stats et commandes affichées concernent uniquement cette campagne
+                </p>
+            </div>
+        </div>
+        <a href="/stm/admin/customers/show?customer_number=<?= urlencode($customer['customer_number']) ?>&country=<?= $customer['country'] ?>"
+           class="inline-flex items-center px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md hover:bg-indigo-100 transition text-sm">
+            <i class="fas fa-times mr-1"></i>Voir tout
+        </a>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Messages flash -->
 <?php if ($flashSuccess = Session::getFlash('success')): ?>
@@ -246,6 +273,38 @@ ob_start();
             </div>
         </div>
 
+        <!-- Origine des commandes (cards compactes) -->
+        <div class="grid grid-cols-2 gap-4 mt-4">
+            <!-- Par lui-même -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg px-4 py-3 border border-blue-200 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-user text-blue-600 text-sm"></i>
+                    </span>
+                    <span class="text-sm font-medium text-blue-700">Par lui-même</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-lg font-bold text-blue-600"><?= $customerStats['orders_by_self'] ?? 0 ?></span>
+                    <span class="text-xs text-blue-500 ml-1">cmd</span>
+                    <span class="text-xs text-blue-400 ml-1">(<?= number_format($customerStats['quantity_by_self'] ?? 0, 0, ',', ' ') ?> promos)</span>
+                </div>
+            </div>
+            <!-- Via son Rep -->
+            <div class="bg-gradient-to-br from-violet-50 to-violet-100 rounded-lg px-4 py-3 border border-violet-200 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="w-8 h-8 bg-violet-200 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-user-tie text-violet-600 text-sm"></i>
+                    </span>
+                    <span class="text-sm font-medium text-violet-700">Via son Rep</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-lg font-bold text-violet-600"><?= $customerStats['orders_by_rep'] ?? 0 ?></span>
+                    <span class="text-xs text-violet-500 ml-1">cmd</span>
+                    <span class="text-xs text-violet-400 ml-1">(<?= number_format($customerStats['quantity_by_rep'] ?? 0, 0, ',', ' ') ?> promos)</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Période d'activité -->
         <?php if (!empty($customerStats['first_order_date'])): ?>
         <div class="bg-indigo-50 rounded-lg p-4 flex items-center justify-between">
@@ -291,6 +350,7 @@ ob_start();
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">N° Cmd</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campagne</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Source</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Articles</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Promos</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -312,6 +372,17 @@ ob_start();
                                             </a>
                                         <?php else: ?>
                                             <span class="text-gray-400">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <?php if (($order['order_source'] ?? 'client') === 'rep'): ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800">
+                                                <i class="fas fa-user-tie mr-1"></i> Rep
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                <i class="fas fa-user mr-1"></i> Client
+                                            </span>
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-4 py-3 text-center">

@@ -7,12 +7,14 @@
  * - Infos campagne
  * - Lignes de commande (produits, quantités)
  * - Gestion fichier TXT
+ * - Informations techniques (source, rep, IP, device, email)
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.2.0
+ * @version    1.3.0
  * @created    2025/11/27
  * @modified   2025/12/30 - Suppression N° commande et section statut synchro
+ * @modified   2026/01/08 - Enrichissement section technique avec Source, Rep, Email
  */
 
 // Permissions pour les boutons (à remplacer par PermissionHelper quand disponible)
@@ -369,9 +371,32 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
 </div>
 
 <!-- Infos techniques -->
-<?php if (!empty($order["ip_address"]) || !empty($order["device_type"])): ?>
 <div class="mt-6 bg-gray-50 rounded-lg p-4">
-    <h4 class="text-sm font-medium text-gray-500 mb-2">Informations techniques</h4>
+    <h4 class="text-sm font-medium text-gray-500 mb-3">Informations techniques</h4>
+
+    <!-- Source de la commande -->
+    <div class="mb-3 pb-3 border-b border-gray-200">
+        <span class="text-xs text-gray-500 mr-2">Source :</span>
+        <?php if (($order['order_source'] ?? 'client') === 'rep'): ?>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-800">
+                <i class="fas fa-user-tie mr-1"></i> Commande passée par un Représentant
+            </span>
+            <?php if (!empty($order['rep_user_name'])): ?>
+            <span class="ml-2 text-xs text-gray-600">
+                <i class="fas fa-user mr-1"></i> <?php echo htmlspecialchars($order['rep_user_name']); ?>
+                <?php if (!empty($order['rep_user_code'])): ?>
+                    <span class="font-mono text-gray-400">(<?php echo htmlspecialchars($order['rep_user_code']); ?>)</span>
+                <?php endif; ?>
+            </span>
+            <?php endif; ?>
+        <?php else: ?>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <i class="fas fa-user mr-1"></i> Commande passée par le Client
+            </span>
+        <?php endif; ?>
+    </div>
+
+    <!-- Données techniques -->
     <div class="flex flex-wrap gap-4 text-xs text-gray-500">
         <span><i class="fas fa-hashtag mr-1"></i> ID: <?php echo $order["id"]; ?></span>
         <span><i class="fas fa-fingerprint mr-1"></i> UUID: <?php echo htmlspecialchars($order["uuid"] ?? 'N/A'); ?></span>
@@ -381,9 +406,25 @@ $pageTitle = "Commande - {$customerNumber} - {$campaignName}";
         <?php if (!empty($order["device_type"])): ?>
         <span><i class="fas fa-<?php echo $order["device_type"] === "mobile" ? "mobile-alt" : ($order["device_type"] === "tablet" ? "tablet-alt" : "desktop"); ?> mr-1"></i> <?php echo ucfirst($order["device_type"]); ?></span>
         <?php endif; ?>
+        <?php if (!empty($order["user_agent"])): ?>
+        <span class="truncate max-w-xs" title="<?php echo htmlspecialchars($order["user_agent"]); ?>">
+            <i class="fas fa-globe mr-1"></i> <?php echo htmlspecialchars(substr($order["user_agent"], 0, 50)); ?>...
+        </span>
+        <?php endif; ?>
     </div>
+
+    <!-- Email envoyé -->
+    <?php if (!empty($order["email_sent"])): ?>
+    <div class="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
+        <span class="inline-flex items-center text-green-600">
+            <i class="fas fa-envelope-circle-check mr-1"></i> Email de confirmation envoyé
+            <?php if (!empty($order["email_sent_at"])): ?>
+            le <?php echo date('d/m/Y à H:i', strtotime($order["email_sent_at"])); ?>
+            <?php endif; ?>
+        </span>
+    </div>
+    <?php endif; ?>
 </div>
-<?php endif; ?>
 
 <?php
 $content = ob_get_clean();
