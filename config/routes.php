@@ -9,7 +9,7 @@
  *
  * @package    Config
  * @author     Fabian Hardy
- * @version    2.0.0
+ * @version    2.1.0
  * @modified   11/12/2025 - Ajout routes équipe campagne (assignees)
  * @modified   22/12/2025 - Ajout route API check-export-cache
  * @modified   23/12/2025 - Ajout route API customer-orders
@@ -17,6 +17,7 @@
  * @modified   30/12/2025 - Ajout routes Email Templates (Sprint 8)
  * @modified   30/12/2025 - Ajout routes Pages Fixes (Sprint 9)
  * @modified   06/01/2026 - Sprint 14 : Ajout route repLogin (page connexion rep avec switch langue)
+ * @modified   08/01/2026 - Sprint 15 : Ajout routes export Excel et génération TXT à la demande
  */
 
 // ============================================
@@ -565,6 +566,28 @@ $router->post("/admin/orders/regenerate", function () {
 
     $controller = new OrderController();
     $controller->regenerateFile();
+});
+
+// ============================================
+// SPRINT 15 : Export Excel et génération TXT à la demande
+// ============================================
+
+// Exporter les commandes sélectionnées en Excel (POST)
+$router->post("/admin/orders/export-excel", function () {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->exportExcel();
+});
+
+// Générer le fichier TXT à la demande pour une commande (POST)
+$router->post("/admin/orders/{id}/generate-txt", function ($id) {
+    $middleware = new AuthMiddleware();
+    $middleware->handle();
+
+    $controller = new OrderController();
+    $controller->generateTxtOnDemand((int) $id);
 });
 
 // Exporter le fichier TXT d'une commande (AVANT la route générique {id})
