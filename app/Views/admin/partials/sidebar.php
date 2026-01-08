@@ -52,6 +52,30 @@ if (!function_exists('isActive')) {
 }
 
 /**
+ * Vérifie si un menu parent doit être ouvert (si lui ou un de ses sous-menus est actif)
+ */
+if (!function_exists('isMenuOpen')) {
+    function isMenuOpen(array $item, string $currentRoute): bool
+    {
+        // Vérifier si le menu parent lui-même est actif
+        if (isActive($item['route'], $currentRoute)) {
+            return true;
+        }
+
+        // Vérifier si un des sous-menus est actif
+        if (isset($item['submenu']) && is_array($item['submenu'])) {
+            foreach ($item['submenu'] as $subItem) {
+                if (isset($subItem['route']) && isActive($subItem['route'], $currentRoute)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
+/**
  * Retourne les classes CSS pour un lien actif/inactif
  */
 if (!function_exists('getNavLinkClass')) {
@@ -304,7 +328,7 @@ $filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
 
                 <?php if (isset($item["submenu"]) && !empty($item["submenu"])): ?>
                     <!-- Menu avec sous-menu -->
-                    <div x-data="{ open: <?= isActive($item["route"], $currentRoute) ? "true" : "false" ?> }">
+                    <div x-data="{ open: <?= isMenuOpen($item, $currentRoute) ? "true" : "false" ?> }">
 
                         <!-- Menu parent -->
                         <button @click="open = !open"
@@ -456,7 +480,7 @@ $filteredSettingsItems = array_filter($settingsItems, 'canAccessMenuItem');
             <?php foreach ($filteredMenuItems as $item): ?>
 
                 <?php if (isset($item["submenu"]) && !empty($item["submenu"])): ?>
-                    <div x-data="{ open: <?= isActive($item["route"], $currentRoute) ? "true" : "false" ?> }">
+                    <div x-data="{ open: <?= isMenuOpen($item, $currentRoute) ? "true" : "false" ?> }">
                         <button @click="open = !open"
                                 class="<?= getNavLinkClass($item["route"], $currentRoute) ?> w-full justify-between">
                             <div class="flex items-center gap-3">
