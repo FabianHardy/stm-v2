@@ -104,7 +104,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Rep_Name, Cluster, Origine, Date_Commande</p>
+            <p><strong>Colonnes:</strong> Campagne, Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Rep_Name, Origine, Date_Commande</p>
         </div>
     </div>
 
@@ -151,7 +151,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Email, Rep_Name, Origine, Date_Commande</p>
+            <p><strong>Colonnes:</strong> Campagne, Num_Client, Nom, Pays, Promo_Art, Nom_Produit, Quantité, Email, Rep_Name, Origine, Date_Commande</p>
         </div>
     </div>
 
@@ -198,7 +198,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Rep_ID, Rep_Nom, Cluster, Pays, Nb_Clients, Clients_Commandé, Taux_Conv, Total_Quantité, %_Via_Reps</p>
+            <p><strong>Colonnes:</strong> Campagne, Rep_ID, Rep_Nom, Cluster, Pays, Nb_Clients, Clients_Commandé, Taux_Conv, Total_Quantité, %_Via_Reps</p>
         </div>
     </div>
 
@@ -245,7 +245,7 @@ ob_start();
         </form>
 
         <div class="mt-4 text-xs text-gray-500">
-            <p><strong>Colonnes:</strong> Num_Client, Nom, Pays, Rep_Name</p>
+            <p><strong>Colonnes:</strong> Campagne, Num_Client, Nom, Pays, Rep_Name</p>
         </div>
     </div>
 </div>

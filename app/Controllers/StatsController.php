@@ -805,6 +805,7 @@ class StatsController
                 // Export des commandes d'une campagne
                 $data = $this->getExportCampaignData($campaignId);
                 $headers = [
+                    "Campagne",
                     "Num_Client",
                     "Nom",
                     "Pays",
@@ -821,8 +822,9 @@ class StatsController
 
             case "reps":
                 // Export stats par représentant
-                $data = $this->getExportRepsData($campaignId);
+                $data = $this->getExportRepsData($campaignId, $campaignName);
                 $headers = [
+                    "Campagne",
                     "Rep_ID",
                     "Rep_Nom",
                     "Cluster",
@@ -848,8 +850,8 @@ class StatsController
                 }
 
                 // Export clients n'ayant pas commandé
-                $data = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
-                $headers = ["Num_Client", "Nom", "Pays", "Rep_Name"];
+                $data = $this->getExportNotOrderedData($campaignId, $campaignName);
+                $headers = ["Campagne", "Num_Client", "Nom", "Pays", "Rep_Name"];
                 $filename = "clients_sans_commande_{$campaignCountry}_{$campaignName}_" . date("Ymd");
                 break;
 
@@ -857,6 +859,7 @@ class StatsController
                 // Export global
                 $data = $this->getExportGlobalData($dateFrom, $dateTo, $campaignId);
                 $headers = [
+                    "Campagne",
                     "Num_Client",
                     "Nom",
                     "Pays",
@@ -864,7 +867,6 @@ class StatsController
                     "Nom_Produit",
                     "Quantité",
                     "Rep_Name",
-                    "Cluster",
                     "Origine",
                     "Date_Commande",
                 ];
@@ -988,20 +990,22 @@ class StatsController
         }
 
         $query = "
-            SELECT cu.customer_number as Num_Client,
+            SELECT c.name as Campagne,
+                   cu.customer_number as Num_Client,
                    cu.company_name as Nom,
                    cu.country as Pays,
                    p.product_code as Promo_Art,
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
-                   cu.rep_name as Rep_Name,
-                   '' as Cluster,
+                   COALESCE(u.name, cu.rep_name) as Rep_Name,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
+            INNER JOIN campaigns c ON o.campaign_id = c.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
+            LEFT JOIN users u ON cu.rep_id = u.id
             WHERE o.status = 'synced'
             AND o.created_at BETWEEN :date_from AND :date_to
             {$campaignFilter}
@@ -1019,20 +1023,23 @@ class StatsController
         $db = \Core\Database::getInstance();
 
         $query = "
-            SELECT cu.customer_number as Num_Client,
+            SELECT c.name as Campagne,
+                   cu.customer_number as Num_Client,
                    cu.company_name as Nom,
                    cu.country as Pays,
                    p.product_code as Promo_Art,
                    p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
                    o.customer_email as Email,
-                   cu.rep_name as Rep_Name,
+                   COALESCE(u.name, cu.rep_name) as Rep_Name,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
+            INNER JOIN campaigns c ON o.campaign_id = c.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
+            LEFT JOIN users u ON cu.rep_id = u.id
             WHERE o.campaign_id = :campaign_id
             AND o.status = 'synced'
             ORDER BY cu.customer_number, p.product_code
@@ -1044,7 +1051,7 @@ class StatsController
     /**
      * Récupère les données pour export représentants
      */
-    private function getExportRepsData(?int $campaignId): array
+    private function getExportRepsData(?int $campaignId, ?string $campaignName = null): array
     {
         $reps = $this->statsModel->getRepStats(null, $campaignId);
 
@@ -1053,6 +1060,9 @@ class StatsController
         if ($campaignId) {
             $originStatsByRep = $this->getOriginStatsByRep($campaignId);
         }
+
+        // Nom de la campagne pour l'export
+        $campagneName = $campaignName ?: "Toutes les campagnes";
 
         $data = [];
         foreach ($reps as $rep) {
@@ -1072,15 +1082,37 @@ class StatsController
             }
 
             $data[] = [
+                "Campagne" => $campagneName,
                 "Rep_ID" => $rep["id"],
                 "Rep_Nom" => $rep["name"],
-                "Cluster" => $rep["cluster"],
+                "Cluster" => $rep["cluster"] ?? "",
                 "Pays" => $rep["country"],
                 "Nb_Clients" => $rep["total_clients"],
                 "Clients_Commande" => $rep["stats"]["customers_ordered"],
                 "Taux_Conv" => $convRate,
                 "Total_Quantite" => $rep["stats"]["total_quantity"],
                 "Pct_Via_Reps" => $pctViaReps,
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Récupère les données pour export clients sans commande
+     */
+    private function getExportNotOrderedData(int $campaignId, string $campaignName): array
+    {
+        $customers = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
+
+        $data = [];
+        foreach ($customers as $cust) {
+            $data[] = [
+                "Campagne" => $campaignName,
+                "Num_Client" => $cust["customer_number"] ?? "",
+                "Nom" => $cust["company_name"] ?? "",
+                "Pays" => $cust["country"] ?? "",
+                "Rep_Name" => $cust["rep_name"] ?? "",
             ];
         }
 
