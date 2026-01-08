@@ -20,6 +20,7 @@
  * @modified 29/12/2025 - Menu Clients simplifié (consultation uniquement, suppression création/import)
  * @modified 30/12/2025 - Ajout menu Traductions (gestion FR/NL front client)
  * @modified 30/12/2025 - Ajout menus Pages statiques et Email templates
+ * @modified 08/01/2026 - Correction isActive() : Vue globale ne highlight plus si sur autres pages stats
  */
 
 use App\Helpers\PermissionHelper;
@@ -40,6 +41,12 @@ if (!function_exists('isActive')) {
         if ($route === '/stm/admin/settings' && str_starts_with($currentRoute, '/stm/admin/settings/')) {
             return false;
         }
+
+        // Cas spécial : /stats (Vue globale) ne doit pas matcher /stats/campaigns, /stats/sales, etc.
+        if ($route === '/stm/admin/stats' && preg_match('#^/stm/admin/stats/(campaigns|sales|reports)#', $currentRoute)) {
+            return false;
+        }
+
         return str_starts_with($currentRoute, $route);
     }
 }
