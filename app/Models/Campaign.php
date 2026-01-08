@@ -9,6 +9,7 @@
  * @modified 2025/12/09 - Ajout méthodes getPromotionStats() et getSupplierStats() pour stats fournisseurs
  * @modified 2025/12/18 - Ajout filtres campaign_ids et accessible_countries pour filtrage par rôle (rep, manager_reps)
  * @modified 2026/01/05 - Sprint 14 : Ajout champ show_prices pour affichage prix aux reps
+ * @modified 2026/01/08 - Sprint 15 : Ajout champ order_processing_mode (direct/pending)
  */
 
 namespace App\Models;
@@ -394,6 +395,7 @@ class Campaign
      * @param array $data Données de la campagne
      * @return int|false ID de la campagne créée ou false
      * @modified 2026/01/05 - Sprint 14 : Ajout show_prices
+     * @modified 2026/01/08 - Sprint 15 : Ajout order_processing_mode
      */
     public function create(array $data): int|false
     {
@@ -407,7 +409,7 @@ class Campaign
                     title_fr, description_fr,
                     title_nl, description_nl,
                     customer_assignment_mode,
-                    order_password, order_type, show_prices, deferred_delivery, delivery_date,
+                    order_password, order_type, show_prices, order_processing_mode, deferred_delivery, delivery_date,
                     unique_url,
                     created_at
                 ) VALUES (
@@ -416,7 +418,7 @@ class Campaign
                     :title_fr, :description_fr,
                     :title_nl, :description_nl,
                     :customer_assignment_mode,
-                    :order_password, :order_type, :show_prices, :deferred_delivery, :delivery_date,
+                    :order_password, :order_type, :show_prices, :order_processing_mode, :deferred_delivery, :delivery_date,
                     :unique_url,
                     NOW()
                 )";
@@ -437,6 +439,7 @@ class Campaign
             ":order_password" => $data["order_password"] ?? null,
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
+            ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
             ":unique_url" => $uuid, // Utiliser le même UUID pour unique_url
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
@@ -458,6 +461,7 @@ class Campaign
      * @param array $data Nouvelles données
      * @return bool
      * @modified 2026/01/05 - Sprint 14 : Ajout show_prices
+     * @modified 2026/01/08 - Sprint 15 : Ajout order_processing_mode
      */
     public function update(int $id, array $data): bool
     {
@@ -481,6 +485,7 @@ class Campaign
                     order_password = :order_password,
                     order_type = :order_type,
                     show_prices = :show_prices,
+                    order_processing_mode = :order_processing_mode,
                     deferred_delivery = :deferred_delivery,
                     delivery_date = :delivery_date,
                     updated_at = NOW()";
@@ -506,6 +511,7 @@ class Campaign
             ":order_password" => $data["order_password"] ?? null,
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
+            ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
         ];

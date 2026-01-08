@@ -13,7 +13,8 @@
  * @modified 2025/12/30 - Ajout méthode showStaticPage() pour pages fixes (Sprint 9)
  * @modified 2025/01/05 - Intégration API Trendy Foods pour éligibilité produits
  * @modified 2026/01/05 - Sprint 14 : Mode Représentant (commande pour client)
- * @modified 2026/01/08 - Amélioration messages compte désactivé + redirection rep
+ * @modified 2026/01/08 - Sprint 14 : Amélioration messages compte désactivé + prompt select_account
+ * @modified 2026/01/08 - Sprint 15 : Mode traitement commandes (direct/pending)
  */
 
 namespace App\Controllers;
@@ -1461,20 +1462,32 @@ class PublicCampaignController
                 ]);
             }
 
-            // 6. Générer le fichier TXT pour l'ERP
-            $fileData = $this->generateOrderFile(
-                $orderId,
-                $campaign,
-                $customer["customer_number"],
-                $customer["country"],
-                $cart["items"],
-            );
+            // 6. SPRINT 15 : Traitement selon le mode de la campagne
+            // ========================================
+            $orderProcessingMode = $campaign["order_processing_mode"] ?? "direct";
 
-            // Mettre à jour le chemin du fichier ET le contenu dans la commande
-            $this->db->execute(
-                "UPDATE orders SET file_path = :file_path, file_content = :file_content, file_generated_at = NOW(), status = 'synced' WHERE id = :id",
-                [":file_path" => $fileData['path'], ":file_content" => $fileData['content'], ":id" => $orderId],
-            );
+            if ($orderProcessingMode === "pending") {
+                // Mode PENDING : pas de fichier TXT, statut validated
+                $this->db->execute(
+                    "UPDATE orders SET status = 'validated' WHERE id = :id",
+                    [":id" => $orderId],
+                );
+            } else {
+                // Mode DIRECT (défaut) : Générer le fichier TXT pour l'ERP
+                $fileData = $this->generateOrderFile(
+                    $orderId,
+                    $campaign,
+                    $customer["customer_number"],
+                    $customer["country"],
+                    $cart["items"],
+                );
+
+                // Mettre à jour le chemin du fichier ET le contenu dans la commande
+                $this->db->execute(
+                    "UPDATE orders SET file_path = :file_path, file_content = :file_content, file_generated_at = NOW(), status = 'synced' WHERE id = :id",
+                    [":file_path" => $fileData['path'], ":file_content" => $fileData['content'], ":id" => $orderId],
+                );
+            }
 
             // 7. Valider la transaction
             $this->db->commit();
@@ -1494,6 +1507,7 @@ class PublicCampaignController
             // 11. Préparer les données email pour envoi asynchrone
             // ========================================
             // SPRINT 14 : Ajout infos rep pour copie email
+            // SPRINT 15 : Ajout mode de traitement pour email différent
             // ========================================
             $_SESSION["pending_email"] = [
                 "customer_email" => $customerEmail,
@@ -1512,6 +1526,8 @@ class PublicCampaignController
                 "is_rep_order" => $isRepOrder,
                 "rep_email" => $customer["rep_email"] ?? null,
                 "rep_name" => $customer["rep_name"] ?? null,
+                // SPRINT 15 : Mode de traitement (pour email différent)
+                "order_processing_mode" => $orderProcessingMode,
             ];
 
             // Horodatage de la validation (protection double soumission)
