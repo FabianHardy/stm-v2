@@ -710,6 +710,7 @@ class StatsController
         // Détail d'un représentant si sélectionné
         $repDetail = null;
         $repClients = [];
+        $clientOrigins = [];
 
         if ($repId && $repCountry) {
             $repClients = $this->statsModel->getRepClients($repId, $repCountry, $campaignId);
@@ -720,6 +721,11 @@ class StatsController
                     $repDetail = $rep;
                     break;
                 }
+            }
+
+            // Récupérer les origines des commandes par client (si campagne sélectionnée)
+            if ($campaignId) {
+                $clientOrigins = $this->getClientOrderOrigins($campaignId, $repId, $repCountry);
             }
         }
 
