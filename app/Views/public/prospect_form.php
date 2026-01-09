@@ -3,7 +3,7 @@
  * Vue : Accès campagne publique - Formulaire prospect
  *
  * Sprint 16 : Mode Prospect
- * Utilise le même layout et composants que show.php
+ * Utilise JavaScript vanilla pour éviter conflits Alpine.js
  *
  * @package STM
  * @created 2026/01/09
@@ -20,26 +20,19 @@ if ($campaign['country'] === 'LU') {
     $lang = 'fr';
 }
 
-// Stocker la langue en session
 $_SESSION['prospect_language'] = $lang;
 
-// Récupérer les erreurs et anciennes valeurs (passées par le contrôleur)
 $errors = $errors ?? [];
 $old = $old ?? [];
 
-// Titre et description selon la langue
 $campaignTitle = $lang === 'fr' ? ($campaign['title_fr'] ?? $campaign['name']) : ($campaign['title_nl'] ?? $campaign['name']);
 $campaignDescription = $lang === 'fr' ? ($campaign['description_fr'] ?? '') : ($campaign['description_nl'] ?? '');
 
-// UUID pour les liens
 $uuid = $campaign['uuid'];
 
-// Variables pour le layout
 $title = trans('prospect.title', $lang) . ' - ' . $campaignTitle;
-$useAlpine = true;
-// NE PAS définir $bodyAttrs - laisser le layout gérer les modals footer
+$useAlpine = true; // Pour les modals du footer
 
-// Récupérer les pages statiques pour le footer (utilisé par le layout)
 $staticPageModel = new \App\Models\StaticPage();
 $footerPages = $staticPageModel->getFooterPages($campaign['id']);
 
@@ -69,10 +62,8 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <main class="container mx-auto px-4 py-8 relative z-10">
     <div class="max-w-2xl mx-auto">
 
-        <!-- Formulaire prospect avec Alpine.js -->
-        <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-8"
-             x-data="prospectForm()"
-             x-init="init()">
+        <!-- Formulaire prospect -->
+        <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-8">
 
             <div class="text-center mb-6">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
@@ -108,7 +99,8 @@ include __DIR__ . '/../components/public/campaign_bar.php';
             <form method="POST"
                   action="/stm/c/<?= htmlspecialchars($uuid) ?>/prospect/register"
                   class="space-y-6"
-                  @submit="validateForm($event)">
+                  id="prospect-form"
+                  onsubmit="return validateProspectForm()">
 
                 <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                 <input type="hidden" name="campaign_id" value="<?= $campaign['id'] ?>">
@@ -186,21 +178,25 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                             <div class="flex gap-4 pt-2">
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="is_vat_liable" value="1"
-                                           x-model="isVatLiable"
+                                           id="vat_liable_yes"
+                                           <?= ($old['is_vat_liable'] ?? '1') === '1' ? 'checked' : '' ?>
+                                           onchange="toggleVatField()"
                                            class="h-4 w-4 text-blue-600 focus:ring-blue-500" required>
                                     <span class="ml-2 text-sm"><?= trans('prospect.yes', $lang) ?></span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="is_vat_liable" value="0"
-                                           x-model="isVatLiable"
+                                           id="vat_liable_no"
+                                           <?= ($old['is_vat_liable'] ?? '1') === '0' ? 'checked' : '' ?>
+                                           onchange="toggleVatField()"
                                            class="h-4 w-4 text-blue-600 focus:ring-blue-500">
                                     <span class="ml-2 text-sm"><?= trans('prospect.no', $lang) ?></span>
                                 </label>
                             </div>
                         </div>
                         <div class="col-span-12 md:col-span-8">
-                            <!-- Champ TVA visible si assujetti -->
-                            <div x-show="isVatLiable === '1'" x-cloak>
+                            <!-- Champ TVA (visible par défaut car Oui est coché) -->
+                            <div id="vat_number_container">
                                 <label for="vat_number" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-hashtag mr-2 text-blue-600"></i>
                                     <?= trans('prospect.vat_number', $lang) ?> <span class="text-red-500">*</span>
@@ -208,11 +204,10 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <input type="text" id="vat_number" name="vat_number"
                                        value="<?= htmlspecialchars($old['vat_number'] ?? '') ?>"
                                        placeholder="BE0123456789"
-                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                       x-bind:required="isVatLiable === '1'">
+                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                             </div>
-                            <!-- Message si non assujetti -->
-                            <div x-show="isVatLiable === '0'" x-cloak class="flex items-center h-full pt-6">
+                            <!-- Message si non assujetti (caché par défaut) -->
+                            <div id="vat_not_liable_message" class="hidden flex items-center h-full pt-6">
                                 <span class="text-sm text-gray-400 italic">
                                     <i class="fas fa-info-circle mr-1"></i>
                                     <?= trans('prospect.not_vat_liable', $lang) ?>
@@ -237,7 +232,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                             </label>
                             <input type="email" id="email" name="email"
                                    value="<?= htmlspecialchars($old['email'] ?? '') ?>"
-                                   x-model="email"
+                                   oninput="checkEmailMatch()"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                    required>
                         </div>
@@ -247,13 +242,10 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <?= trans('prospect.email_confirm', $lang) ?> <span class="text-red-500">*</span>
                             </label>
                             <input type="email" id="email_confirm" name="email_confirm"
-                                   x-model="emailConfirm"
+                                   oninput="checkEmailMatch()"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                   x-bind:class="{'border-red-500 bg-red-50': email && emailConfirm && email !== emailConfirm}"
                                    required>
-                            <p x-show="email && emailConfirm && email !== emailConfirm"
-                               x-cloak
-                               class="mt-1 text-xs text-red-600">
+                            <p id="email_mismatch_error" class="hidden mt-1 text-xs text-red-600">
                                 <i class="fas fa-exclamation-triangle mr-1"></i>
                                 <?= trans('prospect.email_mismatch', $lang) ?>
                             </p>
@@ -298,12 +290,11 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <?= trans('prospect.country', $lang) ?> <span class="text-red-500">*</span>
                             </label>
                             <select id="country" name="country"
-                                    x-model="selectedCountry"
-                                    @change="onCountryChange()"
+                                    onchange="onCountryChange()"
                                     class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                     required>
-                                <option value="BE">🇧🇪 <?= $lang === 'nl' ? 'België' : 'Belgique' ?></option>
-                                <option value="LU">🇱🇺 Luxembourg</option>
+                                <option value="BE" <?= ($old['country'] ?? 'BE') === 'BE' ? 'selected' : '' ?>>🇧🇪 <?= $lang === 'nl' ? 'België' : 'Belgique' ?></option>
+                                <option value="LU" <?= ($old['country'] ?? '') === 'LU' ? 'selected' : '' ?>>🇱🇺 Luxembourg</option>
                             </select>
                         </div>
                         <div class="col-span-12 md:col-span-9">
@@ -326,8 +317,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                             </label>
                             <input type="text" id="postal_code" name="postal_code"
                                    value="<?= htmlspecialchars($old['postal_code'] ?? '') ?>"
-                                   x-model="postalCode"
-                                   @input="onPostalCodeInput()"
+                                   oninput="onPostalCodeInput()"
                                    maxlength="6"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                    required>
@@ -335,20 +325,17 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         <div class="col-span-12 md:col-span-9">
                             <label for="city" class="block text-sm font-semibold text-gray-700 mb-2">
                                 <?= trans('prospect.city', $lang) ?> <span class="text-red-500">*</span>
-                                <span x-show="loadingLocalities" x-cloak class="text-blue-500 ml-1">
+                                <span id="loading_localities" class="hidden text-blue-500 ml-1">
                                     <i class="fas fa-spinner fa-spin"></i>
                                 </span>
                             </label>
                             <select id="city" name="city"
-                                    x-model="city"
                                     class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                     required>
                                 <option value=""><?= trans('prospect.enter_postal', $lang) ?></option>
-                                <template x-for="loc in localities" :key="loc.id">
-                                    <option :value="loc.locality_<?= $lang === 'nl' ? 'nl' : 'fr' ?> || loc.locality_fr"
-                                            x-text="loc.locality_<?= $lang === 'nl' ? 'nl' : 'fr' ?> || loc.locality_fr">
-                                    </option>
-                                </template>
+                                <?php if (!empty($old['city'])): ?>
+                                <option value="<?= htmlspecialchars($old['city']) ?>" selected><?= htmlspecialchars($old['city']) ?></option>
+                                <?php endif; ?>
                             </select>
                         </div>
                     </div>
@@ -368,12 +355,12 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 
                 <!-- Bouton submit -->
                 <button type="submit"
-                        :disabled="submitting || (email && emailConfirm && email !== emailConfirm)"
+                        id="submit_btn"
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-                    <span x-show="!submitting"><?= trans('prospect.submit', $lang) ?></span>
-                    <i x-show="!submitting" class="fas fa-arrow-right"></i>
-                    <span x-show="submitting" x-cloak class="flex items-center gap-2">
-                        <i class="fas fa-spinner fa-spin"></i>
+                    <span id="submit_text"><?= trans('prospect.submit', $lang) ?></span>
+                    <i id="submit_icon" class="fas fa-arrow-right"></i>
+                    <span id="submit_loading" class="hidden">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
                         <?= trans('prospect.loading', $lang) ?>
                     </span>
                 </button>
@@ -396,105 +383,157 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <?php
 $content = ob_get_clean();
 
-// Scripts spécifiques à cette page (défini AVANT le heredoc)
-$jsLang = $lang;
-$jsOldEmail = addslashes($old['email'] ?? '');
-$jsOldCountry = addslashes($old['country'] ?? 'BE');
-$jsOldPostalCode = addslashes($old['postal_code'] ?? '');
-$jsOldCity = addslashes($old['city'] ?? '');
-$jsOldVatLiable = addslashes($old['is_vat_liable'] ?? '1');
-
+// Scripts JavaScript vanilla
 $pageScripts = <<<SCRIPT
 <script>
-function prospectForm() {
-    return {
-        email: '{$jsOldEmail}',
-        emailConfirm: '',
-        selectedCountry: '{$jsOldCountry}' || 'BE',
-        postalCode: '{$jsOldPostalCode}',
-        city: '{$jsOldCity}',
-        isVatLiable: '{$jsOldVatLiable}' || '1',
-        localities: [],
-        loadingLocalities: false,
-        submitting: false,
-        searchTimeout: null,
+// ========================================
+// Toggle champ TVA
+// ========================================
+function toggleVatField() {
+    const isLiable = document.getElementById('vat_liable_yes').checked;
+    const vatContainer = document.getElementById('vat_number_container');
+    const notLiableMsg = document.getElementById('vat_not_liable_message');
+    const vatInput = document.getElementById('vat_number');
 
-        init() {
-            if (this.postalCode && this.postalCode.length >= 4) {
-                this.loadLocalities();
-            }
-        },
-
-        onCountryChange() {
-            this.localities = [];
-            this.city = '';
-            if (this.postalCode && this.postalCode.length >= 4) {
-                this.loadLocalities();
-            }
-        },
-
-        onPostalCodeInput() {
-            clearTimeout(this.searchTimeout);
-
-            if (this.postalCode.length < 4) {
-                this.localities = [];
-                this.city = '';
-                return;
-            }
-
-            this.searchTimeout = setTimeout(() => {
-                this.loadLocalities();
-            }, 300);
-        },
-
-        async loadLocalities() {
-            if (this.postalCode.length < 4) return;
-
-            this.loadingLocalities = true;
-            try {
-                const response = await fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(this.postalCode) + '&country=' + this.selectedCountry);
-                const data = await response.json();
-
-                if (data.success && data.data) {
-                    this.localities = data.data;
-
-                    if (this.localities.length === 1) {
-                        const lang = '{$jsLang}';
-                        this.city = this.localities[0]['locality_' + lang] || this.localities[0].locality_fr;
-                    } else if (this.localities.length > 1) {
-                        this.city = '';
-                    }
-                } else {
-                    this.localities = [];
-                }
-            } catch (e) {
-                console.error('Erreur chargement localités:', e);
-                this.localities = [];
-            } finally {
-                this.loadingLocalities = false;
-            }
-        },
-
-        validateForm(event) {
-            if (this.email !== this.emailConfirm) {
-                event.preventDefault();
-                alert('Les adresses email ne correspondent pas.');
-                return false;
-            }
-
-            if (this.isVatLiable === '0') {
-                const vatInput = document.getElementById('vat_number');
-                if (vatInput) {
-                    vatInput.removeAttribute('required');
-                    vatInput.value = '';
-                }
-            }
-
-            this.submitting = true;
-            return true;
-        }
+    if (isLiable) {
+        vatContainer.classList.remove('hidden');
+        notLiableMsg.classList.add('hidden');
+        vatInput.required = true;
+    } else {
+        vatContainer.classList.add('hidden');
+        notLiableMsg.classList.remove('hidden');
+        vatInput.required = false;
+        vatInput.value = '';
     }
 }
+
+// ========================================
+// Vérification correspondance emails
+// ========================================
+function checkEmailMatch() {
+    const email = document.getElementById('email').value;
+    const emailConfirm = document.getElementById('email_confirm').value;
+    const errorMsg = document.getElementById('email_mismatch_error');
+    const emailConfirmInput = document.getElementById('email_confirm');
+
+    if (email && emailConfirm && email !== emailConfirm) {
+        errorMsg.classList.remove('hidden');
+        emailConfirmInput.classList.add('border-red-500', 'bg-red-50');
+    } else {
+        errorMsg.classList.add('hidden');
+        emailConfirmInput.classList.remove('border-red-500', 'bg-red-50');
+    }
+}
+
+// ========================================
+// Validation formulaire
+// ========================================
+function validateProspectForm() {
+    const email = document.getElementById('email').value;
+    const emailConfirm = document.getElementById('email_confirm').value;
+
+    if (email !== emailConfirm) {
+        alert('Les adresses email ne correspondent pas.');
+        return false;
+    }
+
+    // Désactiver le bouton et afficher le loading
+    const btn = document.getElementById('submit_btn');
+    const text = document.getElementById('submit_text');
+    const icon = document.getElementById('submit_icon');
+    const loading = document.getElementById('submit_loading');
+
+    btn.disabled = true;
+    text.classList.add('hidden');
+    icon.classList.add('hidden');
+    loading.classList.remove('hidden');
+
+    return true;
+}
+
+// ========================================
+// Chargement localités
+// ========================================
+let searchTimeout = null;
+
+function onCountryChange() {
+    document.getElementById('city').innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+    const postalCode = document.getElementById('postal_code').value;
+    if (postalCode.length >= 4) {
+        loadLocalities();
+    }
+}
+
+function onPostalCodeInput() {
+    clearTimeout(searchTimeout);
+    const postalCode = document.getElementById('postal_code').value;
+
+    if (postalCode.length < 4) {
+        document.getElementById('city').innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+        return;
+    }
+
+    searchTimeout = setTimeout(loadLocalities, 300);
+}
+
+async function loadLocalities() {
+    const postalCode = document.getElementById('postal_code').value;
+    const country = document.getElementById('country').value;
+    const citySelect = document.getElementById('city');
+    const loading = document.getElementById('loading_localities');
+
+    if (postalCode.length < 4) return;
+
+    loading.classList.remove('hidden');
+
+    try {
+        const response = await fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(postalCode) + '&country=' + country);
+        const data = await response.json();
+
+        citySelect.innerHTML = '';
+
+        if (data.success && data.data && data.data.length > 0) {
+            if (data.data.length > 1) {
+                citySelect.innerHTML = '<option value=""><?= trans('prospect.select_city', $lang) ?></option>';
+            }
+
+            const lang = '<?= $lang ?>';
+            data.data.forEach(loc => {
+                const name = loc['locality_' + lang] || loc.locality_fr;
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                citySelect.appendChild(option);
+            });
+
+            // Auto-select si une seule localité
+            if (data.data.length === 1) {
+                citySelect.value = data.data[0]['locality_' + lang] || data.data[0].locality_fr;
+            }
+        } else {
+            citySelect.innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+        }
+    } catch (e) {
+        console.error('Erreur:', e);
+        citySelect.innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+    } finally {
+        loading.classList.add('hidden');
+    }
+}
+
+// ========================================
+// Initialisation au chargement
+// ========================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialiser l'état du champ TVA
+    toggleVatField();
+
+    // Charger les localités si code postal pré-rempli
+    const postalCode = document.getElementById('postal_code').value;
+    if (postalCode && postalCode.length >= 4) {
+        loadLocalities();
+    }
+});
 </script>
 SCRIPT;
 
