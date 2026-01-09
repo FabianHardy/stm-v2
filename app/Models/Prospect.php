@@ -34,19 +34,19 @@ class Prospect
     public function generateProspectNumber(string $country): string
     {
         $country = strtoupper($country);
-        
+
         // Récupérer et incrémenter le compteur
-        $query = "UPDATE prospect_sequences 
-                  SET last_number = last_number + 1, updated_at = NOW() 
+        $query = "UPDATE prospect_sequences
+                  SET last_number = last_number + 1, updated_at = NOW()
                   WHERE country = :country";
         $this->db->execute($query, [":country" => $country]);
-        
+
         // Récupérer le nouveau numéro
         $query = "SELECT last_number FROM prospect_sequences WHERE country = :country";
         $result = $this->db->query($query, [":country" => $country]);
-        
+
         $number = $result[0]["last_number"] ?? 1;
-        
+
         return sprintf("PROSP-%s-%06d", $country, $number);
     }
 
@@ -60,7 +60,7 @@ class Prospect
     {
         // Générer le numéro de prospect
         $prospectNumber = $this->generateProspectNumber($data["country"]);
-        
+
         $query = "INSERT INTO prospects (
                     prospect_number, civility, company_name,
                     vat_number, is_vat_liable,
@@ -125,7 +125,7 @@ class Prospect
                   FROM prospects p
                   LEFT JOIN shop_types st ON p.shop_type_id = st.id
                   WHERE p.id = :id";
-        
+
         $result = $this->db->query($query, [":id" => $id]);
         return $result[0] ?? null;
     }
@@ -142,7 +142,7 @@ class Prospect
                   FROM prospects p
                   LEFT JOIN shop_types st ON p.shop_type_id = st.id
                   WHERE p.prospect_number = :prospect_number";
-        
+
         $result = $this->db->query($query, [":prospect_number" => $prospectNumber]);
         return $result[0] ?? null;
     }
@@ -160,7 +160,7 @@ class Prospect
                   LEFT JOIN shop_types st ON p.shop_type_id = st.id
                   WHERE p.campaign_id = :campaign_id
                   ORDER BY p.created_at DESC";
-        
+
         return $this->db->query($query, [":campaign_id" => $campaignId]);
     }
 
@@ -186,7 +186,7 @@ class Prospect
      */
     public function emailExistsForCampaign(string $email, int $campaignId): bool
     {
-        $query = "SELECT COUNT(*) as total FROM prospects 
+        $query = "SELECT COUNT(*) as total FROM prospects
                   WHERE email = :email AND campaign_id = :campaign_id";
         $result = $this->db->query($query, [
             ":email" => $email,
@@ -213,7 +213,8 @@ class Prospect
         if (empty($data["company_name"])) {
             $errors["company_name"] = "Le nom de l'entreprise est obligatoire";
         }
-        if (empty($data["vat_number"])) {
+        // TVA obligatoire SEULEMENT si assujetti
+        if (($data["is_vat_liable"] ?? 1) == 1 && empty($data["vat_number"])) {
             $errors["vat_number"] = "Le numéro de TVA est obligatoire";
         }
         if (empty($data["email"])) {
@@ -253,7 +254,7 @@ class Prospect
      */
     public function getProspectsWithOrdersForCampaign(int $campaignId): array
     {
-        $query = "SELECT 
+        $query = "SELECT
                     p.*,
                     st.name as shop_type_name,
                     COUNT(o.id) as order_count,
@@ -264,7 +265,7 @@ class Prospect
                   WHERE p.campaign_id = :campaign_id
                   GROUP BY p.id
                   ORDER BY p.created_at DESC";
-        
+
         return $this->db->query($query, [":campaign_id" => $campaignId]);
     }
 }
