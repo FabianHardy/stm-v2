@@ -2923,6 +2923,73 @@ class PublicCampaignController
     }
 
     /**
+     * Afficher la page de checkout pour un prospect
+     * GET /c/{uuid}/prospect/checkout
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectCheckout(string $uuid): void
+    {
+        // Gérer le changement de langue via GET
+        $requestedLang = $_GET['lang'] ?? null;
+        if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+            $_SESSION['prospect_language'] = $requestedLang;
+            $cleanUrl = strtok($_SERVER["REQUEST_URI"], "?");
+            header("Location: {$cleanUrl}");
+            exit();
+        }
+
+        // Vérifier que le prospect est identifié
+        if (empty($_SESSION['prospect_id'])) {
+            header("Location: /stm/c/{$uuid}/prospect");
+            exit();
+        }
+
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        if (!$campaign) {
+            http_response_code(404);
+            echo "Campagne introuvable";
+            return;
+        }
+
+        // Récupérer le panier
+        $cart = $_SESSION["cart"] ?? ["campaign_uuid" => $uuid, "items" => []];
+
+        // Vérifier que le panier n'est pas vide
+        $lang = $_SESSION['prospect_language'] ?? 'fr';
+        if (empty($cart["items"])) {
+            $_SESSION["error"] = $lang === "fr"
+                ? "Votre panier est vide. Veuillez ajouter des produits avant de valider."
+                : "Uw winkelwagen is leeg. Voeg producten toe voordat u valideert.";
+
+            header("Location: /stm/c/{$uuid}/prospect/catalog");
+            exit();
+        }
+
+        // Préparer les données du prospect comme un "customer"
+        $customer = [
+            'customer_number' => $_SESSION['prospect_number'],
+            'company_name' => $_SESSION['prospect_name'],
+            'email' => $_SESSION['prospect_email'] ?? '',
+            'country' => $_SESSION['prospect_country'] ?? 'BE',
+            'language' => $lang,
+            'is_prospect' => true,
+        ];
+
+        // Pas de prix API pour les prospects
+        $isRepOrder = false;
+        $showPrices = false;
+        $orderType = $campaign["order_type"] ?? "W";
+
+        // Charger la vue checkout
+        require __DIR__ . "/../Views/public/campaign/checkout.php";
+    }
+
+    /**
      * Déconnexion d'un prospect
      * GET /c/{uuid}/prospect/logout
      *

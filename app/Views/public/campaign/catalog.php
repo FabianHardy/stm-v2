@@ -896,7 +896,12 @@ ob_start();
                         alert(t.emptyCart);
                         return;
                     }
+                    // Sprint 16 : Redirection différente pour prospects
+                    <?php if ($isProspectOrder): ?>
+                    window.location.href = '/stm/c/<?= $uuid ?>/prospect/checkout';
+                    <?php else: ?>
                     window.location.href = '/stm/c/<?= $uuid ?>/checkout';
+                    <?php endif; ?>
                 },
 
                 showNotification(message) {
