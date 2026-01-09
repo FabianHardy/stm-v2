@@ -3,7 +3,6 @@
  * Vue : Accès campagne publique - Formulaire prospect
  *
  * Sprint 16 : Mode Prospect
- * Utilise JavaScript vanilla pour éviter conflits Alpine.js
  *
  * @package STM
  * @created 2026/01/09
@@ -13,7 +12,6 @@
 // PRÉPARATION DES DONNÉES
 // ========================================
 
-// Langue : paramètre GET ou FR par défaut, forcé FR pour LU
 $requestedLang = $_GET['lang'] ?? $lang ?? 'fr';
 $lang = in_array($requestedLang, ['fr', 'nl'], true) ? $requestedLang : 'fr';
 if ($campaign['country'] === 'LU') {
@@ -31,7 +29,7 @@ $campaignDescription = $lang === 'fr' ? ($campaign['description_fr'] ?? '') : ($
 $uuid = $campaign['uuid'];
 
 $title = trans('prospect.title', $lang) . ' - ' . $campaignTitle;
-$useAlpine = true; // Pour les modals du footer
+$useAlpine = true;
 
 $staticPageModel = new \App\Models\StaticPage();
 $footerPages = $staticPageModel->getFooterPages($campaign['id']);
@@ -42,13 +40,11 @@ $footerPages = $staticPageModel->getFooterPages($campaign['id']);
 ob_start();
 ?>
 
-<!-- Header -->
 <?php
 $showClient = false;
 include __DIR__ . '/../components/public/header.php';
 ?>
 
-<!-- Bande campagne -->
 <?php
 $barTitle = $campaignTitle;
 $barSubtitle = $campaignDescription;
@@ -58,11 +54,9 @@ $showCountry = true;
 include __DIR__ . '/../components/public/campaign_bar.php';
 ?>
 
-<!-- Contenu principal -->
 <main class="container mx-auto px-4 py-8 relative z-10">
     <div class="max-w-2xl mx-auto">
 
-        <!-- Formulaire prospect -->
         <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-8">
 
             <div class="text-center mb-6">
@@ -77,7 +71,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                 </p>
             </div>
 
-            <!-- Messages d'erreur -->
             <?php if (!empty($errors)): ?>
             <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg">
                 <div class="flex items-start">
@@ -112,7 +105,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         <i class="fas fa-user mr-2"></i><?= trans('prospect.section_identity', $lang) ?>
                     </h4>
 
-                    <!-- Civilité + Entreprise -->
                     <div class="grid grid-cols-12 gap-4 mb-4">
                         <div class="col-span-12 md:col-span-3">
                             <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -145,7 +137,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         </div>
                     </div>
 
-                    <!-- Type de magasin -->
                     <div>
                         <label for="shop_type_id" class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-store mr-2 text-blue-600"></i>
@@ -195,7 +186,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                             </div>
                         </div>
                         <div class="col-span-12 md:col-span-8">
-                            <!-- Champ TVA (visible par défaut car Oui est coché) -->
                             <div id="vat_number_container">
                                 <label for="vat_number" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-hashtag mr-2 text-blue-600"></i>
@@ -206,7 +196,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                        placeholder="BE0123456789"
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                             </div>
-                            <!-- Message si non assujetti (caché par défaut) -->
                             <div id="vat_not_liable_message" style="display: none;" class="flex items-center h-full pt-6">
                                 <span class="text-sm text-gray-400 italic">
                                     <i class="fas fa-info-circle mr-1"></i>
@@ -223,7 +212,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         <i class="fas fa-address-book mr-2"></i><?= trans('prospect.section_contact', $lang) ?>
                     </h4>
 
-                    <!-- Email + Confirmation -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -252,7 +240,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         </div>
                     </div>
 
-                    <!-- Téléphone + Fax -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="phone" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -283,7 +270,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         <i class="fas fa-map-marker-alt mr-2"></i><?= trans('prospect.section_address', $lang) ?>
                     </h4>
 
-                    <!-- Pays + Adresse -->
                     <div class="grid grid-cols-12 gap-4 mb-4">
                         <div class="col-span-12 md:col-span-3">
                             <label for="country" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -309,7 +295,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                         </div>
                     </div>
 
-                    <!-- Code postal + Localité -->
                     <div class="grid grid-cols-12 gap-4">
                         <div class="col-span-12 md:col-span-3">
                             <label for="postal_code" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -371,7 +356,6 @@ include __DIR__ . '/../components/public/campaign_bar.php';
             </form>
         </div>
 
-        <!-- Section aide -->
         <?php
         $country = $campaign['country'] === 'BOTH' ? 'BE' : $campaign['country'];
         include __DIR__ . '/../components/public/help_box.php';
@@ -383,21 +367,18 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <?php
 $content = ob_get_clean();
 
-// Variables pour le JS (les heredoc n'interprètent pas <?= ?>)
-$jsEnterPostal = trans('prospect.enter_postal', $lang);
-$jsSelectCity = trans('prospect.select_city', $lang);
+// Variables pour le JS
+$jsEnterPostal = addslashes(trans('prospect.enter_postal', $lang));
+$jsSelectCity = addslashes(trans('prospect.select_city', $lang));
 $jsLang = $lang;
 
-// Scripts JavaScript vanilla
-$pageScripts = <<<SCRIPT
-// ========================================
-// Toggle champ TVA
-// ========================================
+// Scripts JavaScript
+$pageScripts = "
 function toggleVatField() {
-    const isLiable = document.getElementById('vat_liable_yes').checked;
-    const vatContainer = document.getElementById('vat_number_container');
-    const notLiableMsg = document.getElementById('vat_not_liable_message');
-    const vatInput = document.getElementById('vat_number');
+    var isLiable = document.getElementById('vat_liable_yes').checked;
+    var vatContainer = document.getElementById('vat_number_container');
+    var notLiableMsg = document.getElementById('vat_not_liable_message');
+    var vatInput = document.getElementById('vat_number');
 
     if (isLiable) {
         vatContainer.style.display = 'block';
@@ -411,14 +392,11 @@ function toggleVatField() {
     }
 }
 
-// ========================================
-// Vérification correspondance emails
-// ========================================
 function checkEmailMatch() {
-    const email = document.getElementById('email').value;
-    const emailConfirm = document.getElementById('email_confirm').value;
-    const errorMsg = document.getElementById('email_mismatch_error');
-    const emailConfirmInput = document.getElementById('email_confirm');
+    var email = document.getElementById('email').value;
+    var emailConfirm = document.getElementById('email_confirm').value;
+    var errorMsg = document.getElementById('email_mismatch_error');
+    var emailConfirmInput = document.getElementById('email_confirm');
 
     if (email && emailConfirm && email !== emailConfirm) {
         errorMsg.classList.remove('hidden');
@@ -429,23 +407,19 @@ function checkEmailMatch() {
     }
 }
 
-// ========================================
-// Validation formulaire
-// ========================================
 function validateProspectForm() {
-    const email = document.getElementById('email').value;
-    const emailConfirm = document.getElementById('email_confirm').value;
+    var email = document.getElementById('email').value;
+    var emailConfirm = document.getElementById('email_confirm').value;
 
     if (email !== emailConfirm) {
         alert('Les adresses email ne correspondent pas.');
         return false;
     }
 
-    // Désactiver le bouton et afficher le loading
-    const btn = document.getElementById('submit_btn');
-    const text = document.getElementById('submit_text');
-    const icon = document.getElementById('submit_icon');
-    const loading = document.getElementById('submit_loading');
+    var btn = document.getElementById('submit_btn');
+    var text = document.getElementById('submit_text');
+    var icon = document.getElementById('submit_icon');
+    var loading = document.getElementById('submit_loading');
 
     btn.disabled = true;
     text.classList.add('hidden');
@@ -455,14 +429,11 @@ function validateProspectForm() {
     return true;
 }
 
-// ========================================
-// Chargement localités
-// ========================================
-let searchTimeout = null;
+var searchTimeout = null;
 
 function onCountryChange() {
-    document.getElementById('city').innerHTML = '<option value="">{$jsEnterPostal}</option>';
-    const postalCode = document.getElementById('postal_code').value;
+    document.getElementById('city').innerHTML = '<option value=\"\">{$jsEnterPostal}</option>';
+    var postalCode = document.getElementById('postal_code').value;
     if (postalCode.length >= 4) {
         loadLocalities();
     }
@@ -470,78 +441,72 @@ function onCountryChange() {
 
 function onPostalCodeInput() {
     clearTimeout(searchTimeout);
-    const postalCode = document.getElementById('postal_code').value;
+    var postalCode = document.getElementById('postal_code').value;
 
     if (postalCode.length < 4) {
-        document.getElementById('city').innerHTML = '<option value="">{$jsEnterPostal}</option>';
+        document.getElementById('city').innerHTML = '<option value=\"\">{$jsEnterPostal}</option>';
         return;
     }
 
     searchTimeout = setTimeout(loadLocalities, 300);
 }
 
-async function loadLocalities() {
-    const postalCode = document.getElementById('postal_code').value;
-    const country = document.getElementById('country').value;
-    const citySelect = document.getElementById('city');
-    const loading = document.getElementById('loading_localities');
+function loadLocalities() {
+    var postalCode = document.getElementById('postal_code').value;
+    var country = document.getElementById('country').value;
+    var citySelect = document.getElementById('city');
+    var loading = document.getElementById('loading_localities');
 
     if (postalCode.length < 4) return;
 
     loading.classList.remove('hidden');
 
-    try {
-        const response = await fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(postalCode) + '&country=' + country);
-        const data = await response.json();
+    fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(postalCode) + '&country=' + country)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            citySelect.innerHTML = '';
 
-        citySelect.innerHTML = '';
+            if (data.success && data.data && data.data.length > 0) {
+                if (data.data.length > 1) {
+                    citySelect.innerHTML = '<option value=\"\">{$jsSelectCity}</option>';
+                }
 
-        if (data.success && data.data && data.data.length > 0) {
-            if (data.data.length > 1) {
-                citySelect.innerHTML = '<option value="">{$jsSelectCity}</option>';
+                var lang = '{$jsLang}';
+                data.data.forEach(function(loc) {
+                    var name = loc['locality_' + lang] || loc.locality_fr;
+                    var option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    citySelect.appendChild(option);
+                });
+
+                if (data.data.length === 1) {
+                    citySelect.value = data.data[0]['locality_' + lang] || data.data[0].locality_fr;
+                }
+            } else {
+                citySelect.innerHTML = '<option value=\"\">{$jsEnterPostal}</option>';
             }
-
-            const lang = '{$jsLang}';
-            data.data.forEach(loc => {
-                const name = loc['locality_' + lang] || loc.locality_fr;
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                citySelect.appendChild(option);
-            });
-
-            // Auto-select si une seule localité
-            if (data.data.length === 1) {
-                citySelect.value = data.data[0]['locality_' + lang] || data.data[0].locality_fr;
-            }
-        } else {
-            citySelect.innerHTML = '<option value="">{$jsEnterPostal}</option>';
-        }
-    } catch (e) {
-        console.error('Erreur:', e);
-        citySelect.innerHTML = '<option value="">{$jsEnterPostal}</option>';
-    } finally {
-        loading.classList.add('hidden');
-    }
+        })
+        .catch(function(e) {
+            console.error('Erreur:', e);
+            citySelect.innerHTML = '<option value=\"\">{$jsEnterPostal}</option>';
+        })
+        .finally(function() {
+            loading.classList.add('hidden');
+        });
 }
 
-// ========================================
-// Initialisation au chargement
-// ========================================
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialiser l'état du champ TVA
     toggleVatField();
 
-    // Charger les localités si code postal pré-rempli
-    const postalCode = document.getElementById('postal_code').value;
+    var postalCode = document.getElementById('postal_code').value;
     if (postalCode && postalCode.length >= 4) {
         loadLocalities();
     }
 });
-SCRIPT;
+";
 
 $pageStyles = '';
 
-// Inclure le layout
 require __DIR__ . '/../layouts/public.php';
 ?>
