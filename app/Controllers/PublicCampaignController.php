@@ -3140,45 +3140,15 @@ class PublicCampaignController
      */
     public function prospectConfirmation(string $uuid): void
     {
-        $orderUuid = $_SESSION['last_order_uuid'] ?? null;
-        $orderNumber = $_SESSION['last_order_number'] ?? null;
-
-        if (!$orderUuid) {
+        // La session prospect doit exister
+        if (empty($_SESSION['prospect_id'])) {
             header("Location: /stm/c/{$uuid}/prospect");
             exit();
         }
 
-        // Récupérer la campagne
-        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
-        $result = $this->db->query($query, [":uuid" => $uuid]);
-        $campaign = $result[0] ?? null;
-
-        // Récupérer la commande
-        $query = "SELECT o.*, p.company_name as prospect_name, p.prospect_number
-                  FROM orders o
-                  LEFT JOIN prospects p ON o.prospect_id = p.id
-                  WHERE o.uuid = :uuid";
-        $result = $this->db->query($query, [":uuid" => $orderUuid]);
-        $order = $result[0] ?? null;
-
-        // Récupérer les lignes de commande
-        $orderLines = [];
-        if ($order) {
-            $query = "SELECT ol.*, p.product_id, pr.name as product_name, pr.code as product_code
-                      FROM order_lines ol
-                      INNER JOIN promotions p ON ol.promotion_id = p.id
-                      INNER JOIN products pr ON p.product_id = pr.id
-                      WHERE ol.order_id = :order_id";
-            $orderLines = $this->db->query($query, [":order_id" => $order['id']]);
-        }
-
-        $lang = $_SESSION['prospect_language'] ?? 'fr';
-
-        // Nettoyer la session
-        unset($_SESSION['last_order_uuid'], $_SESSION['last_order_number']);
-
-        // Charger la vue
-        require __DIR__ . '/../Views/public/prospect_confirmation.php';
+        // La vue confirmation.php gère tout elle-même (session, campagne, etc.)
+        // Elle détecte automatiquement le mode prospect via $_SESSION['prospect_id']
+        require __DIR__ . '/../Views/public/campaign/confirmation.php';
     }
 
     /**

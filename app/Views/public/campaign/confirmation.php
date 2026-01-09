@@ -7,6 +7,7 @@
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
  * @modified 2026/01/06 - Sprint 14 : Badge mode représentant + redirection rep
+ * @modified 2026/01/09 - Sprint 16 : Support mode prospect
  */
 
 // ========================================
@@ -18,8 +19,24 @@ $urlParts = explode('/', $_SERVER['REQUEST_URI']);
 $uuidIndex = array_search('c', $urlParts);
 $uuid = $uuidIndex !== false ? $urlParts[$uuidIndex + 1] : '';
 
-// Vérifier session client
-if (!isset($_SESSION['public_customer'])) {
+// Sprint 16 : Détection mode prospect
+$isProspectOrder = isset($_SESSION['prospect_id']) && !empty($_SESSION['prospect_id']);
+
+if ($isProspectOrder) {
+    // Mode prospect : utiliser les données prospect
+    $customer = [
+        'customer_number' => $_SESSION['prospect_number'] ?? '',
+        'company_name' => $_SESSION['prospect_name'] ?? '',
+        'email' => $_SESSION['prospect_email'] ?? '',
+        'country' => $_SESSION['prospect_country'] ?? 'BE',
+        'language' => $_SESSION['prospect_language'] ?? 'fr',
+        'is_prospect' => true,
+    ];
+} elseif (isset($_SESSION['public_customer'])) {
+    // Mode client normal
+    $customer = $_SESSION['public_customer'];
+} else {
+    // Pas de session valide
     // Sprint 14 : Si cookie mode rep, rediriger vers SSO rep
     $repModeCookie = $_COOKIE['stm_rep_mode'] ?? null;
     if ($repModeCookie && $repModeCookie === $uuid) {
@@ -30,17 +47,22 @@ if (!isset($_SESSION['public_customer'])) {
     exit;
 }
 
-$customer = $_SESSION['public_customer'];
-
 // Sprint 14 : Détection mode représentant
 $isRepOrder = $customer['is_rep_order'] ?? false;
 $repName = $customer['rep_name'] ?? '';
 $repEmail = $customer['rep_email'] ?? '';
 
+// Sprint 16 : URL catalogue selon le mode
+$catalogUrl = $isProspectOrder ? "/stm/c/{$uuid}/prospect/catalog" : "/stm/c/{$uuid}/catalog";
+
 // Gestion switch langue
 $requestedLang = $_GET['lang'] ?? null;
 if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
-    $_SESSION['public_customer']['language'] = $requestedLang;
+    if ($isProspectOrder) {
+        $_SESSION['prospect_language'] = $requestedLang;
+    } else {
+        $_SESSION['public_customer']['language'] = $requestedLang;
+    }
     header("Location: " . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
 }
@@ -136,7 +158,7 @@ include __DIR__ . '/../../components/public/campaign_bar.php';
             </div>
 
             <div class="flex justify-center">
-                <a href="/stm/c/<?= htmlspecialchars($uuid) ?>/catalog"
+                <a href="<?= $catalogUrl ?>"
                    class="inline-flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
