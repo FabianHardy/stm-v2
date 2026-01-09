@@ -441,7 +441,7 @@ class Campaign
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
             ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
-            ":allow_prospects" => $data["allow_prospects"] ?? 0, // Sprint 16 : Par défaut désactivé
+            ":allow_prospects" => $data["allow_prospects"] ?? 1, // Sprint 16 : Par défaut activé
             ":unique_url" => $uuid, // Utiliser le même UUID pour unique_url
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
@@ -515,7 +515,7 @@ class Campaign
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
             ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
-            ":allow_prospects" => $data["allow_prospects"] ?? 0, // Sprint 16 : Par défaut désactivé
+            ":allow_prospects" => $data["allow_prospects"] ?? 1, // Sprint 16 : Par défaut activé
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
         ];

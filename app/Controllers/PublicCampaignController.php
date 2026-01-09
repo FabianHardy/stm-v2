@@ -2768,7 +2768,7 @@ class PublicCampaignController
 
         // Le catalogue prospect est similaire au catalogue client
         // Mais sans vérification API (accès à toutes les promos)
-        
+
         // Récupérer la campagne
         $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
         $result = $this->db->query($query, [":uuid" => $uuid]);
@@ -3027,7 +3027,7 @@ class PublicCampaignController
 
             // Remplacer les variables
             $campaignName = $lang === 'nl' ? ($campaign['title_nl'] ?? $campaign['name']) : ($campaign['title_fr'] ?? $campaign['name']);
-            
+
             $replacements = [
                 '{civility}' => $orderData['civility'],
                 '{company_name}' => $orderData['company_name'],
@@ -3057,74 +3057,6 @@ class PublicCampaignController
 
         } catch (\Exception $e) {
             error_log("Erreur envoi email confirmation prospect: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Générer un UUID v4
-     *
-     * @return string
-     */
-    private function generateUuid(): string
-    {
-        $data = random_bytes(16);
-        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
-        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
-    }
-
-    /**
-     * Générer un numéro de commande unique
-     *
-     * @return string Format: STM-YYYYMMDD-XXXXX
-     */
-    private function generateOrderNumber(): string
-    {
-        $date = date('Ymd');
-        $random = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
-        return "STM-{$date}-{$random}";
-    }
-
-    /**
-     * Détecter le type d'appareil
-     *
-     * @return string desktop|tablet|mobile
-     */
-    private function detectDeviceType(): string
-    {
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        
-        if (preg_match('/tablet|ipad/i', $userAgent)) {
-            return 'tablet';
-        }
-        if (preg_match('/mobile|android|iphone/i', $userAgent)) {
-            return 'mobile';
-        }
-        return 'desktop';
-    }
-
-    /**
-     * Mettre à jour les statistiques de la campagne
-     *
-     * @param int $campaignId
-     */
-    private function updateCampaignStats(int $campaignId): void
-    {
-        $query = "UPDATE campaigns SET
-                    total_orders = (SELECT COUNT(*) FROM orders WHERE campaign_id = :id1),
-                    total_customers = (SELECT COUNT(DISTINCT COALESCE(customer_id, prospect_id)) FROM orders WHERE campaign_id = :id2),
-                    total_items = (SELECT COALESCE(SUM(total_items), 0) FROM orders WHERE campaign_id = :id3)
-                  WHERE id = :id4";
-        
-        try {
-            $this->db->execute($query, [
-                ':id1' => $campaignId,
-                ':id2' => $campaignId,
-                ':id3' => $campaignId,
-                ':id4' => $campaignId,
-            ]);
-        } catch (\PDOException $e) {
-            error_log("Erreur mise à jour stats campagne: " . $e->getMessage());
         }
     }
 }

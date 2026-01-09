@@ -473,6 +473,7 @@ if (!isset($availableUsers)) $availableUsers = [];
                         <input type="checkbox"
                                name="allow_prospects"
                                value="1"
+                               checked
                                class="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
                         <div class="ml-3">
                             <span class="block text-sm font-medium text-gray-900">
@@ -487,8 +488,8 @@ if (!isset($availableUsers)) $availableUsers = [];
                     <!-- Info-bulle -->
                     <div class="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                         <p class="text-xs text-purple-800">
-                            <strong>💡 Mode Prospect :</strong> Les prospects peuvent commander via une URL spéciale 
-                            (<code class="bg-purple-100 px-1 rounded">/c/[uuid]/prospect</code>). 
+                            <strong>💡 Mode Prospect :</strong> Les prospects peuvent commander via une URL spéciale
+                            (<code class="bg-purple-100 px-1 rounded">/c/[uuid]/prospect</code>).
                             Ils doivent remplir un formulaire d'inscription avant d'accéder au catalogue.
                             Leurs commandes sont toujours en mode "En attente" (pas de TXT automatique).
                         </p>
