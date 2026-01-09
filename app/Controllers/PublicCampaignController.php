@@ -167,6 +167,32 @@ class PublicCampaignController
     }
 
     /**
+     * Générer un numéro de commande unique
+     * Format: ORD-YYYY-XXXXXX (6 chiffres aléatoires)
+     *
+     * @return string Numéro de commande unique
+     */
+    private function generateOrderNumber(): string
+    {
+        $year = date('Y');
+        $random = str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
+        $orderNumber = "ORD-{$year}-{$random}";
+
+        // Vérifier unicité
+        $exists = $this->db->query(
+            "SELECT COUNT(*) as cnt FROM orders WHERE order_number = :num",
+            [':num' => $orderNumber]
+        );
+
+        if ($exists[0]['cnt'] > 0) {
+            // Récursion si collision (très rare)
+            return $this->generateOrderNumber();
+        }
+
+        return $orderNumber;
+    }
+
+    /**
      * Afficher la page d'accès à une campagne via UUID
      * Route : GET /c/{uuid}
      *
@@ -721,6 +747,7 @@ class PublicCampaignController
                     "quantity" => $quantity,
                     "image_fr" => $product["image_fr"],
                     "image_nl" => $product["image_nl"] ?? $product["image_fr"],
+                    "package_number" => $product["package_number"] ?? '',
                     // Prix récupérés via API
                     "api_prix" => $apiPrix,
                     "api_prix_promo" => $apiPrixPromo,
@@ -3047,9 +3074,9 @@ class PublicCampaignController
             return;
         }
 
-        // Récupérer le panier
-        $cart = $_SESSION['cart'][$uuid] ?? [];
-        if (empty($cart)) {
+        // Récupérer le panier (même structure que addToCart)
+        $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
+        if (empty($cart['items'])) {
             Session::setFlash('error', 'Votre panier est vide');
             header("Location: /stm/c/{$uuid}/prospect/catalog");
             exit();
@@ -3059,8 +3086,8 @@ class PublicCampaignController
         $orderNumber = $this->generateOrderNumber();
 
         // Calculer les totaux
-        $totalItems = array_sum(array_column($cart, 'quantity'));
-        $totalProducts = count($cart);
+        $totalItems = array_sum(array_column($cart['items'], 'quantity'));
+        $totalProducts = count($cart['items']);
 
         // Créer la commande (toujours en status 'validated' pour les prospects, pas de TXT auto)
         $query = "INSERT INTO orders (
@@ -3097,13 +3124,19 @@ class PublicCampaignController
             $orderId = $this->db->lastInsertId();
 
             // Insérer les lignes de commande
-            foreach ($cart as $promotionId => $item) {
-                $queryLine = "INSERT INTO order_lines (order_id, promotion_id, quantity, created_at)
-                              VALUES (:order_id, :promotion_id, :quantity, NOW())";
+            foreach ($cart['items'] as $item) {
+                $queryLine = "INSERT INTO order_lines (
+                                order_id, product_id, quantity, product_name, product_code, package_number, created_at
+                              ) VALUES (
+                                :order_id, :product_id, :quantity, :product_name, :product_code, :package_number, NOW()
+                              )";
                 $this->db->execute($queryLine, [
                     ':order_id' => $orderId,
-                    ':promotion_id' => $promotionId,
+                    ':product_id' => $item['product_id'],
                     ':quantity' => $item['quantity'],
+                    ':product_name' => $item['name_fr'] ?? $item['product_name'] ?? '',
+                    ':product_code' => $item['code'] ?? $item['product_code'] ?? '',
+                    ':package_number' => $item['package_number'] ?? '',
                 ]);
             }
 
@@ -3111,7 +3144,7 @@ class PublicCampaignController
             $this->updateCampaignStats($campaign['id']);
 
             // Vider le panier
-            unset($_SESSION['cart'][$uuid]);
+            Session::set("cart", ["campaign_uuid" => $uuid, "items" => []]);
 
             // Stocker pour la page de confirmation
             $_SESSION['last_order_uuid'] = $orderUuid;
