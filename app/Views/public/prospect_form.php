@@ -207,7 +207,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                             </div>
                             <!-- Message si non assujetti (caché par défaut) -->
-                            <div id="vat_not_liable_message" class="hidden flex items-center h-full pt-6">
+                            <div id="vat_not_liable_message" style="display: none;" class="flex items-center h-full pt-6">
                                 <span class="text-sm text-gray-400 italic">
                                     <i class="fas fa-info-circle mr-1"></i>
                                     <?= trans('prospect.not_vat_liable', $lang) ?>
@@ -385,7 +385,6 @@ $content = ob_get_clean();
 
 // Scripts JavaScript vanilla
 $pageScripts = <<<SCRIPT
-<script>
 // ========================================
 // Toggle champ TVA
 // ========================================
@@ -396,12 +395,12 @@ function toggleVatField() {
     const vatInput = document.getElementById('vat_number');
 
     if (isLiable) {
-        vatContainer.classList.remove('hidden');
-        notLiableMsg.classList.add('hidden');
+        vatContainer.style.display = 'block';
+        notLiableMsg.style.display = 'none';
         vatInput.required = true;
     } else {
-        vatContainer.classList.add('hidden');
-        notLiableMsg.classList.remove('hidden');
+        vatContainer.style.display = 'none';
+        notLiableMsg.style.display = 'flex';
         vatInput.required = false;
         vatInput.value = '';
     }
@@ -534,7 +533,6 @@ document.addEventListener('DOMContentLoaded', function() {
         loadLocalities();
     }
 });
-</script>
 SCRIPT;
 
 $pageStyles = '';
