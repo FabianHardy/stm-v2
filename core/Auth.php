@@ -14,6 +14,7 @@
  * @package STM
  * @version 2.0
  * @modified 2025/12/10 - Ajout stockage utilisateur complet en session pour PermissionHelper
+ * @modified 2026/01/08 - Message plus explicite pour compte désactivé
  */
 
 namespace Core;
@@ -21,7 +22,7 @@ namespace Core;
 class Auth
 {
     /**
-     * Nom de la session pour l'utilisateur connecté
+     * Nom de la session pour l'utilisateur connectÃ©
      */
     private const SESSION_USER_KEY = 'user_id';
 
@@ -31,7 +32,7 @@ class Auth
     private const REMEMBER_COOKIE_NAME = 'remember_token';
 
     /**
-     * Durée du cookie "Remember me" (30 jours)
+     * DurÃ©e du cookie "Remember me" (30 jours)
      */
     private const REMEMBER_COOKIE_LIFETIME = 60 * 60 * 24 * 30;
 
@@ -41,7 +42,7 @@ class Auth
     private const MAX_LOGIN_ATTEMPTS = 5;
 
     /**
-     * Durée de verrouillage en minutes
+     * DurÃ©e de verrouillage en minutes
      */
     private const LOCKOUT_TIME = 15;
 
@@ -51,14 +52,14 @@ class Auth
      * @param string $username Nom d'utilisateur
      * @param string $password Mot de passe
      * @param bool $remember Remember me
-     * @return array Résultat avec ['success' => bool, 'message' => string]
+     * @return array RÃ©sultat avec ['success' => bool, 'message' => string]
      */
     public static function attempt(string $username, string $password, bool $remember = false): array
     {
         try {
             $db = Database::getInstance()->getConnection();
 
-            // Récupérer l'utilisateur (avec tous les champs nécessaires)
+            // RÃ©cupÃ©rer l'utilisateur (avec tous les champs nÃ©cessaires)
             $stmt = $db->prepare("
                 SELECT id, username, email, name, password, role, is_active,
                        rep_id, rep_country, microsoft_id,
@@ -78,12 +79,12 @@ class Auth
                 ];
             }
 
-            // Vérifier si le compte est verrouillé
+            // VÃ©rifier si le compte est verrouillÃ©
             if ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
                 $minutesLeft = ceil((strtotime($user['locked_until']) - time()) / 60);
                 return [
                     'success' => false,
-                    'message' => "Compte verrouillé. Réessayez dans $minutesLeft minute(s)."
+                    'message' => "Compte verrouillÃ©. RÃ©essayez dans $minutesLeft minute(s)."
                 ];
             }
 
@@ -92,13 +93,13 @@ class Auth
             if (!$isActive) {
                 return [
                     'success' => false,
-                    'message' => 'Ce compte est désactivé.'
+                    'message' => 'Ce compte a été désactivé. Veuillez contacter un administrateur.'
                 ];
             }
 
-            // Vérifier le mot de passe
+            // VÃ©rifier le mot de passe
             if (!password_verify($password, $user['password'])) {
-                // Incrémenter les tentatives
+                // IncrÃ©menter les tentatives
                 self::incrementLoginAttempts($user['id'], $user['login_attempts'] ?? 0);
 
                 $attemptsLeft = self::MAX_LOGIN_ATTEMPTS - (($user['login_attempts'] ?? 0) + 1);
@@ -106,7 +107,7 @@ class Auth
                 if ($attemptsLeft <= 0) {
                     return [
                         'success' => false,
-                        'message' => 'Trop de tentatives. Compte verrouillé pour ' . self::LOCKOUT_TIME . ' minutes.'
+                        'message' => 'Trop de tentatives. Compte verrouillÃ© pour ' . self::LOCKOUT_TIME . ' minutes.'
                     ];
                 }
 
@@ -116,14 +117,14 @@ class Auth
                 ];
             }
 
-            // Connexion réussie : réinitialiser les tentatives
+            // Connexion rÃ©ussie : rÃ©initialiser les tentatives
             self::resetLoginAttempts($user['id']);
 
             // ============================================
             // STOCKER L'UTILISATEUR EN SESSION
             // ============================================
 
-            // Anciennes clés (compatibilité)
+            // Anciennes clÃ©s (compatibilitÃ©)
             Session::set(self::SESSION_USER_KEY, $user['id']);
             Session::set('user_username', $user['username']);
             Session::set('user_role', $user['role']);
@@ -140,11 +141,11 @@ class Auth
                 'microsoft_id' => $user['microsoft_id'] ?? null
             ]);
 
-            // Mettre à jour last_login_at
+            // Mettre Ã  jour last_login_at
             $stmt = $db->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?");
             $stmt->execute([$user['id']]);
 
-            // Régénérer l'ID de session (sécurité)
+            // RÃ©gÃ©nÃ©rer l'ID de session (sÃ©curitÃ©)
             Session::regenerate();
 
             // Gestion du "Remember me"
@@ -154,7 +155,7 @@ class Auth
 
             return [
                 'success' => true,
-                'message' => 'Connexion réussie !'
+                'message' => 'Connexion rÃ©ussie !'
             ];
 
         } catch (\Exception $e) {
@@ -163,13 +164,13 @@ class Auth
 
             return [
                 'success' => false,
-                'message' => 'Une erreur est survenue. Veuillez réessayer.'
+                'message' => 'Une erreur est survenue. Veuillez rÃ©essayer.'
             ];
         }
     }
 
     /**
-     * Incrémente les tentatives de connexion
+     * IncrÃ©mente les tentatives de connexion
      *
      * @param int $userId ID de l'utilisateur
      * @param int $currentAttempts Tentatives actuelles
@@ -200,7 +201,7 @@ class Auth
     }
 
     /**
-     * Réinitialise les tentatives de connexion
+     * RÃ©initialise les tentatives de connexion
      *
      * @param int $userId ID de l'utilisateur
      * @return void
@@ -217,14 +218,14 @@ class Auth
     }
 
     /**
-     * Crée un token "Remember me"
+     * CrÃ©e un token "Remember me"
      *
      * @param int $userId ID de l'utilisateur
      * @return void
      */
     private static function setRememberToken(int $userId): void
     {
-        // Générer un token aléatoire
+        // GÃ©nÃ©rer un token alÃ©atoire
         $token = bin2hex(random_bytes(32));
 
         // Hasher le token pour la BDD
@@ -239,7 +240,7 @@ class Auth
         ");
         $stmt->execute([$hashedToken, $userId]);
 
-        // Créer le cookie (token en clair)
+        // CrÃ©er le cookie (token en clair)
         setcookie(
             self::REMEMBER_COOKIE_NAME,
             $token,
@@ -252,18 +253,18 @@ class Auth
     }
 
     /**
-     * Vérifie si l'utilisateur est connecté
+     * VÃ©rifie si l'utilisateur est connectÃ©
      *
      * @return bool
      */
     public static function check(): bool
     {
-        // Vérifier la session
+        // VÃ©rifier la session
         if (Session::has(self::SESSION_USER_KEY)) {
             return true;
         }
 
-        // Vérifier le cookie "Remember me"
+        // VÃ©rifier le cookie "Remember me"
         if (isset($_COOKIE[self::REMEMBER_COOKIE_NAME])) {
             return self::loginFromRememberToken($_COOKIE[self::REMEMBER_COOKIE_NAME]);
         }
@@ -282,7 +283,7 @@ class Auth
         try {
             $db = Database::getInstance()->getConnection();
 
-            // Récupérer tous les utilisateurs avec un token (avec tous les champs)
+            // RÃ©cupÃ©rer tous les utilisateurs avec un token (avec tous les champs)
             $stmt = $db->prepare("
                 SELECT id, username, email, name, role, remember_token,
                        rep_id, rep_country, microsoft_id
@@ -293,12 +294,12 @@ class Auth
             $stmt->execute();
             $users = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Vérifier chaque token (car hashé)
+            // VÃ©rifier chaque token (car hashÃ©)
             foreach ($users as $user) {
                 if (password_verify($token, $user['remember_token'])) {
                     // Token valide : connecter l'utilisateur
 
-                    // Anciennes clés (compatibilité)
+                    // Anciennes clÃ©s (compatibilitÃ©)
                     Session::set(self::SESSION_USER_KEY, $user['id']);
                     Session::set('user_username', $user['username']);
                     Session::set('user_role', $user['role']);
@@ -315,7 +316,7 @@ class Auth
                         'microsoft_id' => $user['microsoft_id'] ?? null
                     ]);
 
-                    // Mettre à jour last_login_at
+                    // Mettre Ã  jour last_login_at
                     $stmt = $db->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?");
                     $stmt->execute([$user['id']]);
 
@@ -337,7 +338,7 @@ class Auth
     }
 
     /**
-     * Récupère l'ID de l'utilisateur connecté
+     * RÃ©cupÃ¨re l'ID de l'utilisateur connectÃ©
      *
      * @return int|null
      */
@@ -347,7 +348,7 @@ class Auth
     }
 
     /**
-     * Récupère les informations de l'utilisateur connecté
+     * RÃ©cupÃ¨re les informations de l'utilisateur connectÃ©
      *
      * @return array|null
      */
@@ -392,7 +393,7 @@ class Auth
     }
 
     /**
-     * Déconnecte l'utilisateur
+     * DÃ©connecte l'utilisateur
      *
      * @return void
      */
@@ -419,7 +420,7 @@ class Auth
             setcookie(self::REMEMBER_COOKIE_NAME, '', time() - 3600, '/');
         }
 
-        // Détruire la session
+        // DÃ©truire la session
         Session::destroy();
     }
 }

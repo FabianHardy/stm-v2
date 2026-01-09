@@ -3,11 +3,13 @@
  * Vue : Liste des campagnes
  *
  * @package STM/Views/Admin/Campaigns
- * @version 2.4.0
+ * @version 2.6.0
  * @created 07/11/2025
  * @modified 14/11/2025 - Ajout colonne statistiques (clients + promotions)
  * @modified 15/12/2025 - Masquage conditionnel boutons selon permissions (Phase 5)
  * @modified 19/12/2025 - Correction affichage statut (is_active + dates)
+ * @modified 08/01/2026 - Sprint 15 : Ajout colonne Mode (TXT/Excel + type W/V + prix reps)
+ * @modified 09/01/2026 - Sprint 16 : Ajout lien URL Prospect
  */
 
 use App\Helpers\PermissionHelper;
@@ -187,6 +189,9 @@ ob_start();
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Statistiques
                     </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Mode
+                    </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         URLs
                     </th>
@@ -201,7 +206,7 @@ ob_start();
             <tbody class="bg-white divide-y divide-gray-200">
                 <?php if (empty($campaigns)): ?>
                     <tr>
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td colspan="8" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                             </svg>
@@ -285,14 +290,48 @@ ob_start();
                                 </div>
                             </td>
 
-                            <!-- URLs (Client + Reps) -->
+                            <!-- Sprint 15 : Mode de traitement -->
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <?php
+                                $processingMode = $campaign["order_processing_mode"] ?? "direct";
+                                $orderType = $campaign["order_type"] ?? "W";
+                                $showPrices = $campaign["show_prices"] ?? 1;
+                                ?>
+                                <div class="flex flex-col items-center gap-1">
+                                    <?php if ($processingMode === "pending"): ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Export Excel">
+                                            📋 Excel
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title="Fichier TXT immédiat">
+                                            ⚡ TXT
+                                        </span>
+                                    <?php endif; ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?= $orderType === 'W' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' ?>">
+                                        <?= $orderType ?>
+                                    </span>
+                                    <?php if ($showPrices): ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800" title="Prix visibles pour les reps">
+                                            💰
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500" title="Prix masqués pour les reps">
+                                            💰
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+
+                            <!-- URLs (Client + Reps + Prospect) -->
                             <td class="px-6 py-4 text-sm">
                                 <?php if (!empty($campaign["uuid"])): ?>
                                     <?php
                                     $baseUrl = $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm";
                                     $clientUrl = $baseUrl . "/c/" . $campaign["uuid"];
                                     $repUrl = $baseUrl . "/c/" . $campaign["uuid"] . "/rep";
+                                    $prospectUrl = $baseUrl . "/c/" . $campaign["uuid"] . "/prospect";
                                     $shortUuid = "..." . substr($campaign["uuid"], -8);
+                                    $allowProspects = $campaign["allow_prospects"] ?? 0;
                                     ?>
                                     <div class="flex flex-col gap-1.5">
                                         <!-- URL Client -->
@@ -333,6 +372,27 @@ ob_start();
                                                 </svg>
                                             </button>
                                         </div>
+                                        <!-- URL Prospect (Sprint 16) -->
+                                        <?php if ($allowProspects): ?>
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700" title="Formulaire prospect">
+                                                🌱
+                                            </span>
+                                            <a href="<?= $prospectUrl ?>"
+                                               target="_blank"
+                                               class="text-purple-600 hover:text-purple-800 font-mono text-xs"
+                                               title="<?= $prospectUrl ?>">
+                                                <?= $shortUuid ?>/prospect
+                                            </a>
+                                            <button onclick="copyToClipboard('<?= $prospectUrl ?>', this)"
+                                                    class="text-gray-400 hover:text-gray-600"
+                                                    title="Copier URL Prospect">
+                                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 <?php else: ?>
                                     <span class="text-gray-400">-</span>

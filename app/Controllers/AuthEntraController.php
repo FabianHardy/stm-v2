@@ -11,6 +11,7 @@
  * @package STM
  * @created 2025/12/15
  * @modified 2025/01/05 - Ajout auto-matching rep_id par email
+ * @modified 2026/01/08 - Message compte désactivé plus explicite
  */
 
 namespace App\Controllers;
@@ -256,7 +257,7 @@ class AuthEntraController
             return [
                 'success' => false,
                 'pending' => true,
-                'message' => 'Votre compte est en attente d\'activation par un administrateur.'
+                'message' => 'Votre compte a été désactivé. Veuillez contacter un administrateur.'
             ];
         }
 

@@ -6,13 +6,15 @@
  * - Statistiques (total, aujourd'hui, en attente, erreurs)
  * - Filtres (campagne, statut, pays, source, dates, recherche)
  * - Colonne Source (Client/Rep) dans le tableau
+ * - Sélection multiple pour export Excel (Sprint 15)
  * - Pagination
  *
  * @package    App\Views\admin\orders
  * @author     Fabian Hardy
- * @version    1.1.0
+ * @version    1.2.0
  * @created    2025/12/30
  * @modified   2026/01/08 - Ajout filtre Source + colonne Source
+ * @modified   2026/01/08 - Sprint 15 : Export Excel, checkboxes sélection, statut "En attente export"
  */
 
 ob_start();
@@ -179,11 +181,54 @@ function buildFilterUrl($newParams = []) {
     </div>
 </div>
 
+<!-- SPRINT 15 : Boutons d'export Excel -->
+<div class="flex items-center gap-3 mb-4" x-data="{ selectedOrders: [] }">
+    <form id="exportForm" method="POST" action="/stm/admin/orders/export-excel" class="flex items-center gap-3">
+        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+        <input type="hidden" name="campaign_id" value="<?= htmlspecialchars($filters['campaign_id'] ?? '') ?>">
+
+        <!-- Bouton export sélection -->
+        <button type="submit"
+                id="btnExportSelected"
+                disabled
+                class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fas fa-file-excel mr-2"></i>
+            Exporter sélection (<span id="selectedCount">0</span>)
+        </button>
+    </form>
+
+    <?php if (!empty($filters['campaign_id'])): ?>
+    <!-- Bouton export toutes les commandes en attente de la campagne -->
+    <form method="POST" action="/stm/admin/orders/export-excel">
+        <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+        <input type="hidden" name="campaign_id" value="<?= htmlspecialchars($filters['campaign_id']) ?>">
+        <input type="hidden" name="export_all" value="1">
+        <button type="submit"
+                class="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md text-sm hover:bg-orange-700">
+            <i class="fas fa-file-export mr-2"></i>
+            Exporter toutes "En attente"
+        </button>
+    </form>
+    <?php endif; ?>
+
+    <span class="text-sm text-gray-500">
+        <i class="fas fa-info-circle mr-1"></i>
+        Sélectionnez des commandes pour exporter en Excel
+    </span>
+</div>
+
 <!-- Tableau des commandes -->
 <div class="bg-white rounded-lg shadow-sm overflow-hidden">
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
+                <!-- SPRINT 15 : Checkbox tout sélectionner -->
+                <th class="px-3 py-3 text-center">
+                    <input type="checkbox"
+                           id="selectAll"
+                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                           onchange="toggleAllCheckboxes(this)">
+                </th>
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pays</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campagne</th>
@@ -197,7 +242,7 @@ function buildFilterUrl($newParams = []) {
         <tbody class="bg-white divide-y divide-gray-200">
             <?php if (empty($orders)): ?>
             <tr>
-                <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                <td colspan="9" class="px-6 py-12 text-center text-gray-500">
                     <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
                     <p>Aucune commande trouvée</p>
                 </td>
@@ -212,21 +257,30 @@ function buildFilterUrl($newParams = []) {
                     'error' => 'bg-red-100 text-red-800',
                     // Rétrocompatibilité
                     'pending' => 'bg-yellow-100 text-yellow-800',
-                    'validated' => 'bg-green-100 text-green-800',
+                    'validated' => 'bg-orange-100 text-orange-800', // Sprint 15 : Orange pour distinguer
                     'cancelled' => 'bg-red-100 text-red-800',
                 ];
                 $statusLabels = [
                     'pending_sync' => 'En attente',
-                    'synced' => 'Synced',
+                    'synced' => 'Traité (TXT)',
                     'error' => 'Erreur',
                     'pending' => 'En attente',
-                    'validated' => 'Validée',
+                    'validated' => 'En attente export', // Sprint 15 : Plus clair
                     'cancelled' => 'Annulée',
                 ];
                 $statusClass = $statusColors[$order['status']] ?? 'bg-gray-100 text-gray-800';
                 $statusLabel = $statusLabels[$order['status']] ?? $order['status'];
             ?>
             <tr class="hover:bg-gray-50">
+                <!-- SPRINT 15 : Checkbox de sélection -->
+                <td class="px-3 py-4 text-center">
+                    <input type="checkbox"
+                           name="order_ids[]"
+                           form="exportForm"
+                           value="<?= $order['id'] ?>"
+                           class="order-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                           onchange="updateSelectedCount()">
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center">
                     <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium <?= $country === 'BE' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800' ?>">
                         <?= $country === 'BE' ? '🇧🇪 BE' : '🇱🇺 LU' ?>
@@ -315,6 +369,38 @@ function buildFilterUrl($newParams = []) {
 <?php
 $content = ob_get_clean();
 $title = $pageTitle;
-$pageScripts = "";
+$pageScripts = <<<JS
+<script>
+// SPRINT 15 : Gestion des checkboxes pour export Excel
+function toggleAllCheckboxes(source) {
+    const checkboxes = document.querySelectorAll('.order-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = source.checked;
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+    const count = checkboxes.length;
+    const countSpan = document.getElementById('selectedCount');
+    const btnExport = document.getElementById('btnExportSelected');
+
+    if (countSpan) countSpan.textContent = count;
+    if (btnExport) btnExport.disabled = (count === 0);
+
+    // Mettre à jour le checkbox "tout sélectionner"
+    const allCheckboxes = document.querySelectorAll('.order-checkbox');
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.checked = (allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length);
+        selectAll.indeterminate = (checkboxes.length > 0 && checkboxes.length < allCheckboxes.length);
+    }
+}
+
+// Initialisation au chargement
+document.addEventListener('DOMContentLoaded', updateSelectedCount);
+</script>
+JS;
 require __DIR__ . '/../../layouts/admin.php';
 ?>

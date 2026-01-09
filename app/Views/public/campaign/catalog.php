@@ -26,6 +26,13 @@ $isRepOrder = $customer["is_rep_order"] ?? false;
 $showPrices = ($campaign["show_prices"] ?? 1) == 1;
 $orderType = $campaign["order_type"] ?? "W"; // W = normal, V = prospection
 
+// ========================================
+// SPRINT 16 : Détection mode prospect
+// ========================================
+$isProspectOrder = isset($_SESSION['prospect_id']) && !empty($_SESSION['prospect_id']);
+$prospectName = $_SESSION['prospect_name'] ?? '';
+$prospectNumber = $_SESSION['prospect_number'] ?? '';
+
 /**
  * Formater un prix pour affichage
  * @param float|null $price Prix à formater
@@ -142,6 +149,11 @@ ob_start();
                                 <i class="fas fa-user-tie mr-1"></i>
                                 <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
                             </span>
+                            <?php elseif ($isProspectOrder): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200 ml-2">
+                                <i class="fas fa-seedling mr-1"></i>
+                                <?= $lang === 'fr' ? 'Mode prospect' : 'Prospect modus' ?>
+                            </span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -183,10 +195,14 @@ ob_start();
                         </span>
                     </button>
 
-                    <!-- Déconnexion / Changer client (rep) -->
+                    <!-- Déconnexion / Changer client (rep) / Retour formulaire (prospect) -->
                     <?php if ($isRepOrder): ?>
                     <a href="/stm/c/<?= $uuid ?>/rep/select-client" class="hidden lg:flex items-center text-gray-600 hover:text-gray-800">
                         <i class="fas fa-exchange-alt mr-2"></i><?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
+                    </a>
+                    <?php elseif ($isProspectOrder): ?>
+                    <a href="/stm/c/<?= $uuid ?>/prospect/logout" class="hidden lg:flex items-center text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-sign-out-alt mr-2"></i><?= $lang === 'fr' ? 'Déconnexion' : 'Afmelden' ?>
                     </a>
                     <?php else: ?>
                     <a href="/stm/c/<?= $uuid ?>" class="hidden lg:block text-gray-600 hover:text-gray-800">

@@ -14,6 +14,7 @@
  * @modified 2025/12/23 - Ajout API getCustomerOrdersApi() pour modal détail commandes client
  * @modified 2026/01/08 - Ajout stats par origine (client vs rep) dans index() et campaigns()
  * @modified 2026/01/08 - Export Excel : ajout colonne % Via Reps dans récap, colonne Origine par client
+ * @modified 2026/01/08 - Exports: colonne Campagne, Rep_Name depuis DB externe, filtre reps sans clients
  */
 
 namespace App\Controllers;
@@ -26,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class StatsController
@@ -758,15 +760,15 @@ class StatsController
     }
 
     /**
-     * Export CSV/Excel
+     * Export Excel
      *
      * @return void
      * @modified 2025/12/16 - Ajout vérification accès campagne
+     * @modified 2026/01/08 - Toujours Excel, nom fichier avec campagne et pays
      */
     public function export(): void
     {
         $type = $_POST["type"] ?? "global";
-        $format = $_POST["format"] ?? "csv";
         $campaignId = !empty($_POST["campaign_id"]) ? (int) $_POST["campaign_id"] : null;
         $dateFrom = $_POST["date_from"] ?? date("Y-m-d", strtotime("-14 days"));
         $dateTo = $_POST["date_to"] ?? date("Y-m-d");
@@ -776,6 +778,17 @@ class StatsController
             Session::setFlash("error", "Vous n'avez pas accès à cette campagne");
             header("Location: /stm/admin/stats/reports");
             exit();
+        }
+
+        // Récupérer les infos de la campagne si spécifiée
+        $campaignName = "";
+        $campaignCountry = "";
+        if ($campaignId) {
+            $campaign = $this->campaignModel->findById($campaignId);
+            if ($campaign) {
+                $campaignName = $this->sanitizeFilename($campaign["name"]);
+                $campaignCountry = $campaign["country"];
+            }
         }
 
         $data = [];
@@ -793,6 +806,7 @@ class StatsController
                 // Export des commandes d'une campagne
                 $data = $this->getExportCampaignData($campaignId);
                 $headers = [
+                    "Campagne",
                     "Num_Client",
                     "Nom",
                     "Pays",
@@ -804,13 +818,14 @@ class StatsController
                     "Origine",
                     "Date_Commande",
                 ];
-                $filename = "export_campagne_" . $campaignId . "_" . date("Ymd");
+                $filename = "export_campagne_{$campaignCountry}_{$campaignName}_" . date("Ymd");
                 break;
 
             case "reps":
                 // Export stats par représentant
-                $data = $this->getExportRepsData($campaignId);
+                $data = $this->getExportRepsData($campaignId, $campaignName);
                 $headers = [
+                    "Campagne",
                     "Rep_ID",
                     "Rep_Nom",
                     "Cluster",
@@ -821,7 +836,11 @@ class StatsController
                     "Total_Quantité",
                     "%_Via_Reps",
                 ];
-                $filename = "export_reps_" . date("Ymd");
+                if ($campaignId && $campaignName) {
+                    $filename = "export_reps_{$campaignCountry}_{$campaignName}_" . date("Ymd");
+                } else {
+                    $filename = "export_reps_toutes_campagnes_" . date("Ymd");
+                }
                 break;
 
             case "not_ordered":
@@ -832,15 +851,16 @@ class StatsController
                 }
 
                 // Export clients n'ayant pas commandé
-                $data = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
-                $headers = ["Num_Client", "Nom", "Pays", "Rep_Name"];
-                $filename = "clients_sans_commande_" . $campaignId . "_" . date("Ymd");
+                $data = $this->getExportNotOrderedData($campaignId, $campaignName);
+                $headers = ["Campagne", "Num_Client", "Nom", "Pays", "Rep_Name"];
+                $filename = "clients_sans_commande_{$campaignCountry}_{$campaignName}_" . date("Ymd");
                 break;
 
             default:
                 // Export global
                 $data = $this->getExportGlobalData($dateFrom, $dateTo, $campaignId);
                 $headers = [
+                    "Campagne",
                     "Num_Client",
                     "Nom",
                     "Pays",
@@ -848,21 +868,119 @@ class StatsController
                     "Nom_Produit",
                     "Quantité",
                     "Rep_Name",
-                    "Cluster",
                     "Origine",
                     "Date_Commande",
                 ];
-                $filename = "export_global_" . date("Ymd");
+                if ($campaignId && $campaignName) {
+                    $filename = "export_global_{$campaignCountry}_{$campaignName}_" . date("Ymd");
+                } else {
+                    $filename = "export_global_toutes_campagnes_" . date("Ymd");
+                }
                 break;
         }
 
-        // Générer le fichier
-        if ($format === "csv") {
-            $this->exportCSV($data, $headers, $filename);
-        } else {
-            // Pour Excel, on utilise CSV avec séparateur point-virgule
-            $this->exportCSV($data, $headers, $filename, ";");
+        // Toujours générer en Excel
+        $this->exportToExcel($data, $headers, $filename);
+    }
+
+    /**
+     * Nettoie un nom de fichier (supprime les caractères spéciaux)
+     */
+    private function sanitizeFilename(string $name): string
+    {
+        // Remplacer les accents
+        $name = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name);
+        // Remplacer les espaces par des underscores
+        $name = str_replace(' ', '_', $name);
+        // Supprimer tout sauf lettres, chiffres, underscores et tirets
+        $name = preg_replace('/[^a-zA-Z0-9_-]/', '', $name);
+        // Limiter la longueur
+        return substr($name, 0, 50);
+    }
+
+    /**
+     * Génère et télécharge un vrai fichier Excel (.xlsx)
+     */
+    private function exportToExcel(array $data, array $headers, string $filename): void
+    {
+        // Augmenter le temps d'exécution pour les gros exports
+        set_time_limit(300);
+
+        // Nettoyer tous les buffers output pour éviter la corruption du fichier
+        while (ob_get_level()) {
+            ob_end_clean();
         }
+
+        // Désactiver l'affichage des erreurs dans le fichier
+        ini_set('display_errors', '0');
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Export');
+
+        // Styles pour l'en-tête
+        $headerStyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F46E5']
+            ],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+        ];
+
+        // Écrire les en-têtes
+        $col = 'A';
+        foreach ($headers as $header) {
+            $sheet->setCellValue($col . '1', $header);
+            $col++;
+        }
+
+        // Calculer la dernière colonne
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle('A1:' . $lastCol . '1')->applyFromArray($headerStyle);
+
+        // Écrire les données
+        $row = 2;
+        foreach ($data as $dataRow) {
+            $col = 'A';
+            foreach (array_values($dataRow) as $value) {
+                $sheet->setCellValue($col . $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+
+        // Auto-dimensionner les colonnes
+        $col = 'A';
+        for ($i = 1; $i <= count($headers); $i++) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+            $col++;
+        }
+
+        // Bordures pour toutes les données
+        $lastRow = $row - 1;
+        if ($lastRow >= 1) {
+            $sheet->getStyle('A1:' . $lastCol . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(Border::BORDER_THIN);
+        }
+
+        // Figer la première ligne
+        $sheet->freezePane('A2');
+
+        // Cookie pour signaler la fin du téléchargement au JavaScript
+        $downloadToken = $_POST['download_token'] ?? '';
+        if ($downloadToken) {
+            setcookie('download_complete', $downloadToken, time() + 60, '/');
+        }
+
+        // Générer et envoyer le fichier
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
+        header('Cache-Control: max-age=0');
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit();
     }
 
     /**
@@ -884,17 +1002,17 @@ class StatsController
         }
 
         $query = "
-            SELECT cu.customer_number as Num_Client,
+            SELECT c.name as Campagne,
+                   cu.customer_number as Num_Client,
                    cu.company_name as Nom,
                    cu.country as Pays,
                    p.product_code as Promo_Art,
-                   p.name as Nom_Produit,
+                   p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
-                   cu.rep_name as Rep_Name,
-                   '' as Cluster,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
+            INNER JOIN campaigns c ON o.campaign_id = c.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
@@ -904,7 +1022,134 @@ class StatsController
             ORDER BY o.created_at DESC, cu.customer_number
         ";
 
-        return $db->query($query, $params);
+        $results = $db->query($query, $params);
+
+        // Enrichir avec le rep_name depuis la base externe
+        return $this->enrichWithRepNames($results);
+    }
+
+    /**
+     * Enrichit les données avec les noms des représentants depuis la base externe
+     * Utilise customer_number pour trouver IDE_REP dans BE_CLL/LU_CLL
+     */
+    private function enrichWithRepNames(array $data): array
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        // Collecter les customer_numbers uniques par pays
+        $customersBE = [];
+        $customersLU = [];
+
+        foreach ($data as $row) {
+            $customerNumber = $row['Num_Client'] ?? '';
+            $country = $row['Pays'] ?? '';
+            if (!empty($customerNumber)) {
+                if ($country === 'BE') {
+                    $customersBE[$customerNumber] = true;
+                } else {
+                    $customersLU[$customerNumber] = true;
+                }
+            }
+        }
+
+        // Récupérer les IDE_REP depuis la base externe
+        $customerRepIds = [];
+        $repNames = [];
+
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+
+            // Récupérer IDE_REP pour les clients BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(',', array_fill(0, count($customersBE), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['BE'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Récupérer IDE_REP pour les clients LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(',', array_fill(0, count($customersLU), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['LU'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Collecter les rep_ids uniques
+            $repIdsBE = [];
+            $repIdsLU = [];
+            foreach ($customerRepIds as $country => $customers) {
+                foreach ($customers as $repId) {
+                    if (!empty($repId)) {
+                        if ($country === 'BE') {
+                            $repIdsBE[$repId] = true;
+                        } else {
+                            $repIdsLU[$repId] = true;
+                        }
+                    }
+                }
+            }
+
+            // Récupérer les noms des reps
+            if (!empty($repIdsBE)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM BE_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsBE)
+                );
+                foreach ($result as $r) {
+                    $repNames['BE'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+
+            if (!empty($repIdsLU)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsLU), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM LU_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsLU)
+                );
+                foreach ($result as $r) {
+                    $repNames['LU'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("Error fetching rep names: " . $e->getMessage());
+        }
+
+        // Enrichir les données
+        $enriched = [];
+        foreach ($data as $row) {
+            $country = $row['Pays'] ?? '';
+            $customerNumber = $row['Num_Client'] ?? '';
+            $repId = $customerRepIds[$country][$customerNumber] ?? '';
+            $repName = $repNames[$country][$repId] ?? '';
+
+            // Reconstruire la ligne avec Rep_Name
+            $enriched[] = [
+                'Campagne' => $row['Campagne'] ?? '',
+                'Num_Client' => $row['Num_Client'] ?? '',
+                'Nom' => $row['Nom'] ?? '',
+                'Pays' => $row['Pays'] ?? '',
+                'Promo_Art' => $row['Promo_Art'] ?? '',
+                'Nom_Produit' => $row['Nom_Produit'] ?? '',
+                'Quantite' => $row['Quantite'] ?? '',
+                'Rep_Name' => $repName,
+                'Origine' => $row['Origine'] ?? '',
+                'Date_Commande' => $row['Date_Commande'] ?? '',
+            ];
+        }
+
+        return $enriched;
     }
 
     /**
@@ -915,17 +1160,18 @@ class StatsController
         $db = \Core\Database::getInstance();
 
         $query = "
-            SELECT cu.customer_number as Num_Client,
+            SELECT c.name as Campagne,
+                   cu.customer_number as Num_Client,
                    cu.company_name as Nom,
                    cu.country as Pays,
                    p.product_code as Promo_Art,
-                   p.name as Nom_Produit,
+                   p.name_fr as Nom_Produit,
                    ol.quantity as Quantite,
                    o.customer_email as Email,
-                   cu.rep_name as Rep_Name,
                    CASE WHEN COALESCE(o.order_source, 'client') = 'rep' THEN 'Via Rep' ELSE 'Via Client' END as Origine,
                    DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') as Date_Commande
             FROM orders o
+            INNER JOIN campaigns c ON o.campaign_id = c.id
             INNER JOIN customers cu ON o.customer_id = cu.id
             INNER JOIN order_lines ol ON o.id = ol.order_id
             INNER JOIN products p ON ol.product_id = p.id
@@ -934,13 +1180,141 @@ class StatsController
             ORDER BY cu.customer_number, p.product_code
         ";
 
-        return $db->query($query, [":campaign_id" => $campaignId]);
+        $results = $db->query($query, [":campaign_id" => $campaignId]);
+
+        // Enrichir avec le rep_name depuis la base externe
+        return $this->enrichWithRepNamesCampaign($results);
+    }
+
+    /**
+     * Enrichit les données campagne avec les noms des représentants depuis la base externe
+     * Utilise customer_number pour trouver IDE_REP dans BE_CLL/LU_CLL
+     */
+    private function enrichWithRepNamesCampaign(array $data): array
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        // Collecter les customer_numbers uniques par pays
+        $customersBE = [];
+        $customersLU = [];
+
+        foreach ($data as $row) {
+            $customerNumber = $row['Num_Client'] ?? '';
+            $country = $row['Pays'] ?? '';
+            if (!empty($customerNumber)) {
+                if ($country === 'BE') {
+                    $customersBE[$customerNumber] = true;
+                } else {
+                    $customersLU[$customerNumber] = true;
+                }
+            }
+        }
+
+        // Récupérer les IDE_REP depuis la base externe
+        $customerRepIds = [];
+        $repNames = [];
+
+        try {
+            $extDb = \Core\ExternalDatabase::getInstance();
+
+            // Récupérer IDE_REP pour les clients BE
+            if (!empty($customersBE)) {
+                $placeholders = implode(',', array_fill(0, count($customersBE), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM BE_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersBE)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['BE'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Récupérer IDE_REP pour les clients LU
+            if (!empty($customersLU)) {
+                $placeholders = implode(',', array_fill(0, count($customersLU), '?'));
+                $result = $extDb->query(
+                    "SELECT CLL_NCLIXX, IDE_REP FROM LU_CLL WHERE CLL_NCLIXX IN ({$placeholders})",
+                    array_keys($customersLU)
+                );
+                foreach ($result as $r) {
+                    $customerRepIds['LU'][$r['CLL_NCLIXX']] = $r['IDE_REP'];
+                }
+            }
+
+            // Collecter les rep_ids uniques
+            $repIdsBE = [];
+            $repIdsLU = [];
+            foreach ($customerRepIds as $country => $customers) {
+                foreach ($customers as $repId) {
+                    if (!empty($repId)) {
+                        if ($country === 'BE') {
+                            $repIdsBE[$repId] = true;
+                        } else {
+                            $repIdsLU[$repId] = true;
+                        }
+                    }
+                }
+            }
+
+            // Récupérer les noms des reps
+            if (!empty($repIdsBE)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsBE), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM BE_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsBE)
+                );
+                foreach ($result as $r) {
+                    $repNames['BE'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+
+            if (!empty($repIdsLU)) {
+                $placeholders = implode(',', array_fill(0, count($repIdsLU), '?'));
+                $result = $extDb->query(
+                    "SELECT IDE_REP, CONCAT(REP_PRENOM, ' ', REP_NOM) as rep_name FROM LU_REP WHERE IDE_REP IN ({$placeholders})",
+                    array_keys($repIdsLU)
+                );
+                foreach ($result as $r) {
+                    $repNames['LU'][$r['IDE_REP']] = trim($r['rep_name']);
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("Error fetching rep names: " . $e->getMessage());
+        }
+
+        // Enrichir les données
+        $enriched = [];
+        foreach ($data as $row) {
+            $country = $row['Pays'] ?? '';
+            $customerNumber = $row['Num_Client'] ?? '';
+            $repId = $customerRepIds[$country][$customerNumber] ?? '';
+            $repName = $repNames[$country][$repId] ?? '';
+
+            // Reconstruire la ligne avec Rep_Name
+            $enriched[] = [
+                'Campagne' => $row['Campagne'] ?? '',
+                'Num_Client' => $row['Num_Client'] ?? '',
+                'Nom' => $row['Nom'] ?? '',
+                'Pays' => $row['Pays'] ?? '',
+                'Promo_Art' => $row['Promo_Art'] ?? '',
+                'Nom_Produit' => $row['Nom_Produit'] ?? '',
+                'Quantite' => $row['Quantite'] ?? '',
+                'Email' => $row['Email'] ?? '',
+                'Rep_Name' => $repName,
+                'Origine' => $row['Origine'] ?? '',
+                'Date_Commande' => $row['Date_Commande'] ?? '',
+            ];
+        }
+
+        return $enriched;
     }
 
     /**
      * Récupère les données pour export représentants
      */
-    private function getExportRepsData(?int $campaignId): array
+    private function getExportRepsData(?int $campaignId, ?string $campaignName = null): array
     {
         $reps = $this->statsModel->getRepStats(null, $campaignId);
 
@@ -950,8 +1324,16 @@ class StatsController
             $originStatsByRep = $this->getOriginStatsByRep($campaignId);
         }
 
+        // Nom de la campagne pour l'export
+        $campagneName = $campaignName ?: "Toutes les campagnes";
+
         $data = [];
         foreach ($reps as $rep) {
+            // Ne pas exporter les reps sans clients assignés
+            if (($rep["total_clients"] ?? 0) == 0) {
+                continue;
+            }
+
             $convRate =
                 $rep["total_clients"] > 0
                     ? round(($rep["stats"]["customers_ordered"] / $rep["total_clients"]) * 100, 1) . "%"
@@ -968,15 +1350,37 @@ class StatsController
             }
 
             $data[] = [
+                "Campagne" => $campagneName,
                 "Rep_ID" => $rep["id"],
                 "Rep_Nom" => $rep["name"],
-                "Cluster" => $rep["cluster"],
+                "Cluster" => $rep["cluster"] ?? "",
                 "Pays" => $rep["country"],
                 "Nb_Clients" => $rep["total_clients"],
                 "Clients_Commande" => $rep["stats"]["customers_ordered"],
                 "Taux_Conv" => $convRate,
                 "Total_Quantite" => $rep["stats"]["total_quantity"],
                 "Pct_Via_Reps" => $pctViaReps,
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Récupère les données pour export clients sans commande
+     */
+    private function getExportNotOrderedData(int $campaignId, string $campaignName): array
+    {
+        $customers = $this->statsModel->getCustomersNotOrdered($campaignId, 5000);
+
+        $data = [];
+        foreach ($customers as $cust) {
+            $data[] = [
+                "Campagne" => $campaignName,
+                "Num_Client" => $cust["customer_number"] ?? "",
+                "Nom" => $cust["company_name"] ?? "",
+                "Pays" => $cust["country"] ?? "",
+                "Rep_Name" => $cust["rep_name"] ?? "",
             ];
         }
 
