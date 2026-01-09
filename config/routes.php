@@ -696,6 +696,12 @@ $router->get('/c/{uuid}/prospect/confirmation', function($uuid) {
     $controller->prospectConfirmation($uuid);
 });
 
+// Déconnexion prospect
+$router->get('/c/{uuid}/prospect/logout', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectLogout($uuid);
+});
+
 // =============================================================================
 // API ROUTES - SPRINT 16 (Codes postaux et types de magasin)
 // =============================================================================
