@@ -19,6 +19,7 @@
  * @modified   06/01/2026 - Sprint 14 : Ajout route repLogin (page connexion rep avec switch langue)
  * @modified   08/01/2026 - Sprint 15 : Ajout routes export Excel et génération TXT à la demande
  * @modified   09/01/2026 - Sprint 16 : Ajout routes mode prospect + API codes postaux
+ * @modified   09/01/2026 - Sprint 16 : Ajout route prospect/checkout
  */
 
 // ============================================
@@ -682,6 +683,12 @@ $router->post('/c/{uuid}/prospect/register', function($uuid) {
 $router->get('/c/{uuid}/prospect/catalog', function($uuid) {
     $controller = new \App\Controllers\PublicCampaignController();
     $controller->prospectCatalog($uuid);
+});
+
+// Page checkout prospect (validation commande)
+$router->get('/c/{uuid}/prospect/checkout', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectCheckout($uuid);
 });
 
 // Soumettre commande prospect

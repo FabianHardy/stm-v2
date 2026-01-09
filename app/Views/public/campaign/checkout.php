@@ -7,16 +7,36 @@
  * @modified 2025/11/21 - Adaptation au layout public centralisé
  * @modified 2025/12/30 - Migration vers système trans() centralisé
  * @modified 2026/01/06 - Sprint 14 : Badge mode représentant
+ * @modified 2026/01/09 - Sprint 16 : Support mode prospect
  */
 
-if (!isset($_SESSION['public_customer'])) {
+// Sprint 16 : Détection mode prospect
+$isProspectOrder = isset($_SESSION['prospect_id']) && !empty($_SESSION['prospect_id']);
+
+if ($isProspectOrder) {
+    // Mode prospect : utiliser les données prospect
+    $customer = [
+        'customer_number' => $_SESSION['prospect_number'] ?? '',
+        'company_name' => $_SESSION['prospect_name'] ?? '',
+        'email' => $_SESSION['prospect_email'] ?? '',
+        'country' => $_SESSION['prospect_country'] ?? 'BE',
+        'language' => $_SESSION['prospect_language'] ?? 'fr',
+        'is_prospect' => true,
+    ];
+} elseif (isset($_SESSION['public_customer'])) {
+    // Mode client normal
+    $customer = $_SESSION['public_customer'];
+} else {
+    // Pas de session valide
     header('Location: /stm/');
     exit;
 }
 
-$customer = $_SESSION['public_customer'];
 $lang = $customer['language'];
 $uuid = $campaign['uuid'];
+
+// Sprint 16 : URL catalogue selon le mode
+$catalogUrl = $isProspectOrder ? "/stm/c/{$uuid}/prospect/catalog" : "/stm/c/{$uuid}/catalog";
 
 // Sprint 14 : Détection mode représentant
 $isRepOrder = $customer['is_rep_order'] ?? false;
@@ -93,6 +113,11 @@ ob_start();
                                     <i class="fas fa-user-tie mr-1"></i>
                                     <?= $lang === 'fr' ? 'Mode représentant' : 'Vertegenwoordiger' ?>
                                 </span>
+                                <?php elseif ($isProspectOrder): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200 ml-2">
+                                    <i class="fas fa-seedling mr-1"></i>
+                                    <?= $lang === 'fr' ? 'Mode prospect' : 'Prospect modus' ?>
+                                </span>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -128,6 +153,13 @@ ob_start();
                             <i class="fas fa-exchange-alt mr-2"></i>
                             <?= $lang === 'fr' ? 'Changer de client' : 'Klant wijzigen' ?>
                         </a>
+                        <?php elseif ($isProspectOrder): ?>
+                        <!-- Déconnexion (prospect) -->
+                        <a href="/stm/c/<?= $uuid ?>/prospect/logout"
+                           class="hidden lg:block text-gray-600 hover:text-gray-800 transition">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            <?= trans('common.logout', $lang) ?>
+                        </a>
                         <?php else: ?>
                         <!-- Déconnexion (client normal) -->
                         <a href="/stm/c/<?= $uuid ?>"
@@ -147,7 +179,7 @@ ob_start();
             <div class="container mx-auto px-4 py-4 sm:py-6">
                 <div class="flex items-center gap-2 sm:gap-4">
                     <!-- Bouton retour à gauche -->
-                    <a href="/stm/c/<?= $uuid ?>/catalog"
+                    <a href="<?= $catalogUrl ?>"
                        class="flex-shrink-0 flex items-center text-white hover:text-orange-100 transition font-semibold">
                         <i class="fas fa-arrow-left sm:mr-2"></i>
                         <span class="hidden sm:inline"><?= trans('common.back', $lang) ?></span>
@@ -212,7 +244,7 @@ ob_start();
                                 <p class="text-gray-500 mb-4">
                                     <?= trans('checkout.cart_empty', $lang) ?>
                                 </p>
-                                <a href="/stm/c/<?= $uuid ?>/catalog"
+                                <a href="<?= $catalogUrl ?>"
                                    class="inline-block bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition">
                                     <?= trans('checkout.back_to_catalog', $lang) ?>
                                 </a>
@@ -313,7 +345,13 @@ ob_start();
                             <?= trans('checkout.finalize', $lang) ?>
                         </h2>
 
-                        <form method="POST" action="/stm/c/<?= $uuid ?>/order/submit" id="checkoutForm">
+                        <?php
+                        // Sprint 16 : URL différente pour prospects
+                        $formAction = $isProspectOrder
+                            ? "/stm/c/{$uuid}/prospect/order"
+                            : "/stm/c/{$uuid}/order/submit";
+                        ?>
+                        <form method="POST" action="<?= $formAction ?>" id="checkoutForm">
                             <input type="hidden" name="_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
 
                             <!-- Email -->
