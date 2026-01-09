@@ -3043,7 +3043,7 @@ class PublicCampaignController
         exit();
     }
 
-    /**
+/**
      * Soumettre une commande prospect
      * POST /c/{uuid}/prospect/order
      *
@@ -3051,14 +3051,40 @@ class PublicCampaignController
      */
     public function prospectSubmitOrder(string $uuid): void
     {
+        // ========================================
+        // DEBUG TEMPORAIRE - Écriture dans fichier
+        // ========================================
+        $debugLog = [];
+        $debugLog[] = "=== DEBUG prospectSubmitOrder " . date('Y-m-d H:i:s') . " ===";
+        $debugLog[] = "UUID: " . $uuid;
+        $debugLog[] = "prospect_id: " . ($_SESSION['prospect_id'] ?? 'VIDE');
+        $debugLog[] = "prospect_email: " . ($_SESSION['prospect_email'] ?? 'VIDE');
+        $debugLog[] = "POST _token: " . ($_POST['_token'] ?? 'ABSENT');
+        $debugLog[] = "SESSION csrf_token: " . ($_SESSION['csrf_token'] ?? 'ABSENT');
+        $debugLog[] = "Tokens match: " . (($_POST['_token'] ?? '') === ($_SESSION['csrf_token'] ?? '') ? 'OUI' : 'NON');
+        $debugLog[] = "Cart brut: " . json_encode($_SESSION['cart'] ?? 'ABSENT');
+
+        // Fonction pour écrire le log
+        $writeDebugLog = function($debugLog, $exitPoint = '') {
+            if ($exitPoint) {
+                $debugLog[] = ">>> SORTIE: " . $exitPoint;
+            }
+            $debugLog[] = "=== FIN DEBUG ===\n";
+            $logPath = dirname(__DIR__, 2) . '/logs/prospect_debug.log';
+            file_put_contents($logPath, implode("\n", $debugLog) . "\n", FILE_APPEND);
+        };
+        // ========================================
+
         // Vérifier que le prospect est identifié
         if (empty($_SESSION['prospect_id'])) {
+            $writeDebugLog($debugLog, 'prospect_id VIDE → redirect /prospect');
             header("Location: /stm/c/{$uuid}/prospect");
             exit();
         }
 
         // Vérifier le token CSRF
         if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            $writeDebugLog($debugLog, 'Token CSRF INVALIDE → redirect /catalog');
             Session::setFlash('error', 'Token de sécurité invalide');
             header("Location: /stm/c/{$uuid}/prospect/catalog");
             exit();
@@ -3070,13 +3096,20 @@ class PublicCampaignController
         $campaign = $result[0] ?? null;
 
         if (!$campaign) {
+            $writeDebugLog($debugLog, 'Campagne introuvable');
             http_response_code(404);
             return;
         }
 
+        $debugLog[] = "Campagne trouvée: ID=" . $campaign['id'];
+
         // Récupérer le panier (même structure que addToCart)
         $cart = Session::get("cart", ["campaign_uuid" => $uuid, "items" => []]);
+        $debugLog[] = "Cart après Session::get: " . json_encode($cart);
+        $debugLog[] = "Nombre items: " . count($cart['items'] ?? []);
+
         if (empty($cart['items'])) {
+            $writeDebugLog($debugLog, 'Panier VIDE → redirect /catalog');
             Session::setFlash('error', 'Votre panier est vide');
             header("Location: /stm/c/{$uuid}/prospect/catalog");
             exit();
@@ -3084,10 +3117,12 @@ class PublicCampaignController
 
         // Générer le numéro de commande
         $orderNumber = $this->generateOrderNumber();
+        $debugLog[] = "Order number généré: " . $orderNumber;
 
         // Calculer les totaux
         $totalItems = array_sum(array_column($cart['items'], 'quantity'));
         $totalProducts = count($cart['items']);
+        $debugLog[] = "Totaux: items=$totalItems, products=$totalProducts";
 
         // Créer la commande (toujours en status 'validated' pour les prospects, pas de TXT auto)
         $query = "INSERT INTO orders (
@@ -3119,12 +3154,15 @@ class PublicCampaignController
             ':device_type' => $this->detectDeviceType(),
         ];
 
+        $debugLog[] = "Params INSERT: " . json_encode($params);
+
         try {
             $this->db->execute($query, $params);
             $orderId = $this->db->lastInsertId();
+            $debugLog[] = "Commande créée: ID=$orderId";
 
             // Insérer les lignes de commande
-            foreach ($cart['items'] as $item) {
+            foreach ($cart['items'] as $index => $item) {
                 $queryLine = "INSERT INTO order_lines (
                                 order_id, product_id, quantity, product_name, product_code, package_number, created_at
                               ) VALUES (
@@ -3138,6 +3176,7 @@ class PublicCampaignController
                     ':product_code' => $item['code'] ?? $item['product_code'] ?? '',
                     ':package_number' => $item['package_number'] ?? '',
                 ]);
+                $debugLog[] = "Ligne $index insérée: product_id=" . $item['product_id'];
             }
 
             // Mettre à jour les stats de la campagne
@@ -3153,11 +3192,17 @@ class PublicCampaignController
             // Envoyer l'email de confirmation (si template existe)
             $this->sendProspectOrderConfirmationEmail($orderId, $campaign);
 
+            $debugLog[] = "SUCCÈS - Redirect vers confirmation";
+            $writeDebugLog($debugLog, 'SUCCÈS');
+
             // Rediriger vers la page de confirmation
             header("Location: /stm/c/{$uuid}/prospect/confirmation");
             exit();
 
         } catch (\PDOException $e) {
+            $debugLog[] = "ERREUR PDO: " . $e->getMessage();
+            $writeDebugLog($debugLog, 'ERREUR PDO');
+
             error_log("Erreur création commande prospect: " . $e->getMessage());
             Session::setFlash('error', 'Erreur lors de la création de la commande');
             header("Location: /stm/c/{$uuid}/prospect/catalog");
