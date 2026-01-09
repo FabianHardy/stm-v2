@@ -7,7 +7,6 @@
  *
  * @package STM
  * @created 2026/01/09
- * @modified 2026/01/09 - Alignement design avec page client (show.php)
  */
 
 // ========================================
@@ -24,7 +23,7 @@ if ($campaign['country'] === 'LU') {
 // Stocker la langue en session
 $_SESSION['prospect_language'] = $lang;
 
-// Récupérer les erreurs et anciennes valeurs
+// Récupérer les erreurs et anciennes valeurs (passées par le contrôleur)
 $errors = $errors ?? [];
 $old = $old ?? [];
 
@@ -38,7 +37,7 @@ $uuid = $campaign['uuid'];
 // Variables pour le layout
 $title = trans('prospect.title', $lang) . ' - ' . $campaignTitle;
 $useAlpine = true;
-$bodyAttrs = 'x-data="prospectForm()"';
+// NE PAS définir $bodyAttrs - laisser le layout gérer les modals footer
 
 // Récupérer les pages statiques pour le footer (utilisé par le layout)
 $staticPageModel = new \App\Models\StaticPage();
@@ -52,7 +51,7 @@ ob_start();
 
 <!-- Header -->
 <?php
-$showClient = false; // Pas de client connecté sur cette page
+$showClient = false;
 include __DIR__ . '/../components/public/header.php';
 ?>
 
@@ -70,8 +69,11 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <main class="container mx-auto px-4 py-8 relative z-10">
     <div class="max-w-2xl mx-auto">
 
-        <!-- Formulaire prospect -->
-        <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-8">
+        <!-- Formulaire prospect avec Alpine.js -->
+        <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-8"
+             x-data="prospectForm()"
+             x-init="init()">
+
             <div class="text-center mb-6">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
                     <i class="fas fa-seedling text-3xl text-green-600"></i>
@@ -112,9 +114,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                 <input type="hidden" name="campaign_id" value="<?= $campaign['id'] ?>">
                 <input type="hidden" name="language" value="<?= $lang ?>">
 
-                <!-- ============================================ -->
                 <!-- SECTION : IDENTIFICATION -->
-                <!-- ============================================ -->
                 <div class="border-b border-gray-200 pb-6">
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                         <i class="fas fa-user mr-2"></i><?= trans('prospect.section_identity', $lang) ?>
@@ -172,9 +172,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- SECTION : TVA -->
-                <!-- ============================================ -->
                 <div class="border-b border-gray-200 pb-6">
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                         <i class="fas fa-file-invoice mr-2"></i><?= trans('prospect.section_vat', $lang) ?>
@@ -189,21 +187,20 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="is_vat_liable" value="1"
                                            x-model="isVatLiable"
-                                           <?= ($old['is_vat_liable'] ?? '1') === '1' ? 'checked' : '' ?>
                                            class="h-4 w-4 text-blue-600 focus:ring-blue-500" required>
                                     <span class="ml-2 text-sm"><?= trans('prospect.yes', $lang) ?></span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="is_vat_liable" value="0"
                                            x-model="isVatLiable"
-                                           <?= ($old['is_vat_liable'] ?? '') === '0' ? 'checked' : '' ?>
                                            class="h-4 w-4 text-blue-600 focus:ring-blue-500">
                                     <span class="ml-2 text-sm"><?= trans('prospect.no', $lang) ?></span>
                                 </label>
                             </div>
                         </div>
                         <div class="col-span-12 md:col-span-8">
-                            <div x-show="isVatLiable === '1'">
+                            <!-- Champ TVA visible si assujetti -->
+                            <div x-show="isVatLiable === '1'" x-cloak>
                                 <label for="vat_number" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-hashtag mr-2 text-blue-600"></i>
                                     <?= trans('prospect.vat_number', $lang) ?> <span class="text-red-500">*</span>
@@ -214,7 +211,8 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                        x-bind:required="isVatLiable === '1'">
                             </div>
-                            <div x-show="isVatLiable === '0'" class="flex items-center h-full pt-6" x-cloak>
+                            <!-- Message si non assujetti -->
+                            <div x-show="isVatLiable === '0'" x-cloak class="flex items-center h-full pt-6">
                                 <span class="text-sm text-gray-400 italic">
                                     <i class="fas fa-info-circle mr-1"></i>
                                     <?= trans('prospect.not_vat_liable', $lang) ?>
@@ -224,9 +222,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- SECTION : COORDONNÉES -->
-                <!-- ============================================ -->
                 <div class="border-b border-gray-200 pb-6">
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                         <i class="fas fa-address-book mr-2"></i><?= trans('prospect.section_contact', $lang) ?>
@@ -240,6 +236,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <?= trans('prospect.email', $lang) ?> <span class="text-red-500">*</span>
                             </label>
                             <input type="email" id="email" name="email"
+                                   value="<?= htmlspecialchars($old['email'] ?? '') ?>"
                                    x-model="email"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                    required>
@@ -252,7 +249,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                             <input type="email" id="email_confirm" name="email_confirm"
                                    x-model="emailConfirm"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                   :class="{'border-red-500 bg-red-50': email && emailConfirm && email !== emailConfirm}"
+                                   x-bind:class="{'border-red-500 bg-red-50': email && emailConfirm && email !== emailConfirm}"
                                    required>
                             <p x-show="email && emailConfirm && email !== emailConfirm"
                                x-cloak
@@ -288,9 +285,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- SECTION : ADRESSE -->
-                <!-- ============================================ -->
                 <div class="border-b border-gray-200 pb-6">
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                         <i class="fas fa-map-marker-alt mr-2"></i><?= trans('prospect.section_address', $lang) ?>
@@ -303,7 +298,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                 <?= trans('prospect.country', $lang) ?> <span class="text-red-500">*</span>
                             </label>
                             <select id="country" name="country"
-                                    x-model="country"
+                                    x-model="selectedCountry"
                                     @change="onCountryChange()"
                                     class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                     required>
@@ -348,12 +343,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                                     x-model="city"
                                     class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                     required>
-                                <option value="" x-show="localities.length === 0">
-                                    <?= trans('prospect.enter_postal', $lang) ?>
-                                </option>
-                                <option value="" x-show="localities.length > 0" x-cloak>
-                                    <?= trans('prospect.select_city', $lang) ?>
-                                </option>
+                                <option value=""><?= trans('prospect.enter_postal', $lang) ?></option>
                                 <template x-for="loc in localities" :key="loc.id">
                                     <option :value="loc.locality_<?= $lang === 'nl' ? 'nl' : 'fr' ?> || loc.locality_fr"
                                             x-text="loc.locality_<?= $lang === 'nl' ? 'nl' : 'fr' ?> || loc.locality_fr">
@@ -364,9 +354,7 @@ include __DIR__ . '/../components/public/campaign_bar.php';
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- INFORMATIONS COMPLÉMENTAIRES -->
-                <!-- ============================================ -->
                 <div>
                     <label for="additional_info" class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-comment mr-2 text-blue-600"></i>
@@ -408,117 +396,109 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <?php
 $content = ob_get_clean();
 
-// Variables échappées pour JavaScript
-$escapedEmail = addslashes($old['email'] ?? '');
-$escapedCountry = addslashes($old['country'] ?? 'BE');
-$escapedPostalCode = addslashes($old['postal_code'] ?? '');
-$escapedCity = addslashes($old['city'] ?? '');
-$escapedVatLiable = addslashes($old['is_vat_liable'] ?? '1');
+// Scripts spécifiques à cette page (défini AVANT le heredoc)
+$jsLang = $lang;
+$jsOldEmail = addslashes($old['email'] ?? '');
+$jsOldCountry = addslashes($old['country'] ?? 'BE');
+$jsOldPostalCode = addslashes($old['postal_code'] ?? '');
+$jsOldCity = addslashes($old['city'] ?? '');
+$jsOldVatLiable = addslashes($old['is_vat_liable'] ?? '1');
 
-// Scripts spécifiques à cette page
 $pageScripts = <<<SCRIPT
 <script>
-    function prospectForm() {
-        return {
-            email: '{$escapedEmail}',
-            emailConfirm: '',
-            country: '{$escapedCountry}',
-            postalCode: '{$escapedPostalCode}',
-            city: '{$escapedCity}',
-            isVatLiable: '{$escapedVatLiable}',
-            localities: [],
-            loadingLocalities: false,
-            submitting: false,
-            searchTimeout: null,
+function prospectForm() {
+    return {
+        email: '{$jsOldEmail}',
+        emailConfirm: '',
+        selectedCountry: '{$jsOldCountry}' || 'BE',
+        postalCode: '{$jsOldPostalCode}',
+        city: '{$jsOldCity}',
+        isVatLiable: '{$jsOldVatLiable}' || '1',
+        localities: [],
+        loadingLocalities: false,
+        submitting: false,
+        searchTimeout: null,
 
-            init() {
-                // Charger les localités si code postal pré-rempli
-                if (this.postalCode && this.postalCode.length >= 4) {
-                    this.loadLocalities();
-                }
-            },
+        init() {
+            if (this.postalCode && this.postalCode.length >= 4) {
+                this.loadLocalities();
+            }
+        },
 
-            onCountryChange() {
+        onCountryChange() {
+            this.localities = [];
+            this.city = '';
+            if (this.postalCode && this.postalCode.length >= 4) {
+                this.loadLocalities();
+            }
+        },
+
+        onPostalCodeInput() {
+            clearTimeout(this.searchTimeout);
+
+            if (this.postalCode.length < 4) {
                 this.localities = [];
                 this.city = '';
-                if (this.postalCode && this.postalCode.length >= 4) {
-                    this.loadLocalities();
-                }
-            },
-
-            onPostalCodeInput() {
-                clearTimeout(this.searchTimeout);
-
-                if (this.postalCode.length < 4) {
-                    this.localities = [];
-                    this.city = '';
-                    return;
-                }
-
-                this.searchTimeout = setTimeout(() => {
-                    this.loadLocalities();
-                }, 300);
-            },
-
-            async loadLocalities() {
-                if (this.postalCode.length < 4) return;
-
-                this.loadingLocalities = true;
-                try {
-                    const response = await fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(this.postalCode) + '&country=' + this.country);
-                    const data = await response.json();
-
-                    if (data.success && data.data) {
-                        this.localities = data.data;
-
-                        // Auto-sélection si une seule localité
-                        if (this.localities.length === 1) {
-                            const lang = '{$lang}';
-                            this.city = this.localities[0]['locality_' + lang] || this.localities[0].locality_fr;
-                        } else if (this.localities.length > 1) {
-                            this.city = '';
-                        }
-                    } else {
-                        this.localities = [];
-                    }
-                } catch (e) {
-                    console.error('Erreur chargement localités:', e);
-                    this.localities = [];
-                } finally {
-                    this.loadingLocalities = false;
-                }
-            },
-
-            validateForm(event) {
-                // Vérifier correspondance emails
-                if (this.email !== this.emailConfirm) {
-                    event.preventDefault();
-                    alert('Les adresses email ne correspondent pas.');
-                    return false;
-                }
-
-                // Si non assujetti TVA, vider le champ
-                if (this.isVatLiable === '0') {
-                    const vatInput = document.getElementById('vat_number');
-                    if (vatInput) {
-                        vatInput.removeAttribute('required');
-                        vatInput.value = '';
-                    }
-                }
-
-                this.submitting = true;
-                return true;
+                return;
             }
+
+            this.searchTimeout = setTimeout(() => {
+                this.loadLocalities();
+            }, 300);
+        },
+
+        async loadLocalities() {
+            if (this.postalCode.length < 4) return;
+
+            this.loadingLocalities = true;
+            try {
+                const response = await fetch('/stm/api/postal-codes/localities?code=' + encodeURIComponent(this.postalCode) + '&country=' + this.selectedCountry);
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    this.localities = data.data;
+
+                    if (this.localities.length === 1) {
+                        const lang = '{$jsLang}';
+                        this.city = this.localities[0]['locality_' + lang] || this.localities[0].locality_fr;
+                    } else if (this.localities.length > 1) {
+                        this.city = '';
+                    }
+                } else {
+                    this.localities = [];
+                }
+            } catch (e) {
+                console.error('Erreur chargement localités:', e);
+                this.localities = [];
+            } finally {
+                this.loadingLocalities = false;
+            }
+        },
+
+        validateForm(event) {
+            if (this.email !== this.emailConfirm) {
+                event.preventDefault();
+                alert('Les adresses email ne correspondent pas.');
+                return false;
+            }
+
+            if (this.isVatLiable === '0') {
+                const vatInput = document.getElementById('vat_number');
+                if (vatInput) {
+                    vatInput.removeAttribute('required');
+                    vatInput.value = '';
+                }
+            }
+
+            this.submitting = true;
+            return true;
         }
     }
+}
 </script>
 SCRIPT;
 
-$pageStyles = <<<'STYLES'
-<style>
-    [x-cloak] { display: none !important; }
-</style>
-STYLES;
+$pageStyles = '';
 
 // Inclure le layout
 require __DIR__ . '/../layouts/public.php';
