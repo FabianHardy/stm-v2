@@ -21,6 +21,7 @@
  * @modified   2025/12/30 - Ajout vérifications de permissions et filtrage par scope
  * @modified   2026/01/08 - Ajout filtre source (client/rep) + jointure rep dans show()
  * @modified   2026/01/08 - Sprint 15 : Ajout statut validated, export Excel, génération TXT à la demande
+ * @modified   2026/01/09 - Sprint 16 : Export Excel 2 onglets (Clients / Prospects)
  */
 
 namespace App\Controllers;
@@ -726,9 +727,9 @@ class OrderController
             exit;
         }
 
-        // Récupérer les données des commandes
+        // Récupérer les données des commandes CLIENTS (customer_id NOT NULL)
         $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
-        $sql = "
+        $sqlClients = "
             SELECT
                 o.id,
                 o.uuid,
@@ -749,40 +750,86 @@ class OrderController
             INNER JOIN campaigns c ON o.campaign_id = c.id
             LEFT JOIN customers cu ON o.customer_id = cu.id
             LEFT JOIN users u ON o.ordered_by_rep_id = u.id
-            WHERE o.id IN ({$placeholders})
+            WHERE o.id IN ({$placeholders}) AND o.customer_id IS NOT NULL
             ORDER BY o.created_at DESC
         ";
 
-        $orders = $this->db->query($sql, $orderIds);
+        $clientOrders = $this->db->query($sqlClients, $orderIds);
 
-        if (empty($orders)) {
+        // Récupérer les données des commandes PROSPECTS (prospect_id NOT NULL)
+        $sqlProspects = "
+            SELECT
+                o.id,
+                o.uuid,
+                o.status,
+                o.order_source,
+                o.customer_email,
+                o.total_items,
+                o.total_products,
+                o.created_at,
+                c.name as campaign_name,
+                c.country as campaign_country,
+                c.order_type,
+                p.prospect_number,
+                p.company_name,
+                p.vat_number,
+                p.phone,
+                p.address,
+                p.postal_code,
+                p.city,
+                p.country as prospect_country,
+                st.name as shop_type_name
+            FROM orders o
+            INNER JOIN campaigns c ON o.campaign_id = c.id
+            LEFT JOIN prospects p ON o.prospect_id = p.id
+            LEFT JOIN shop_types st ON p.shop_type_id = st.id
+            WHERE o.id IN ({$placeholders}) AND o.prospect_id IS NOT NULL
+            ORDER BY o.created_at DESC
+        ";
+
+        $prospectOrders = $this->db->query($sqlProspects, $orderIds);
+
+        if (empty($clientOrders) && empty($prospectOrders)) {
             Session::setFlash('error', 'Aucune commande trouvée.');
             header('Location: /stm/admin/orders');
             exit;
         }
 
-        // Récupérer les lignes de commande pour chaque commande
-        $ordersWithLines = [];
-        foreach ($orders as $order) {
+        // Récupérer les lignes de commande pour chaque commande CLIENTS
+        $clientOrdersWithLines = [];
+        foreach ($clientOrders as $order) {
             $lines = $this->db->query(
                 "SELECT product_code, product_name, quantity FROM order_lines WHERE order_id = :order_id",
                 [':order_id' => $order['id']]
             );
             $order['lines'] = $lines;
-            $ordersWithLines[] = $order;
+            $clientOrdersWithLines[] = $order;
         }
 
-        // Générer le fichier Excel
-        $this->generateExcelFile($ordersWithLines);
+        // Récupérer les lignes de commande pour chaque commande PROSPECTS
+        $prospectOrdersWithLines = [];
+        foreach ($prospectOrders as $order) {
+            $lines = $this->db->query(
+                "SELECT product_code, product_name, quantity FROM order_lines WHERE order_id = :order_id",
+                [':order_id' => $order['id']]
+            );
+            $order['lines'] = $lines;
+            $prospectOrdersWithLines[] = $order;
+        }
+
+        // Générer le fichier Excel avec 2 onglets
+        $this->generateExcelFile($clientOrdersWithLines, $prospectOrdersWithLines);
     }
 
     /**
-     * Générer le fichier Excel et l'envoyer au navigateur
+     * Générer le fichier Excel avec 2 onglets (Clients / Prospects) et l'envoyer au navigateur
+     * Sprint 16 : Support dual export
      *
-     * @param array $orders Commandes avec leurs lignes
+     * @param array $clientOrders Commandes clients avec leurs lignes
+     * @param array $prospectOrders Commandes prospects avec leurs lignes
      * @return void
      */
-    private function generateExcelFile(array $orders): void
+    private function generateExcelFile(array $clientOrders, array $prospectOrders = []): void
     {
         // Augmenter le temps d'exécution
         set_time_limit(300);
@@ -796,50 +843,114 @@ class OrderController
         ini_set('display_errors', '0');
 
         // Nom du fichier
-        $campaignName = $orders[0]['campaign_name'] ?? 'commandes';
+        $campaignName = $clientOrders[0]['campaign_name'] ?? $prospectOrders[0]['campaign_name'] ?? 'commandes';
         $filename = 'export_commandes_' . preg_replace('/[^a-zA-Z0-9]/', '_', $campaignName) . '_' . date('Y-m-d_His') . '.xlsx';
 
         // Créer le fichier Excel avec PhpSpreadsheet
         require_once BASE_PATH . '/vendor/autoload.php';
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Commandes');
 
-        // En-têtes
-        $headers = ['Réf. Commande', 'Date', 'Client N°', 'Société', 'Pays', 'Email', 'Source', 'Représentant', 'Code Produit', 'Produit', 'Quantité', 'Campagne'];
+        // =====================================================================
+        // ONGLET 1 : CLIENTS
+        // =====================================================================
+        $sheetClients = $spreadsheet->getActiveSheet();
+        $sheetClients->setTitle('Clients');
+
+        // En-têtes Clients
+        $headersClients = ['Réf. Commande', 'Date', 'Client N°', 'Société', 'Pays', 'Email', 'Source', 'Représentant', 'Code Produit', 'Produit', 'Quantité', 'Campagne'];
         $col = 'A';
-        foreach ($headers as $header) {
-            $sheet->setCellValue($col . '1', $header);
-            $sheet->getStyle($col . '1')->getFont()->setBold(true);
-            $sheet->getStyle($col . '1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('E2E8F0');
+        foreach ($headersClients as $header) {
+            $sheetClients->setCellValue($col . '1', $header);
+            $sheetClients->getStyle($col . '1')->getFont()->setBold(true);
+            $sheetClients->getStyle($col . '1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('E2E8F0');
             $col++;
         }
 
-        // Données - une ligne par produit
+        // Données Clients
         $row = 2;
-        foreach ($orders as $order) {
+        foreach ($clientOrders as $order) {
             foreach ($order['lines'] as $line) {
-                $sheet->setCellValue('A' . $row, 'ORD-' . date('Y', strtotime($order['created_at'])) . '-' . str_pad($order['id'], 6, '0', STR_PAD_LEFT));
-                $sheet->setCellValue('B' . $row, date('d/m/Y H:i', strtotime($order['created_at'])));
-                $sheet->setCellValue('C' . $row, $order['customer_number']);
-                $sheet->setCellValue('D' . $row, $order['company_name']);
-                $sheet->setCellValue('E' . $row, $order['customer_country']);
-                $sheet->setCellValue('F' . $row, $order['customer_email']);
-                $sheet->setCellValue('G' . $row, $order['order_source'] === 'rep' ? 'Représentant' : 'Client');
-                $sheet->setCellValue('H' . $row, $order['rep_name'] ?? '-');
-                $sheet->setCellValue('I' . $row, $line['product_code']);
-                $sheet->setCellValue('J' . $row, $line['product_name']);
-                $sheet->setCellValue('K' . $row, $line['quantity']);
-                $sheet->setCellValue('L' . $row, $order['campaign_name']);
+                $sheetClients->setCellValue('A' . $row, 'ORD-' . date('Y', strtotime($order['created_at'])) . '-' . str_pad($order['id'], 6, '0', STR_PAD_LEFT));
+                $sheetClients->setCellValue('B' . $row, date('d/m/Y H:i', strtotime($order['created_at'])));
+                $sheetClients->setCellValue('C' . $row, $order['customer_number']);
+                $sheetClients->setCellValue('D' . $row, $order['company_name']);
+                $sheetClients->setCellValue('E' . $row, $order['customer_country']);
+                $sheetClients->setCellValue('F' . $row, $order['customer_email']);
+                $sheetClients->setCellValue('G' . $row, $order['order_source'] === 'rep' ? 'Représentant' : 'Client');
+                $sheetClients->setCellValue('H' . $row, $order['rep_name'] ?? '-');
+                $sheetClients->setCellValue('I' . $row, $line['product_code']);
+                $sheetClients->setCellValue('J' . $row, $line['product_name']);
+                $sheetClients->setCellValue('K' . $row, $line['quantity']);
+                $sheetClients->setCellValue('L' . $row, $order['campaign_name']);
                 $row++;
             }
         }
 
-        // Auto-size des colonnes
+        // Auto-size des colonnes Clients
         foreach (range('A', 'L') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+            $sheetClients->getColumnDimension($col)->setAutoSize(true);
         }
+
+        // Si pas de clients, ajouter un message
+        if (empty($clientOrders)) {
+            $sheetClients->setCellValue('A2', 'Aucune commande client');
+            $sheetClients->getStyle('A2')->getFont()->setItalic(true);
+        }
+
+        // =====================================================================
+        // ONGLET 2 : PROSPECTS
+        // =====================================================================
+        $sheetProspects = $spreadsheet->createSheet();
+        $sheetProspects->setTitle('Prospects');
+
+        // En-têtes Prospects (colonnes différentes)
+        $headersProspects = ['Réf. Commande', 'Date', 'Prospect N°', 'Société', 'TVA', 'Type magasin', 'Pays', 'Email', 'Téléphone', 'Adresse', 'Code postal', 'Ville', 'Code Produit', 'Produit', 'Quantité', 'Campagne'];
+        $col = 'A';
+        foreach ($headersProspects as $header) {
+            $sheetProspects->setCellValue($col . '1', $header);
+            $sheetProspects->getStyle($col . '1')->getFont()->setBold(true);
+            $sheetProspects->getStyle($col . '1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('DDD6FE'); // Violet clair pour distinguer
+            $col++;
+        }
+
+        // Données Prospects
+        $row = 2;
+        foreach ($prospectOrders as $order) {
+            foreach ($order['lines'] as $line) {
+                $sheetProspects->setCellValue('A' . $row, 'ORD-' . date('Y', strtotime($order['created_at'])) . '-' . str_pad($order['id'], 6, '0', STR_PAD_LEFT));
+                $sheetProspects->setCellValue('B' . $row, date('d/m/Y H:i', strtotime($order['created_at'])));
+                $sheetProspects->setCellValue('C' . $row, $order['prospect_number']);
+                $sheetProspects->setCellValue('D' . $row, $order['company_name']);
+                $sheetProspects->setCellValue('E' . $row, $order['vat_number']);
+                $sheetProspects->setCellValue('F' . $row, $order['shop_type_name']);
+                $sheetProspects->setCellValue('G' . $row, $order['prospect_country']);
+                $sheetProspects->setCellValue('H' . $row, $order['customer_email']);
+                $sheetProspects->setCellValue('I' . $row, $order['phone']);
+                $sheetProspects->setCellValue('J' . $row, $order['address']);
+                $sheetProspects->setCellValue('K' . $row, $order['postal_code']);
+                $sheetProspects->setCellValue('L' . $row, $order['city']);
+                $sheetProspects->setCellValue('M' . $row, $line['product_code']);
+                $sheetProspects->setCellValue('N' . $row, $line['product_name']);
+                $sheetProspects->setCellValue('O' . $row, $line['quantity']);
+                $sheetProspects->setCellValue('P' . $row, $order['campaign_name']);
+                $row++;
+            }
+        }
+
+        // Auto-size des colonnes Prospects
+        foreach (range('A', 'P') as $col) {
+            $sheetProspects->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // Si pas de prospects, ajouter un message
+        if (empty($prospectOrders)) {
+            $sheetProspects->setCellValue('A2', 'Aucune commande prospect');
+            $sheetProspects->getStyle('A2')->getFont()->setItalic(true);
+        }
+
+        // Revenir au premier onglet (Clients)
+        $spreadsheet->setActiveSheetIndex(0);
 
         // Envoyer le fichier
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

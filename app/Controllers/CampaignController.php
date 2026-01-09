@@ -189,6 +189,7 @@ class CampaignController
             "order_type" => $_POST["order_type"] ?? "W",
             "show_prices" => isset($_POST["show_prices"]) ? 1 : 0, // Sprint 14
             "order_processing_mode" => $_POST["order_processing_mode"] ?? "direct", // Sprint 15
+            "allow_prospects" => isset($_POST["allow_prospects"]) ? 1 : 0, // Sprint 16
             "deferred_delivery" => isset($_POST["deferred_delivery"]) ? 1 : 0,
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];
@@ -374,6 +375,7 @@ class CampaignController
             "order_type" => $_POST["order_type"] ?? "W",
             "show_prices" => isset($_POST["show_prices"]) ? 1 : 0, // Sprint 14
             "order_processing_mode" => $_POST["order_processing_mode"] ?? "direct", // Sprint 15
+            "allow_prospects" => isset($_POST["allow_prospects"]) ? 1 : 0, // Sprint 16
             "deferred_delivery" => isset($_POST["deferred_delivery"]) ? 1 : 0,
             "delivery_date" => !empty($_POST["delivery_date"]) ? $_POST["delivery_date"] : null,
         ];

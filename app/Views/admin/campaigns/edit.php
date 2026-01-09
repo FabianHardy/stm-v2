@@ -503,6 +503,54 @@ if (!isset($availableUsers)) $availableUsers = [];
                         </p>
                     </div>
                 </div>
+
+                <!-- SPRINT 16 : Mode Prospect -->
+                <div class="mt-6 pt-6 border-t border-gray-200">
+                    <label class="relative flex items-start cursor-pointer">
+                        <input type="checkbox"
+                               name="allow_prospects"
+                               value="1"
+                               <?= ($old['allow_prospects'] ?? $campaign['allow_prospects'] ?? 0) ? 'checked' : '' ?>
+                               class="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">
+                                👤 Autoriser les prospects
+                            </span>
+                            <span class="block text-sm text-gray-600 mt-1">
+                                Active une URL dédiée pour les nouveaux clients (sans numéro client existant)
+                            </span>
+                        </div>
+                    </label>
+
+                    <!-- Info-bulle -->
+                    <div class="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p class="text-xs text-purple-800">
+                            <strong>💡 Mode Prospect :</strong> Les prospects peuvent commander via une URL spéciale 
+                            (<code class="bg-purple-100 px-1 rounded">/c/[uuid]/prospect</code>). 
+                            Ils doivent remplir un formulaire d'inscription avant d'accéder au catalogue.
+                            Leurs commandes sont toujours en mode "En attente" (pas de TXT automatique).
+                        </p>
+                    </div>
+
+                    <?php if ($campaign['allow_prospects'] ?? false): ?>
+                    <!-- URL Prospect -->
+                    <div class="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p class="text-xs text-gray-700 mb-2">
+                            <strong>🔗 URL Prospect :</strong>
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <code class="flex-1 bg-white px-3 py-2 text-sm rounded border border-gray-300 text-purple-600">
+                                <?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'actions.trendyfoods.com') ?>/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/prospect
+                            </code>
+                            <button type="button" 
+                                    onclick="navigator.clipboard.writeText('<?= ($_SERVER['HTTP_HOST'] ?? 'actions.trendyfoods.com') ?>/stm/c/<?= htmlspecialchars($campaign['uuid']) ?>/prospect')"
+                                    class="px-3 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
+                                📋 Copier
+                            </button>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 

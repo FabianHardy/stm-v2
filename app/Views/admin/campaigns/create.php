@@ -466,6 +466,34 @@ if (!isset($availableUsers)) $availableUsers = [];
                         </p>
                     </div>
                 </div>
+
+                <!-- SPRINT 16 : Mode Prospect -->
+                <div class="mt-6 pt-6 border-t border-gray-200">
+                    <label class="relative flex items-start cursor-pointer">
+                        <input type="checkbox"
+                               name="allow_prospects"
+                               value="1"
+                               class="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">
+                                👤 Autoriser les prospects
+                            </span>
+                            <span class="block text-sm text-gray-600 mt-1">
+                                Active une URL dédiée pour les nouveaux clients (sans numéro client existant)
+                            </span>
+                        </div>
+                    </label>
+
+                    <!-- Info-bulle -->
+                    <div class="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p class="text-xs text-purple-800">
+                            <strong>💡 Mode Prospect :</strong> Les prospects peuvent commander via une URL spéciale 
+                            (<code class="bg-purple-100 px-1 rounded">/c/[uuid]/prospect</code>). 
+                            Ils doivent remplir un formulaire d'inscription avant d'accéder au catalogue.
+                            Leurs commandes sont toujours en mode "En attente" (pas de TXT automatique).
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
 

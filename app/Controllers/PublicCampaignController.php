@@ -15,6 +15,7 @@
  * @modified 2026/01/05 - Sprint 14 : Mode Représentant (commande pour client)
  * @modified 2026/01/08 - Sprint 14 : Amélioration messages compte désactivé + prompt select_account
  * @modified 2026/01/08 - Sprint 15 : Mode traitement commandes (direct/pending)
+ * @modified 2026/01/09 - Sprint 16 : Mode Prospect (inscription + commande nouveaux clients)
  */
 
 namespace App\Controllers;
@@ -2590,5 +2591,540 @@ class PublicCampaignController
         curl_close($ch);
 
         return json_decode($response, true);
+    }
+
+    // ========================================================================
+    // SPRINT 16 : MODE PROSPECT
+    // ========================================================================
+
+    /**
+     * Afficher le formulaire d'inscription prospect
+     * GET /c/{uuid}/prospect
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectForm(string $uuid): void
+    {
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        if (!$campaign) {
+            http_response_code(404);
+            echo "Campagne introuvable";
+            return;
+        }
+
+        // Vérifier que le mode prospect est activé
+        if (!($campaign['allow_prospects'] ?? false)) {
+            http_response_code(403);
+            echo "L'inscription prospect n'est pas activée pour cette campagne";
+            return;
+        }
+
+        // Vérifier que la campagne est active
+        if (!$campaign['is_active']) {
+            http_response_code(403);
+            echo "Cette campagne n'est pas active";
+            return;
+        }
+
+        // Vérifier les dates
+        $now = new \DateTime();
+        $startDate = new \DateTime($campaign['start_date']);
+        $endDate = new \DateTime($campaign['end_date']);
+
+        if ($now < $startDate || $now > $endDate) {
+            http_response_code(403);
+            echo "Cette campagne n'est pas disponible actuellement";
+            return;
+        }
+
+        // Charger les types de magasin
+        $shopTypeModel = new \App\Models\ShopType();
+        $shopTypes = $shopTypeModel->getAllActive();
+
+        // Déterminer la langue
+        $lang = $_GET['lang'] ?? 'fr';
+        if (!in_array($lang, ['fr', 'nl'])) {
+            $lang = 'fr';
+        }
+
+        // Récupérer les erreurs et anciennes valeurs de session
+        $errors = Session::getFlash('errors') ?? [];
+        $old = Session::getFlash('old') ?? [];
+
+        // Charger la vue
+        require __DIR__ . '/../Views/public/prospect_form.php';
+    }
+
+    /**
+     * Traiter l'inscription d'un prospect
+     * POST /c/{uuid}/prospect/register
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectRegister(string $uuid): void
+    {
+        // Vérifier le token CSRF
+        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            Session::setFlash('errors', ['global' => 'Token de sécurité invalide']);
+            header("Location: /stm/c/{$uuid}/prospect");
+            exit();
+        }
+
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        if (!$campaign || !($campaign['allow_prospects'] ?? false)) {
+            http_response_code(403);
+            echo "Accès refusé";
+            return;
+        }
+
+        // Préparer les données
+        $data = [
+            'civility' => $_POST['civility'] ?? '',
+            'company_name' => trim($_POST['company_name'] ?? ''),
+            'vat_number' => trim($_POST['vat_number'] ?? ''),
+            'is_vat_liable' => (int) ($_POST['is_vat_liable'] ?? 1),
+            'email' => trim($_POST['email'] ?? ''),
+            'phone' => trim($_POST['phone'] ?? ''),
+            'fax' => trim($_POST['fax'] ?? '') ?: null,
+            'shop_type_id' => (int) ($_POST['shop_type_id'] ?? 0),
+            'address' => trim($_POST['address'] ?? ''),
+            'postal_code' => trim($_POST['postal_code'] ?? ''),
+            'city' => trim($_POST['city'] ?? ''),
+            'country' => $_POST['country'] ?? 'BE',
+            'additional_info' => trim($_POST['additional_info'] ?? '') ?: null,
+            'language' => $_POST['language'] ?? 'fr',
+            'campaign_id' => $campaign['id'],
+            'ip_address' => $this->getClientIp(),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        ];
+
+        // Valider les données
+        $prospectModel = new \App\Models\Prospect();
+        $errors = $prospectModel->validate($data, $campaign['id']);
+
+        // Vérifier confirmation email
+        $emailConfirm = trim($_POST['email_confirm'] ?? '');
+        if ($data['email'] !== $emailConfirm) {
+            $errors['email_confirm'] = 'Les emails ne correspondent pas';
+        }
+
+        if (!empty($errors)) {
+            Session::setFlash('errors', $errors);
+            Session::setFlash('old', $data);
+            header("Location: /stm/c/{$uuid}/prospect?lang=" . ($data['language'] ?? 'fr'));
+            exit();
+        }
+
+        // Créer le prospect
+        $prospectId = $prospectModel->create($data);
+
+        if (!$prospectId) {
+            Session::setFlash('errors', ['global' => 'Erreur lors de l\'inscription']);
+            Session::setFlash('old', $data);
+            header("Location: /stm/c/{$uuid}/prospect?lang=" . ($data['language'] ?? 'fr'));
+            exit();
+        }
+
+        // Récupérer le prospect créé
+        $prospect = $prospectModel->findById($prospectId);
+
+        // Stocker en session
+        $_SESSION['prospect_id'] = $prospectId;
+        $_SESSION['prospect_number'] = $prospect['prospect_number'];
+        $_SESSION['prospect_name'] = $prospect['company_name'];
+        $_SESSION['prospect_email'] = $prospect['email'];
+        $_SESSION['prospect_country'] = $prospect['country'];
+        $_SESSION['prospect_language'] = $prospect['language'];
+        $_SESSION['campaign_id'] = $campaign['id'];
+        $_SESSION['campaign_uuid'] = $uuid;
+        $_SESSION['order_source'] = 'prospect';
+
+        // Rediriger vers le catalogue
+        header("Location: /stm/c/{$uuid}/prospect/catalog");
+        exit();
+    }
+
+    /**
+     * Afficher le catalogue pour un prospect
+     * GET /c/{uuid}/prospect/catalog
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectCatalog(string $uuid): void
+    {
+        // Vérifier que le prospect est identifié
+        if (empty($_SESSION['prospect_id'])) {
+            header("Location: /stm/c/{$uuid}/prospect");
+            exit();
+        }
+
+        // Le catalogue prospect est similaire au catalogue client
+        // Mais sans vérification API (accès à toutes les promos)
+        
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        if (!$campaign) {
+            http_response_code(404);
+            echo "Campagne introuvable";
+            return;
+        }
+
+        // Préparer les données pour la vue
+        $lang = $_SESSION['prospect_language'] ?? 'fr';
+        $prospectNumber = $_SESSION['prospect_number'];
+        $prospectName = $_SESSION['prospect_name'];
+        $country = $_SESSION['prospect_country'] ?? 'BE';
+
+        // Récupérer les catégories et promotions
+        $query = "SELECT DISTINCT c.id, c.name_fr, c.name_nl, c.sort_order
+                  FROM categories c
+                  INNER JOIN promotions p ON p.category_id = c.id
+                  WHERE p.campaign_id = :campaign_id AND p.is_active = 1
+                  ORDER BY c.sort_order ASC, c.name_fr ASC";
+        $categories = $this->db->query($query, [":campaign_id" => $campaign['id']]);
+
+        // Récupérer toutes les promotions actives (pas de filtre API pour les prospects)
+        $query = "SELECT p.*, pr.name as product_name, pr.description_fr, pr.description_nl,
+                         pr.image_url, pr.code as product_code,
+                         c.name_fr as category_name_fr, c.name_nl as category_name_nl
+                  FROM promotions p
+                  INNER JOIN products pr ON p.product_id = pr.id
+                  LEFT JOIN categories c ON p.category_id = c.id
+                  WHERE p.campaign_id = :campaign_id AND p.is_active = 1
+                  ORDER BY c.sort_order ASC, p.sort_order ASC";
+        $promotions = $this->db->query($query, [":campaign_id" => $campaign['id']]);
+
+        // Marquer toutes les promotions comme éligibles pour les prospects
+        foreach ($promotions as &$promo) {
+            $promo['is_eligible'] = true;
+            $promo['eligibility_reason'] = null;
+        }
+
+        // Récupérer le panier
+        $cart = $_SESSION['cart'][$uuid] ?? [];
+        $cartCount = array_sum(array_column($cart, 'quantity'));
+        $cartTotal = 0;
+        foreach ($cart as $item) {
+            $cartTotal += ($item['quantity'] ?? 0);
+        }
+
+        // Source de la commande
+        $orderSource = 'prospect';
+
+        // Charger la vue catalogue (réutiliser la vue existante avec adaptations)
+        require __DIR__ . '/../Views/public/prospect_catalog.php';
+    }
+
+    /**
+     * Soumettre une commande prospect
+     * POST /c/{uuid}/prospect/order
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectSubmitOrder(string $uuid): void
+    {
+        // Vérifier que le prospect est identifié
+        if (empty($_SESSION['prospect_id'])) {
+            header("Location: /stm/c/{$uuid}/prospect");
+            exit();
+        }
+
+        // Vérifier le token CSRF
+        if (!isset($_POST['_token']) || $_POST['_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+            Session::setFlash('error', 'Token de sécurité invalide');
+            header("Location: /stm/c/{$uuid}/prospect/catalog");
+            exit();
+        }
+
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        if (!$campaign) {
+            http_response_code(404);
+            return;
+        }
+
+        // Récupérer le panier
+        $cart = $_SESSION['cart'][$uuid] ?? [];
+        if (empty($cart)) {
+            Session::setFlash('error', 'Votre panier est vide');
+            header("Location: /stm/c/{$uuid}/prospect/catalog");
+            exit();
+        }
+
+        // Générer le numéro de commande
+        $orderNumber = $this->generateOrderNumber();
+
+        // Calculer les totaux
+        $totalItems = array_sum(array_column($cart, 'quantity'));
+        $totalProducts = count($cart);
+
+        // Créer la commande (toujours en status 'validated' pour les prospects, pas de TXT auto)
+        $query = "INSERT INTO orders (
+                    uuid, order_number, campaign_id, prospect_id,
+                    customer_email, order_source,
+                    total_items, total_products,
+                    ip_address, user_agent, device_type,
+                    status, created_at
+                ) VALUES (
+                    :uuid, :order_number, :campaign_id, :prospect_id,
+                    :customer_email, :order_source,
+                    :total_items, :total_products,
+                    :ip_address, :user_agent, :device_type,
+                    'validated', NOW()
+                )";
+
+        $orderUuid = $this->generateUuid();
+        $params = [
+            ':uuid' => $orderUuid,
+            ':order_number' => $orderNumber,
+            ':campaign_id' => $campaign['id'],
+            ':prospect_id' => $_SESSION['prospect_id'],
+            ':customer_email' => $_SESSION['prospect_email'],
+            ':order_source' => 'prospect',
+            ':total_items' => $totalItems,
+            ':total_products' => $totalProducts,
+            ':ip_address' => $this->getClientIp(),
+            ':user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+            ':device_type' => $this->detectDeviceType(),
+        ];
+
+        try {
+            $this->db->execute($query, $params);
+            $orderId = $this->db->lastInsertId();
+
+            // Insérer les lignes de commande
+            foreach ($cart as $promotionId => $item) {
+                $queryLine = "INSERT INTO order_lines (order_id, promotion_id, quantity, created_at)
+                              VALUES (:order_id, :promotion_id, :quantity, NOW())";
+                $this->db->execute($queryLine, [
+                    ':order_id' => $orderId,
+                    ':promotion_id' => $promotionId,
+                    ':quantity' => $item['quantity'],
+                ]);
+            }
+
+            // Mettre à jour les stats de la campagne
+            $this->updateCampaignStats($campaign['id']);
+
+            // Vider le panier
+            unset($_SESSION['cart'][$uuid]);
+
+            // Stocker pour la page de confirmation
+            $_SESSION['last_order_uuid'] = $orderUuid;
+            $_SESSION['last_order_number'] = $orderNumber;
+
+            // Envoyer l'email de confirmation (si template existe)
+            $this->sendProspectOrderConfirmationEmail($orderId, $campaign);
+
+            // Rediriger vers la page de confirmation
+            header("Location: /stm/c/{$uuid}/prospect/confirmation");
+            exit();
+
+        } catch (\PDOException $e) {
+            error_log("Erreur création commande prospect: " . $e->getMessage());
+            Session::setFlash('error', 'Erreur lors de la création de la commande');
+            header("Location: /stm/c/{$uuid}/prospect/catalog");
+            exit();
+        }
+    }
+
+    /**
+     * Page de confirmation commande prospect
+     * GET /c/{uuid}/prospect/confirmation
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectConfirmation(string $uuid): void
+    {
+        $orderUuid = $_SESSION['last_order_uuid'] ?? null;
+        $orderNumber = $_SESSION['last_order_number'] ?? null;
+
+        if (!$orderUuid) {
+            header("Location: /stm/c/{$uuid}/prospect");
+            exit();
+        }
+
+        // Récupérer la campagne
+        $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $uuid]);
+        $campaign = $result[0] ?? null;
+
+        // Récupérer la commande
+        $query = "SELECT o.*, p.company_name as prospect_name, p.prospect_number
+                  FROM orders o
+                  LEFT JOIN prospects p ON o.prospect_id = p.id
+                  WHERE o.uuid = :uuid";
+        $result = $this->db->query($query, [":uuid" => $orderUuid]);
+        $order = $result[0] ?? null;
+
+        // Récupérer les lignes de commande
+        $orderLines = [];
+        if ($order) {
+            $query = "SELECT ol.*, p.product_id, pr.name as product_name, pr.code as product_code
+                      FROM order_lines ol
+                      INNER JOIN promotions p ON ol.promotion_id = p.id
+                      INNER JOIN products pr ON p.product_id = pr.id
+                      WHERE ol.order_id = :order_id";
+            $orderLines = $this->db->query($query, [":order_id" => $order['id']]);
+        }
+
+        $lang = $_SESSION['prospect_language'] ?? 'fr';
+
+        // Nettoyer la session
+        unset($_SESSION['last_order_uuid'], $_SESSION['last_order_number']);
+
+        // Charger la vue
+        require __DIR__ . '/../Views/public/prospect_confirmation.php';
+    }
+
+    /**
+     * Envoyer l'email de confirmation de commande prospect
+     *
+     * @param int $orderId ID de la commande
+     * @param array $campaign Données de la campagne
+     */
+    private function sendProspectOrderConfirmationEmail(int $orderId, array $campaign): void
+    {
+        try {
+            // Récupérer le template
+            $query = "SELECT * FROM email_templates WHERE type = 'prospect_order_confirmation'";
+            $result = $this->db->query($query);
+            $template = $result[0] ?? null;
+
+            if (!$template) {
+                error_log("Template email prospect_order_confirmation non trouvé");
+                return;
+            }
+
+            // Récupérer les infos de la commande
+            $query = "SELECT o.*, p.* FROM orders o
+                      INNER JOIN prospects p ON o.prospect_id = p.id
+                      WHERE o.id = :order_id";
+            $result = $this->db->query($query, [":order_id" => $orderId]);
+            $orderData = $result[0] ?? null;
+
+            if (!$orderData) {
+                return;
+            }
+
+            $lang = $orderData['language'] ?? 'fr';
+            $subject = $lang === 'nl' ? $template['subject_nl'] : $template['subject_fr'];
+            $body = $lang === 'nl' ? $template['body_nl'] : $template['body_fr'];
+
+            // Remplacer les variables
+            $campaignName = $lang === 'nl' ? ($campaign['title_nl'] ?? $campaign['name']) : ($campaign['title_fr'] ?? $campaign['name']);
+            
+            $replacements = [
+                '{civility}' => $orderData['civility'],
+                '{company_name}' => $orderData['company_name'],
+                '{campaign_name}' => $campaignName,
+                '{prospect_number}' => $orderData['prospect_number'],
+                '{total_items}' => $orderData['total_items'],
+            ];
+
+            foreach ($replacements as $key => $value) {
+                $subject = str_replace($key, $value, $subject);
+                $body = str_replace($key, $value, $body);
+            }
+
+            // Envoyer via Mailchimp/Mandrill
+            $emailService = new MailchimpEmailService();
+            $emailService->send(
+                $orderData['email'],
+                $subject,
+                $body
+            );
+
+            // Marquer l'email comme envoyé
+            $this->db->execute(
+                "UPDATE orders SET email_sent = 1, email_sent_at = NOW() WHERE id = :id",
+                [":id" => $orderId]
+            );
+
+        } catch (\Exception $e) {
+            error_log("Erreur envoi email confirmation prospect: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Générer un UUID v4
+     *
+     * @return string
+     */
+    private function generateUuid(): string
+    {
+        $data = random_bytes(16);
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+
+    /**
+     * Générer un numéro de commande unique
+     *
+     * @return string Format: STM-YYYYMMDD-XXXXX
+     */
+    private function generateOrderNumber(): string
+    {
+        $date = date('Ymd');
+        $random = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
+        return "STM-{$date}-{$random}";
+    }
+
+    /**
+     * Détecter le type d'appareil
+     *
+     * @return string desktop|tablet|mobile
+     */
+    private function detectDeviceType(): string
+    {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        
+        if (preg_match('/tablet|ipad/i', $userAgent)) {
+            return 'tablet';
+        }
+        if (preg_match('/mobile|android|iphone/i', $userAgent)) {
+            return 'mobile';
+        }
+        return 'desktop';
+    }
+
+    /**
+     * Mettre à jour les statistiques de la campagne
+     *
+     * @param int $campaignId
+     */
+    private function updateCampaignStats(int $campaignId): void
+    {
+        $query = "UPDATE campaigns SET
+                    total_orders = (SELECT COUNT(*) FROM orders WHERE campaign_id = :id1),
+                    total_customers = (SELECT COUNT(DISTINCT COALESCE(customer_id, prospect_id)) FROM orders WHERE campaign_id = :id2),
+                    total_items = (SELECT COALESCE(SUM(total_items), 0) FROM orders WHERE campaign_id = :id3)
+                  WHERE id = :id4";
+        
+        try {
+            $this->db->execute($query, [
+                ':id1' => $campaignId,
+                ':id2' => $campaignId,
+                ':id3' => $campaignId,
+                ':id4' => $campaignId,
+            ]);
+        } catch (\PDOException $e) {
+            error_log("Erreur mise à jour stats campagne: " . $e->getMessage());
+        }
     }
 }

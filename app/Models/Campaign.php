@@ -10,6 +10,7 @@
  * @modified 2025/12/18 - Ajout filtres campaign_ids et accessible_countries pour filtrage par rôle (rep, manager_reps)
  * @modified 2026/01/05 - Sprint 14 : Ajout champ show_prices pour affichage prix aux reps
  * @modified 2026/01/08 - Sprint 15 : Ajout champ order_processing_mode (direct/pending)
+ * @modified 2026/01/09 - Sprint 16 : Ajout champ allow_prospects pour mode prospect
  */
 
 namespace App\Models;
@@ -409,7 +410,7 @@ class Campaign
                     title_fr, description_fr,
                     title_nl, description_nl,
                     customer_assignment_mode,
-                    order_password, order_type, show_prices, order_processing_mode, deferred_delivery, delivery_date,
+                    order_password, order_type, show_prices, order_processing_mode, allow_prospects, deferred_delivery, delivery_date,
                     unique_url,
                     created_at
                 ) VALUES (
@@ -418,7 +419,7 @@ class Campaign
                     :title_fr, :description_fr,
                     :title_nl, :description_nl,
                     :customer_assignment_mode,
-                    :order_password, :order_type, :show_prices, :order_processing_mode, :deferred_delivery, :delivery_date,
+                    :order_password, :order_type, :show_prices, :order_processing_mode, :allow_prospects, :deferred_delivery, :delivery_date,
                     :unique_url,
                     NOW()
                 )";
@@ -440,6 +441,7 @@ class Campaign
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
             ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
+            ":allow_prospects" => $data["allow_prospects"] ?? 0, // Sprint 16 : Par défaut désactivé
             ":unique_url" => $uuid, // Utiliser le même UUID pour unique_url
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
@@ -486,6 +488,7 @@ class Campaign
                     order_type = :order_type,
                     show_prices = :show_prices,
                     order_processing_mode = :order_processing_mode,
+                    allow_prospects = :allow_prospects,
                     deferred_delivery = :deferred_delivery,
                     delivery_date = :delivery_date,
                     updated_at = NOW()";
@@ -512,6 +515,7 @@ class Campaign
             ":order_type" => $data["order_type"] ?? "W",
             ":show_prices" => $data["show_prices"] ?? 1, // Sprint 14 : Par défaut ON
             ":order_processing_mode" => $data["order_processing_mode"] ?? "direct", // Sprint 15 : Par défaut direct
+            ":allow_prospects" => $data["allow_prospects"] ?? 0, // Sprint 16 : Par défaut désactivé
             ":deferred_delivery" => $data["deferred_delivery"] ?? 0,
             ":delivery_date" => $data["delivery_date"] ?? null,
         ];

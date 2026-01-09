@@ -18,6 +18,7 @@
  * @modified   30/12/2025 - Ajout routes Pages Fixes (Sprint 9)
  * @modified   06/01/2026 - Sprint 14 : Ajout route repLogin (page connexion rep avec switch langue)
  * @modified   08/01/2026 - Sprint 15 : Ajout routes export Excel et génération TXT à la demande
+ * @modified   09/01/2026 - Sprint 16 : Ajout routes mode prospect + API codes postaux
  */
 
 // ============================================
@@ -659,6 +660,62 @@ $router->post('/c/{uuid}/rep/identify', function($uuid) {
 $router->get('/c/{uuid}/rep/logout', function($uuid) {
     $controller = new \App\Controllers\PublicCampaignController();
     $controller->repLogout($uuid);
+});
+
+// =============================================================================
+// ROUTES MODE PROSPECT - SPRINT 16
+// =============================================================================
+
+// Page formulaire inscription prospect
+$router->get('/c/{uuid}/prospect', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectForm($uuid);
+});
+
+// Traiter l'inscription prospect
+$router->post('/c/{uuid}/prospect/register', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectRegister($uuid);
+});
+
+// Catalogue pour prospect
+$router->get('/c/{uuid}/prospect/catalog', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectCatalog($uuid);
+});
+
+// Soumettre commande prospect
+$router->post('/c/{uuid}/prospect/order', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectSubmitOrder($uuid);
+});
+
+// Confirmation commande prospect
+$router->get('/c/{uuid}/prospect/confirmation', function($uuid) {
+    $controller = new \App\Controllers\PublicCampaignController();
+    $controller->prospectConfirmation($uuid);
+});
+
+// =============================================================================
+// API ROUTES - SPRINT 16 (Codes postaux et types de magasin)
+// =============================================================================
+
+// Recherche autocomplete codes postaux
+$router->get('/api/postal-codes/search', function() {
+    $controller = new \App\Controllers\Api\ProspectController();
+    $controller->searchPostalCodes();
+});
+
+// Récupérer localités pour un code postal
+$router->get('/api/postal-codes/localities', function() {
+    $controller = new \App\Controllers\Api\ProspectController();
+    $controller->getLocalities();
+});
+
+// Récupérer tous les types de magasin
+$router->get('/api/shop-types', function() {
+    $controller = new \App\Controllers\Api\ProspectController();
+    $controller->getShopTypes();
 });
 
 // =============================================================================
