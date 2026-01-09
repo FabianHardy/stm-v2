@@ -2755,6 +2755,8 @@ class PublicCampaignController
      * Afficher le catalogue pour un prospect
      * GET /c/{uuid}/prospect/catalog
      *
+     * Réutilise la vue catalog.php existante
+     *
      * @param string $uuid UUID de la campagne
      */
     public function prospectCatalog(string $uuid): void
@@ -2764,9 +2766,6 @@ class PublicCampaignController
             header("Location: /stm/c/{$uuid}/prospect");
             exit();
         }
-
-        // Le catalogue prospect est similaire au catalogue client
-        // Mais sans vérification API (accès à toutes les promos)
 
         // Récupérer la campagne
         $query = "SELECT * FROM campaigns WHERE uuid = :uuid";
@@ -2779,50 +2778,124 @@ class PublicCampaignController
             return;
         }
 
-        // Préparer les données pour la vue
+        // Préparer les données du prospect comme un "customer"
         $lang = $_SESSION['prospect_language'] ?? 'fr';
-        $prospectNumber = $_SESSION['prospect_number'];
-        $prospectName = $_SESSION['prospect_name'];
-        $country = $_SESSION['prospect_country'] ?? 'BE';
-
-        // Récupérer les catégories et promotions
-        $query = "SELECT DISTINCT c.id, c.name_fr, c.name_nl, c.sort_order
-                  FROM categories c
-                  INNER JOIN promotions p ON p.category_id = c.id
-                  WHERE p.campaign_id = :campaign_id AND p.is_active = 1
-                  ORDER BY c.sort_order ASC, c.name_fr ASC";
-        $categories = $this->db->query($query, [":campaign_id" => $campaign['id']]);
-
-        // Récupérer toutes les promotions actives (pas de filtre API pour les prospects)
-        $query = "SELECT p.*, pr.name as product_name, pr.description_fr, pr.description_nl,
-                         pr.image_url, pr.code as product_code,
-                         c.name_fr as category_name_fr, c.name_nl as category_name_nl
-                  FROM promotions p
-                  INNER JOIN products pr ON p.product_id = pr.id
-                  LEFT JOIN categories c ON p.category_id = c.id
-                  WHERE p.campaign_id = :campaign_id AND p.is_active = 1
-                  ORDER BY c.sort_order ASC, p.sort_order ASC";
-        $promotions = $this->db->query($query, [":campaign_id" => $campaign['id']]);
-
-        // Marquer toutes les promotions comme éligibles pour les prospects
-        foreach ($promotions as &$promo) {
-            $promo['is_eligible'] = true;
-            $promo['eligibility_reason'] = null;
-        }
-
-        // Récupérer le panier
-        $cart = $_SESSION['cart'][$uuid] ?? [];
-        $cartCount = array_sum(array_column($cart, 'quantity'));
-        $cartTotal = 0;
-        foreach ($cart as $item) {
-            $cartTotal += ($item['quantity'] ?? 0);
-        }
+        $customer = [
+            'customer_number' => $_SESSION['prospect_number'],
+            'company_name' => $_SESSION['prospect_name'],
+            'email' => $_SESSION['prospect_email'] ?? '',
+            'country' => $_SESSION['prospect_country'] ?? 'BE',
+            'language' => $lang,
+        ];
 
         // Source de la commande
         $orderSource = 'prospect';
 
-        // Charger la vue catalogue (réutiliser la vue existante avec adaptations)
-        require __DIR__ . '/../Views/public/prospect_catalog.php';
+        // Récupérer toutes les catégories actives avec leurs produits
+        $categoriesQuery = "
+            SELECT DISTINCT
+                cat.id,
+                cat.code,
+                cat.name_fr,
+                cat.name_nl,
+                cat.color,
+                cat.icon_path,
+                cat.display_order
+            FROM categories cat
+            INNER JOIN products p ON p.category_id = cat.id
+            WHERE p.campaign_id = :campaign_id
+              AND p.is_active = 1
+              AND cat.is_active = 1
+            ORDER BY cat.display_order ASC, cat.name_fr ASC
+        ";
+
+        $categories = $this->db->query($categoriesQuery, [":campaign_id" => $campaign["id"]]);
+
+        // Pour chaque catégorie, récupérer ses produits
+        foreach ($categories as $key => $category) {
+            $productsQuery = "
+                SELECT p.*
+                FROM products p
+                WHERE p.category_id = :category_id
+                  AND p.campaign_id = :campaign_id
+                  AND p.is_active = 1
+                ORDER BY p.display_order ASC, p.name_fr ASC
+            ";
+
+            $products = $this->db->query($productsQuery, [
+                ":category_id" => $category["id"],
+                ":campaign_id" => $campaign["id"],
+            ]);
+
+            // Pour les prospects : tous les produits sont éligibles, pas de quota client
+            $filteredProducts = [];
+            foreach ($products as $product) {
+                // Calculer les quotas disponibles (global seulement)
+                $quotas = $this->calculateAvailableQuotas(
+                    $product["id"],
+                    $customer["customer_number"],
+                    $customer["country"],
+                    $product["max_per_customer"],
+                    $product["max_total"]
+                );
+
+                $product["available_for_customer"] = $quotas["customer"];
+                $product["available_global"] = $quotas["global"];
+                $product["max_orderable"] = $quotas["max_orderable"];
+                $product["is_orderable"] = $quotas["is_orderable"];
+
+                // Pas de prix API pour les prospects
+                $product["api_prix"] = null;
+                $product["api_prix_promo"] = null;
+                $product["api_prix_colis"] = null;
+
+                $filteredProducts[] = $product;
+            }
+
+            $categories[$key]["products"] = $filteredProducts;
+        }
+
+        // Supprimer les catégories vides
+        $categories = array_filter($categories, function($cat) {
+            return !empty($cat["products"]);
+        });
+        $categories = array_values($categories);
+
+        // Récupérer le panier depuis la session
+        $cart = Session::get("cart", [
+            "campaign_uuid" => $uuid,
+            "items" => [],
+        ]);
+
+        // Charger la même vue que pour les clients
+        require __DIR__ . "/../Views/public/campaign/catalog.php";
+    }
+
+    /**
+     * Déconnexion d'un prospect
+     * GET /c/{uuid}/prospect/logout
+     *
+     * Supprime les données de session prospect et redirige vers le formulaire
+     *
+     * @param string $uuid UUID de la campagne
+     */
+    public function prospectLogout(string $uuid): void
+    {
+        // Supprimer les données de session prospect
+        unset($_SESSION['prospect_id']);
+        unset($_SESSION['prospect_number']);
+        unset($_SESSION['prospect_name']);
+        unset($_SESSION['prospect_email']);
+        unset($_SESSION['prospect_country']);
+        unset($_SESSION['prospect_language']);
+        unset($_SESSION['order_source']);
+
+        // Supprimer le panier de cette campagne
+        unset($_SESSION['cart'][$uuid]);
+
+        // Rediriger vers le formulaire prospect
+        header("Location: /stm/c/{$uuid}/prospect");
+        exit();
     }
 
     /**
