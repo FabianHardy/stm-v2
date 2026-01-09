@@ -383,6 +383,11 @@ include __DIR__ . '/../components/public/campaign_bar.php';
 <?php
 $content = ob_get_clean();
 
+// Variables pour le JS (les heredoc n'interprètent pas <?= ?>)
+$jsEnterPostal = trans('prospect.enter_postal', $lang);
+$jsSelectCity = trans('prospect.select_city', $lang);
+$jsLang = $lang;
+
 // Scripts JavaScript vanilla
 $pageScripts = <<<SCRIPT
 // ========================================
@@ -456,7 +461,7 @@ function validateProspectForm() {
 let searchTimeout = null;
 
 function onCountryChange() {
-    document.getElementById('city').innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+    document.getElementById('city').innerHTML = '<option value="">{$jsEnterPostal}</option>';
     const postalCode = document.getElementById('postal_code').value;
     if (postalCode.length >= 4) {
         loadLocalities();
@@ -468,7 +473,7 @@ function onPostalCodeInput() {
     const postalCode = document.getElementById('postal_code').value;
 
     if (postalCode.length < 4) {
-        document.getElementById('city').innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+        document.getElementById('city').innerHTML = '<option value="">{$jsEnterPostal}</option>';
         return;
     }
 
@@ -493,10 +498,10 @@ async function loadLocalities() {
 
         if (data.success && data.data && data.data.length > 0) {
             if (data.data.length > 1) {
-                citySelect.innerHTML = '<option value=""><?= trans('prospect.select_city', $lang) ?></option>';
+                citySelect.innerHTML = '<option value="">{$jsSelectCity}</option>';
             }
 
-            const lang = '<?= $lang ?>';
+            const lang = '{$jsLang}';
             data.data.forEach(loc => {
                 const name = loc['locality_' + lang] || loc.locality_fr;
                 const option = document.createElement('option');
@@ -510,11 +515,11 @@ async function loadLocalities() {
                 citySelect.value = data.data[0]['locality_' + lang] || data.data[0].locality_fr;
             }
         } else {
-            citySelect.innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+            citySelect.innerHTML = '<option value="">{$jsEnterPostal}</option>';
         }
     } catch (e) {
         console.error('Erreur:', e);
-        citySelect.innerHTML = '<option value=""><?= trans('prospect.enter_postal', $lang) ?></option>';
+        citySelect.innerHTML = '<option value="">{$jsEnterPostal}</option>';
     } finally {
         loading.classList.add('hidden');
     }
