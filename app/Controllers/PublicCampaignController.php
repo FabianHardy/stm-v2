@@ -2723,17 +2723,16 @@ class PublicCampaignController
             exit();
         }
 
-        // Créer le prospect
+        // Créer le prospect (un même email peut avoir plusieurs entrées = plusieurs points de vente)
         $prospectId = $prospectModel->create($data);
 
         if (!$prospectId) {
-            Session::setFlash('errors', ['global' => 'Erreur lors de l\'inscription']);
+            Session::setFlash('errors', ['global' => 'Erreur lors de l\'enregistrement']);
             Session::setFlash('old', $data);
             header("Location: /stm/c/{$uuid}/prospect?lang=" . ($data['language'] ?? 'fr'));
             exit();
         }
 
-        // Récupérer le prospect créé
         $prospect = $prospectModel->findById($prospectId);
 
         // Stocker en session

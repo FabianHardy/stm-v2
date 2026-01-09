@@ -196,6 +196,80 @@ class Prospect
     }
 
     /**
+     * Trouver un prospect par email et campagne
+     *
+     * @param string $email
+     * @param int $campaignId
+     * @return array|null
+     */
+    public function findByEmailAndCampaign(string $email, int $campaignId): ?array
+    {
+        $query = "SELECT p.*, st.name as shop_type_name
+                  FROM prospects p
+                  LEFT JOIN shop_types st ON p.shop_type_id = st.id
+                  WHERE p.email = :email AND p.campaign_id = :campaign_id
+                  LIMIT 1";
+
+        $result = $this->db->query($query, [
+            ":email" => $email,
+            ":campaign_id" => $campaignId
+        ]);
+        return $result[0] ?? null;
+    }
+
+    /**
+     * Mettre à jour un prospect
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        $query = "UPDATE prospects SET
+                    civility = :civility,
+                    company_name = :company_name,
+                    vat_number = :vat_number,
+                    is_vat_liable = :is_vat_liable,
+                    phone = :phone,
+                    fax = :fax,
+                    shop_type_id = :shop_type_id,
+                    address = :address,
+                    postal_code = :postal_code,
+                    city = :city,
+                    country = :country,
+                    additional_info = :additional_info,
+                    language = :language,
+                    updated_at = NOW()
+                  WHERE id = :id";
+
+        $params = [
+            ":id" => $id,
+            ":civility" => $data["civility"],
+            ":company_name" => $data["company_name"],
+            ":vat_number" => $data["vat_number"] ?? null,
+            ":is_vat_liable" => $data["is_vat_liable"] ?? 1,
+            ":phone" => $data["phone"],
+            ":fax" => $data["fax"] ?? null,
+            ":shop_type_id" => $data["shop_type_id"],
+            ":address" => $data["address"],
+            ":postal_code" => $data["postal_code"],
+            ":city" => $data["city"],
+            ":country" => $data["country"],
+            ":additional_info" => $data["additional_info"] ?? null,
+            ":language" => $data["language"] ?? "fr",
+        ];
+
+        try {
+            $this->db->execute($query, $params);
+            return true;
+        } catch (\PDOException $e) {
+            error_log("Erreur mise à jour prospect: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Valider les données du prospect
      *
      * @param array $data
@@ -221,9 +295,8 @@ class Prospect
             $errors["email"] = "L'email est obligatoire";
         } elseif (!filter_var($data["email"], FILTER_VALIDATE_EMAIL)) {
             $errors["email"] = "L'email n'est pas valide";
-        } elseif ($campaignId && $this->emailExistsForCampaign($data["email"], $campaignId)) {
-            $errors["email"] = "Cet email a déjà été utilisé pour cette campagne";
         }
+        // Note : Pas de vérification d'unicité - un prospect peut revenir plusieurs fois
         if (empty($data["phone"])) {
             $errors["phone"] = "Le téléphone est obligatoire";
         }
