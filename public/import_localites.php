@@ -21,9 +21,9 @@ echo "=== IMPORT LOCALITES DEPUIS CSV ===\n\n";
 
 // Connexion DB
 $host = 'localhost';
-$dbname = 'trendyblog_stm_dev';
-$user = 'trendyblog_root';
-$pass = 'fabianh2545';
+$dbname = 'trendyblog_stm_v2';
+$user = 'trendyblog_stm';
+$pass = '';
 
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {

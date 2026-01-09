@@ -10,6 +10,7 @@
  * @modified 2025/12/10 - Ajout onglet Équipe pour gestion des collaborateurs
  * @modified 2025/12/15 - Masquage conditionnel boutons selon permissions (Phase 5)
  * @modified 2026/01/08 - Sprint 15 : Affichage mode de traitement (direct/pending) + prix reps
+ * @modified 2026/01/09 - Sprint 16 : Ajout lien URL Prospect
  */
 
 use App\Helpers\PermissionHelper;
@@ -137,6 +138,8 @@ $canViewOrders = PermissionHelper::can('orders.view');
     $baseUrl = $_ENV["APP_URL"] ?? $_SERVER["APP_URL"] ?? "https://actions.trendyfoods.com/stm";
     $clientUrl = $baseUrl . "/c/" . htmlspecialchars($campaign["uuid"]);
     $repUrl = $baseUrl . "/c/" . htmlspecialchars($campaign["uuid"]) . "/rep";
+    $prospectUrl = $baseUrl . "/c/" . htmlspecialchars($campaign["uuid"]) . "/prospect";
+    $allowProspects = $campaign["allow_prospects"] ?? 0;
     ?>
 
     <!-- SECTION : Liens de la campagne -->
@@ -191,6 +194,42 @@ $canViewOrders = PermissionHelper::can('orders.view');
                     🔐 Les représentants se connectent via leur compte Microsoft et peuvent commander pour un client
                 </p>
             </div>
+
+            <!-- Sprint 16 : Lien Prospects -->
+            <?php if ($allowProspects): ?>
+            <div class="pt-4 border-t border-white border-opacity-30">
+                <h3 class="text-sm font-semibold uppercase tracking-wide mb-2 opacity-90">
+                    🌱 Lien prospects (nouveaux clients)
+                </h3>
+                <div class="flex items-center space-x-3">
+                    <div class="flex-1 bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
+                        <code id="prospect-url" class="text-white font-mono text-sm break-all">
+                            <?= $prospectUrl ?>
+                        </code>
+                    </div>
+                    <button type="button"
+                            onclick="copyToClipboard('prospect-url', 'copy-text-prospect', 'copy-icon-prospect')"
+                            class="flex-shrink-0 inline-flex items-center px-4 py-3 bg-white text-green-600 rounded-lg font-medium text-sm hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-green-600 transition">
+                        <svg id="copy-icon-prospect" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <span id="copy-text-prospect">Copier</span>
+                    </button>
+                </div>
+                <p class="mt-2 text-sm opacity-90">
+                    📝 Les prospects s'inscrivent et commandent - leurs commandes seront visibles dans l'export Excel
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="pt-4 border-t border-white border-opacity-30">
+                <div class="flex items-center space-x-2 text-white text-opacity-70">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                    <span class="text-sm">Mode prospect désactivé pour cette campagne</span>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
