@@ -16,6 +16,7 @@
  * @modified 2026/01/08 - Sprint 14 : Amélioration messages compte désactivé + prompt select_account
  * @modified 2026/01/08 - Sprint 15 : Mode traitement commandes (direct/pending)
  * @modified 2026/01/09 - Sprint 16 : Mode Prospect (inscription + commande nouveaux clients)
+ * @modified 2026/01/09 - Sprint 16 : Support prospect dans panier + switch langue catalogue
  */
 
 namespace App\Controllers;
@@ -79,6 +80,47 @@ class PublicCampaignController
                 if (filter_var($ip, FILTER_VALIDATE_IP)) {
                     return $ip;
                 }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Récupérer le client courant (client normal OU prospect)
+     * Sprint 16 : Support des prospects dans les méthodes panier
+     *
+     * @param string $uuid UUID de la campagne
+     * @return array|null Données client normalisées ou null si pas de session
+     */
+    private function getCurrentCustomer(string $uuid): ?array
+    {
+        // Essayer d'abord la session client normale
+        $customer = Session::get("public_customer");
+        if ($customer && $customer["campaign_uuid"] === $uuid) {
+            return $customer;
+        }
+
+        // Sinon, vérifier si c'est un prospect
+        if (!empty($_SESSION['prospect_id'])) {
+            // Récupérer la campagne pour avoir l'ID
+            $query = "SELECT id FROM campaigns WHERE uuid = :uuid";
+            $result = $this->db->query($query, [":uuid" => $uuid]);
+            $campaign = $result[0] ?? null;
+
+            if ($campaign) {
+                // Retourner un objet customer normalisé pour le prospect
+                return [
+                    'customer_number' => $_SESSION['prospect_number'] ?? '',
+                    'company_name' => $_SESSION['prospect_name'] ?? '',
+                    'email' => $_SESSION['prospect_email'] ?? '',
+                    'country' => $_SESSION['prospect_country'] ?? 'BE',
+                    'language' => $_SESSION['prospect_language'] ?? 'fr',
+                    'campaign_uuid' => $uuid,
+                    'campaign_id' => $campaign['id'],
+                    'is_prospect' => true,
+                    'prospect_id' => $_SESSION['prospect_id'],
+                ];
             }
         }
 
@@ -569,10 +611,10 @@ class PublicCampaignController
         header("Content-Type: application/json");
 
         try {
-            // Vérifier session client
-            $customer = Session::get("public_customer");
+            // Vérifier session client ou prospect (Sprint 16)
+            $customer = $this->getCurrentCustomer($uuid);
 
-            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+            if (!$customer) {
                 echo json_encode(["success" => false, "error" => "Session expirée"]);
                 exit();
             }
@@ -716,9 +758,10 @@ class PublicCampaignController
         header("Content-Type: application/json");
 
         try {
-            $customer = Session::get("public_customer");
+            // Vérifier session client ou prospect (Sprint 16)
+            $customer = $this->getCurrentCustomer($uuid);
 
-            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+            if (!$customer) {
                 echo json_encode(["success" => false, "error" => "Session expirée"]);
                 exit();
             }
@@ -799,9 +842,10 @@ class PublicCampaignController
         header("Content-Type: application/json");
 
         try {
-            $customer = Session::get("public_customer");
+            // Vérifier session client ou prospect (Sprint 16)
+            $customer = $this->getCurrentCustomer($uuid);
 
-            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+            if (!$customer) {
                 echo json_encode(["success" => false, "error" => "Session expirée"]);
                 exit();
             }
@@ -844,9 +888,10 @@ class PublicCampaignController
         header("Content-Type: application/json");
 
         try {
-            $customer = Session::get("public_customer");
+            // Vérifier session client ou prospect (Sprint 16)
+            $customer = $this->getCurrentCustomer($uuid);
 
-            if (!$customer || $customer["campaign_uuid"] !== $uuid) {
+            if (!$customer) {
                 echo json_encode(["success" => false, "error" => "Session expirée"]);
                 exit();
             }
@@ -2765,6 +2810,12 @@ class PublicCampaignController
         if (empty($_SESSION['prospect_id'])) {
             header("Location: /stm/c/{$uuid}/prospect");
             exit();
+        }
+
+        // Sprint 16 : Gérer le changement de langue via GET
+        $requestedLang = $_GET['lang'] ?? null;
+        if ($requestedLang && in_array($requestedLang, ['fr', 'nl'], true)) {
+            $_SESSION['prospect_language'] = $requestedLang;
         }
 
         // Récupérer la campagne
